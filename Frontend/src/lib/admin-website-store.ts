@@ -266,7 +266,7 @@ export const initialLandingContent: LandingContent = {
     eyebrow: "LIVE CLASS + LMS DALAM SATU ALUR BELAJAR",
     heading: "Belajar Bahasa Jepang Terarah dari Dasar sampai Siap JLPT",
     support:
-      "Placement test, learning journey, flashcard, latihan, try out, komunitas, dan kelas bersama Sensei tersedia dalam satu pengalaman belajar yang konsisten.",
+      "Placement test, pembelajaran, flashcard, latihan, try out, komunitas, dan kelas bersama Sensei tersedia dalam satu pengalaman belajar yang konsisten.",
     primaryCtaLabel: "Coba Gratis",
     primaryCtaPath: "/register",
     secondaryCtaLabel: "Lihat Program",
@@ -501,7 +501,7 @@ function normalizeSectionsToLanding(sections: unknown[]): LandingContent {
           : initialLandingContent.hero.heading,
       support:
         typeof heroSec?.description === "string"
-          ? heroSec.description
+          ? heroSec.description.replace(/learning journey/gi, "pembelajaran")
           : initialLandingContent.hero.support,
       primaryCtaLabel:
         typeof heroSec?.primaryCtaText === "string"
@@ -654,7 +654,7 @@ function normalizeLandingContent(val: unknown): LandingContent {
           : initialLandingContent.hero.heading,
       support:
         typeof rawHero.support === "string"
-          ? rawHero.support
+          ? rawHero.support.replace(/learning journey/gi, "pembelajaran")
           : initialLandingContent.hero.support,
       primaryCtaLabel:
         typeof rawHero.primaryCtaLabel === "string"
@@ -886,12 +886,13 @@ function normalizeArticle(val: unknown): Article | null {
       : typeof raw.excerpt === "string"
         ? raw.excerpt
         : "";
-  const rawImage =
+  const candidateImage =
     typeof raw.imageUrl === "string"
       ? raw.imageUrl
       : typeof raw.coverImage === "string"
         ? raw.coverImage
         : "";
+  const rawImage = candidateImage === "/showcase/dashboard-showcase.png" ? "" : candidateImage;
   const rawImageAlt =
     typeof raw.imageAlt === "string"
       ? raw.imageAlt

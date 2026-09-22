@@ -1,44 +1,47 @@
 "use client";
 
 import Image from "next/image";
-import { publicSensei, type PublicSensei } from "@/lib/public-sensei";
+import { useState } from "react";
 import { usePublishedClassOperations } from "@/lib/class-store";
 
-export function SenseiGrid({ limit, reveal = false }: { limit?: number; reveal?: boolean }) {
+export function SenseiGrid({ limit, reveal = false, carousel = false }: { limit?: number; reveal?: boolean; carousel?: boolean }) {
   const operations = usePublishedClassOperations();
-  const profiles = (() => { const seen = new Set<string>(); const merged: PublicSensei[] = []; for (const sensei of [...publicSensei, ...operations.sensei.map((item) => ({ id: item.id, name: item.name, initials: item.name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase(), avatarSrc: item.photoUrl || undefined, expertise: item.specialization }))]) { const key = sensei.id + sensei.name.toLowerCase(); if (!seen.has(key) && !merged.some((x) => x.name.toLowerCase() === sensei.name.toLowerCase())) { seen.add(key); merged.push(sensei); } } return limit ? merged.slice(0, limit) : merged; })();
+  const profiles = limit ? operations.sensei.slice(0, limit) : operations.sensei;
+  const [activeIndex, setActiveIndex] = useState(0);
+  const currentIndex = profiles.length ? activeIndex % profiles.length : 0;
+  const move = (direction: number) => profiles.length > 1 && setActiveIndex((current) => (current + direction + profiles.length) % profiles.length);
+
+  const cards = profiles.map((sensei, index) => {
+    const distance = ((index - currentIndex + profiles.length + Math.floor(profiles.length / 2)) % profiles.length) - Math.floor(profiles.length / 2);
+    return (
+      <article
+        aria-hidden={carousel && Math.abs(distance) > 1}
+        className={`sensei-card${reveal ? " reveal-item" : ""}${carousel ? ` sensei-carousel-card sensei-carousel-card-${distance === 0 ? "active" : Math.abs(distance) === 1 ? "side" : "hidden"}` : ""}`}
+        key={sensei.id}
+        style={carousel ? ({ "--sensei-position": distance } as React.CSSProperties) : reveal ? ({ "--reveal-index": index } as React.CSSProperties) : undefined}
+      >
+        <div className="sensei-avatar" aria-label={`Foto ${sensei.name}`}>
+          {sensei.photoUrl ? <Image src={sensei.photoUrl} alt={`Foto profil ${sensei.name}`} fill sizes="(max-width: 768px) 76vw, 270px" className="sensei-avatar-img" /> : <span>{sensei.name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</span>}
+        </div>
+        <div className="sensei-card-body">
+          <h3>{sensei.name}</h3>
+          <p>{sensei.title}</p>
+          <ul aria-label={`Fokus pembelajaran ${sensei.name}`}>
+            {sensei.specialization.slice(0, carousel ? 3 : undefined).map((expertise) => <li key={expertise}>{expertise}</li>)}
+          </ul>
+        </div>
+      </article>
+    );
+  });
+
+  if (!profiles.length) return <p className="sensei-empty">Belum ada profil Sensei aktif.</p>;
+  if (!carousel) return <div className="sensei-grid">{cards}</div>;
 
   return (
-    <div className="sensei-grid">
-      {profiles.map((sensei, index) => (
-        <article
-          className={`sensei-card${reveal ? " reveal-item" : ""}`}
-          key={sensei.id}
-          style={reveal ? ({ "--reveal-index": index } as React.CSSProperties) : undefined}
-        >
-          <div className="sensei-avatar" aria-label={`Foto ${sensei.name}`}>
-            {sensei.avatarSrc ? (
-              <Image
-                src={sensei.avatarSrc}
-                alt={`Foto profil ${sensei.name}`}
-                fill
-                sizes="(max-width: 768px) 100vw, 360px"
-                className="sensei-avatar-img"
-              />
-            ) : (
-              <span>{sensei.initials}</span>
-            )}
-          </div>
-          <div className="sensei-card-body">
-            <h3>{sensei.name}</h3>
-            <ul aria-label={`Fokus pembelajaran ${sensei.name}`}>
-              {sensei.expertise.map((expertise) => (
-                <li key={expertise}>{expertise}</li>
-              ))}
-            </ul>
-          </div>
-        </article>
-      ))}
+    <div className="sensei-carousel" aria-roledescription="carousel" aria-label="Sensei Hiru Academy">
+      <button className="sensei-carousel-arrow sensei-carousel-prev" type="button" aria-label="Sensei sebelumnya" onClick={() => move(-1)}>&lt;</button>
+      <div className="sensei-carousel-viewport" aria-live="polite">{cards}</div>
+      <button className="sensei-carousel-arrow sensei-carousel-next" type="button" aria-label="Sensei berikutnya" onClick={() => move(1)}>&gt;</button>
     </div>
   );
 }

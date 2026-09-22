@@ -17,7 +17,7 @@ export function readPublishedClassOperations(): PublishedClassOperations {
   const classes = store.classes.filter((x) => x.status === "Aktif");
   const allowed = new Set(classes.map((x) => x.id));
   const sessions = store.sessions.filter((x) => allowed.has(x.classId) && x.status !== "Dibatalkan");
-  const people = new Map(sensei.map((x) => [x.id, x.name]));
+  const people = new Map(store.sensei.map((x) => [x.id, x.name]));
   const byId = new Map(classes.map((x) => [x.id, x]));
   return { sensei, classes, sessions, schedule: sessions.map((x) => { const c = byId.get(x.classId); return { id: x.id, title: x.title, meta: `${x.startAt} – ${x.endAt}`, status: x.status, senseiName: people.get(x.senseiId) || "", program: c?.programCode || "", chapter: x.chapterId, meetingUrl: x.meetingUrl, replayId: x.replayId }; }) };
 }

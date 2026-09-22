@@ -27,7 +27,7 @@ export default function BlogPage() {
       publishedAt: a.publishedAt
         ? new Date(a.publishedAt).toLocaleDateString("id-ID", { day: "numeric", month: "long", year: "numeric" })
         : a.updatedAt,
-      imageUrl: a.imageUrl,
+      imageUrl: "",
       href: `/blog/article?slug=${encodeURIComponent(a.slug)}`,
     }));
 
@@ -40,7 +40,7 @@ export default function BlogPage() {
           publishedAt: matchedAdminFeatured.publishedAt,
           title: matchedAdminFeatured.title,
           description: matchedAdminFeatured.description,
-          imageUrl: matchedAdminFeatured.imageUrl,
+          imageUrl: "",
           href: matchedAdminFeatured.href,
           slug: matchedAdminFeatured.slug,
         }

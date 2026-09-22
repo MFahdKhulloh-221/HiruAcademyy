@@ -155,7 +155,7 @@ const initialLandingSections: LandingSection[] = [
     badge: "LIVE CLASS + LMS DALAM SATU ALUR BELAJAR",
     headline: "Belajar Bahasa Jepang Terarah dari Dasar sampai Siap JLPT",
     description:
-      "Placement test, learning journey, flashcard, latihan, try out, komunitas, dan kelas bersama Sensei tersedia dalam satu pengalaman belajar yang konsisten.",
+      "Placement test, pembelajaran, flashcard, latihan, try out, komunitas, dan kelas bersama Sensei tersedia dalam satu pengalaman belajar yang konsisten.",
     primaryCtaText: "Coba Gratis",
     primaryCtaUrl: "/register",
     secondaryCtaText: "Lihat Program",
@@ -262,7 +262,7 @@ const initialBlogs: BlogPost[] = [
     category: "Tips Belajar",
     excerpt:
       "Susun ritme belajar mingguan dengan video, modul, flashcard, latihan, dan checkpoint tanpa kehilangan fokus.",
-    coverImage: "/showcase/dashboard-showcase.png",
+    coverImage: "",
     coverImageAlt: "Ilustrasi alur belajar mandiri Hiru Academy",
     author: "Hiru Academic Team",
     publishedAt: "2026-08-20",
@@ -440,15 +440,24 @@ function loadStore(): WebsiteStoreData {
       return fallback;
     }
     const parsed = JSON.parse(raw);
+    const sanitizeSections = (sections: LandingSection[]) =>
+      sections.map((s) => ({
+        ...s,
+        description: s.description ? s.description.replace(/learning journey/gi, "pembelajaran") : s.description,
+      }));
     return {
       landingSections: Array.isArray(parsed.landingSections)
-        ? parsed.landingSections
+        ? sanitizeSections(parsed.landingSections)
         : initialLandingSections,
       publishedLandingSections: Array.isArray(parsed.publishedLandingSections)
-        ? parsed.publishedLandingSections
+        ? sanitizeSections(parsed.publishedLandingSections)
         : initialLandingSections,
       campaigns: Array.isArray(parsed.campaigns) ? parsed.campaigns : initialCampaigns,
-      blogs: Array.isArray(parsed.blogs) ? parsed.blogs : initialBlogs,
+      blogs: Array.isArray(parsed.blogs)
+        ? parsed.blogs.map((b: BlogPost) =>
+            b.coverImage === "/showcase/dashboard-showcase.png" ? { ...b, coverImage: "" } : b
+          )
+        : initialBlogs,
       testimonials: Array.isArray(parsed.testimonials)
         ? parsed.testimonials
         : initialTestimonials,

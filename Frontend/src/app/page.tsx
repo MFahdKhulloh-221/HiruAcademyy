@@ -92,11 +92,11 @@ const proofItems = [
 ];
 
 const lmsPreviews = [
-  { key: "dashboard", icon: "layers" as const, label: "Dashboard", imageSrc: "/showcase/dashboard-showcase.png" },
-  { key: "journey", icon: "compass" as const, label: "Pembelajaran", imageSrc: "/showcase/dashboard-showcase.png" },
-  { key: "lesson", icon: "play" as const, label: "Materi / Video Lesson", imageSrc: "/showcase/dashboard-showcase.png" },
-  { key: "flashcard", icon: "book" as const, label: "Flashcard", imageSrc: "/showcase/dashboard-showcase.png" },
-  { key: "evaluation", icon: "target" as const, label: "Try Out / Evaluasi", imageSrc: "/showcase/dashboard-showcase.png" },
+  { key: "dashboard", icon: "layers" as const, label: "Dashboard", imageSrc: "/showcase/dashboard.png" },
+  { key: "journey", icon: "compass" as const, label: "Pembelajaran", imageSrc: "/showcase/pembelajaran.png" },
+  { key: "lesson", icon: "play" as const, label: "Materi / Video Lesson", imageSrc: "/showcase/video.png" },
+  { key: "flashcard", icon: "book" as const, label: "Flashcard", imageSrc: "/showcase/flashcard.png" },
+  { key: "evaluation", icon: "target" as const, label: "Try Out / Evaluasi", imageSrc: "/showcase/tryout.png" },
 ];
 
 function LmsPreview({ preview }: { preview: (typeof lmsPreviews)[number] }) {
@@ -129,6 +129,9 @@ export default function Home() {
   const publishedTestimonials = usePublishedTestimonials({ featuredOnly: true });
 
   const hero = landing.hero;
+  const heroSupport =
+    (hero.support ? hero.support.replace(/learning journey/gi, "pembelajaran") : "") ||
+    "Placement test, pembelajaran, flashcard, latihan, try out, komunitas, dan kelas bersama Sensei tersedia dalam satu pengalaman belajar yang konsisten.";
   const currentOffers = offers;
 
   const displayTestimonials = useMemo(() => {
@@ -148,7 +151,7 @@ export default function Home() {
     <PublicPage>
       <main id="top" data-landing-motion>
         <LandingMotion />
-        <section className="hero" data-reveal><div className="hero-orb hero-orb-one" /><div className="hero-orb hero-orb-two" /><div className="container hero-grid"><div className="hero-copy"><p className="eyebrow"><Icon name="sparkle" width="17" height="17" /> {hero.eyebrow || "LIVE CLASS + LMS DALAM SATU ALUR BELAJAR"}</p><h1>{hero.heading && hero.heading.includes("Dasar sampai Siap JLPT") ? (<>{hero.heading.split("Dasar sampai Siap JLPT")[0]}<span>Dasar sampai Siap JLPT</span>{hero.heading.split("Dasar sampai Siap JLPT")[1]}</>) : (hero.heading || <>Belajar Bahasa Jepang Terarah dari <span>Dasar sampai Siap JLPT</span></>)}</h1><p className="hero-lead">{hero.support || "Placement test, learning journey, flashcard, latihan, try out, komunitas, dan kelas bersama Sensei tersedia dalam satu pengalaman belajar yang konsisten."}</p><div className="hero-actions"><ArrowLink href={hero.primaryCtaPath || "/register"}>{hero.primaryCtaLabel || "Coba Gratis"}</ArrowLink><a className="text-link" href={hero.secondaryCtaPath || "#program"}><Icon name="play" width="21" height="21" /> {hero.secondaryCtaLabel || "Lihat Program"}</a></div></div><div className="hero-visual" aria-label="Ilustrasi perjalanan belajar bahasa Jepang"><div className="sun" aria-hidden="true" /><div className="cloud cloud-one" /><div className="cloud cloud-two" /><div className="learning-card card-kanji"><small>Hari ini</small><strong><ruby>学<rt>まな</rt></ruby>ぶ</strong><span>belajar</span></div><div className="learning-card card-progress"><span className="mini-icon"><Icon name="layers" width="19" height="19" /></span><div><small>Perjalananmu</small><strong>Terus bertumbuh</strong></div><div className="progress"><i /></div></div><div className="torii" aria-hidden="true"><i /><b /><span /><em /></div><div className="hill hill-back" /><div className="hill hill-front" /><div className="floating-note note-one">あ</div><div className="floating-note note-two">夢</div></div></div></section>
+        <section className="hero" data-reveal><div className="hero-orb hero-orb-one" /><div className="hero-orb hero-orb-two" /><div className="container hero-grid"><div className="hero-copy"><p className="eyebrow"><Icon name="sparkle" width="17" height="17" /> {hero.eyebrow || "LIVE CLASS + LMS DALAM SATU ALUR BELAJAR"}</p><h1>{hero.heading && hero.heading.includes("Dasar sampai Siap JLPT") ? (<>{hero.heading.split("Dasar sampai Siap JLPT")[0]}<span>Dasar sampai Siap JLPT</span>{hero.heading.split("Dasar sampai Siap JLPT")[1]}</>) : (hero.heading || <>Belajar Bahasa Jepang Terarah dari <span>Dasar sampai Siap JLPT</span></>)}</h1><p className="hero-lead">{heroSupport}</p><div className="hero-actions"><ArrowLink href={hero.primaryCtaPath || "/register"}>{hero.primaryCtaLabel || "Coba Gratis"}</ArrowLink><a className="text-link" href={hero.secondaryCtaPath || "#program"}><Icon name="play" width="21" height="21" /> {hero.secondaryCtaLabel || "Lihat Program"}</a></div></div><div className="hero-visual" aria-label="Ilustrasi perjalanan belajar bahasa Jepang"><div className="sun" aria-hidden="true" /><div className="cloud cloud-one" /><div className="cloud cloud-two" /><div className="learning-card card-kanji"><small>Hari ini</small><strong><ruby>学<rt>まな</rt></ruby>ぶ</strong><span>belajar</span></div><div className="learning-card card-progress"><span className="mini-icon"><Icon name="layers" width="19" height="19" /></span><div><small>Perjalananmu</small><strong>Terus bertumbuh</strong></div><div className="progress"><i /></div></div><div className="torii" aria-hidden="true"><i /><b /><span /><em /></div><div className="hill hill-back" /><div className="hill hill-front" /><div className="floating-note note-one">あ</div><div className="floating-note note-two">夢</div></div></div></section>
 
         <aside className="proof-strip" aria-label="Pencapaian HIRU Academy" data-reveal><div className="container proof-strip-grid">{proofItems.map((item, index) => <div className="proof-item reveal-item" key={item.value} style={{ "--reveal-index": index } as React.CSSProperties}><span><Icon name={item.icon} width="24" height="24" /></span><p><strong {...(item.label ? { "data-counter": item.value.replace(/\D/g, ""), "data-suffix": item.value.replace(/\d/g, "") } : {})}>{item.value}</strong>{item.label && <small>{item.label}</small>}</p></div>)}</div></aside>
 
@@ -209,7 +212,7 @@ export default function Home() {
 
         <section className="section lms-showcase" data-reveal><div className="container section-heading"><h2>Bukan Hanya Belajar Saat Zoom</h2><p>Lanjutkan belajar melalui materi, rekaman, latihan, dan evaluasi yang tersimpan di LMS Hiru Academy.</p></div><div className="lms-showcase-viewport"><div className="lms-showcase-track"><div className="lms-showcase-group">{lmsPreviews.map((preview) => <LmsPreview key={preview.key} preview={preview} />)}</div><div className="lms-showcase-group lms-showcase-copy" aria-hidden="true">{lmsPreviews.map((preview) => <LmsPreview key={preview.key} preview={preview} />)}</div></div></div></section>
 
-        <section className="section landing-sensei" data-reveal><div className="container"><div className="section-heading"><h2>Belajar Bersama Sensei Berpengalaman</h2></div><SenseiGrid limit={3} reveal /><div className="landing-sensei-action"><Link className="button button-primary" href="/sensei">Lihat Semua Sensei</Link></div></div></section>
+        <section className="section landing-sensei" data-reveal><div className="container"><div className="landing-sensei-heading"><h2>Belajar Bersama Sensei Berpengalaman</h2><p>Temukan mentor sesuai level, target, dan gaya belajarmu.</p></div><SenseiGrid carousel /><div className="landing-sensei-action"><Link className="button button-dark" href="/sensei">Lihat Semua Sensei</Link></div></div></section>
 
         <section className="section landing-testimonials" data-reveal><div className="container"><div className="section-heading"><p className="kicker">CERITA PEMBELAJAR</p><h2>{landing.testimonial?.heading || "Cerita dari Pembelajar Hiru Academy"}</h2></div><div className="testimonial-grid">{displayTestimonials.map((testimonial, index) => <article className="testimonial-card reveal-item" key={testimonial.name} style={{ "--reveal-index": index } as React.CSSProperties}><div className="testimonial-avatar">{testimonial.avatarSrc ? <Image alt={`Foto ${testimonial.name}`} fill sizes="64px" src={testimonial.avatarSrc} /> : <span aria-hidden="true">{testimonial.initials}</span>}</div><blockquote>{testimonial.quote}</blockquote><footer><strong>{testimonial.name}</strong><small>{testimonial.membership}</small></footer></article>)}</div><div className="landing-testimonials-action"><Link className="button button-primary" href="/testimoni">Lihat lebih banyak</Link></div></div></section>
 
