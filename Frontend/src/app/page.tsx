@@ -44,7 +44,7 @@ const offers = [
       "Akses membaca diskusi komunitas",
     ],
     cta: "Pilih Coba Gratis",
-    href: "/register?plan=free",
+    href: "/program",
     buttonClass: "button-dark",
   },
   {
@@ -62,7 +62,7 @@ const offers = [
       "Rekaman kelas dan evaluasi hasil belajar",
     ],
     cta: "Pilih Bersama Sensei",
-    href: "/register?plan=sensei",
+    href: "/program?plan=sensei",
     buttonClass: "button-primary",
   },
   {
@@ -80,7 +80,7 @@ const offers = [
       "Akses komunitas serta sertifikat digital",
     ],
     cta: "Pilih Mandiri",
-    href: "/register?plan=lms",
+    href: "/program?plan=lms",
     buttonClass: "button-dark",
   },
 ];

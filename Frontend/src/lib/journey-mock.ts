@@ -32,52 +32,49 @@ export type JourneyChapter = {
   href?: string;
 };
 
-const senseiLevels: JourneyLevel[] = [
-  { slug: "dasar", code: "DASAR", title: "Dasar Bahasa Jepang", description: "Hiragana, Katakana, salam, dan pola kalimat dasar untuk pemula.", access: "notPurchased", cohort: "none", progression: "available", statusLabel: "BELUM DIBELI", actionLabel: "Beli Level Dasar" },
-  { slug: "n5", code: "N5", title: "JLPT N5", description: "Dapat dibeli langsung; cohort N4 dan N3 tetap aktif tanpa perubahan.", access: "notPurchased", cohort: "none", progression: "available", statusLabel: "BELUM DIBELI", actionLabel: "Lihat Paket N5" },
-  { slug: "n4", code: "N4", title: "JLPT N4", description: "Journey, kelas Sensei, jadwal, dan replay aktif pada level N4.", access: "owned", cohort: "active", progression: "current", statusLabel: "SEDANG DIPELAJARI", actionLabel: "Lanjutkan N4" },
-  { slug: "n3", code: "N3", title: "JLPT N3", description: "Level aktif kedua dengan journey dan cohort yang disimpan terpisah.", access: "owned", cohort: "active", progression: "available", statusLabel: "LEVEL & COHORT AKTIF", actionLabel: "Buka Journey N3" },
-  { slug: "n2", code: "N2", title: "JLPT N2", description: "Dapat ditambahkan tanpa menyelesaikan N3; jadwal dibuat setelah aktivasi.", access: "notPurchased", cohort: "none", progression: "available", statusLabel: "BELUM DIBELI", actionLabel: "Lihat Paket N2" },
-  { slug: "ssw-pengolahan-makanan", code: "SSW", title: "SSW Pengolahan Makanan", description: "Kosakata kerja, sanitasi higienis, dan standar keselamatan industri makanan.", access: "notPurchased", cohort: "none", progression: "available", statusLabel: "BELUM DIBELI", actionLabel: "Lihat Paket SSW" },
-  { slug: "interview", code: "INTERVIEW", title: "Persiapan Interview", description: "Persiapan wawancara kerja, etika profesional, dan simulasi tanya jawab.", access: "notPurchased", cohort: "none", progression: "available", statusLabel: "BELUM DIBELI", actionLabel: "Lihat Paket Interview" },
-];
-
 const baseLevels = [
   ["dasar", "DASAR", "Dasar Bahasa Jepang", "Hiragana, Katakana, salam, dan pola dasar pemula."],
   ["n5", "N5", "JLPT N5", "Tata bahasa dasar, kanji pemula, dan percakapan harian."],
   ["n4", "N4", "JLPT N4", "Pola kalimat lanjutan, kanji esensial, dan percakapan kontekstual."],
   ["n3", "N3", "JLPT N3", "Tata bahasa menengah, teks umum, dan kemampuan komunikasi."],
   ["n2", "N2", "JLPT N2", "Tata bahasa kompleks, artikel opini, dan pemahaman profesional."],
+  ["n1", "N1", "JLPT N1", "Nuansa bahasa tingkat tinggi, teks kompleks, dan strategi JLPT N1."],
   ["ssw-pengolahan-makanan", "SSW", "SSW Pengolahan Makanan", "SOP industri makanan Jepang, higienitas, dan instruksi lapangan."],
   ["interview", "INTERVIEW", "Persiapan Interview", "Etika wawancara kerja, motivasi, dan simulasi profesional."],
 ] as const;
 
-export function getJourneyLevels(membership: Membership): JourneyLevel[] {
-  if (membership === "sensei") return senseiLevels;
+export const jlptLevels = ["N5", "N4", "N3", "N2", "N1"] as const;
+
+export function getDefaultPurchasedLevel(membership: Membership): string | undefined {
+  return membership === "free" ? undefined : "N4";
+}
+
+export function hasFullLearningAccess(code: string, purchasedLevel?: string, standalonePrograms: readonly string[] = []): boolean {
+  const normalized = code.toUpperCase();
+  const purchased = purchasedLevel?.toUpperCase();
+  if (normalized === "SSW" || normalized === "INTERVIEW") return standalonePrograms.includes(normalized);
+  if (normalized === "DASAR") return Boolean(purchased && jlptLevels.includes(purchased as (typeof jlptLevels)[number]));
+  const purchasedIndex = jlptLevels.indexOf(purchased as (typeof jlptLevels)[number]);
+  const requestedIndex = jlptLevels.indexOf(normalized as (typeof jlptLevels)[number]);
+  return purchasedIndex >= 0 && requestedIndex >= 0 && requestedIndex <= purchasedIndex;
+}
+
+export function getJourneyLevels(membership: Membership, purchasedLevel = getDefaultPurchasedLevel(membership), standalonePrograms: readonly string[] = []): JourneyLevel[] {
   return baseLevels.map(([slug, code, title, desc]) => {
-    const free = membership === "free";
-    const freeEligible = slug !== "ssw-pengolahan-makanan" && slug !== "interview";
-    const lmsOwned = slug === "dasar" || slug === "n5" || slug === "n4";
-    const access: LevelAccess = free ? (freeEligible ? "freePreview" : "notPurchased") : lmsOwned ? "owned" : "notPurchased";
-    const progression: LevelProgression = slug === "n4" ? "current" : "available";
-    const statusLabel = free
-      ? freeEligible ? "CHAPTER 1 TERSEDIA" : "TERKUNCI"
-      : lmsOwned ? (slug === "n4" ? "SEDANG DIPELAJARI" : "LEVEL DIMILIKI") : "BELUM AKTIF";
-    const actionLabel = free
-      ? freeEligible ? "Buka Chapter 1" : "Upgrade Membership"
-      : lmsOwned ? "Buka perjalanan" : `Lihat Paket ${code}`;
+    const previewEligible = code === "DASAR" || jlptLevels.includes(code as (typeof jlptLevels)[number]);
+    const owned = membership !== "free" && hasFullLearningAccess(code, purchasedLevel, standalonePrograms);
+    const access: LevelAccess = owned ? "owned" : previewEligible ? "freePreview" : "notPurchased";
+    const progression: LevelProgression = purchasedLevel?.toUpperCase() === code ? "current" : "available";
     return {
       slug,
       code,
       title,
-      description: free
-        ? freeEligible ? "Chapter 1 tersedia sebagai akses Free pada level ini." : "Tingkat lanjutan memerlukan upgrade membership."
-        : lmsOwned ? desc : "Level dapat dibeli terpisah atau melalui program lanjutan.",
+      description: access === "freePreview" ? "Chapter 1 tersedia sebagai akses preview pada level ini." : desc,
       access,
-      cohort: "none",
+      cohort: membership === "sensei" && progression === "current" ? "active" : "none",
       progression,
-      statusLabel,
-      actionLabel,
+      statusLabel: owned ? (progression === "current" ? "SEDANG DIPELAJARI" : "LEVEL DIMILIKI") : access === "freePreview" ? "CHAPTER 1 TERSEDIA" : "TERKUNCI",
+      actionLabel: owned ? "Buka perjalanan" : access === "freePreview" ? "Buka Chapter 1" : "Upgrade Membership",
     };
   });
 }
@@ -103,6 +100,24 @@ const senseiChapterSeeds = [
 ] as const;
 
 export function getJourneyChapters(membership: Membership, level: JourneyLevel): JourneyChapter[] {
+  if (level.access === "freePreview") {
+    return [1, 2, 3, 4, 5].map((number) => {
+      const state: ChapterState = number === 1 ? "current" : "entitlementLocked";
+      return {
+        key: `chapter-${number}`,
+        orderLabel: String(number).padStart(2, "0"),
+        title: `${level.code} | Chapter ${number}`,
+        description: "Video | modul | flashcard | audio | reading | checkpoint",
+        state,
+        statusLabel: number === 1 ? "Buka Chapter 1" : "Terkunci • Upgrade",
+        progress: 0,
+        components: chapterComponents(level.slug, number, state),
+        checkpointUnlocked: number === 1,
+        href: number === 1 ? `/learn/${level.slug}/chapter-1?membership=${membership}` : undefined,
+      };
+    });
+  }
+
   if (level.access === "notPurchased") {
     return [1, 2, 3, 4, 5].map((number) => ({
       key: `chapter-${number}`,
@@ -117,7 +132,7 @@ export function getJourneyChapters(membership: Membership, level: JourneyLevel):
     }));
   }
 
-  if (membership === "sensei") {
+  if (membership === "sensei" && level.cohort === "active") {
     return [
       ...senseiChapterSeeds.map(([key, orderLabel, title, state, statusLabel]) => ({
         key,
@@ -155,15 +170,15 @@ export function getJourneyChapters(membership: Membership, level: JourneyLevel):
   });
 }
 
-export function findJourneyLevel(membership: Membership, slug: string): JourneyLevel | undefined {
-  return getJourneyLevels(membership).find((level) => level.slug === slug);
+export function findJourneyLevel(membership: Membership, slug: string, purchasedLevel = getDefaultPurchasedLevel(membership), standalonePrograms: readonly string[] = []): JourneyLevel | undefined {
+  return getJourneyLevels(membership, purchasedLevel, standalonePrograms).find((level) => level.slug === slug);
 }
 
-export function canAccessLearning(membership: Membership, levelSlug: string, chapterKey: string): boolean {
-  const level = findJourneyLevel(membership, levelSlug);
+export function canAccessLearning(membership: Membership, levelSlug: string, chapterKey: string, purchasedLevel = getDefaultPurchasedLevel(membership), standalonePrograms: readonly string[] = []): boolean {
+  const level = findJourneyLevel(membership, levelSlug, purchasedLevel, standalonePrograms);
   if (!level) return false;
   if (chapterKey === "chapter-1" && level.access !== "notPurchased") return true;
-  if (!level || level.access === "notPurchased") return false;
+  if (level.access === "notPurchased") return false;
   if (level.access === "freePreview") return chapterKey === "chapter-1";
   return getJourneyChapters(membership, level).some((chapter) => chapter.key === chapterKey && (chapter.state === "completed" || chapter.state === "current" || chapter.state === "available"));
 }

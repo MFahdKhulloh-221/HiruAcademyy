@@ -2,16 +2,22 @@ import { StudentBreadcrumb } from "@/components/student-breadcrumb";
 import { PracticeScreen as PracticeFlowScreen } from "@/components/practice-screen";
 import { StudentNavigation } from "@/components/student-navigation";
 import { supportingData, type SupportingKind } from "@/lib/supporting-mock";
+import { createPublicInvoice, getCurrentDemoUser, getInvoiceWhatsAppUrl } from "@/lib/business-store";
+import { hasFullLearningAccess, jlptLevels } from "@/lib/journey-mock";
 import { usePublishedCurriculum } from "@/lib/curriculum-store";
 import { usePublishedAnnouncements } from "@/lib/website-store";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { FaWhatsapp } from "react-icons/fa";
 import {
+  LuArrowLeft,
   LuAward,
   LuBell,
   LuBookOpen,
+  LuBriefcase,
   LuCalendar,
   LuCheck,
+  LuChefHat,
   LuCircleCheck,
   LuClipboardCheck,
   LuClock,
@@ -26,6 +32,7 @@ import {
   LuLock,
   LuMail,
   LuMessagesSquare,
+  LuReceipt,
   LuRotateCcw,
   LuRoute,
   LuSearch,
@@ -35,7 +42,7 @@ import {
   LuUser,
 } from "react-icons/lu";
 
-export function SupportingScreen({ kind, membership, breadcrumbCurrent }: { kind: SupportingKind; membership: "free" | "lms" | "sensei"; breadcrumbCurrent?: string }) {
+export function SupportingScreen({ kind, membership, breadcrumbCurrent, targetProgram }: { kind: SupportingKind; membership: "free" | "lms" | "sensei"; breadcrumbCurrent?: string; targetProgram?: string }) {
   if (kind === "practice") return <PracticeFlowScreen membership={membership} />;
   const data = supportingData[kind];
   if (kind === "library") return <LibraryScreen membership={membership} />;
@@ -45,7 +52,7 @@ export function SupportingScreen({ kind, membership, breadcrumbCurrent }: { kind
   if (kind === "community") return <CommunityScreen membership={membership} />;
   if (kind === "notifications") return <NotificationScreen membership={membership} />;
   if (kind === "profile") return <ProfileScreen membership={membership} />;
-  if (kind === "renewal") return <RenewalScreen membership={membership} breadcrumbCurrent={breadcrumbCurrent} />;
+  if (kind === "renewal") return <RenewalScreen membership={membership} breadcrumbCurrent={breadcrumbCurrent} targetProgram={targetProgram} />;
   if (kind === "createPost") return <CreatePostScreen membership={membership} />;
   if (kind === "affiliate") return <AffiliateScreen membership={membership} />;
   return (
@@ -392,68 +399,289 @@ function AffiliateScreen({ membership }: { membership: "free" | "lms" | "sensei"
   );
 }
 
-function RenewalScreen({ membership, breadcrumbCurrent }: { membership: "free" | "lms" | "sensei"; breadcrumbCurrent?: string }) {
+function RenewalScreen({ membership, breadcrumbCurrent, targetProgram }: { membership: "free" | "lms" | "sensei"; breadcrumbCurrent?: string; targetProgram?: string }) {
+  const currentLevel = membership === "free" ? undefined : getCurrentDemoUser().purchasedLevel || "N4";
+  const currentIndex = jlptLevels.indexOf(currentLevel?.toUpperCase() as (typeof jlptLevels)[number]);
+  const higherJlpt = currentIndex < 0 ? [...jlptLevels] : jlptLevels.slice(currentIndex + 1);
+  const programOptions = [...higherJlpt, "SSW", "INTERVIEW"];
+  const requested = targetProgram?.toUpperCase();
+  const initialProgram = requested && programOptions.includes(requested as (typeof programOptions)[number]) ? requested : programOptions[0];
+  const [program, setProgram] = useState(initialProgram);
   const [plan, setPlan] = useState<"lms" | "sensei">("lms");
   const [rewardApplied, setRewardApplied] = useState(false);
   const query = `?membership=${membership}`;
+  const isJlpt = program?.startsWith("N");
+  const programLabel = program === "SSW" ? "SSW Pengolahan Makanan" : program === "INTERVIEW" ? "Interview" : program ? `JLPT ${program}` : "Tidak ada level JLPT lebih tinggi";
+
+  function createRenewalInvoice() {
+    if (!program) return;
+    const user = getCurrentDemoUser();
+    const invoice = createPublicInvoice({ level: program, plan, name: user.name, email: user.email, whatsapp: user.whatsapp });
+    window.open(getInvoiceWhatsAppUrl(invoice), "_blank", "noopener,noreferrer");
+  }
+
+  const membershipDisplayTitle = membership === "sensei" ? "Kelas bersama Sensei" : membership === "lms" ? "Belajar Mandiri" : "Free Member";
+  const activeLevelDisplay = currentLevel ? `JLPT ${currentLevel}` : "Chapter 1";
+
   return (
     <div className="supporting-shell student-shell">
       <StudentNavigation membership={membership} />
       <main className="supporting-main renewal-page">
-        {breadcrumbCurrent && <StudentBreadcrumb items={[{ label: "Membership", href: `/renewal${query}` }, { label: breadcrumbCurrent }]} />}
-        <Link className="sensei-back renewal-top-back" href={`/profile${query}`}>← Kembali ke Profil</Link>
-        <header className="supporting-header">
+        <div className="renewal-top-nav">
+          <Link className="renewal-top-back" href={`/profile${query}`}>
+            <LuArrowLeft aria-hidden="true" />
+            <span>Kembali ke Profil</span>
+          </Link>
+          {breadcrumbCurrent && (
+            <StudentBreadcrumb
+              items={[
+                { label: "Membership", href: `/renewal${query}` },
+                { label: breadcrumbCurrent },
+              ]}
+            />
+          )}
+        </div>
+
+        <header className="supporting-header renewal-header">
           <p className="dash-kicker">MEMBERSHIP RENEWAL</p>
-          <h1>Lanjutkan akses tanpa kehilangan progres</h1>
+          <h1>Lanjutkan Akses Tanpa Kehilangan Progres</h1>
           <p>Harga dan periode baru tampil setelah plan dipilih; data berasal dari paket resmi HIRU Academy.</p>
         </header>
-        <section className="renewal-current">
-          <div className="renewal-badge-row">
-            <span className="renewal-status-badge">
-              <LuShieldCheck aria-hidden="true" /> Membership Aktif
-            </span>
-          </div>
-          <h2>Belajar Mandiri • N4</h2>
-          <p>Akses aktif hingga 31 Desember 2026. Progres tetap tersimpan setelah perpanjangan.</p>
-        </section>
-        <section className="renewal-plans">
-          <h2>Pilih plan lanjutan</h2>
-          <div>
-            <button className={plan === "lms" ? "active" : ""} type="button" onClick={() => setPlan("lms")}>
-              <div className="renewal-plan-icon"><LuBookOpen aria-hidden="true" /></div>
-              <small>LMS</small>
-              <strong>Belajar Mandiri</strong>
-              <span>Journey penuh, try out, review, sertifikat, dan forum diskusi.</span>
-              <b>Rp 99.000 / 6 Bulan</b>
-            </button>
-            <button className={plan === "sensei" ? "active" : ""} type="button" onClick={() => setPlan("sensei")}>
-              <div className="renewal-plan-icon"><LuGraduationCap aria-hidden="true" /></div>
-              <small>{membership === "sensei" ? "SENSEI" : "LMS + Zoom"}</small>
-              <strong>Belajar dengan Sensei</strong>
-              <span>Semua LMS ditambah cohort, jadwal Zoom, bimbingan Sensei, dan replay.</span>
-              <b>Rp 350.000 / Bulan</b>
-            </button>
+
+        {/* Banner Status Aktif */}
+        <section className="renewal-current-banner">
+          <div className="banner-left">
+            <div className="banner-shield-icon" aria-hidden="true">
+              <LuShieldCheck />
+            </div>
+            <div className="banner-copy">
+              <div className="banner-status-pill">
+                <LuCircleCheck aria-hidden="true" />
+                <span>Membership Aktif</span>
+              </div>
+              <h2>
+                {membershipDisplayTitle} • {activeLevelDisplay}
+              </h2>
+              <p>Akses aktif hingga 31 Desember 2026. Progres tetap tersimpan setelah perpanjangan.</p>
+            </div>
           </div>
         </section>
-        <section className="renewal-reward">
-          <p className="dash-kicker">
-            <LuGift aria-hidden="true" /> REWARD REFERRAL TERSEDIA
-          </p>
-          <h2>Gunakan reward diskon pada invoice renewal berikutnya</h2>
-          <p>Saldo reward aktif dapat langsung memotong total pembayaranmu.</p>
-          <button type="button" className="button button-orange" aria-pressed={rewardApplied} onClick={() => setRewardApplied(true)}>
-            {rewardApplied ? "Reward Diterapkan" : "Gunakan Reward"}
+
+        {/* STEP 1 • Pilih Program / Level */}
+        <section className="renewal-step-section">
+          <div className="renewal-step-header">
+            <div className="renewal-step-badge">
+              <LuTag aria-hidden="true" />
+              <span>STEP 1</span>
+            </div>
+            <h2>Pilih Program / Level</h2>
+            <p>Pilih program atau level lanjutan yang ingin kamu pelajari.</p>
+          </div>
+          <div className="renewal-program-grid">
+            {programOptions.map((option) => {
+              const isSelected = program === option;
+              const isSsw = option === "SSW";
+              const isInterview = option === "INTERVIEW";
+              const label = isSsw ? "SSW Pengolahan Makanan" : isInterview ? "Interview" : `JLPT ${option}`;
+              const badgeLabel = isSsw || isInterview ? "PROGRAM STANDALONE" : "UPGRADE JLPT";
+
+              return (
+                <button
+                  key={option}
+                  type="button"
+                  className={`renewal-program-card ${isSelected ? "selected" : ""}`}
+                  onClick={() => {
+                    setProgram(option);
+                    if (isSsw || isInterview) setPlan("lms");
+                  }}
+                  aria-pressed={isSelected}
+                >
+                  <div className="renewal-card-top-row">
+                    <span className={`renewal-program-icon-badge ${isSsw ? "icon-chef" : isInterview ? "icon-work" : "icon-jlpt"}`} aria-hidden="true">
+                      {isSsw ? <LuChefHat /> : isInterview ? <LuBriefcase /> : <LuAward />}
+                    </span>
+                    <span className="renewal-category-pill">{badgeLabel}</span>
+                    {isSelected && (
+                      <span className="renewal-card-check" aria-hidden="true">
+                        <LuCircleCheck />
+                      </span>
+                    )}
+                  </div>
+                  <div className="renewal-card-body">
+                    <strong className="renewal-program-title">{label}</strong>
+                    <p className="renewal-program-sub">
+                      {isSsw
+                        ? "Materi spesifik keahlian pengolahan makanan industri Jepang."
+                        : isInterview
+                          ? "Persiapan interview kerja & wawancara visa Jepang."
+                          : `Pemantapan materi dan simulasi ujian JLPT ${option}.`}
+                    </p>
+                  </div>
+                </button>
+              );
+            })}
+            {!programOptions.length && (
+              <p className="renewal-empty-hint">Tidak ada level JLPT lebih tinggi. Program standalone tetap dapat dipilih.</p>
+            )}
+          </div>
+        </section>
+
+        {/* STEP 2 • Pilih Paket Belajar */}
+        <section className="renewal-step-section">
+          <div className="renewal-step-header">
+            <div className="renewal-step-badge">
+              <LuLayers3 aria-hidden="true" />
+              <span>STEP 2</span>
+            </div>
+            <h2>Pilih Paket Belajar</h2>
+            <p>Pilih metode pembelajaran yang sesuai dengan ritme dan kebutuhan bimbinganmu.</p>
+          </div>
+          <div className="renewal-plans-grid">
+            <button
+              className={`renewal-plan-card ${plan === "lms" ? "selected" : ""}`}
+              type="button"
+              onClick={() => setPlan("lms")}
+              aria-pressed={plan === "lms"}
+            >
+              <div className="renewal-plan-header">
+                <div className="renewal-plan-icon-wrap" aria-hidden="true">
+                  <LuBookOpen />
+                </div>
+                <div className="renewal-plan-titles">
+                  <span className="renewal-plan-badge">LMS</span>
+                  <h3>Belajar Mandiri</h3>
+                </div>
+                {plan === "lms" && (
+                  <span className="renewal-plan-check" aria-hidden="true">
+                    <LuCircleCheck />
+                  </span>
+                )}
+              </div>
+              <p className="renewal-plan-desc">
+                Journey penuh, try out, review, sertifikat, dan forum diskusi.
+              </p>
+              <div className="renewal-plan-price-box">
+                <span className="renewal-price-val">Rp 99.000</span>
+                <span className="renewal-price-period">/ 6 Bulan</span>
+              </div>
+            </button>
+
+            {isJlpt && (
+              <button
+                className={`renewal-plan-card ${plan === "sensei" ? "selected" : ""}`}
+                type="button"
+                onClick={() => setPlan("sensei")}
+                aria-pressed={plan === "sensei"}
+              >
+                <div className="renewal-plan-header">
+                  <div className="renewal-plan-icon-wrap sensei" aria-hidden="true">
+                    <LuGraduationCap />
+                  </div>
+                  <div className="renewal-plan-titles">
+                    <div className="renewal-title-badges">
+                      <span className="renewal-plan-badge sensei">SENSEI</span>
+                      <span className="renewal-popular-tag">Paling Populer</span>
+                    </div>
+                    <h3>Kelas bersama Sensei</h3>
+                  </div>
+                  {plan === "sensei" && (
+                    <span className="renewal-plan-check" aria-hidden="true">
+                      <LuCircleCheck />
+                    </span>
+                  )}
+                </div>
+                <p className="renewal-plan-desc">
+                  Semua LMS ditambah cohort, jadwal Zoom, bimbingan Sensei, dan replay.
+                </p>
+                <div className="renewal-plan-price-box">
+                  <span className="renewal-price-val">Rp 350.000</span>
+                  <span className="renewal-price-period">/ Bulan</span>
+                </div>
+              </button>
+            )}
+          </div>
+        </section>
+
+        {/* Reward Referral */}
+        <section className="renewal-reward-card">
+          <div className="renewal-reward-content">
+            <div className="renewal-reward-icon-wrap" aria-hidden="true">
+              <LuGift />
+            </div>
+            <div className="renewal-reward-text">
+              <div className="renewal-reward-kicker">
+                <LuGift aria-hidden="true" />
+                <span>REWARD REFERRAL TERSEDIA</span>
+              </div>
+              <h3>Gunakan reward diskon pada invoice renewal berikutnya</h3>
+              <p>Saldo reward aktif dapat langsung memotong total pembayaranmu.</p>
+            </div>
+          </div>
+          <button
+            type="button"
+            className={`renewal-reward-button ${rewardApplied ? "applied" : ""}`}
+            aria-pressed={rewardApplied}
+            onClick={() => setRewardApplied((prev) => !prev)}
+          >
+            {rewardApplied ? (
+              <>
+                <LuCheck aria-hidden="true" />
+                <span>Reward Diterapkan</span>
+              </>
+            ) : (
+              <>
+                <LuGift aria-hidden="true" />
+                <span>Gunakan Reward</span>
+              </>
+            )}
           </button>
         </section>
-        <section className="renewal-summary">
-          <p className="dash-kicker">RINGKASAN RENEWAL</p>
-          <h2>{plan === "lms" ? "Belajar Mandiri" : "Belajar dengan Sensei"} • periode baru</h2>
-          <p className="renewal-summary-desc">{rewardApplied && "Reward referral diterapkan. "}Rincian pembayaran dan tanggal aktif baru akan dikirimkan melalui WhatsApp.</p>
+
+        {/* Summary Card */}
+        <section className="renewal-summary-card">
+          <div className="renewal-summary-head">
+            <div className="renewal-summary-tag">
+              <LuReceipt aria-hidden="true" />
+              <span>RINGKASAN RENEWAL</span>
+            </div>
+            <h2>{programLabel} • {plan === "lms" ? "Belajar Mandiri" : "Kelas bersama Sensei"}</h2>
+            <p className="renewal-summary-desc"><strong>Program:</strong> {programLabel}<br /><strong>Paket:</strong> {plan === "lms" ? "Belajar Mandiri" : "Kelas bersama Sensei"}<br />{rewardApplied && "Reward referral diterapkan. "}Rincian pembayaran dan tanggal aktif baru akan dikirimkan melalui WhatsApp.</p>
+          </div>
+
+          <div className="renewal-summary-grid">
+            <div className="summary-item">
+              <span className="label">Program Dipilih</span>
+              <strong className="value">{programLabel}</strong>
+              <small>{isJlpt ? "Sertifikasi Standar JLPT" : "Program Keahlian Terarah"}</small>
+            </div>
+            <div className="summary-item">
+              <span className="label">Paket Belajar</span>
+              <strong className="value">{plan === "lms" ? "Belajar Mandiri (LMS)" : "Kelas bersama Sensei"}</strong>
+              <small>{plan === "lms" ? "Akses Mandiri 6 Bulan" : "Live Zoom & Bimbingan Sensei"}</small>
+            </div>
+            <div className="summary-item">
+              <span className="label">Biaya Investasi</span>
+              <strong className="value text-orange">{plan === "lms" ? "Rp 99.000" : "Rp 350.000"}</strong>
+              <small>{rewardApplied ? "✓ Diskon referral aktif" : "Tarif resmi terdaftar"}</small>
+            </div>
+          </div>
+
           <div className="renewal-invoice-action">
-            <button className="button button-primary" type="submit">Buat Invoice &amp; Buka WhatsApp</button>
+            <button
+              className="renewal-submit-button"
+              type="button"
+              onClick={createRenewalInvoice}
+              disabled={!program}
+            >
+              <FaWhatsapp className="whatsapp-icon" aria-hidden="true" />
+              <span>Buat Invoice &amp; Buka WhatsApp</span>
+              <LuReceipt className="receipt-icon" aria-hidden="true" />
+            </button>
           </div>
         </section>
-        <aside className="renewal-announcement renewal-announcement-center">
+
+        {/* Announcement Box */}
+        <aside className="renewal-announcement-box">
           <div className="renewal-announcement-header">
             <LuInfo aria-hidden="true" />
             <strong>Pengumuman</strong>
@@ -983,6 +1211,9 @@ const baseSeeds: LibraryMaterialSeed[] = [
 ];
 
 function LibraryScreen({ membership }: { membership: "free" | "lms" | "sensei" }) {
+  const currentUser = getCurrentDemoUser();
+  const purchasedLevel = membership === "free" ? undefined : currentUser.purchasedLevel || "N4";
+  const standalonePrograms = currentUser.purchasedLevel === "SSW" || currentUser.purchasedLevel === "INTERVIEW" ? [currentUser.purchasedLevel] : [];
   const [search, setSearch] = useState("");
   const [level, setLevel] = useState("Semua");
   const [type, setType] = useState("Semua");
@@ -1014,11 +1245,8 @@ function LibraryScreen({ membership }: { membership: "free" | "lms" | "sensei" }
   }, [publishedMaterials]);
 
   const materials = materialSeeds.map((item) => {
-    const isLocked = membership === "free"
-      ? item.level === "SSW" || item.level === "Interview"
-      : membership === "lms"
-        ? !["Dasar", "N5", "N4"].includes(item.level)
-        : !["N4", "N3"].includes(item.level);
+    const programCode = item.level === "Dasar" ? "DASAR" : item.level === "Interview" ? "INTERVIEW" : item.level.toUpperCase();
+    const isLocked = membership === "free" || !hasFullLearningAccess(programCode, purchasedLevel, standalonePrograms);
     const defaultHref = `/learn/${item.level === "Dasar" ? "dasar" : item.level.toLowerCase()}/chapter-${membership === "free" ? "1" : "4"}/${item.type === "Tata Bahasa" ? "grammar" : item.type.toLowerCase()}?membership=${membership}`;
     return {
       icon: item.type === "Kanji" ? LuLayers3 : LuBookOpen,

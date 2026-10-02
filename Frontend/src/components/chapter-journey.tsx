@@ -163,8 +163,8 @@ export function ChapterJourney({ membership, level, chapters }: { membership: Me
                     <b aria-hidden="true"><LuArrowRight /></b>
                   </button>
                 ) : chapter.state === "entitlementLocked" ? (
-                  <Link className="chapter-action-button" href={"/renewal?membership=" + membership}>
-                    Upgrade Akses
+                  <Link className="chapter-action-button" href={`/renewal?membership=${membership}&target=${level.code.toLowerCase()}`}>
+                    Upgrade ke {level.code === "SSW" ? "SSW Pengolahan Makanan" : level.code === "INTERVIEW" ? "Interview" : `JLPT ${level.code}`}
                     <b aria-hidden="true"><LuArrowRight /></b>
                   </Link>
                 ) : (

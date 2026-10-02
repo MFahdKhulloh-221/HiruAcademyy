@@ -1,15 +1,17 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useMemo, useState } from "react";
 import { LuSparkles } from "react-icons/lu";
 import { PublicPage } from "@/components/public-shell";
 import { levelCatalog, plans } from "@/lib/public-mock";
 import { usePublishedPrograms } from "@/lib/curriculum-store";
 
-export default function ProgramPage() {
+function ProgramContent() {
   const publishedPrograms = usePublishedPrograms();
-  const [selectedPlanId, setSelectedPlanId] = useState("sensei");
+  const planParam = useSearchParams().get("plan");
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(planParam === "sensei" || planParam === "lms" || planParam === "free" ? planParam : null);
   const [selectedLevel, setSelectedLevel] = useState(levelCatalog[1]);
 
   const matchedProgram = publishedPrograms.find(
@@ -17,8 +19,9 @@ export default function ProgramPage() {
   );
 
   const currentPlans = useMemo(() => {
-    if (!matchedProgram) return plans;
-    return plans.map((plan) => {
+    const orderedPlans = ["free", "sensei", "lms"].map((id) => plans.find((plan) => plan.id === id)).filter((plan): plan is (typeof plans)[number] => Boolean(plan));
+    if (!matchedProgram) return orderedPlans;
+    return orderedPlans.map((plan) => {
       if (plan.id === "lms" && typeof matchedProgram.selfStudyPrice === "number") {
         const p = matchedProgram.selfStudyPrice;
         const formatted = p >= 1000 && p % 1000 === 0 ? `${p / 1000}k` : p.toLocaleString("id-ID");
@@ -43,7 +46,13 @@ export default function ProgramPage() {
     });
   }, [matchedProgram]);
 
-  const selectedPlan = currentPlans.find((p) => p.id === selectedPlanId) ?? currentPlans[2];
+  const selectedPlan = currentPlans.find((plan) => plan.id === selectedPlanId);
+  const summaryPlan = selectedPlan ?? currentPlans[0];
+
+  function handleButtonClick(planId: string) {
+    setSelectedPlanId(planId);
+    document.querySelector(".level-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
 
   return (
     <PublicPage active="Program">
@@ -57,7 +66,7 @@ export default function ProgramPage() {
           </div>
           <div className="pricing-grid">
             {currentPlans.map((plan) => {
-              const isSelected = selectedPlan.id === plan.id;
+              const isSelected = selectedPlan?.id === plan.id;
               const isPopular = plan.id === "sensei";
               const displayPrice = plan.price.replace(/99\.000/g, "99k").replace(/350\.000/g, "350k");
               const [amount, period] = displayPrice.includes("/")
@@ -117,7 +126,7 @@ export default function ProgramPage() {
                       className={`button ${isSelected ? "button-primary" : "button-secondary"} pricing-cta-btn`}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setSelectedPlanId(plan.id);
+                        handleButtonClick(plan.id);
                       }}
                     >
                       {plan.id === "free"
@@ -164,10 +173,6 @@ export default function ProgramPage() {
                     <li key={topic}>{topic}</li>
                   ))}
                 </ul>
-                <footer>
-                  <em>Pilih {level.code}</em>
-                  <b aria-hidden="true">→</b>
-                </footer>
               </button>
             ))}
           </div>
@@ -181,7 +186,7 @@ export default function ProgramPage() {
               </div>
               <div className="summary-header-copy">
                 <div className="summary-tag">RINGKASAN PILIHAN</div>
-                <h2>{selectedLevel.name} • {selectedPlan.title}</h2>
+                <h2>{selectedLevel.name} • {summaryPlan.title}</h2>
                 <p>Paket belajar pilihanmu siap didaftarkan.</p>
               </div>
             </div>
@@ -189,13 +194,13 @@ export default function ProgramPage() {
             <div className="summary-meta-grid">
               <div className="summary-meta-card price-highlight">
                 <span className="meta-label">BIAYA INVESTASI</span>
-                <strong className="meta-value">{selectedPlan.price.replace(/99\.000/g, "99k").replace(/350\.000/g, "350k")}</strong>
-                <small className="meta-note">{selectedPlan.id === "free" ? "Akses Chapter 1 Gratis" : "Investasi pendidikan terarah"}</small>
+                <strong className="meta-value">{summaryPlan.price.replace(/99\.000/g, "99k").replace(/350\.000/g, "350k")}</strong>
+                <small className="meta-note">{summaryPlan.id === "free" ? "Akses Chapter 1 Gratis" : "Investasi pendidikan terarah"}</small>
               </div>
-              {selectedPlan.period && (
+              {summaryPlan.period && (
                 <div className="summary-meta-card period-highlight">
                   <span className="meta-label">DURASI &amp; AKSES</span>
-                  <strong className="meta-value">{selectedPlan.period}</strong>
+                  <strong className="meta-value">{summaryPlan.period}</strong>
                   <small className="meta-note">Masa aktif bimbingan materi</small>
                 </div>
               )}
@@ -207,7 +212,7 @@ export default function ProgramPage() {
             </div>
 
             <div className="summary-action-box" style={{ width: "100%", display: "flex", justifyContent: "center", margin: "20px auto 0" }}>
-              <Link className="button button-primary summary-cta" href={`/register?placement=${selectedLevel.code}&plan=${selectedPlan.id}`} style={{ margin: "0 auto" }}>
+              <Link className="button button-primary summary-cta" href={`/register?placement=${selectedLevel.code}&plan=${summaryPlan.id}`} style={{ margin: "0 auto" }}>
                 Lanjutkan Pendaftaran
               </Link>
             </div>
@@ -215,5 +220,13 @@ export default function ProgramPage() {
         </aside>
       </main>
     </PublicPage>
+  );
+}
+
+export default function ProgramPage() {
+  return (
+    <Suspense fallback={null}>
+      <ProgramContent />
+    </Suspense>
   );
 }

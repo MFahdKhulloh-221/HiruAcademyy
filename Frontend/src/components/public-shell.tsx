@@ -4,7 +4,7 @@ import { FaInstagram, FaWhatsapp } from "react-icons/fa";
 import { BrandLogo } from "@/components/brand-logo";
 
 export function PublicHeader({ active }: { active?: string }) {
-  const links = [["Program", "/program"], ["Coba Gratis", "/register"], ["Placement Test", "/placement"], ["Testimoni", "/testimoni"], ["Blog", "/blog"]];
+  const links = [["Program", "/program"], ["Placement Test", "/placement"], ["Testimoni", "/testimoni"], ["Blog", "/blog"]];
   return <header className="public-header"><div className="public-wrap"><Link href="/" aria-label="Hiru Academy"><BrandLogo /></Link><nav aria-label="Navigasi utama">{links.map(([label, href]) => <Link className={active === label ? "active" : ""} key={href} href={href}>{label}</Link>)}</nav><Link className="public-login" href="/login">Login</Link></div></header>;
 }
 

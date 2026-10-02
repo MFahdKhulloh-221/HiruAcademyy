@@ -33,6 +33,11 @@ export function PracticeScreen({ membership }: { membership: Membership }) {
   const [drafts, setDrafts] = useState<Record<string, PracticeDraft>>({});
 
   useEffect(() => {
+    const resetList = () => setStep("list");
+    window.addEventListener("hiru:practice-list", resetList);
+    return () => window.removeEventListener("hiru:practice-list", resetList);
+  }, []);
+  useEffect(() => {
     const timer = setTimeout(() => {
       const savedHistory = readSession<PracticeHistory[]>(historyKey(membership), []);
       if (savedHistory.length) {
@@ -113,7 +118,7 @@ export function PracticeScreen({ membership }: { membership: Membership }) {
 
   return <div className="supporting-shell student-shell"><StudentNavigation membership={membership} /><main className="supporting-main practice-page practice-flow">
     <nav className="practice-breadcrumb" aria-label="Breadcrumb"><button type="button" onClick={() => setStep("list")}>Latihan Harian</button><span aria-hidden="true">›</span><button type="button" onClick={() => setStep("list")}>{level}</button>{activeCategory && <><span aria-hidden="true">›</span>{step === "list" ? <strong aria-current="page">{activeCategory}</strong> : <button type="button" onClick={() => setStep("list")}>{activeCategory}</button>}</>}{!activeCategory && step === "list" && <strong className="sr-only" aria-current="page">{level}</strong>}{step !== "list" && <><span aria-hidden="true">›</span>{step === "runner" ? <strong aria-current="page">Latihan {exercise}</strong> : <button type="button" onClick={() => setStep("runner")}>Latihan {exercise}</button>}</>}{(step === "result" || step === "review") && <><span aria-hidden="true">›</span>{step === "result" ? <strong aria-current="page">Hasil</strong> : <button type="button" onClick={() => setStep("result")}>Hasil</button>}</>}{step === "review" && <><span aria-hidden="true">›</span><strong aria-current="page">Lihat Jawaban</strong></>}</nav>
-    <header className="practice-header"><div><h1>Latihan Harian</h1><p>“Tingkatkan kemampuan bahasa Jepang Anda hari ini.”</p></div><label>Pilih Level<select value={level} onChange={(event) => changeLevel(event.target.value as PracticeLevel)}>{practiceLevels.map((item) => <option key={item}>{item}</option>)}</select></label></header>
+    <header className="practice-header"><div><h1>Latihan Harian</h1><p>“Tingkatkan kemampuan bahasa Jepang Anda hari ini.”</p></div>{step === "list" && <label>Pilih Level<select value={level} onChange={(event) => changeLevel(event.target.value as PracticeLevel)}>{practiceLevels.map((item) => <option key={item}>{item}</option>)}</select></label>}</header>
     {step === "list" && <>
       <section className="practice-summary" aria-label="Ringkasan Latihan"><article><LuBookOpen /><div><span>Total Latihan</span><strong>{history.length}</strong></div></article><article><LuTarget /><div><span>Rata-rata Skor</span><strong>{average}%</strong></div></article><article><LuFlame /><div><span>Streak Hari Ini</span><strong>{history.length ? 1 : 0} hari</strong></div></article></section>
       {levelHasCategories(level) && <nav className="practice-category-tabs" aria-label="Pilih Kategori">{practiceCategories.map((item) => <button type="button" aria-pressed={category === item} className={category === item ? "active" : ""} onClick={() => setCategory(item)} key={item}>{item}</button>)}</nav>}

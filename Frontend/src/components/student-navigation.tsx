@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { LuBell, LuEllipsis, LuHouse, LuLockKeyhole, LuMenu, LuMessagesSquare, LuRoute, LuTrendingUp, LuUser, LuX } from "react-icons/lu";
+import { LuBell, LuEllipsis, LuHouse, LuLockKeyhole, LuLogOut, LuMenu, LuMessagesSquare, LuPlay, LuRoute, LuSettings, LuTrendingUp, LuUser, LuX } from "react-icons/lu";
 import type { IconType } from "react-icons";
 import { BrandLogo } from "@/components/brand-logo";
 import type { Membership } from "@/lib/dashboard-mock";
@@ -153,13 +153,26 @@ export function StudentNavigation({ membership }: { membership: Membership }) {
         const Icon = item.icon;
         if (item.children && item.entitlement !== "locked") {
           const open = item.active || expanded[item.label] === true;
-          return <div className="student-nav-group" key={item.label}><button className={`student-nav-item student-nav-parent state-${stateClass}`} type="button" aria-expanded={open} onClick={() => setExpanded((state) => ({ ...state, [item.label]: !open }))}><span aria-hidden="true"><Icon /></span>{item.label}<i className={open ? "open" : ""} aria-hidden="true">⌄</i></button>{open && <div className="student-submenu">{item.children.map((child) => { const active = child.key === current; return child.entitlement === "locked" ? <button className={`${active ? "active " : ""}locked`} type="button" aria-current={active ? "page" : undefined} onClick={(event) => openModal(child.label, "membershipLock", event.currentTarget)} key={child.key}><span>{child.label}</span><LuLockKeyhole aria-hidden="true" /></button> : <Link className={active ? "active" : ""} href={child.href} aria-current={active ? "page" : undefined} onClick={() => setMobileOpen(false)} key={child.key}>{child.label}</Link>; })}</div>}</div>;
+          return <div className="student-nav-group" key={item.label}><button className={`student-nav-item student-nav-parent state-${stateClass}`} type="button" aria-expanded={open} onClick={() => setExpanded((state) => ({ ...state, [item.label]: !open }))}><span aria-hidden="true"><Icon /></span>{item.label}<i className={open ? "open" : ""} aria-hidden="true">⌄</i></button>{open && <div className="student-submenu">{item.children.map((child) => { const active = child.key === current; return child.entitlement === "locked" ? <button className={`${active ? "active " : ""}locked`} type="button" aria-current={active ? "page" : undefined} onClick={(event) => openModal(child.label, "membershipLock", event.currentTarget)} key={child.key}><span>{child.label}</span><LuLockKeyhole aria-hidden="true" /></button> : <Link className={active ? "active" : ""} href={child.href} aria-current={active ? "page" : undefined} onClick={() => { setMobileOpen(false); if (child.key === "practice") window.dispatchEvent(new CustomEvent("hiru:practice-list")); }} key={child.key}>{child.label}</Link>; })}</div>}</div>;
         }
         if (item.entitlement !== "locked" && item.implementation === "implemented" && item.href) return <Link className={`student-nav-item state-${stateClass}`} href={item.href} aria-current={item.active ? "page" : undefined} onClick={() => setMobileOpen(false)} key={item.label}><span aria-hidden="true"><Icon /></span>{item.label}</Link>;
         const variant = item.entitlement === "locked" ? "membershipLock" : "notImplemented";
         return <button className={`student-nav-item state-${stateClass}${feedback === item.label ? " locked-feedback" : ""}`} type="button" onClick={(event) => openModal(item.label, variant, event.currentTarget)} key={item.label}><span aria-hidden="true"><Icon /></span>{item.label}{item.entitlement === "locked" && <i aria-hidden="true"><LuLockKeyhole /></i>}</button>;
       })}</nav>
-      <div className="student-nav-bottom">{["Mulai Belajar", "Pengaturan", "Keluar"].map((label) => <button type="button" onClick={(event) => openModal(label, "notImplemented", event.currentTarget)} key={label}>{label}</button>)}</div>
+      <div className="student-nav-bottom">
+        <button type="button" onClick={(event) => openModal("Mulai Belajar", "notImplemented", event.currentTarget)}>
+          <span aria-hidden="true"><LuPlay /></span>
+          <span>Mulai Belajar</span>
+        </button>
+        <button type="button" onClick={(event) => openModal("Pengaturan", "notImplemented", event.currentTarget)}>
+          <span aria-hidden="true"><LuSettings /></span>
+          <span>Pengaturan</span>
+        </button>
+        <button type="button" onClick={(event) => openModal("Keluar", "notImplemented", event.currentTarget)}>
+          <span aria-hidden="true"><LuLogOut /></span>
+          <span>Keluar</span>
+        </button>
+      </div>
     </>
   );
 

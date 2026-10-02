@@ -15,7 +15,7 @@ import {
   LuSearch,
   LuVolume2,
 } from "react-icons/lu";
-import { replayMarkers, replays, scheduleSessions } from "@/lib/sensei-mock";
+import { getReplayAccessLevels, replayLevels, replayMarkers, replays, scheduleSessions, type ReplayLevel } from "@/lib/sensei-mock";
 import { usePublishedCurriculum } from "@/lib/curriculum-store";
 import { formatStudentScheduleDate, usePublishedClassOperations, type StudentScheduleItem } from "@/lib/class-store";
 
@@ -107,6 +107,7 @@ export function ClassDetailScreen() {
 
 type ReplayItem = {
   id: string;
+  level: ReplayLevel;
   title: string;
   description: string;
   category: string;
@@ -116,25 +117,31 @@ type ReplayItem = {
   date?: string;
 };
 
-export function ReplayScreen() {
+export function ReplayScreen({ purchasedLevel = "N4" }: { purchasedLevel?: string }) {
   const curriculum = usePublishedCurriculum();
-  const [filter, setFilter] = useState("Semua");
+  const accessLevels = getReplayAccessLevels("sensei", purchasedLevel);
+  const [filter, setFilter] = useState<ReplayLevel>(accessLevels.at(-1) ?? "N5");
   const [search, setSearch] = useState("");
   const [processing, setProcessing] = useState(false);
 
   const publishedReplays: ReplayItem[] = useMemo(() => {
     return (curriculum.replays || [])
       .filter((r) => r.status === "Published")
-      .map((r) => ({
+      .map((r) => {
+        const programCode = r.programCode?.toUpperCase();
+        const level = replayLevels.includes(programCode as ReplayLevel) ? programCode as ReplayLevel : "N4";
+        return ({
         id: r.id,
         title: r.title,
         description: r.description,
-        category: r.programCode ? `Chapter ${r.programCode}` : "Chapter 4",
+        level,
+        category: level,
         featured: false,
         youtubeVideoId: r.youtubeVideoId,
         durationMinutes: r.durationMinutes || 90,
         date: r.date,
-      }));
+      });
+      });
   }, [curriculum.replays]);
 
   const allReplays: ReplayItem[] = useMemo(() => {
@@ -154,12 +161,12 @@ export function ReplayScreen() {
     () =>
       allReplays.filter(
         (item) =>
-          (filter === "Semua" || item.category === filter) &&
+          item.level === filter &&
           item.title.toLowerCase().includes(search.toLowerCase())
       ),
     [allReplays, filter, search]
   );
-  const featured = allReplays[0];
+  const featured = visible[0];
 
   if (processing) {
     return (
@@ -198,16 +205,19 @@ export function ReplayScreen() {
           />
         </label>
         <div className="replay-tabs-group">
-          {["Semua", "Chapter 4", "Tersimpan"].map((item) => (
-            <button
+          {replayLevels.map((item) => {
+            const accessible = accessLevels.includes(item);
+            return <button
               type="button"
               className={`replay-tab-btn ${filter === item ? "active" : ""}`}
-              onClick={() => setFilter(item)}
+              onClick={() => accessible && setFilter(item)}
+              disabled={!accessible}
+              aria-label={`${item}${accessible ? "" : ", terkunci"}`}
               key={item}
             >
-              {item}
-            </button>
-          ))}
+              {item}{accessible ? "" : " • Terkunci"}
+            </button>;
+          })}
         </div>
       </div>
 
@@ -229,8 +239,8 @@ export function ReplayScreen() {
                 className="button button-primary"
                 href={
                   featured.youtubeVideoId
-                    ? `/replay/chapter-4?membership=sensei&v=${encodeURIComponent(featured.youtubeVideoId)}`
-                    : "/replay/chapter-4?membership=sensei"
+                    ? `/replay/chapter-4?membership=sensei&id=${encodeURIComponent(featured.id)}&v=${encodeURIComponent(featured.youtubeVideoId)}`
+                    : `/replay/chapter-4?membership=sensei&id=${encodeURIComponent(featured.id)}`
                 }
               >
                 Putar Rekaman
@@ -270,8 +280,8 @@ export function ReplayScreen() {
                   <Link
                     href={
                       item.youtubeVideoId
-                        ? `/replay/chapter-4?membership=sensei&v=${encodeURIComponent(item.youtubeVideoId)}`
-                        : "/replay/chapter-4?membership=sensei"
+                        ? `/replay/chapter-4?membership=sensei&id=${encodeURIComponent(item.id)}&v=${encodeURIComponent(item.youtubeVideoId)}`
+                        : `/replay/chapter-4?membership=sensei&id=${encodeURIComponent(item.id)}`
                     }
                     className="button button-primary"
                   >
@@ -300,15 +310,16 @@ export function ReplayScreen() {
   );
 }
 
-export function ReplayPlayerScreen({ youtubeVideoId }: { youtubeVideoId?: string }) {
+export function ReplayPlayerScreen({ youtubeVideoId, purchasedLevel = "N4" }: { youtubeVideoId?: string; purchasedLevel?: string }) {
   const searchParams = useSearchParams();
   const curriculum = usePublishedCurriculum();
   const queryVideoId = searchParams.get("v") || undefined;
   const queryReplayId = searchParams.get("id") || undefined;
-
+  const accessibleLevels = getReplayAccessLevels("sensei", purchasedLevel);
+  const matchedDummy = replays.find((item) => item.id === queryReplayId && accessibleLevels.includes(item.level));
   const matchedPublished = queryReplayId
-    ? curriculum.replays.find((r) => r.id === queryReplayId)
-    : curriculum.replays.find((r) => r.youtubeVideoId) || curriculum.replays[0];
+    ? curriculum.replays.find((r) => r.id === queryReplayId && accessibleLevels.includes((r.programCode?.toUpperCase() || "N4") as ReplayLevel))
+    : curriculum.replays.find((r) => r.youtubeVideoId && accessibleLevels.includes((r.programCode?.toUpperCase() || "N4") as ReplayLevel)) || curriculum.replays[0];
 
   const activeVideoId = youtubeVideoId || queryVideoId || matchedPublished?.youtubeVideoId;
 
@@ -342,8 +353,8 @@ export function ReplayPlayerScreen({ youtubeVideoId }: { youtubeVideoId?: string
       </Link>
       <PageHead
         eyebrow="REPLAY • CHAPTER 4 • COHORT AKTIF"
-        title={matchedPublished?.title || "Pola Kalimat dan Kehidupan Sehari-hari"}
-        description={matchedPublished?.description || "Rekaman bimbingan Sensei lengkap dengan chapter markers, materi modul, dan ringkasan kelas."}
+        title={matchedPublished?.title || matchedDummy?.title || "Pola Kalimat dan Kehidupan Sehari-hari"}
+        description={matchedPublished?.description || matchedDummy?.description || "Rekaman bimbingan Sensei lengkap dengan chapter markers, materi modul, dan ringkasan kelas."}
       />
 
       {/* YouTube-Ready Video Player Structure */}

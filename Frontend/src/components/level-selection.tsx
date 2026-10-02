@@ -26,22 +26,6 @@ export function LevelSelection({ membership, levels }: { membership: Membership;
 
   return (
     <>
-      {membership === "sensei" && (
-        <section className="active-level-summary">
-          <div>
-            <p className="dash-kicker">2 LEVEL AKTIF</p>
-            <h2>JLPT N4 dan N3 aktif bersama Sensei</h2>
-            <p>Lanjutkan N4 atau buka N3. Progress, jadwal kelas, dan replay disimpan per level serta cohort akun.</p>
-            <div className="active-level-actions">
-              <Link className="continue-button" href="/journey/n4?membership=sensei">
-                Lanjutkan N4 <LuArrowRight aria-hidden="true" style={{ display: "inline-block", marginLeft: "4px", verticalAlign: "middle" }} />
-              </Link>
-            </div>
-          </div>
-
-        </section>
-      )}
-
       <section className="level-grid" aria-label="Pilihan level">
         {levels.map((level) => {
           const isLocked = level.access === "notPurchased";
@@ -72,8 +56,8 @@ export function LevelSelection({ membership, levels }: { membership: Membership;
               <h2>{level.title}</h2>
               <p>{level.description}</p>
               {level.access === "notPurchased" ? (
-                <Link className="level-unavailable" href={`/renewal?membership=${membership}`}>
-                  {level.actionLabel}
+                <Link className="level-unavailable" href={`/renewal?membership=${membership}&target=${level.code.toLowerCase()}`}>
+                  {level.code === "SSW" || level.code === "INTERVIEW" ? level.actionLabel : `Upgrade ke JLPT ${level.code}`}
                   <LuArrowRight aria-hidden="true" style={{ display: "inline-block", marginLeft: "4px", verticalAlign: "middle" }} />
                 </Link>
               ) : (

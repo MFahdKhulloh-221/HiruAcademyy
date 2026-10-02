@@ -16,11 +16,12 @@ import {
 import { AssessmentUnavailable } from "@/components/assessment-unavailable";
 import { miniCheckpoints } from "@/lib/sensei-mock";
 import { usePublishedAssessments, type PublishedAssessment } from "@/lib/assessment-store";
+import type { Membership } from "@/lib/dashboard-mock";
 
 const defaultItem = miniCheckpoints.find((group) => group.level === "N4")!.items.find((item) => item.session === "sesi 2" && item.part === "part 1")!;
 type View = "list" | "info" | "runner" | "result" | "review" | "unavailable" | "review-unavailable";
 
-export function MiniCheckpointScreen() {
+export function MiniCheckpointScreen({ membership = "sensei" }: { membership?: Membership } = {}) {
   const [view, setView] = useState<View>("list");
   const [selected, setSelected] = useState(defaultItem);
   const [answer, setAnswer] = useState("b");
@@ -47,7 +48,7 @@ export function MiniCheckpointScreen() {
         description="Akses mengikuti cohort, progres pertemuan, dan jadwal rilis resmi kelas."
         facts={["Cohort aktif", "Progres kelas", "Rilis akademik"]}
         primary={{ label: "Kembali ke Daftar", onClick: () => setView("list") }}
-        secondary={{ label: "Kembali Dashboard", href: "/dashboard?membership=sensei" }}
+        secondary={{ label: "Kembali Dashboard", href: `/dashboard?membership=${membership}` }}
       />
     );
   }
@@ -326,7 +327,7 @@ onClick={() => setQuestion((value) => Math.min(totalQuestions, value + 1))}
           <button className="button button-secondary" type="button" onClick={() => setView("result")}>
             Kembali ke Hasil
           </button>
-          <Link className="button button-dark" href="/practice?membership=sensei">
+          <Link className="button button-dark" href={`/practice?membership=${membership}`}>
             Latihan Rekomendasi
           </Link>
         </div>
