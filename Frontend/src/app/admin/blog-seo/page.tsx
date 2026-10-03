@@ -1,10 +1,5 @@
-import { Suspense } from "react";
-import { BlogSeoStudio } from "@/components/website-content-studio";
+import { AdminBlogPrototype } from "@/components/admin-blog-prototype";
 
 export default function Page() {
-  return (
-    <Suspense fallback={<div className="admin-loading">Memuat CMS Blog &amp; SEO…</div>}>
-      <BlogSeoStudio />
-    </Suspense>
-  );
+  return <AdminBlogPrototype />;
 }

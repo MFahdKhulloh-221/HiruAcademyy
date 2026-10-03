@@ -1,10 +1,5 @@
-import { Suspense } from "react";
-import { TestimonialStudio } from "@/components/website-content-studio";
+import { AdminTestimonialPrototype } from "@/components/admin-testimonial-prototype";
 
 export default function Page() {
-  return (
-    <Suspense fallback={<div className="admin-loading">Memuat CMS Testimoni…</div>}>
-      <TestimonialStudio />
-    </Suspense>
-  );
+  return <AdminTestimonialPrototype />;
 }

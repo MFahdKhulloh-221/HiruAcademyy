@@ -1,2 +1,5 @@
-import { ClassOperations } from "@/components/class-operations";
-export default function Page() { return <ClassOperations />; }
+import { AdminLiveReplayPrototype } from "@/components/admin-live-replay-prototype";
+
+export default function Page() {
+  return <AdminLiveReplayPrototype />;
+}

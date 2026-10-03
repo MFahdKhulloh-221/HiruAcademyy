@@ -1,10 +1,5 @@
-import { Suspense } from "react";
-import { UserMembershipOperations } from "@/components/business-operations";
+import { AdminUsersPrototype } from "@/components/admin-users-prototype";
 
 export default function Page() {
-  return (
-    <Suspense fallback={<div className="admin-loading">Memuat Pengguna &amp; Akses…</div>}>
-      <UserMembershipOperations />
-    </Suspense>
-  );
+  return <AdminUsersPrototype />;
 }

@@ -1,2 +1,5 @@
-import { SenseiDirectory } from "@/components/class-operations";
-export default function Page() { return <SenseiDirectory />; }
+import { AdminSenseiPrototype } from "@/components/admin-sensei-prototype";
+
+export default function Page() {
+  return <AdminSenseiPrototype />;
+}

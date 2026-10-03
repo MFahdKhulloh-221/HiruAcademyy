@@ -1,10 +1,5 @@
-import { Suspense } from "react";
-import { PlacementBuilder } from "@/components/placement-builder";
+import { AdminPlacementPrototype } from "@/components/admin-placement-prototype";
 
 export default function Page() {
-  return (
-    <Suspense fallback={<span role="status">Memuat placement…</span>}>
-      <PlacementBuilder />
-    </Suspense>
-  );
+  return <AdminPlacementPrototype />;
 }

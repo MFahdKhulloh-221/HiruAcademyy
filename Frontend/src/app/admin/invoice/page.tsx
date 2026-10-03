@@ -1,10 +1,5 @@
-import { Suspense } from "react";
-import { InvoiceOperations } from "@/components/business-operations";
+import { AdminInvoicePrototype } from "@/components/admin-invoice-prototype";
 
 export default function Page() {
-  return (
-    <Suspense fallback={<div className="admin-loading">Memuat Invoice…</div>}>
-      <InvoiceOperations />
-    </Suspense>
-  );
+  return <AdminInvoicePrototype />;
 }

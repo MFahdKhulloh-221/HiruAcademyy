@@ -1,10 +1,5 @@
-import { Suspense } from "react";
-import { AffiliateOperations } from "@/components/business-operations";
+import { AdminAffiliatePrototype } from "@/components/admin-affiliate-prototype";
 
 export default function Page() {
-  return (
-    <Suspense fallback={<div className="admin-loading">Memuat Affiliate &amp; Komisi…</div>}>
-      <AffiliateOperations initialTab="Affiliate" />
-    </Suspense>
-  );
+  return <AdminAffiliatePrototype />;
 }

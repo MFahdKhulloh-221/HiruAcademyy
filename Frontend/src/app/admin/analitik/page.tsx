@@ -1,5 +1,5 @@
-import { AdminAnalyticsDashboard } from "@/components/admin-analytics-dashboard";
+import { AdminAnalyticsPrototype } from "@/components/admin-analytics-prototype";
 
 export default function Page() {
-  return <AdminAnalyticsDashboard />;
+  return <AdminAnalyticsPrototype />;
 }
