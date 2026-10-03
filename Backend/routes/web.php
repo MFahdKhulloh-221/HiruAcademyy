@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AccessGrantController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ProgramController;
 use App\Http\Controllers\ProgramOfferController;
@@ -8,6 +9,10 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('api')->middleware('throttle:identity')->group(function () {
     Route::middleware(['auth:sanctum', 'active', 'role:admin'])->prefix('admin')->group(function () {
+        Route::get('users/{user}/access', [AccessGrantController::class, 'index']);
+        Route::post('users/{user}/access', [AccessGrantController::class, 'store']);
+        Route::patch('access/{grant}', [AccessGrantController::class, 'update']);
+        Route::delete('access/{grant}', [AccessGrantController::class, 'destroy']);
         Route::get('promotions', [PromotionController::class, 'index']);
         Route::post('promotions', [PromotionController::class, 'store']);
         Route::patch('promotions/{promotion}', [PromotionController::class, 'update']);
