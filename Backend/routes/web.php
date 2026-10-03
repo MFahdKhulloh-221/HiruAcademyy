@@ -1,9 +1,14 @@
 <?php
 
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\ProgramController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('api')->middleware('throttle:identity')->group(function () {
+    Route::get('public/programs', [ProgramController::class, 'publicIndex']);
+    Route::get('admin/programs', [ProgramController::class, 'adminIndex'])
+        ->middleware(['auth:sanctum', 'active', 'role:admin']);
+
     Route::prefix('auth')->group(function () {
         Route::post('register', [AuthController::class, 'register']);
         Route::post('login', [AuthController::class, 'login']);

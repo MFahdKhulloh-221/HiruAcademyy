@@ -23,7 +23,9 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('recovery', fn (Request $request) => Limit::perMinute(5)->by($request->ip()));
         Event::listen(CommandStarting::class, function (CommandStarting $event) {
             if (str_starts_with($event->command ?? '', 'migrate') || in_array($event->command, ['db:wipe', 'db:seed', 'hiru:admin:create'], true)) {
-                if (! $this->app->environment('testing') && in_array($event->command, ['migrate:fresh', 'migrate:refresh', 'migrate:reset', 'migrate:rollback', 'db:wipe', 'db:seed'], true)) {
+                $programSeed = $event->command === 'db:seed'
+                    && in_array($event->input->getOption('class'), ['ProgramSeeder', 'Database\\Seeders\\ProgramSeeder'], true);
+                if (! $this->app->environment('testing') && ! $programSeed && in_array($event->command, ['migrate:fresh', 'migrate:refresh', 'migrate:reset', 'migrate:rollback', 'db:wipe', 'db:seed'], true)) {
                     throw new \RuntimeException('Operasi destruktif diblokir pada database normal.');
                 }
                 DatabaseSafety::assertTarget($this->app->environment('testing'));
