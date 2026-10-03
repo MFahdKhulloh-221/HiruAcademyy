@@ -2,9 +2,13 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ProgramController;
+use App\Http\Controllers\ProgramOfferController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('api')->middleware('throttle:identity')->group(function () {
+    Route::get('public/offers', [ProgramOfferController::class, 'publicIndex']);
+    Route::get('admin/offers', [ProgramOfferController::class, 'adminIndex'])
+        ->middleware(['auth:sanctum', 'active', 'role:admin']);
     Route::get('public/programs', [ProgramController::class, 'publicIndex']);
     Route::get('admin/programs', [ProgramController::class, 'adminIndex'])
         ->middleware(['auth:sanctum', 'active', 'role:admin']);
