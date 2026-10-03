@@ -187,7 +187,7 @@ class AccessGrantTest extends TestCase
         $other = User::create(['name' => 'Other Student', 'email' => 'other-grant@example.test', 'whatsapp' => '081234567896', 'password' => 'Password123!']);
         $this->postJson($this->url($other), $this->payload('n5'))->assertCreated();
         $response = $this->getJson($this->url())->assertOk()->assertJsonCount(4, 'data');
-        $keys = ['id', 'user_id', 'program_id', 'plan_code', 'starts_at', 'ends_at', 'status', 'created_at', 'updated_at'];
+        $keys = ['id', 'user_id', 'program_id', 'plan_code', 'starts_at', 'ends_at', 'status', 'source_invoice_id', 'created_at', 'updated_at'];
         sort($keys);
         foreach ($response->json('data') as $row) {
             $actual = array_keys($row);

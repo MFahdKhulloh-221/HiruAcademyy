@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class AccessGrant extends Model
 {
-    protected $fillable = ['user_id', 'program_id', 'plan_code', 'starts_at', 'ends_at', 'status'];
+    protected $fillable = ['user_id', 'program_id', 'plan_code', 'starts_at', 'ends_at', 'status', 'source_invoice_id'];
 
     protected function casts(): array
     {
