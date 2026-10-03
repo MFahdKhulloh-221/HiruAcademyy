@@ -40,8 +40,7 @@ class AdminLearningController extends Controller
 
     public function destroy(Request $request): JsonResponse
     {
-        $class = $this->content->model($this->resource($request));
-        $class::query()->whereKey($this->id($request))->firstOrFail()->delete();
+        $this->content->delete($this->resource($request), $this->id($request));
 
         return response()->json(null, 204);
     }

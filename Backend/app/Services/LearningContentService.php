@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\AudioQuestion;
 use App\Models\Chapter;
 use App\Models\Flashcard;
+use App\Models\LearningAttempt;
 use App\Models\LearningModule;
 use App\Models\MiniCheckpointQuestion;
 use App\Models\Program;
@@ -149,6 +150,18 @@ class LearningContentService
             }
             throw ValidationException::withMessages(['chapter_number' => 'Chapter number already exists in this program.']);
         }
+    }
+
+    public function delete(string $resource, string|int $id): void
+    {
+        $class = $this->model($resource);
+        DB::transaction(function () use ($resource, $class, $id) {
+            $model = $class::whereKey($id)->lockForUpdate()->firstOrFail();
+            if ($resource === 'chapters' && LearningAttempt::where('chapter_id', $model->id)->exists()) {
+                throw ValidationException::withMessages(['chapter' => 'Chapter has retained learning attempts and cannot be deleted.']);
+            }
+            $model->delete();
+        }, 3);
     }
 
     private function allowed(string $family, string $activity): bool
