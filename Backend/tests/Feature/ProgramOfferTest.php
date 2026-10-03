@@ -99,7 +99,7 @@ class ProgramOfferTest extends TestCase
             ->assertJsonPath('data.0.base_price', 99000)
             ->assertJsonPath('data.0.duration_months', 6);
         foreach ($response->json('data') as $offer) {
-            $this->assertSame(['program', 'plan_code', 'base_price', 'currency', 'duration_months'], array_keys($offer));
+            $this->assertSame(['program', 'plan_code', 'base_price', 'currency', 'duration_months', 'promotion', 'discount_percent', 'discount_amount', 'effective_price'], array_keys($offer));
             $this->assertSame(['code', 'slug', 'name'], array_keys($offer['program']));
             $this->assertIsInt($offer['base_price']);
             $this->assertSame('IDR', $offer['currency']);

@@ -3,9 +3,16 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\ProgramController;
 use App\Http\Controllers\ProgramOfferController;
+use App\Http\Controllers\PromotionController;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('api')->middleware('throttle:identity')->group(function () {
+    Route::middleware(['auth:sanctum', 'active', 'role:admin'])->prefix('admin')->group(function () {
+        Route::get('promotions', [PromotionController::class, 'index']);
+        Route::post('promotions', [PromotionController::class, 'store']);
+        Route::patch('promotions/{promotion}', [PromotionController::class, 'update']);
+        Route::delete('promotions/{promotion}', [PromotionController::class, 'destroy']);
+    });
     Route::get('public/offers', [ProgramOfferController::class, 'publicIndex']);
     Route::get('admin/offers', [ProgramOfferController::class, 'adminIndex'])
         ->middleware(['auth:sanctum', 'active', 'role:admin']);
