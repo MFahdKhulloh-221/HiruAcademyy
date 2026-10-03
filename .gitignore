@@ -1,0 +1,6 @@
+Backend/.env
+Backend/.env.*
+!Backend/.env.example
+
+Backend/database/*.sqlite
+Backend/database/*.sqlite-*
