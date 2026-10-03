@@ -1,16 +1,26 @@
 <?php
 
 use App\Http\Controllers\AccessGrantController;
+use App\Http\Controllers\AdminLearningController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\EffectiveAccessController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\ProgramController;
 use App\Http\Controllers\ProgramOfferController;
 use App\Http\Controllers\PromotionController;
+use App\Http\Controllers\StudentLearningController;
+use App\Services\LearningContentService;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('api')->middleware('throttle:identity')->group(function () {
     Route::middleware(['auth:sanctum', 'active', 'role:admin'])->prefix('admin')->group(function () {
+        foreach (array_keys(LearningContentService::RESOURCES) as $resource) {
+            Route::get($resource, [AdminLearningController::class, 'index'])->defaults('resource', $resource);
+            Route::post($resource, [AdminLearningController::class, 'store'])->defaults('resource', $resource);
+            Route::get("$resource/{content}", [AdminLearningController::class, 'show'])->whereNumber('content')->defaults('resource', $resource);
+            Route::patch("$resource/{content}", [AdminLearningController::class, 'update'])->whereNumber('content')->defaults('resource', $resource);
+            Route::delete("$resource/{content}", [AdminLearningController::class, 'destroy'])->whereNumber('content')->defaults('resource', $resource);
+        }
         Route::get('invoices', [InvoiceController::class, 'index']);
         Route::get('invoices/{invoice}', [InvoiceController::class, 'show']);
         Route::post('invoices/{invoice}/transition', [InvoiceController::class, 'transition']);
@@ -25,6 +35,8 @@ Route::prefix('api')->middleware('throttle:identity')->group(function () {
         Route::delete('promotions/{promotion}', [PromotionController::class, 'destroy']);
     });
     Route::middleware(['auth:sanctum', 'active', 'role:student'])->prefix('student')->group(function () {
+        Route::get('programs/{program}/chapters', [StudentLearningController::class, 'index']);
+        Route::get('programs/{program}/chapters/{chapter}', [StudentLearningController::class, 'show']);
         Route::get('invoices', [InvoiceController::class, 'index']);
         Route::post('invoices', [InvoiceController::class, 'store']);
         Route::get('invoices/{invoice}', [InvoiceController::class, 'show']);
