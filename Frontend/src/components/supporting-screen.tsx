@@ -1,3 +1,4 @@
+import { useAuth } from "@/components/auth-provider";
 import { StudentBreadcrumb } from "@/components/student-breadcrumb";
 import { PracticeScreen as PracticeFlowScreen } from "@/components/practice-screen";
 import { StudentNavigation } from "@/components/student-navigation";
@@ -98,6 +99,8 @@ export function SupportingScreen({ kind, membership, breadcrumbCurrent, targetPr
 }
 
 function ProfileScreen({ membership }: { membership: "free" | "lms" | "sensei" }) {
+  const { user } = useAuth();
+  const initials = (user?.name ?? "").trim().split(/\s+/).slice(0, 2).map((part) => Array.from(part)[0] ?? "").join("").toUpperCase();
   const query = `?membership=${membership}`;
   const membershipCopy =
     membership === "sensei"
@@ -126,10 +129,10 @@ function ProfileScreen({ membership }: { membership: "free" | "lms" | "sensei" }
           <p>Kelola informasi akun, status belajar, sertifikat, dan preferensi.</p>
         </header>
         <section className="profile-identity">
-          <span>H</span>
+          <span>{initials}</span>
           <div>
-            <h2>Hilmi</h2>
-            <p>hilmi.student@example.com</p>
+            <h2>{user?.name ?? ""}</h2>
+            <p>{user?.email ?? ""}</p>
             <div className="profile-identity-tags">
               <span className="profile-pill"><LuRoute aria-hidden="true" /> Level N4</span>
               <span className="profile-pill"><LuFlag aria-hidden="true" /> Target JLPT: Des 2026</span>
@@ -851,6 +854,7 @@ function NotificationScreen({ membership }: { membership: "free" | "lms" | "sens
 }
 
 function CertificateScreen({ membership }: { membership: "free" | "lms" | "sensei" }) {
+  const { user } = useAuth();
   const query = `?membership=${membership}`;
   if (membership === "free") return (
     <div className="supporting-shell student-shell">
@@ -870,7 +874,7 @@ function CertificateScreen({ membership }: { membership: "free" | "lms" | "sense
   );
 
   const certificates = [
-    { icon: LuAward, title: "Sertifikat JLPT N5", program: "Program JLPT N5", recipient: "Hilmi", status: "Diterbitkan", href: `/certificate/n5${query}`, action: "Lihat Sertifikat", available: true },
+    { icon: LuAward, title: "Sertifikat JLPT N5", program: "Program JLPT N5", recipient: user?.name ?? "", status: "Diterbitkan", href: `/certificate/n5${query}`, action: "Lihat Sertifikat", available: true },
     { icon: LuLock, title: "Sertifikat belum tersedia", program: "Sertifikat JLPT N4", status: "Dalam Proses", action: "Lihat Kriteria", href: `/certificate/n4${query}`, available: false },
     { icon: LuLock, title: "Sertifikat belum tersedia", program: "Sertifikat JLPT N3", status: "Belum Memenuhi", action: "Lihat Kriteria", href: `/certificate/n3${query}`, available: false },
   ];

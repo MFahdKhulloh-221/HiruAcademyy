@@ -18,6 +18,7 @@ import {
   LuRoute,
 } from "react-icons/lu";
 import type { IconType } from "react-icons";
+import { useAuth } from "@/components/auth-provider";
 import { StudentNavigation } from "@/components/student-navigation";
 import { getStudentFeatureAccess, type DashboardData, type DashboardIcon } from "@/lib/dashboard-mock";
 
@@ -52,6 +53,9 @@ export function StudentDashboard({
   data: DashboardData;
   previewEnabled: boolean;
 }) {
+  const { user: currentUser } = useAuth();
+  const name = currentUser?.name ?? "";
+  const initials = name.trim().split(/\s+/).slice(0, 2).map((part) => Array.from(part)[0] ?? "").join("").toUpperCase();
   const config = data.config;
   const [lockedFeature, setLockedFeature] = useState<string | null>(null);
 
@@ -64,9 +68,9 @@ export function StudentDashboard({
             <button type="button" aria-label="Notifikasi">
               <Glyph name="bell" />
             </button>
-            <div className="dash-avatar">{data.user.initials}</div>
+            <div className="dash-avatar">{initials}</div>
             <div>
-              <strong>{data.user.displayName}</strong>
+              <strong>{name}</strong>
               <span>{data.membershipLabel}</span>
             </div>
           </div>
@@ -93,7 +97,7 @@ export function StudentDashboard({
           <section className="dash-welcome">
             <div>
               <h1>
-                {config.greeting} <span aria-hidden="true">👋</span>
+                Halo, {name} <span aria-hidden="true">👋</span>
               </h1>
               <p className="dash-subgreeting">{config.subgreeting}</p>
             </div>
@@ -162,7 +166,7 @@ export function StudentDashboard({
                 {config.leaderboard.map((user) => (
                   <li key={user.rank} className={`dash-leaderboard-item${user.isCurrentUser ? " current-user" : ""}`}>
                     <span className={`dash-rank-badge rank-${user.rank}`}>{user.rank}</span>
-                    <div className="dash-leaderboard-info"><strong>{user.name}</strong><small>{user.rank === 1 ? "12.450 XP" : user.rank === 2 ? "10.820 XP" : user.rank === 3 ? "9.640 XP" : user.rank === 4 ? "8.930 XP" : "8.410 XP"}</small></div>
+                    <div className="dash-leaderboard-info"><strong>{user.isCurrentUser ? `${name} (Kamu)` : user.name}</strong><small>{user.rank === 1 ? "12.450 XP" : user.rank === 2 ? "10.820 XP" : user.rank === 3 ? "9.640 XP" : user.rank === 4 ? "8.930 XP" : "8.410 XP"}</small></div>
                     {user.rank === 1 && <span className="dash-rank-fire" aria-hidden="true"><LuFlame /></span>}
                   </li>
                 ))}

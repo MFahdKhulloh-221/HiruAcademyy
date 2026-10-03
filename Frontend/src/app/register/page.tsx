@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Suspense, useState } from "react";
+import { Suspense, useRef, useState } from "react";
 import { PublicPage } from "@/components/public-shell";
+import { useAuth, type RegisterPayload } from "@/components/auth-provider";
+import { ApiError } from "@/lib/api";
 
 function RegisterForm() {
   const searchParams = useSearchParams();
@@ -17,10 +19,40 @@ function RegisterForm() {
   const [target, setTarget] = useState(defaultTarget);
   const [plan, setPlan] = useState(defaultPlan);
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
+  const { register } = useAuth();
+  const pending = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (plan === "Free Member") router.push("/dashboard?membership=free");
-    else router.push(`/checkout?level=${target.toLowerCase()}&plan=${plan === "Belajar Mandiri" ? "lms" : "sensei"}`);
+    if (pending.current) return;
+    const data = new FormData(event.currentTarget);
+    const levels = ["N1", "N2", "N3", "N4", "N5"] as const;
+    const targetJlpt = levels.find(level => level === target);
+    if (!targetJlpt) return setError("Periksa target JLPT.");
+    const password = String(data.get("password") ?? "");
+    const payload: RegisterPayload = {
+      name: String(data.get("name") ?? "").trim(),
+      email: String(data.get("email") ?? "").trim(),
+      whatsapp: String(data.get("whatsapp") ?? "").trim(),
+      password,
+      password_confirmation: password,
+      target_jlpt: targetJlpt,
+    };
+    const destination = plan === "Free Member" ? "/dashboard?membership=free" : `/checkout?level=${targetJlpt.toLowerCase()}&plan=${plan === "Belajar Mandiri" ? "lms" : "sensei"}`;
+    pending.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      await register(payload);
+      router.replace(destination);
+    } catch (cause) {
+      const failure = cause instanceof ApiError ? cause : new ApiError(0);
+      setError(Object.values(failure.errors).flat().join(" ") || failure.message);
+      pending.current = false;
+      setBusy(false);
+    }
   }
 
   return (
@@ -61,7 +93,7 @@ function RegisterForm() {
           <h1>Pendaftaran Akun Baru</h1>
         </header>
 
-        <form className="public-form register-form" onSubmit={submit}>
+        <form className="public-form register-form" onSubmit={submit} aria-busy={busy} aria-describedby={error ? "register-error" : undefined}>
           <div className="register-form-grid">
             <label>Nama Lengkap<input name="name" type="text" autoComplete="name" placeholder="Masukkan nama lengkap" required /></label>
             <label>Email<input name="email" type="email" autoComplete="email" placeholder="contoh@email.com" required /></label>
@@ -97,7 +129,8 @@ function RegisterForm() {
 
           <div className="register-actions">
             <p className="register-notice">Progres placement dan rekomendasi level akan disimpan pada akun.</p>
-            <button className="button button-primary" type="submit">Buat Akun</button>
+            {error && <p id="register-error" className="recovery-error" role="alert">{error}</p>}
+            <button className="button button-primary" type="submit" disabled={busy}>{busy ? "Memuat..." : "Buat Akun"}</button>
             <p className="auth-switch">Sudah punya akun? <Link className="text-link" href="/login">Masuk</Link></p>
           </div>
         </form>

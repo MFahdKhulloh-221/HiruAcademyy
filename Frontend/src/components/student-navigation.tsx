@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuth } from "@/components/auth-provider";
 import { useEffect, useRef, useState } from "react";
 import { LuBell, LuEllipsis, LuHouse, LuLockKeyhole, LuLogOut, LuMenu, LuMessagesSquare, LuPlay, LuRoute, LuSettings, LuTrendingUp, LuUser, LuX } from "react-icons/lu";
 import type { IconType } from "react-icons";
@@ -81,6 +82,28 @@ function itemsFor(membership: Membership, current: StudentNavKey | null): NavIte
 
 export function StudentNavigation({ membership }: { membership: Membership }) {
   const pathname = usePathname();
+  const router = useRouter();
+  const { logout } = useAuth();
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState("");
+  const logoutPending = useRef(false);
+
+  async function handleLogout() {
+    if (logoutPending.current) return;
+    logoutPending.current = true;
+    setLoggingOut(true);
+    setLogoutError("");
+    try {
+      await logout();
+      router.replace("/login");
+    } catch {
+      setLogoutError("Permintaan belum berhasil. Silakan coba lagi.");
+    } finally {
+      logoutPending.current = false;
+      setLoggingOut(false);
+    }
+  }
+
   const current = resolveStudentNavKey(pathname);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
@@ -168,10 +191,11 @@ export function StudentNavigation({ membership }: { membership: Membership }) {
           <span aria-hidden="true"><LuSettings /></span>
           <span>Pengaturan</span>
         </button>
-        <button type="button" onClick={(event) => openModal("Keluar", "notImplemented", event.currentTarget)}>
+        <button type="button" onClick={handleLogout} disabled={loggingOut} aria-busy={loggingOut}>
           <span aria-hidden="true"><LuLogOut /></span>
-          <span>Keluar</span>
+          <span>{loggingOut ? "Memuat..." : "Keluar"}</span>
         </button>
+        {logoutError && <p className="locked-modal-message" role="alert">{logoutError}</p>}
       </div>
     </>
   );

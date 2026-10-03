@@ -2,16 +2,36 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { AuthShell } from "@/components/auth-shell";
+import { authDestination, useAuth } from "@/components/auth-provider";
+import { ApiError } from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
   const [visible, setVisible] = useState(false);
 
-  function submit(event: React.FormEvent<HTMLFormElement>) {
+  const { login } = useAuth();
+  const pending = useRef(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+
+  async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    router.push("/dashboard?membership=free");
+    if (pending.current) return;
+    const data = new FormData(event.currentTarget);
+    pending.current = true;
+    setBusy(true);
+    setError("");
+    try {
+      const user = await login(String(data.get("identity") ?? "").trim(), String(data.get("password") ?? ""));
+      router.replace(authDestination(user));
+    } catch (cause) {
+      const failure = cause instanceof ApiError ? cause : new ApiError(0);
+      setError(failure.status === 422 || failure.status === 401 ? "Email/WhatsApp atau kata sandi tidak sesuai." : failure.message);
+      pending.current = false;
+      setBusy(false);
+    }
   }
 
   return (
@@ -24,7 +44,7 @@ export default function LoginPage() {
         <h2>Masuk ke Hiru Academy</h2>
         <p className="auth-description">Gunakan email atau nomor WhatsApp dan kata sandimu.</p>
 
-        <form className="auth-form" onSubmit={submit}>
+        <form className="auth-form" onSubmit={submit} aria-busy={busy} aria-describedby={error ? "login-error" : undefined}>
           <div className="auth-field">
             <label htmlFor="identity">Email / WhatsApp</label>
             <input id="identity" name="identity" type="text" autoComplete="username" placeholder="email atau nomor WhatsApp" required />
@@ -41,7 +61,8 @@ export default function LoginPage() {
             <small>Lupa kata sandi? <Link className="text-link" href="/forgot-password">Gunakan alur pemulihan akun.</Link></small>
           </div>
 
-          <button className="auth-submit button button-primary" type="submit" style={{ width: "100%", marginTop: "10px" }}>Masuk</button>
+          {error && <p id="login-error" className="recovery-error" role="alert">{error}</p>}
+          <button className="auth-submit button button-primary" type="submit" disabled={busy} style={{ width: "100%", marginTop: "10px" }}>{busy ? "Memuat..." : "Masuk"}</button>
 
           <p className="auth-switch">Belum punya akun? <Link className="text-link" href="/register">Daftar</Link></p>
         </form>

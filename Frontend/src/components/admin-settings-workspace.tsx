@@ -2,6 +2,7 @@
 
 import { FormEvent, useMemo, useState, useSyncExternalStore } from "react";
 import { useSearchParams } from "next/navigation";
+import { useAuth } from "@/components/auth-provider";
 import {
   AdminBreadcrumb,
   AdminPageHeader,
@@ -44,6 +45,7 @@ function AdminSettingsForm({
   business: ReturnType<typeof useBusinessAdminStore>;
   initialTab: Tab;
 }) {
+  const { user } = useAuth();
   const [active, setActive] = useState<Tab>(initialTab);
   const [draft, setDraft] = useState<AdminSettings>(savedSettings);
   const [invoiceTemplate, setInvoiceTemplate] = useState(business.settings.invoiceWhatsAppTemplate);
@@ -67,6 +69,7 @@ function AdminSettingsForm({
 
   function save(event: FormEvent) {
     event.preventDefault();
+    if (active === "Profil Admin") return;
     const nextErrors: Record<string, string> = {};
     if (active === "Umum" && !draft.general.siteName.trim()) nextErrors.siteName = "Nama situs wajib diisi.";
     if (active === "Kontak") {
@@ -80,7 +83,6 @@ function AdminSettingsForm({
       if (affiliate.commissionValue < 0) nextErrors.commissionValue = "Nilai komisi tidak boleh negatif.";
       if (affiliate.validationPeriodDays < 0) nextErrors.validationPeriodDays = "Periode validasi tidak boleh negatif.";
     }
-    if (active === "Profil Admin" && draft.adminProfile.email && !/^\S+@\S+\.\S+$/.test(draft.adminProfile.email)) nextErrors.profileEmail = "Email admin tidak valid.";
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
     saveAdminSettings(draft);
@@ -116,8 +118,8 @@ function AdminSettingsForm({
             <div className="settings-card"><header><div><h2>Affiliate</h2><p>Atur status dan aturan komisi operasional.</p></div></header><label className="settings-toggle"><input type="checkbox" checked={affiliate.affiliateEnabled} onChange={(e) => setAffiliate((v) => ({ ...v, affiliateEnabled: e.target.checked }))} /><span>Aktifkan affiliate</span></label><div className="settings-grid"><Field label="Mode komisi"><select value={affiliate.commissionMode} onChange={(e) => setAffiliate((v) => ({ ...v, commissionMode: e.target.value as "Percentage" | "Nominal" }))}><option value="Percentage">Persentase</option><option value="Nominal">Nominal</option></select></Field><Field label="Nilai komisi"><input type="number" min="0" value={affiliate.commissionValue} onChange={(e) => setAffiliate((v) => ({ ...v, commissionValue: Number(e.target.value) }))} />{errors.commissionValue && <em>{errors.commissionValue}</em>}</Field><Field label="Periode validasi (hari)"><input type="number" min="0" value={affiliate.validationPeriodDays} onChange={(e) => setAffiliate((v) => ({ ...v, validationPeriodDays: Number(e.target.value) }))} />{errors.validationPeriodDays && <em>{errors.validationPeriodDays}</em>}</Field></div></div>
           </section>}
           {active === "Privasi" && <section className="settings-card"><header><div><h2>Privasi & persetujuan</h2><p>Tentukan jalur dokumen dan kewajiban persetujuan analitik. Pengaturan ini bukan mesin kebijakan otomatis.</p></div></header><div className="settings-grid"><Field label="Path kebijakan privasi"><input value={draft.privacy.privacyPolicyPath} onChange={(e) => patch("privacy", { privacyPolicyPath: e.target.value })} /></Field><Field label="Path syarat & ketentuan"><input value={draft.privacy.termsPath} onChange={(e) => patch("privacy", { termsPath: e.target.value })} /></Field></div><label className="settings-toggle"><input type="checkbox" checked={draft.privacy.analyticsConsentRequired} onChange={(e) => patch("privacy", { analyticsConsentRequired: e.target.checked })} /><span>Wajibkan persetujuan sebelum pelacakan analitik</span></label></section>}
-          {active === "Profil Admin" && <section className="settings-card"><header><div><h2>Profil admin</h2><p>Informasi tampilan akun admin.</p></div></header><div className="settings-grid"><Field label="Nama tampilan"><input value={draft.adminProfile.displayName} onChange={(e) => patch("adminProfile", { displayName: e.target.value })} /></Field><Field label="Email"><input type="email" value={draft.adminProfile.email} onChange={(e) => patch("adminProfile", { email: e.target.value })} aria-invalid={!!errors.profileEmail} />{errors.profileEmail && <em>{errors.profileEmail}</em>}</Field><Field label="URL avatar"><input type="url" value={draft.adminProfile.avatarUrl} onChange={(e) => patch("adminProfile", { avatarUrl: e.target.value })} placeholder="https://…" /></Field></div></section>}
-          <footer className="settings-actions"><button className="button button-primary" type="submit" disabled={!dirty}>Simpan {active}</button>{message && <p role="status">{message}</p>}</footer>
+          {active === "Profil Admin" && <section className="settings-card"><header><div><h2>Profil admin</h2><p>Informasi tampilan akun admin.</p></div></header><div className="settings-grid"><Field label="Nama tampilan"><input value={user?.name ?? ""} readOnly /></Field><Field label="Email"><input type="email" value={user?.email ?? ""} readOnly /></Field><Field label="URL avatar"><input type="url" value="" disabled placeholder="https://…" /></Field></div></section>}
+          <footer className="settings-actions"><button className="button button-primary" type="submit" disabled={active === "Profil Admin" || !dirty}>Simpan {active}</button>{message && <p role="status">{message}</p>}</footer>
         </form>
       </AdminTabs>
     </>
