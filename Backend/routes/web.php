@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccessGrantController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\EffectiveAccessController;
 use App\Http\Controllers\ProgramController;
 use App\Http\Controllers\ProgramOfferController;
 use App\Http\Controllers\PromotionController;
@@ -9,6 +10,7 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('api')->middleware('throttle:identity')->group(function () {
     Route::middleware(['auth:sanctum', 'active', 'role:admin'])->prefix('admin')->group(function () {
+        Route::get('users/{user}/effective-access', [EffectiveAccessController::class, 'admin']);
         Route::get('users/{user}/access', [AccessGrantController::class, 'index']);
         Route::post('users/{user}/access', [AccessGrantController::class, 'store']);
         Route::patch('access/{grant}', [AccessGrantController::class, 'update']);
@@ -18,6 +20,8 @@ Route::prefix('api')->middleware('throttle:identity')->group(function () {
         Route::patch('promotions/{promotion}', [PromotionController::class, 'update']);
         Route::delete('promotions/{promotion}', [PromotionController::class, 'destroy']);
     });
+    Route::get('student/access', [EffectiveAccessController::class, 'student'])
+        ->middleware(['auth:sanctum', 'active', 'role:student']);
     Route::get('public/offers', [ProgramOfferController::class, 'publicIndex']);
     Route::get('admin/offers', [ProgramOfferController::class, 'adminIndex'])
         ->middleware(['auth:sanctum', 'active', 'role:admin']);
