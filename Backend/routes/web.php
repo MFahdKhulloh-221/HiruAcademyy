@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccessGrantController;
 use App\Http\Controllers\AdminLearningController;
+use App\Http\Controllers\AdminScheduleReplayController;
 use App\Http\Controllers\AdminTryOutController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\EffectiveAccessController;
@@ -11,12 +12,21 @@ use App\Http\Controllers\ProgramOfferController;
 use App\Http\Controllers\PromotionController;
 use App\Http\Controllers\StudentAssessmentController;
 use App\Http\Controllers\StudentLearningController;
+use App\Http\Controllers\StudentScheduleReplayController;
 use App\Http\Controllers\StudentTryOutController;
 use App\Services\LearningContentService;
+use App\Services\ScheduleReplayService;
 use Illuminate\Support\Facades\Route;
 
 Route::prefix('api')->middleware('throttle:identity')->group(function () {
     Route::middleware(['auth:sanctum', 'active', 'role:admin'])->prefix('admin')->group(function () {
+        foreach (array_keys(ScheduleReplayService::RESOURCES) as $resource) {
+            Route::get($resource, [AdminScheduleReplayController::class, 'index'])->defaults('resource', $resource);
+            Route::post($resource, [AdminScheduleReplayController::class, 'store'])->defaults('resource', $resource);
+            Route::get("$resource/{content}", [AdminScheduleReplayController::class, 'show'])->whereNumber('content')->defaults('resource', $resource);
+            Route::patch("$resource/{content}", [AdminScheduleReplayController::class, 'update'])->whereNumber('content')->defaults('resource', $resource);
+            Route::delete("$resource/{content}", [AdminScheduleReplayController::class, 'destroy'])->whereNumber('content')->defaults('resource', $resource);
+        }
         foreach (array_keys(LearningContentService::RESOURCES) as $resource) {
             Route::get($resource, [AdminLearningController::class, 'index'])->defaults('resource', $resource);
             Route::post($resource, [AdminLearningController::class, 'store'])->defaults('resource', $resource);
@@ -48,6 +58,10 @@ Route::prefix('api')->middleware('throttle:identity')->group(function () {
         Route::delete('promotions/{promotion}', [PromotionController::class, 'destroy']);
     });
     Route::middleware(['auth:sanctum', 'active', 'role:student'])->prefix('student')->group(function () {
+        Route::get('class-schedules', [StudentScheduleReplayController::class, 'schedules']);
+        Route::get('class-schedules/{schedule}', [StudentScheduleReplayController::class, 'schedule'])->whereNumber('schedule');
+        Route::get('replays', [StudentScheduleReplayController::class, 'replays']);
+        Route::get('replay-playlists/{playlist}', [StudentScheduleReplayController::class, 'playlist'])->whereNumber('playlist');
         Route::prefix('programs/{program}/chapters/{chapter}')->group(function () {
             Route::get('progress', [StudentAssessmentController::class, 'progress']);
             Route::post('completions', [StudentAssessmentController::class, 'complete']);
