@@ -28,7 +28,7 @@ class InvoiceWorkflowService
             $offer->load('promotions');
             $pricing = $offer->pricing();
 
-            return Invoice::create([
+            $invoice = Invoice::create([
                 'reference' => (string) Str::uuid(), 'user_id' => $student->id,
                 'program_offer_id' => $offer->id, 'program_id' => $offer->program_id, 'plan_code' => $offer->plan_code,
                 'status' => 'draft', 'base_price' => $pricing['base_price'],
@@ -37,6 +37,9 @@ class InvoiceWorkflowService
                 'duration_months' => $offer->duration_months,
                 'due_date' => $metadata['due_date'] ?? null, 'note' => $metadata['note'] ?? null,
             ])->fresh();
+            app(AffiliateService::class)->referral($invoice, $metadata['referral_code'] ?? null);
+
+            return $invoice;
         });
     }
 

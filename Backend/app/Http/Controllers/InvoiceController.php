@@ -32,6 +32,8 @@ class InvoiceController extends Controller
     {
         $rules = [
             'program_offer_id' => ['required', 'integer', 'exists:program_offers,id'],
+            'referral_code' => ['nullable', 'string', 'max:255'],
+            'affiliate_id' => ['prohibited'], 'commission' => ['prohibited'], 'rate' => ['prohibited'], 'amount' => ['prohibited'],
             'due_date' => ['nullable', 'date_format:Y-m-d'], 'note' => ['nullable', 'string', 'max:5000'],
         ];
         foreach (['user_id', 'status', 'base_price', 'discount', 'discount_percent', 'discount_amount', 'total_price', 'effective_price', 'duration', 'duration_months', 'currency', 'program_id', 'plan_code', 'source_invoice_id'] as $field) {
