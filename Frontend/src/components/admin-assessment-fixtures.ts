@@ -18,6 +18,8 @@ export type AdminAssessmentQuestion = {
   explanation: string;
   passage: string;
   file: File | null;
+  audioUrl?: string;
+  pointValue?: number;
   order: string;
   status: "Draft" | "Published";
 };
@@ -77,7 +79,7 @@ export function assessmentError(item: AdminAssessment) {
   const contexts: readonly string[] = item.kind === "mini" ? miniAssessmentContexts : tryoutAssessmentContexts;
   if (!contexts.includes(item.context) || !item.title.trim()) return "Isi judul dan pilih konteks yang valid.";
   if (item.kind === "mini" && (!item.chapter.trim() || !positiveInteger(item.session) || !["1", "2"].includes(item.part))) return "Isi chapter, sesi, dan part yang valid.";
-  if ((item.duration && !positiveInteger(item.duration)) || (item.kind === "tryout" && !item.duration)) return "Durasi harus berupa bilangan bulat positif.";
+  if (item.duration && !positiveInteger(item.duration)) return "Durasi harus berupa bilangan bulat positif.";
   if (!positiveInteger(item.maxScore) || !positiveInteger(item.order)) return "Skor maksimal dan urutan harus berupa bilangan bulat positif.";
   if (item.kind === "tryout" && Number(item.maxScore) < 76) return "Skor maksimal harus mendukung batas 19 per sesi.";
   if (item.passingScore !== "" && (!/^\d+(\.\d+)?$/.test(item.passingScore) || !Number.isFinite(Number(item.passingScore)) || Number(item.passingScore) > Number(item.maxScore))) return "Passing score harus antara 0 dan skor maksimal, atau kosong.";
@@ -85,10 +87,10 @@ export function assessmentError(item: AdminAssessment) {
   const questionIssue = item.questions.map((question) => assessmentQuestionError(question, item)).find(Boolean);
   if (questionIssue) return questionIssue;
   if (item.status === "Published") {
-    if (!item.duration || item.passingScore === "") return "OPEN: isi durasi dan passing score sebelum publish.";
+    if (item.kind === "mini" && (!item.duration || item.passingScore === "")) return "OPEN: isi durasi dan passing score sebelum publish.";
     if (!item.questions.some((question) => question.status === "Published")) return "Tambahkan soal Published sebelum publish.";
     if (item.kind === "tryout" && assessmentSections(item).some((section) => !item.questions.some((question) => question.section === section && question.status === "Published"))) return "Setiap sesi membutuhkan soal Published.";
-    if (item.questions.some((question) => question.status === "Published" && ((question.type === "Audio" && !question.file) || (question.type === "Reading" && !question.passage.trim())))) return "OPEN: lengkapi file audio dan teks bacaan sebelum publish.";
+    if (item.questions.some((question) => question.status === "Published" && ((question.type === "Audio" && !question.file && !question.audioUrl?.trim()) || (question.type === "Reading" && !question.passage.trim())))) return "OPEN: lengkapi file audio dan teks bacaan sebelum publish.";
   }
   return "";
 }

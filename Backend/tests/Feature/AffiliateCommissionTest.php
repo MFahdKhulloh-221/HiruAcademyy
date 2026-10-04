@@ -16,6 +16,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -59,6 +60,31 @@ class AffiliateCommissionTest extends TestCase
         }
 
         return $invoice;
+    }
+
+    public function test_full_snapshot_payout_is_atomic_server_priced_and_repeat_safe(): void
+    {
+        $affiliate = $this->affiliate();
+        $invoice = $this->invoice('active');
+        $snapshot = $invoice->getAttributes();
+        $commission = app(AffiliateService::class)->createCommission($invoice, $affiliate);
+        $payload = ['request_key' => (string) Str::uuid(), 'affiliate_id' => $affiliate->id, 'commission_ids' => [$commission->id], 'paid_at' => today()->toDateString()];
+        $this->actingAs($this->student)->postJson('/api/admin/payouts', $payload)->assertForbidden();
+        $this->actingAs($this->admin)->postJson('/api/admin/payouts', $payload)->assertUnprocessable();
+        app(AffiliateService::class)->transition($commission, ['status' => 'approved']);
+        $this->postJson('/api/admin/payouts', $payload + ['amount' => 1])->assertUnprocessable();
+        $response = $this->postJson('/api/admin/payouts', $payload)->assertOk()->assertJsonPath('data.amount', $commission->amount);
+        $this->postJson('/api/admin/payouts', $payload)->assertOk()->assertJsonPath('data.id', $response->json('data.id'));
+        $this->postJson('/api/admin/payouts', array_replace($payload, ['affiliate_id' => (string) $affiliate->id, 'commission_ids' => [(string) $commission->id]]))->assertOk()->assertJsonPath('data.id', $response->json('data.id'));
+        $this->postJson('/api/admin/payouts', array_replace($payload, ['request_key' => (string) Str::uuid()]))->assertUnprocessable();
+        $other = $this->affiliate('25', ['code' => 'OTHER_PAYOUT']);
+        $this->postJson('/api/admin/payouts', array_replace($payload, ['affiliate_id' => $other->id]))->assertUnprocessable();
+        $this->postJson('/api/admin/payouts', array_replace($payload, ['commission_ids' => [$commission->id, $commission->id]]))->assertUnprocessable();
+        $this->assertDatabaseCount('payouts', 1);
+        $this->assertDatabaseCount('payout_commissions', 1);
+        $this->assertSame('paid', $commission->fresh()->status);
+        $this->assertSame($snapshot, $invoice->fresh()->getAttributes());
+        $this->assertDatabaseCount('access_grants', 1);
     }
 
     public function test_normalization_crud_unique_contacts_and_no_affiliate_role(): void

@@ -1,35 +1,22 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
-import { ASSESSMENT_CHANGE_EVENT, ASSESSMENT_STORAGE_KEY, getScoringKey, readAssessments, toLearnerAssessment, type Assessment } from "@/lib/admin-assessment-store";
+import { apiRequest } from "@/lib/api";
+import { useLearningRequest } from "@/components/learning-hooks";
+import { loadAdminTryOuts } from "@/lib/admin-tryout-api";
+import { assessmentSessionLabels, assessmentSessions } from "@/lib/assessment-attempt";
+import type { Assessment } from "@/lib/admin-assessment-store";
 
 export type PublishedAssessmentOption = { id: string; label: string };
-export type PublishedAssessmentQuestion = { id: string; section: string; prompt: string; japanese?: { text: string; reading?: string }; options: PublishedAssessmentOption[]; explanation?: string };
-export type PublishedAssessment = { id: string; type: "practice" | "tryout" | "mini-checkpoint" | "checkpoint"; title: string; level: string; category?: string; exercise?: number; session?: number; part?: number; durationMinutes?: number; maxScore?: number; sections?: string[]; questions: PublishedAssessmentQuestion[]; answerKey: Record<string, string> };
-
-let cachedRaw: string | null | undefined;
-let cachedRecords: PublishedAssessment[] = [];
+export type PublishedAssessmentQuestion = { id: string; section: string; prompt: string; options: PublishedAssessmentOption[] };
+export type PublishedAssessment = { id: string; type: "tryout"; title: string; level: string; sections: string[]; questions: PublishedAssessmentQuestion[] };
 const empty: PublishedAssessment[] = [];
-
-function adapt(item: Assessment): PublishedAssessment {
-  const learner = toLearnerAssessment(item);
-  const sectionNames = Object.fromEntries(item.sections.map((section) => [section.id, section.name]));
-  return { id: learner.id, type: learner.type === "mini" ? "mini-checkpoint" : learner.type, title: learner.title, level: learner.level, category: learner.category, exercise: learner.order, session: learner.session, part: learner.part, durationMinutes: learner.durationMinutes, maxScore: learner.sections.reduce((sum, section) => sum + (section.maxScore ?? 0), 0) || undefined, sections: learner.sections.map((section) => section.name), questions: learner.questions.map((question) => ({ id: question.id, section: question.sectionId ? sectionNames[question.sectionId] ?? "" : "", prompt: question.prompt, options: question.options.map((option) => ({ id: option.id, label: option.text })), explanation: question.explanation })), answerKey: getScoringKey(item) };
+const load = async (signal: AbortSignal) => {
+  const { data } = await apiRequest<{ data: { id: number; title: string }[] }>("/api/student/try-outs", { signal });
+  return data.map(item => ({ id: String(item.id), type: "tryout" as const, title: item.title, level: "", sections: [...assessmentSessionLabels], questions: [] }));
+};
+export function readPublishedAssessments() { return empty; }
+export function usePublishedAssessments() { return useLearningRequest(load, "published-assessments").data ?? empty; }
+export async function loadCanonicalAssessments(signal?: AbortSignal): Promise<Assessment[]> {
+  const items = await loadAdminTryOuts(signal);
+  return items.map(item => ({ id: item.id, type: "tryout", title: item.title, description: "", level: item.context, status: item.status, updatedAt: "", sections: assessmentSessions.map((id, index) => ({ id, name: assessmentSessionLabels[index], maxScore: 45 })), questions: item.questions.map(question => ({ id: question.id, prompt: question.prompt, explanation: question.explanation, imageUrl: "", audioUrl: question.audioUrl ?? "", sectionId: assessmentSessions[assessmentSessionLabels.indexOf(question.section as typeof assessmentSessionLabels[number])], options: question.answers.map((text, index) => ({ id: ["A", "B", "C", "D"][index], text, isCorrect: index === question.correctAnswer })) })) }));
 }
-
-export function readPublishedAssessments(): PublishedAssessment[] {
-  if (typeof window === "undefined") return empty;
-  const raw = localStorage.getItem(ASSESSMENT_STORAGE_KEY);
-  if (raw !== cachedRaw) { cachedRaw = raw; cachedRecords = readAssessments().filter((item) => item.status === "Published").map(adapt); }
-  return cachedRecords;
-}
-
-function subscribe(onStoreChange: () => void) {
-  const storage = (event: StorageEvent) => { if (event.key === ASSESSMENT_STORAGE_KEY) { cachedRaw = undefined; onStoreChange(); } };
-  const local = () => { cachedRaw = undefined; onStoreChange(); };
-  window.addEventListener("storage", storage);
-  window.addEventListener(ASSESSMENT_CHANGE_EVENT, local);
-  return () => { window.removeEventListener("storage", storage); window.removeEventListener(ASSESSMENT_CHANGE_EVENT, local); };
-}
-
-export function usePublishedAssessments() { return useSyncExternalStore(subscribe, readPublishedAssessments, () => empty); }

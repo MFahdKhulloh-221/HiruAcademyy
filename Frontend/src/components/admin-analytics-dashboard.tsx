@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useState } from "react";
+import { useLearningRequest } from "@/components/learning-hooks";
+import { loadCanonicalAnalytics } from "@/lib/canonical-analytics";
 import {
   AdminBreadcrumb,
   AdminEmptyState,
@@ -13,7 +15,6 @@ import {
   AdminTabs,
 } from "@/components/admin-primitives";
 import {
-  deriveAnalytics,
   type AnalyticsData,
   type AnalyticsPeriod,
   type Distribution,
@@ -39,13 +40,13 @@ function DistributionList({ rows, value = false }: { rows: readonly Distribution
 
 function Summary({ data }: { data: AnalyticsData }) {
   const summary = data.tabs.summary;
-  return <div className="analytics-stack"><section className="analytics-metrics" aria-label="Metrik ringkasan"><AdminMetricCard label="Total pengguna" value={summary.totalUsers.value} detail="Snapshot saat ini"/><AdminMetricCard label="Membership aktif" value={summary.activeMemberships.value} detail="Snapshot saat ini"/><AdminMetricCard label="Invoice perlu tindakan" value={summary.invoicesAwaitingAction.value} detail="Snapshot saat ini"/><AdminMetricCard label="Invoice terverifikasi/aktif" value={summary.verifiedAndActiveInvoices.value} detail="Snapshot saat ini"/><AdminMetricCard label="Lead placement" value={summary.placementLeads.value} detail="Sesuai periode"/><AdminMetricCard label="Konten terbit" value={summary.publishedContent.value} detail="Snapshot saat ini"/></section><div className="analytics-section-grid"><AdminSection title="Status invoice" description="Distribusi operasional sesuai periode."><DistributionList rows={data.tabs.transactions.invoicesByStatus}/></AdminSection><AdminSection title="Sesi mendatang" description="Jadwal berstatus Terjadwal, snapshot saat ini."><div className="analytics-single-value"><strong>{summary.upcomingSessions.value}</strong><span>sesi mendatang</span></div></AdminSection></div><ExternalAnalytics status={summary.externalAnalytics}/></div>;
+  return <div className="analytics-stack"><section className="analytics-metrics" aria-label="Metrik ringkasan"><AdminMetricCard label="Total pengguna" value={summary.totalUsers.value} detail="Snapshot saat ini"/><AdminMetricCard label="Membership aktif" value={summary.activeMemberships.value} detail="Snapshot saat ini"/><AdminMetricCard label="Invoice perlu tindakan" value={summary.invoicesAwaitingAction.value} detail="Snapshot saat ini"/><AdminMetricCard label="Invoice terverifikasi/aktif" value={summary.verifiedAndActiveInvoices.value} detail="Snapshot saat ini"/><AdminMetricCard label="Lead placement" value="—" detail="Sesuai periode"/><AdminMetricCard label="Konten terbit" value={summary.publishedContent.value} detail="Snapshot saat ini"/></section><div className="analytics-section-grid"><AdminSection title="Status invoice" description="Distribusi operasional sesuai periode."><DistributionList rows={data.tabs.transactions.invoicesByStatus}/></AdminSection><AdminSection title="Sesi mendatang" description="Jadwal berstatus Terjadwal, snapshot saat ini."><div className="analytics-single-value"><strong>{summary.upcomingSessions.value}</strong><span>sesi mendatang</span></div></AdminSection></div><ExternalAnalytics status={summary.externalAnalytics}/></div>;
 }
 
 function Acquisition({ data }: { data: AnalyticsData }) {
   const acquisition = data.tabs.acquisition;
   const snapshot = acquisition.affiliateSnapshot;
-  return <div className="analytics-stack"><p className="analytics-scope-note">Data placement mengikuti periode. Data affiliate diberi label snapshot saat ini.</p><div className="analytics-section-grid"><AdminSection title="Rekomendasi placement" description="Distribusi lead placement sesuai periode."><DistributionList rows={acquisition.placementRecommendations}/></AdminSection><AdminSection title="Target placement" description="Distribusi target lead sesuai periode."><DistributionList rows={acquisition.placementTargets}/></AdminSection><AdminSection title="Status lead placement" description="Status operasional lead sesuai periode."><DistributionList rows={acquisition.leadStatuses}/></AdminSection><AdminSection title="Atribusi referral" description="Invoice beratribusi referral sesuai periode."><DistributionList rows={acquisition.referralAttributedInvoices} value/></AdminSection></div><AdminSection title="Affiliate — snapshot saat ini" description="Akumulasi tersimpan saat ini; tidak berubah oleh pilihan periode."><div className="analytics-snapshot-table"><span>Affiliate<strong>{snapshot.affiliates}</strong></span><span>Affiliate aktif<strong>{snapshot.activeAffiliates}</strong></span><span>Klik<strong>{snapshot.clicks}</strong></span><span>Pendaftaran<strong>{snapshot.registrations}</strong></span><span>Pembelian<strong>{snapshot.purchases}</strong></span></div></AdminSection></div>;
+  return <div className="analytics-stack"><p className="analytics-scope-note">Data placement mengikuti periode. Data affiliate diberi label snapshot saat ini.</p><div className="analytics-section-grid"><AdminSection title="Rekomendasi placement" description="Distribusi lead placement sesuai periode."><DistributionList rows={acquisition.placementRecommendations}/></AdminSection><AdminSection title="Target placement" description="Distribusi target lead sesuai periode."><DistributionList rows={acquisition.placementTargets}/></AdminSection><AdminSection title="Status lead placement" description="Status operasional lead sesuai periode."><DistributionList rows={acquisition.leadStatuses}/></AdminSection><AdminSection title="Atribusi referral" description="Invoice beratribusi referral sesuai periode."><DistributionList rows={acquisition.referralAttributedInvoices} value/></AdminSection></div><AdminSection title="Affiliate — snapshot saat ini" description="Akumulasi tersimpan saat ini; tidak berubah oleh pilihan periode."><div className="analytics-snapshot-table"><span>Affiliate<strong>{snapshot.affiliates}</strong></span><span>Affiliate aktif<strong>{snapshot.activeAffiliates}</strong></span><span>Klik<strong>—</strong></span><span>Pendaftaran<strong>—</strong></span><span>Pembelian<strong>—</strong></span></div></AdminSection></div>;
 }
 
 function Learning({ data }: { data: AnalyticsData }) {
@@ -65,6 +66,9 @@ function ExternalAnalytics({ status }: { status: AnalyticsData["tabs"]["summary"
 export function AdminAnalyticsDashboard() {
   const [tab, setTab] = useState<(typeof tabs)[number]>("Ringkasan");
   const [period, setPeriod] = useState<AnalyticsPeriod>("30d");
-  const data = deriveAnalytics(period);
+  const load = useCallback(() => loadCanonicalAnalytics(period), [period]);
+  const request = useLearningRequest(load, `analytics-${period}`);
+  const data = request.data;
+  if (!data) return <AdminShell current="/admin/analitik"><main className="admin-page admin-analytics"><p role={request.error ? "alert" : "status"}>{request.error ?? "Memuat…"}</p>{request.error && <button type="button" onClick={request.retry}>Coba Lagi</button>}</main></AdminShell>;
   return <AdminShell current="/admin/analitik"><main className="admin-page admin-analytics"><AdminBreadcrumb items={[{ label: "Admin", href: "/admin" }, { label: "Analitik" }]}/><AdminPageHeader eyebrow="PANEL ADMIN • ANALITIK" title="Analitik" description="Ringkasan operasional dari data yang tersedia di panel admin." actions={<fieldset className="analytics-period"><legend>Periode</legend>{periods.map((item) => <button key={item.value} type="button" className={period === item.value ? "active" : ""} aria-pressed={period === item.value} onClick={() => setPeriod(item.value)}>{item.label}</button>)}</fieldset>}/><AdminTabs tabs={tabs} active={tab} onChange={(next) => setTab(next as (typeof tabs)[number])} label="Bagian analitik">{tab === "Ringkasan" && <Summary data={data}/>} {tab === "Akuisisi" && <Acquisition data={data}/>} {tab === "Pembelajaran" && <Learning data={data}/>} {tab === "Transaksi" && <Transactions data={data}/>}</AdminTabs></main></AdminShell>;
 }

@@ -1,3 +1,3 @@
 import { Suspense } from "react";
-import { SupportingRoute } from "@/components/supporting-route";
-export default function LibraryPage() { return <Suspense><SupportingRoute kind="library" /></Suspense>; }
+import { LearningLibrary } from "@/components/learning-library";
+export default function LibraryPage() { return <Suspense><LearningLibrary /></Suspense>; }

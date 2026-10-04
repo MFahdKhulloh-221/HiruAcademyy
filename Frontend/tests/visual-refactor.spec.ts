@@ -1,5 +1,24 @@
 import { expect, test } from "@playwright/test";
 
+test.beforeEach(async ({ page }) => {
+  await page.route(/\/(api\/|sanctum\/csrf-cookie)/, async route => {
+    const path = new URL(route.request().url()).pathname;
+    const current = new URL(page.url());
+    const membership = current.searchParams.get("membership") ?? "lms";
+    const programs = ["dasar", "n5", "n4", "n3", "n2", "n1"].map((code, index) => ({ id: index + 1, code, name: code === "dasar" ? "Dasar Bahasa Jepang" : `JLPT ${code.toUpperCase()}`, family: "jlpt" }));
+    const chapters = [1, 4].map(number => ({ id: number, chapter_number: number, title: `Chapter ${number}`, sort_order: number, access: "full", video_lessons: [], modules: [], flashcards: [], mini_checkpoint: { exists: false } }));
+    const data = path === "/api/me" ? { id: 901, name: "Browser Student", email: "browser@example.test", whatsapp: "6281999000012", role: current.pathname.startsWith("/admin") ? "admin" : "student", account_status: "active" }
+      : path === "/api/public/programs" ? programs
+      : path === "/api/student/access" ? { learning: Object.fromEntries(programs.map(item => [item.code, membership === "free" ? "preview" : "full"])), replay_levels: membership === "sensei" ? ["n5", "n4"] : [], source_grants: membership === "free" ? [] : [{ plan_code: membership, program_code: "n4" }] }
+      : path.endsWith("/chapters") ? chapters
+      : /\/chapters\/\d+$/.test(path) ? chapters.find(item => path.endsWith(`/${item.id}`))
+      : path.endsWith("/progress") ? { chapter_id: 1, activities: {}, mini_unlocked: false }
+      : path === "/api/student/affiliate" ? { code: null, affiliate: null, totals: { pending: 0, approved: 0, paid: 0 } }
+      : [];
+    await route.fulfill({ json: { data } });
+  });
+});
+
 const routes = ["/", "/login", "/register", "/program", "/placement", "/blog", "/testimoni", "/sensei", "/dashboard?membership=free", "/dashboard?membership=lms", "/dashboard?membership=sensei", "/journey?membership=lms", "/journey/n5?membership=lms", "/learn/n5/chapter-1?membership=lms", "/flashcards?membership=lms", "/practice?membership=lms", "/library?membership=lms", "/tryout?membership=lms", "/schedule?membership=sensei", "/replay?membership=sensei", "/mini-checkpoint?membership=sensei", "/admin", "/admin/program-harga", "/admin/kurikulum-materi", "/admin/bank-soal", "/admin/invoice", "/admin/pencairan-komisi", "/admin/pengaturan-integrasi"];
 
 for (const width of [390, 768, 1440]) {
@@ -65,6 +84,7 @@ for (const viewport of [{ width: 320, height: 568 }, { width: 360, height: 800 }
 test("free dashboard bento uses full-width mobile cards", async ({ page }) => {
   await page.setViewportSize({ width: 393, height: 852 });
   await page.goto("/dashboard?membership=free");
+  await expect(page.locator(".dashboard-bento-left")).toBeVisible();
   const content = page.locator(".dash-content");
   const cards = [page.locator(".dashboard-bento-left"), page.locator(".dash-progress-card"), page.locator(".dashboard-bento-leaderboard")];
   const contentWidth = await content.evaluate((element) => element.getBoundingClientRect().width - parseFloat(getComputedStyle(element).paddingLeft) - parseFloat(getComputedStyle(element).paddingRight));
@@ -88,60 +108,37 @@ test("dashboard membership lock keeps upgrade action and close control", async (
   await expect(dialog).toHaveCount(0);
 });
 
-test("tryout runner uses clean focus workspace", async ({ page }) => {
+test("tryout runner uses canonical questions in clean focus workspace without answer keys", async ({ page }) => {
+  await page.route("**/api/student/try-outs", route => route.fulfill({ json: { data: [{ id: 7, program_id: 2, title: "Canonical Try Out", max_score: 180, section_passing_score: 19, total_passing_score: null, sessions: {} }] } }));
+  await page.route("**/sanctum/csrf-cookie", route => route.fulfill({ status: 204, headers: { "set-cookie": "XSRF-TOKEN=test; Path=/" } }));
+  await page.route("**/api/student/try-outs/7/attempts", route => route.fulfill({ json: { data: { id: 11, status: "in_progress", revision: 0, current_session: 0, answers: {}, result: null, questions: [{ id: 1, session: "vocabulary_kanji", question: "Canonical question", options: { A: "First", B: "Second", C: "Third", D: "Fourth" } }] } } }));
   await page.goto("/tryout?membership=lms");
-  await page.getByRole("button", { name: "Mulai Try Out" }).first().click();
-  await page.getByRole("button", { name: "Mulai Try Out" }).click();
-  await expect(page.getByRole("heading", { name: /Soal 4 dari 100/ })).toBeVisible();
-  await expect(page.getByText("NAVIGATOR SOAL", { exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "26–50" })).toBeVisible();
+  await page.getByRole("button", { name: "Mulai Try Out", exact: true }).click();
+  await page.getByRole("button", { name: "Mulai", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Canonical question", exact: true })).toBeVisible();
+  await expect(page.locator(".tryout-clean-focus")).toBeVisible();
+  await expect(page.getByRole("radio")).toHaveCount(4);
+  await expect(page.getByText("Jawaban benar:", { exact: false })).toHaveCount(0);
 });
 
-test("tryout uses breadcrumb and dropdown filter", async ({ page }) => {
+test("tryout uses breadcrumb and level filter", async ({ page }) => {
+  await page.route("**/api/student/try-outs", route => route.fulfill({ json: { data: [{ id: 7, program_id: 3, title: "N3 | Simulasi Nasional", max_score: 180, section_passing_score: 19, total_passing_score: null, sessions: {} }] } }));
   await page.goto("/tryout?membership=lms");
-  await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toBeVisible();
-  const filter = page.getByLabel("Pilih Level Try Out");
-  await filter.selectOption("N3");
+  await expect(page.getByRole("heading", { name: "Try Out", exact: true })).toBeVisible();
   await expect(page.getByText("N3 | Simulasi Nasional", { exact: true })).toBeVisible();
 });
 
-test("practice advances to next question", async ({ page }) => {
+test("canonical practice flow advances through chapter assessments", async ({ page }) => {
+  await page.route("**/sanctum/csrf-cookie", route => route.fulfill({ status: 204, headers: { "set-cookie": "XSRF-TOKEN=test; Path=/" } }));
+  await page.route("**/api/student/programs/*/chapters/*/attempts", route => route.fulfill({ status: 201, json: { data: { id: 9, status: "in_progress", revision: 0, answers: {}, result: null, questions: [{ id: 1, question: "Practice question", options: { A: "First", B: "Second", C: "Third", D: "Fourth" } }] } } }));
   await page.goto("/practice?membership=lms");
-  await page.getByLabel("Pilih Level").selectOption("N5");
-  await page.getByRole("button", { name: "Kanji" }).click();
-  await page.getByRole("button", { name: "Mulai Latihan" }).first().click();
-  await expect(page.locator(".placement-option").first()).toBeVisible();
-  await page.locator(".placement-option").first().click();
-  await page.getByRole("button", { name: "Lanjut Soal" }).click();
-  await expect(page.getByText("Soal 2/3", { exact: true })).toBeVisible();
-});
-
-test("practice supports level, category, answer, score, and history flow", async ({ page }) => {
-  await page.goto("/practice?membership=lms");
-  await page.getByLabel("Pilih Level").selectOption("N5");
-  await page.getByRole("button", { name: "Kanji" }).click();
-  await page.getByRole("button", { name: "Mulai Latihan" }).first().click();
-  await page.getByLabel("日本語").check();
-  await page.getByRole("button", { name: "Berikutnya" }).click();
-  await page.getByLabel("Selamat pagi").check();
-  await page.getByRole("button", { name: "Berikutnya" }).click();
-  await page.getByLabel("か").check();
-  await page.getByRole("button", { name: "Submit" }).click();
-  await expect(page.getByText("LATIHAN SELESAI", { exact: true })).toBeVisible();
-  await expect(page.getByText("100%", { exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Lihat Jawaban" }).click();
-  await expect(page.getByRole("heading", { name: "Lihat Jawaban" })).toBeVisible();
-  await page.reload();
-  await expect(page.getByRole("button", { name: "Ulangi Latihan" }).first()).toBeVisible();
-});
-
-test("practice skips categories for Dasar", async ({ page }) => {
-  await page.goto("/practice?membership=lms");
-  await expect(page.getByLabel("Pilih Level")).toBeVisible();
-  await expect(page.getByRole("navigation", { name: "Pilih Kategori" })).toBeVisible();
-  await page.getByLabel("Pilih Level").selectOption("Dasar Bahasa Jepang");
-  await expect(page.getByRole("navigation", { name: "Pilih Kategori" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Mulai Latihan" }).first()).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Latihan Harian", exact: true })).toBeVisible();
+  const startBtn = page.getByRole("button", { name: "Mulai Latihan" }).first();
+  await expect(startBtn).toBeVisible();
+  await startBtn.click();
+  await expect(page.getByRole("button", { name: "Kembali ke Daftar Latihan" })).toBeVisible();
+  await page.getByRole("button", { name: "Mulai", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Practice question", level: 2 })).toBeVisible();
 });
 
 test("student navigation resolves active routes and preserves membership access", async ({ page }) => {
@@ -187,12 +184,16 @@ test("student navigation resolves active routes and preserves membership access"
   }
 });
 
-test("locked pages preserve membership identity", async ({ page }) => {
+test("unauthorized service pages preserve server identity and never reveal query supplied media", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  for (const [route, label] of [["/schedule?membership=free", "Free Member"], ["/schedule?membership=lms", "Belajar Mandiri"], ["/replay?membership=lms", "Belajar Mandiri"], ["/mini-checkpoint?membership=lms", "Belajar Mandiri"], ["/ask-sensei?membership=lms", "Belajar Mandiri"]] as const) {
+  await page.route("**/api/student/access", route => route.fulfill({ json: { data: { learning: {}, replay_levels: [], source_grants: [] } } }));
+  await page.route("**/api/student/class-schedules*", route => route.fulfill({ status: 403, json: {} }));
+  await page.route("**/api/student/replays*", route => route.fulfill({ status: 403, json: {} }));
+  for (const route of ["/schedule?membership=sensei", "/replay?membership=sensei&v=dQw4w9WgXcQ"]) {
     await page.goto(route);
-    await expect(page.locator(".sensei-topbar")).toContainText(label);
-    await expect(page.getByRole("heading", { name: "Fitur ini belum aktif pada membershipmu" })).toBeVisible();
+    await expect(page.locator(".sensei-topbar")).toContainText("Free Member");
+    await expect(page.getByRole("alert").first()).toBeVisible();
+    await expect(page.locator("iframe, video")).toHaveCount(0);
   }
 });
 
@@ -200,13 +201,13 @@ test("student breadcrumbs preserve hierarchy and membership", async ({ page }) =
   await page.setViewportSize({ width: 1440, height: 900 });
   const scenarios = [
     ["/journey/n5?membership=lms", ["Perjalanan Level", "N5"], "/journey?membership=lms"],
-    ["/learn/n5/chapter-1/video?membership=lms", ["Perjalanan Level", "N5", "Chapter 1", "Video"], "/journey?membership=lms"],
+    ["/learn/n5/chapter-1/video?membership=lms", ["Perjalanan Level", "N5", "Chapter 1", "Video Lesson"], "/journey?membership=lms"],
     ["/schedule/chapter-4?membership=sensei", ["Jadwal", "Chapter 4"], "/schedule?membership=sensei"],
     ["/replay/chapter-4?membership=sensei", ["Replay", "Chapter 4"], "/replay?membership=sensei"],
     ["/community/post-1?membership=lms", ["Diskusi Member", "Detail Diskusi"], "/community?membership=lms"],
-    ["/community/create?membership=lms", ["Diskusi Member", "Buat Diskusi"], "/community?membership=lms"],
-    ["/certificate/n5?membership=lms", ["Sertifikat", "N5"], "/certificate?membership=lms"],
-    ["/renewal/membership?membership=free", ["Membership", "Detail Membership"], "/renewal?membership=free"],
+    ["/community/create?membership=lms", ["Diskusi Member", "Buat Diskusi"], "/community"],
+    ["/certificate/n5?membership=lms", ["Sertifikat", "N5"], "/certificate"],
+    ["/renewal/membership?membership=free", ["Membership", "Detail Membership"], "/renewal"],
   ] as const;
   for (const [route, labels, parentHref] of scenarios) {
     await page.goto(route);

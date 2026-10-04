@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { PublicPage } from "@/components/public-shell";
-import { usePublishedArticles } from "@/lib/website-store";
+import { contentMedia, useContent, type ArticleContent } from "@/lib/public-content-api";
 import type { ArticleBlock } from "@/lib/admin-website-store";
 
 function renderBlock(block: ArticleBlock) {
@@ -65,11 +65,13 @@ function renderBlock(block: ArticleBlock) {
   }
 }
 
-function ArticleReader() {
+export function ArticleReader({ requestedSlug }: { requestedSlug?: string }) {
   const searchParams = useSearchParams();
-  const slug = searchParams.get("slug") || "";
-  const articles = usePublishedArticles();
-  const article = articles.find((a) => a.slug === slug);
+  const slug = requestedSlug ?? searchParams.get("slug") ?? "";
+  const content = useContent<ArticleContent>(`/api/blog/${/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) ? slug : "invalid-slug"}`, true);
+  const found = content.data.find(item => item.slug === slug);
+  const article = found ? { ...found, summary: found.excerpt ?? "", imageUrl: contentMedia(found.thumbnail), imageAlt: found.title, publishedAt: found.published_at, updatedAt: "", blocks: found.body.split(/\n\s*\n/).map((text, index) => ({ id: String(index), type: "paragraph" as const, text })) } : undefined;
+  if (content.loading || content.error) return <PublicPage active="Blog"><main className="public-main blog-detail-page">{content.loading ? <p role="status">Memuat artikel…</p> : <div role="alert">{content.error} <button type="button" onClick={content.reload}>Coba lagi</button></div>}</main></PublicPage>;
 
   if (!article) {
     return (

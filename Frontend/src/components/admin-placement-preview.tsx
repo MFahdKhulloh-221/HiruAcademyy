@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { LuArrowLeft, LuArrowRight, LuCheck, LuClock } from "react-icons/lu";
 
 export type PlacementSettings = { title: string; introHeading: string; minutes: string; description: string };
-export type PlacementQuestion = { id: string; prompt: string; answers: string[]; correct: string; category: string; published: boolean; explanation: string; image?: File; audio?: File };
+export type PlacementQuestion = { id: string; prompt: string; answers: string[]; correct: string; category: string; published: boolean; explanation: string; image?: File; audio?: File; imageUrl?: string; audioUrl?: string };
 
 export function PlacementMedia({ image, audio }: { image?: File; audio?: File }) {
   const imageRef = useRef<HTMLImageElement>(null);

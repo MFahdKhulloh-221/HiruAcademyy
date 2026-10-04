@@ -7,10 +7,16 @@ use App\Models\Chapter;
 use App\Models\Program;
 use App\Services\ChapterAccessPolicy;
 use App\Services\EntitlementService;
+use App\Services\LearningLibraryService;
 use Illuminate\Http\Request;
 
 class StudentLearningController extends Controller
 {
+    public function library(Request $request, LearningLibraryService $library)
+    {
+        return response()->json(['data' => $library->modules($request->user())]);
+    }
+
     public function index(Request $request, Program $program, EntitlementService $entitlements, ChapterAccessPolicy $policy)
     {
         abort_unless($program->status === 'active', 404);

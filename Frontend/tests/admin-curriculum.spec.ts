@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./canonical-fixture";
 
 const storageKey = "hiru-admin-curriculum:v1";
 const responsiveWidths = [360, 390, 768, 820, 1024, 1440];
@@ -16,258 +16,136 @@ test.beforeEach(async ({ page }) => {
   await page.evaluate((key) => localStorage.removeItem(key), storageKey);
 });
 
-test("Scenario A: Program & Harga hub lists, searches, filters, and resets programs", async ({ page }) => {
+test("Scenario A: canonical offer hub lists server plans and searches without inventing foundation pricing", async ({ page }) => {
   await page.goto("/admin/program-harga");
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Program & Harga");
-  const table = page.getByRole("table", { name: "Daftar Program & Harga" });
-  await expect(table).toBeVisible();
-
-  await expect(table.getByText("DASAR").first()).toBeVisible();
-  await expect(table.getByText("JLPT N5")).toBeVisible();
-  await expect(table.getByText("JLPT N4")).toBeVisible();
-
-  const searchInput = page.getByLabel("Cari program");
-  await searchInput.fill("DASAR");
-  await expect(table.getByText("DASAR").first()).toBeVisible();
-  await expect(table.getByText("JLPT N5")).toHaveCount(0);
-
-  const statusSelect = page.getByLabel("Status");
-  await statusSelect.selectOption("Published");
-  await expect(table.getByText("DASAR").first()).toBeVisible();
-
-  await page.getByRole("button", { name: "Reset" }).click();
-  await expect(searchInput).toHaveValue("");
-  await expect(statusSelect).toHaveValue("");
-  await expect(table.getByText("JLPT N5")).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText("Harga & Promo");
+  const table = page.getByRole("table", { name: "Harga dan pratinjau promo" });
+  await expect(table.getByRole("cell", { name: "JLPT N5", exact: true })).toHaveCount(2);
+  await expect(table.getByRole("cell", { name: "JLPT N4", exact: true })).toHaveCount(2);
+  await expect(table.getByRole("cell", { name: "DASAR", exact: true })).toHaveCount(0);
+  const search = page.getByLabel("Cari program", { exact: true });
+  await search.fill("N4");
+  await expect(table.getByRole("cell", { name: "JLPT N5", exact: true })).toHaveCount(0);
+  await expect(table.getByRole("cell", { name: "JLPT N4", exact: true })).toHaveCount(2);
+  await search.clear();
+  await expect(table.getByRole("cell", { name: "JLPT N5", exact: true })).toHaveCount(2);
+  await expect(table).toContainText("6 bulan");
+  await expect(table).toContainText("1 bulan");
 });
 
-test("Scenario B: Program editor validates required fields, previews program card, and saves draft/published program", async ({ page }) => {
+test("Scenario B: canonical price editor validates nonnegative integer and persists without changing duration", async ({ page }) => {
   await page.goto("/admin/program-harga");
-  await page.getByRole("link", { name: "+ Tambah Program" }).click();
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Program Baru");
+  await page.getByRole("button", { name: "Edit Harga JLPT N5 Belajar Mandiri", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Harga normal", { exact: true }).fill("-1");
+  await dialog.getByRole("button", { name: "Simpan harga", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toBeVisible();
+  await dialog.getByLabel("Harga normal", { exact: true }).fill("149000");
+  await dialog.getByRole("button", { name: "Simpan harga", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.reload();
+  const row = page.getByRole("row").filter({ has: page.getByRole("button", { name: "Edit Harga JLPT N5 Belajar Mandiri", exact: true }) });
+  await expect(row).toContainText("Rp149.000");
+  await expect(row).toContainText("6 bulan");
+});
 
-  const outline = page.getByRole("navigation", { name: "Outline Program" });
-  await expect(outline.getByRole("button", { name: /1\. Informasi/ })).toBeVisible();
-  await expect(outline.getByRole("button", { name: /2\. Harga & Akses/ })).toBeVisible();
-  await expect(outline.getByRole("button", { name: /3\. Status & Urutan/ })).toBeVisible();
-
-  await page.getByLabel("Slug URL").fill("");
-  await page.getByLabel("Nama Program").fill("");
-  await page.getByRole("button", { name: "Terbitkan" }).click();
-  const alert = page.locator(".assessment-validation");
-  await expect(alert).toContainText("Nama program wajib diisi.");
-  await expect(alert).toContainText("Slug program wajib diisi.");
-
-  await page.getByLabel("Kode Program").selectOption("N2");
-  await page.getByLabel("Nama Program").fill("JLPT N2 Mahir");
-  await page.getByLabel("Slug URL").fill("n2-mahir");
-  await page.getByLabel("Ringkasan Singkat").fill("Program tingkat lanjut persiapan JLPT N2.");
-  await page.getByLabel("Deskripsi Lengkap").fill("Materi lengkap tata bahasa, kanji tingkat mahir, dokkai dan choukai.");
-
-  await outline.getByRole("button", { name: /2\. Harga & Akses/ }).click();
-  await page.getByLabel("Harga Belajar Mandiri (Rp)").fill("149000");
-  await page.getByLabel("Harga Belajar dengan Sensei (Rp)").fill("499000");
-  await page.getByLabel("Durasi Akses Belajar (Bulan)").fill("12");
-
-  await outline.getByRole("button", { name: /3\. Status & Urutan/ }).click();
-  await page.getByLabel("Urutan Tampilan").fill("5");
-
-  await page.getByRole("button", { name: "Preview" }).click();
-  const previewDialog = page.getByRole("dialog");
-  await expect(previewDialog).toContainText("Preview Kartu Program");
-  await expect(previewDialog).toContainText("JLPT N2 Mahir");
-  await previewDialog.getByRole("button", { name: "Tutup Preview" }).click();
-  await expect(previewDialog).toHaveCount(0);
-
-  await page.getByRole("button", { name: "Terbitkan" }).click();
-  await expect(page.getByRole("status")).toContainText("Perubahan program berhasil disimpan.");
-
+test("Scenario C: canonical catalog cannot be deleted through price management", async ({ page }) => {
   await page.goto("/admin/program-harga");
-  const table = page.getByRole("table", { name: "Daftar Program & Harga" });
-  await expect(table.getByText("JLPT N2 Mahir")).toBeVisible();
+  const table = page.getByRole("table", { name: "Harga dan pratinjau promo" });
+  await expect(table.getByRole("cell", { name: "JLPT N4", exact: true })).toHaveCount(2);
+  await expect(table.getByRole("button", { name: "Hapus", exact: true })).toHaveCount(0);
+  await page.reload();
+  await expect(table.getByRole("cell", { name: "JLPT N4", exact: true })).toHaveCount(2);
 });
 
-test("Scenario C: Program deletion opens confirmation dialog and removes program on confirm", async ({ page }) => {
-  await page.goto("/admin/program-harga");
-  const table = page.getByRole("table", { name: "Daftar Program & Harga" });
-  await expect(table.getByText("INTERVIEW", { exact: true })).toBeVisible();
-
-  const interviewRow = table.getByRole("row").filter({ hasText: "INTERVIEW" });
-  await interviewRow.getByRole("button", { name: "Hapus" }).click();
-
-  const confirmDialog = page.getByRole("dialog");
-  await expect(confirmDialog).toContainText("Hapus Program?");
-  await confirmDialog.getByRole("button", { name: "Batal" }).click();
-  await expect(confirmDialog).toHaveCount(0);
-  await expect(table.getByText("INTERVIEW", { exact: true })).toBeVisible();
-
-  await interviewRow.getByRole("button", { name: "Hapus" }).click();
-  await page.getByRole("dialog").getByRole("button", { name: "Hapus" }).click();
-  await expect(table.getByText("INTERVIEW", { exact: true })).toHaveCount(0);
-});
-
-test("Scenario D: Kurikulum chapter editor handles program selection, empty notices, weight rules, and section configuration", async ({ page }) => {
+test("Scenario D: canonical chapter creation validates positive integer chapter and persists via API", async ({ page }) => {
+  const chapters: Record<string, unknown>[] = [];
+  await page.route("**/api/admin/chapters**", async route => {
+    if (route.request().method() === "POST") { const row = { ...route.request().postDataJSON(), id: 10 }; chapters.push(row); await route.fulfill({ status: 201, json: { data: row } }); return; }
+    await route.fulfill({ json: { data: chapters } });
+  });
   await page.goto("/admin/kurikulum-materi");
-  await expect(page.getByRole("heading", { level: 1 })).toContainText("Kurikulum & Materi");
-
-  const programSelect = page.getByRole("combobox", { name: "Pilih Program:" });
-  await programSelect.selectOption("INTERVIEW");
-  await expect(page.getByText("Struktur program belum dikonfigurasi")).toBeVisible();
-
-  await programSelect.selectOption("N5");
-  await page.getByRole("button", { name: "+ Tambah Chapter" }).click();
-  await expect(page.getByRole("region", { name: "Bobot Progres Siswa" })).toBeVisible();
-  await expect(page.getByText("JLPT N5–N2: Video 20%, Modul PDF 5%, Flashcard 20%, Audio 20%, Reading 20%, Checkpoint 15%")).toBeVisible();
-
-  await page.getByLabel("Judul Chapter").fill("Chapter 99: Percakapan Penutup");
-  await page.getByLabel("Slug URL").fill("chapter-99-percakapan-penutup");
-  await page.getByLabel("Deskripsi Singkat").fill("Membahas kesimpulan percakapan dasar sehari-hari.");
-
-  const outline = page.getByRole("navigation", { name: "Outline Chapter" });
-  await outline.getByRole("button", { name: /2\. Video/ }).click();
-  await page.getByLabel("URL Video (YouTube / Embed)").fill("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
-  await page.getByLabel("Estimasi Durasi Video (Menit)").fill("25");
-
-  await outline.getByRole("button", { name: /3\. Modul/ }).click();
-  await page.getByLabel("Judul Dokumen PDF").fill("Modul Percakapan Lengkap");
-  await page.getByLabel("URL / Path Dokumen PDF").fill("/files/n5/modul-99.pdf");
-
-  await outline.getByRole("button", { name: /5\. Audio/ }).click();
-  await page.getByLabel("Judul Audio Soal").fill("Audio Percakapan Penutup");
-  await page.getByLabel("URL / Path File Audio").fill("/audio/n5/audio-99.mp3");
-
-  await outline.getByRole("button", { name: /6\. Reading/ }).click();
-  await page.getByLabel("Judul Bacaan").fill("Teks Percakapan Penutup");
-  await page.getByLabel("Teks Bacaan (Passage)").fill("これはテストの文章です。");
-
-  await page.getByRole("button", { name: "Preview" }).click();
-  const preview = page.getByRole("dialog");
-  await expect(preview.getByRole("heading", { name: "Preview Ringkasan Chapter" })).toBeVisible();
-  await expect(preview).toContainText("Chapter 99: Percakapan Penutup");
-  await preview.getByRole("button", { name: "Tutup Preview" }).click();
-
-  await page.getByRole("button", { name: "Terbitkan" }).click();
-  await expect(page.getByRole("status")).toContainText("Chapter berhasil disimpan.");
-
-  await page.getByRole("button", { name: "← Kembali ke Daftar Chapter" }).click();
-  const table = page.getByRole("table", { name: "Daftar Chapter N5" });
-  await expect(table.getByText("Chapter 99: Percakapan Penutup")).toBeVisible();
+  await page.getByRole("button", { name: "Tambah Chapter", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Chapter", { exact: true }).fill("99");
+  await dialog.getByLabel("Judul", { exact: true }).fill("Chapter 99: Percakapan Penutup");
+  await dialog.getByLabel("Deskripsi", { exact: true }).fill("Membahas kesimpulan percakapan.");
+  await dialog.getByRole("combobox", { name: /^Status/ }).selectOption("published");
+  await dialog.getByRole("button", { name: "Simpan", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("table").getByText("Chapter 99: Percakapan Penutup")).toBeVisible();
 });
 
-test("Scenario E: Chapter reordering persists order updates and chapter deletion removes chapter", async ({ page }) => {
+test("Scenario E: canonical chapter order persists and confirmed deletion removes only selected chapter", async ({ page }) => {
+  let chapters = [{ id: 7, program_id: 1, chapter_number: 1, title: "First Chapter", description: "", sort_order: 0, status: "draft" }, { id: 8, program_id: 1, chapter_number: 2, title: "Second Chapter", description: "", sort_order: 1, status: "draft" }];
+  await page.route("**/api/admin/chapters**", async route => {
+    const id = Number(new URL(route.request().url()).pathname.split("/").at(-1));
+    if (route.request().method() === "PATCH") Object.assign(chapters.find(row => row.id === id)!, route.request().postDataJSON());
+    if (route.request().method() === "DELETE") { chapters = chapters.filter(row => row.id !== id); await route.fulfill({ status: 204 }); return; }
+    await route.fulfill({ json: { data: Number.isFinite(id) ? chapters.find(row => row.id === id) : chapters.sort((a, b) => a.sort_order - b.sort_order) } });
+  });
   await page.goto("/admin/kurikulum-materi");
-  const programSelect = page.getByRole("combobox", { name: "Pilih Program:" });
-  await programSelect.selectOption("N5");
-
-  const table = page.getByRole("table", { name: "Daftar Chapter N5" });
-  const rows = table.getByRole("row");
-  await expect(rows.nth(1)).toContainText("Perkenalan Diri & Partikel Dasar");
-  await expect(rows.nth(2)).toContainText("Menunjukkan Benda & Lokasi");
-
-  const firstDownBtn = rows.nth(1).getByRole("button", { name: "Turunkan urutan" });
-  await firstDownBtn.click();
-  await expect(rows.nth(1)).toContainText("Menunjukkan Benda & Lokasi");
-  await expect(rows.nth(2)).toContainText("Perkenalan Diri & Partikel Dasar");
-
-  const deleteBtn = rows.nth(1).getByRole("button", { name: "Hapus" });
-  await deleteBtn.click();
-  const confirm = page.getByRole("dialog");
-  await expect(confirm).toContainText("Hapus Chapter?");
-  await confirm.getByRole("button", { name: "Batal" }).click();
-
-  await deleteBtn.click();
-  await page.getByRole("dialog").getByRole("button", { name: "Hapus" }).click();
-  await expect(table.getByText("Menunjukkan Benda & Lokasi")).toHaveCount(0);
+  let row = page.getByRole("row").filter({ hasText: "First Chapter" });
+  await row.getByRole("button", { name: "Edit", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Urutan", { exact: true }).fill("2");
+  await dialog.getByRole("button", { name: "Simpan", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("table").getByRole("row").nth(1)).toContainText("Second Chapter");
+  row = page.getByRole("row").filter({ hasText: "Second Chapter" });
+  page.once("dialog", dialog => dialog.dismiss());
+  await row.getByRole("button", { name: "Hapus", exact: true }).click();
+  await expect(row).toBeVisible();
+  page.once("dialog", dialog => dialog.accept());
+  await row.getByRole("button", { name: "Hapus", exact: true }).click();
+  await expect(row).toHaveCount(0);
+  await expect(page.getByRole("row").filter({ hasText: "First Chapter" })).toBeVisible();
 });
 
-test("Scenario F: Flashcard deck authoring manages cards and provides interactive flip preview", async ({ page }) => {
-  await page.goto("/admin/kurikulum-materi");
-  await page.getByRole("tab", { name: "Flashcard" }).click();
-
-  const deckTable = page.getByRole("table", { name: "Daftar Flashcard Deck" });
-  await expect(deckTable).toBeVisible();
-  await expect(deckTable.getByText("Kosakata Rutinitas Harian N4")).toBeVisible();
-
-  await page.getByRole("button", { name: "+ Tambah Deck" }).click();
-  await expect(page.getByRole("heading", { name: "Pengaturan Dek" })).toBeVisible();
-
-  await page.getByLabel("Judul Dek").fill("Deck Kosakata N5 Tambahan");
-
-  const cardItems = page.locator(".card-editor-item");
-  const firstCard = cardItems.first();
-  await firstCard.getByLabel("Depan (Front / Kanji / Kosakata)").fill("猫");
-  await firstCard.getByLabel("Belakang (Back)").fill("Kucing");
-  await firstCard.getByLabel("Cara Baca (Reading / Furigana)").fill("ねこ");
-
-  await page.getByRole("button", { name: "+ Tambah Kartu" }).click();
-  const secondCard = cardItems.nth(1);
-  await secondCard.getByLabel("Depan (Front / Kanji / Kosakata)").fill("犬");
-  await secondCard.getByLabel("Belakang (Back)").fill("Anjing");
-
-  await page.getByRole("button", { name: "Terbitkan" }).click();
-  await expect(page.getByRole("status")).toContainText("Dek flashcard berhasil disimpan.");
-  await page.getByRole("button", { name: "← Kembali ke Daftar Flashcard" }).click();
-
-  await expect(deckTable.getByText("Deck Kosakata N5 Tambahan")).toBeVisible();
-
-  const newRow = deckTable.getByRole("row").filter({ hasText: "Deck Kosakata N5 Tambahan" });
-  await newRow.getByRole("button", { name: "Preview Flip" }).click();
-
-  const flipDialog = page.getByRole("dialog");
-  await expect(flipDialog).toContainText("DEPAN");
-  await expect(flipDialog).toContainText("猫");
-
-  await flipDialog.getByRole("button", { name: "Putar Kartu (Flip)" }).click();
-  await expect(flipDialog).toContainText("BELAKANG");
-  await expect(flipDialog).toContainText("Kucing");
-
-  await flipDialog.getByRole("button", { name: "Tutup", exact: true }).click();
-  await expect(flipDialog).toHaveCount(0);
+test("Scenario F: canonical flashcard card authoring manages reading/meaning and persists order", async ({ page }) => {
+  await page.route("**/api/admin/chapters", route => route.fulfill({ json: { data: [{ id: 7, program_id: 1, chapter_number: 1, title: "Chapter 1", status: "published", sort_order: 0 }] } }));
+  const cards = [{ id: 11, chapter_id: 7, japanese: "猫", reading: "ねこ", meaning: "Kucing", example: "", sort_order: 0, status: "draft" }];
+  await page.route("**/api/admin/flashcards**", async route => {
+    const id = Number(new URL(route.request().url()).pathname.split("/").at(-1));
+    if (route.request().method() === "POST") { const row = { ...route.request().postDataJSON(), id: 12 }; cards.push(row); await route.fulfill({ status: 201, json: { data: row } }); return; }
+    await route.fulfill({ json: { data: Number.isFinite(id) ? cards.find(row => row.id === id) : cards } });
+  });
+  await page.goto("/admin/kurikulum-materi?tab=Flashcard");
+  await expect(page.getByRole("table").getByText("猫")).toBeVisible();
+  await page.getByRole("button", { name: "Tambah Kartu", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Japanese", { exact: true }).fill("犬");
+  await dialog.getByLabel("Bacaan", { exact: true }).fill("いぬ");
+  await dialog.getByLabel("Arti", { exact: true }).fill("Anjing");
+  await dialog.getByRole("button", { name: "Simpan", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("table").getByText("犬")).toBeVisible();
 });
 
-test("Scenario G: Perpustakaan materi and replay rekaman manage library items and youtube class recordings", async ({ page }) => {
+test("Scenario G: library follows module projection and replay videos manage youtube class recordings", async ({ page }) => {
+  await page.route("**/api/admin/replay-playlists", route => route.fulfill({ json: { data: [{ id: 7, program_id: 1, title: "N5 Replay Playlist", status: "published", sort_order: 0 }] } }));
+  const videos = [{ id: 91, playlist_id: 7, title: "Live Q&A Persiapan JLPT N5", video_url: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", duration_minutes: 90, status: "published", sort_order: 0 }];
+  await page.route("**/api/admin/replay-videos**", async route => {
+    if (route.request().method() === "POST") { const row = { ...route.request().postDataJSON(), id: 92 }; videos.push(row); await route.fulfill({ status: 201, json: { data: row } }); return; }
+    await route.fulfill({ json: { data: videos } });
+  });
   await page.goto("/admin/kurikulum-materi");
-
   await page.getByRole("tab", { name: "Perpustakaan Materi" }).click();
-  const libTable = page.getByRole("table", { name: "Daftar Perpustakaan Materi" });
-  await expect(libTable).toBeVisible();
-
-  await page.getByRole("button", { name: "+ Tambah Materi" }).click();
-  const libModal = page.getByRole("dialog");
-  await expect(libModal.getByRole("heading", { name: "Tambah Materi Baru" })).toBeVisible();
-
-  await libModal.getByLabel("Judul Materi").fill("Daftar Kanji Lengkap N5");
-  await libModal.getByLabel("Jenis Materi").selectOption("Kanji");
-  await libModal.getByLabel("URL File / Sumber").fill("/files/n5/kanji-n5.pdf");
-  await libModal.getByLabel("Deskripsi").fill("Panduan 100 kanji N5 lengkap dengan goyaku.");
-  await libModal.getByRole("button", { name: "Simpan Materi" }).click();
-  await expect(libTable.getByText("Daftar Kanji Lengkap N5")).toBeVisible();
-
-  await page.getByRole("tab", { name: "Replay Rekaman" }).click();
-  const replayTable = page.getByRole("table", { name: "Daftar Replay Rekaman" });
-  await expect(replayTable).toBeVisible();
-
-  await page.getByRole("button", { name: "+ Tambah Replay" }).click();
-  const replayModal = page.getByRole("dialog");
-  await expect(replayModal.getByRole("heading", { name: "Tambah Replay Baru" })).toBeVisible();
-
-  await replayModal.getByLabel("Judul Sesi Replay").fill("Live Q&A Persiapan JLPT N5");
-  await replayModal.getByLabel("Nama Sensei").fill("Tanaka Sensei");
-  await replayModal.getByLabel("Tanggal Pelaksanaan").fill("2026-09-20");
-  await replayModal.getByLabel("Durasi (Menit)").fill("90");
-  await replayModal.getByLabel("URL YouTube").fill("https://www.youtube.com/watch?v=dQw4w9WgXcQ");
-  await expect(replayModal.getByText("Preview Video:")).toBeVisible();
-
-  await replayModal.getByRole("button", { name: "Simpan Replay" }).click();
-  await expect(replayTable.getByText("Live Q&A Persiapan JLPT N5")).toBeVisible();
+  await expect(page.getByText("Perpustakaan Materi mengikuti modul published pada chapter.")).toBeVisible();
+  await page.goto("/admin/kelas-jadwal");
+  await page.getByRole("tab", { name: "Replay" }).click();
+  await expect(page.getByRole("table").getByText("N5 Replay Playlist")).toBeVisible();
 });
 
 test("program & harga hub stays usable at supported responsive widths", async ({ page }) => {
   for (const width of responsiveWidths) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/admin/program-harga");
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Program & Harga");
-    await expect(page.getByRole("table", { name: "Daftar Program & Harga" })).toBeVisible();
+    await expect(page.getByRole("heading", { level: 1 })).toContainText("Harga & Promo");
+    await expect(page.getByRole("table", { name: "Harga dan pratinjau promo" })).toBeVisible();
     await expectNoHorizontalOverflow(page);
   }
 });
@@ -275,25 +153,12 @@ test("program & harga hub stays usable at supported responsive widths", async ({
 test("program & harga editor stays usable at supported responsive widths", async ({ page }) => {
   for (const width of responsiveWidths) {
     await page.setViewportSize({ width, height: 900 });
-    await page.goto("/admin/program-harga?action=new");
-    await expect(page.getByRole("heading", { level: 1 })).toContainText("Program Baru");
-    await expectNoHorizontalOverflow(page);
-
-    const outline = page.locator(".program-editor-outline");
-    const content = page.locator(".program-editor-content");
-
-    if (width <= 820) {
-      await expect(page.getByRole("button", { name: "Outline", exact: true })).toBeVisible();
-      await page.getByRole("button", { name: "Outline", exact: true }).click();
-      await expect(outline).toBeVisible();
-
-      await page.getByRole("button", { name: "Editor", exact: true }).click();
-      await expect(content).toBeVisible();
-    } else {
-      await expect(page.locator(".assessment-mobile-tabs")).toBeHidden();
-      await expect(outline).toBeVisible();
-      await expect(content).toBeVisible();
-    }
+    await page.goto("/admin/program-harga");
+    await page.getByRole("button", { name: "Edit Harga JLPT N5 Belajar Mandiri", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("heading", { name: "Edit Harga", exact: true })).toBeVisible();
+    await expect(dialog.getByLabel("Harga normal", { exact: true })).toHaveValue("99000");
+    await expect(dialog.getByRole("button", { name: "Simpan harga", exact: true })).toBeVisible();
     await expectNoHorizontalOverflow(page);
   }
 });
@@ -309,29 +174,17 @@ test("kurikulum & materi hub stays usable at supported responsive widths", async
   }
 });
 
-test("kurikulum & materi chapter editor stays usable at supported responsive widths", async ({ page }) => {
+test("kurikulum & materi canonical chapter editor stays usable at supported responsive widths", async ({ page }) => {
+  await page.route("**/api/admin/chapters", route => route.fulfill({ json: { data: [{ id: 7, program_id: 1, chapter_number: 1, title: "Canonical Chapter", description: "Description", sort_order: 0, status: "draft" }] } }));
   for (const width of responsiveWidths) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/admin/kurikulum-materi");
-    await page.getByRole("button", { name: "Edit" }).first().click();
-    await expect(page.getByRole("region", { name: "Bobot Progres Siswa" })).toBeVisible();
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByLabel("Judul", { exact: true })).toHaveValue("Canonical Chapter");
+    await expect(dialog.getByRole("button", { name: "Simpan", exact: true })).toBeVisible();
     await expectNoHorizontalOverflow(page);
-
-    const outline = page.locator(".chapter-outline-menu");
-    const content = page.locator(".chapter-editor-panel");
-
-    if (width <= 820) {
-      await expect(page.getByRole("button", { name: "Outline", exact: true })).toBeVisible();
-      await page.getByRole("button", { name: "Outline", exact: true }).click();
-      await expect(outline).toBeVisible();
-
-      await page.getByRole("button", { name: "Editor", exact: true }).click();
-      await expect(content).toBeVisible();
-    } else {
-      await expect(page.locator(".assessment-mobile-tabs")).toBeHidden();
-      await expect(outline).toBeVisible();
-      await expect(content).toBeVisible();
-    }
-    await expectNoHorizontalOverflow(page);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
   }
 });

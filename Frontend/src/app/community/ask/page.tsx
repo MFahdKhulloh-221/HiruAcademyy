@@ -2,8 +2,9 @@ import Link from "next/link";
 import { StudentBreadcrumb } from "@/components/student-breadcrumb";
 import { StudentNavigation } from "@/components/student-navigation";
 
-export default function AskSenseiPage({ searchParams }: { searchParams: { membership?: string } }) {
-  const membership = searchParams.membership === "lms" || searchParams.membership === "sensei" ? searchParams.membership : "free";
+export default async function AskSenseiPage({ searchParams }: { searchParams: Promise<{ membership?: string }> }) {
+  const params = await searchParams;
+  const membership = params.membership === "lms" || params.membership === "sensei" ? params.membership : "free";
 
   return (
     <div className="supporting-shell student-shell">

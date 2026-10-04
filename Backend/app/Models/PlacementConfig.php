@@ -13,7 +13,7 @@ class PlacementConfig extends Model
 
     protected function casts(): array
     {
-        return ['duration_minutes' => 'integer'];
+        return ['duration_minutes' => 'integer', 'recommendation_rules' => 'array'];
     }
 
     public function questions(): HasMany

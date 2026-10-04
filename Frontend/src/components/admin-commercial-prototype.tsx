@@ -1,23 +1,12 @@
 "use client";
 
-import { type FormEvent, useCallback, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useState } from "react";
+import { commercialCode, commercialData, commercialWrite, type Offer } from "@/lib/commercial-api";
 import { LuSearch } from "react-icons/lu";
 import { AdminConfirmDialog, AdminDataTable, AdminDialog, AdminFilterToolbar, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge } from "@/components/admin-primitives";
-const programFixtures: { code: string; name: string; status: string; selfStudyPrice: number | null; selfStudyAvailable: boolean; senseiPrice: number | null; senseiAvailable: boolean }[] = [
-  { code: "DASAR", name: "Dasar Bahasa Jepang", status: "Published", selfStudyPrice: 99000, selfStudyAvailable: true, senseiPrice: 350000, senseiAvailable: true },
-  { code: "N5", name: "JLPT N5", status: "Published", selfStudyPrice: 99000, selfStudyAvailable: true, senseiPrice: 350000, senseiAvailable: true },
-  { code: "N4", name: "JLPT N4", status: "Published", selfStudyPrice: 99000, selfStudyAvailable: true, senseiPrice: 350000, senseiAvailable: true },
-  { code: "N3", name: "JLPT N3", status: "Published", selfStudyPrice: 199000, selfStudyAvailable: true, senseiPrice: 450000, senseiAvailable: true },
-  { code: "N2", name: "JLPT N2", status: "Published", selfStudyPrice: 249000, selfStudyAvailable: true, senseiPrice: 550000, senseiAvailable: true },
-  { code: "N1", name: "JLPT N1", status: "OPEN", selfStudyPrice: null, selfStudyAvailable: true, senseiPrice: null, senseiAvailable: true },
-  { code: "SSW", name: "SSW Pengolahan Makanan", status: "Published", selfStudyPrice: 299000, selfStudyAvailable: true, senseiPrice: null, senseiAvailable: false },
-  { code: "INTERVIEW", name: "Persiapan Interview", status: "Published", selfStudyPrice: 199000, selfStudyAvailable: true, senseiPrice: null, senseiAvailable: false },
-];
-const initialPrices = programFixtures.flatMap((program) => [
-  ...(program.selfStudyAvailable ? [{ id: `${program.code}-lms`, code: program.code, program: program.name, status: program.status, mode: "Belajar Mandiri", months: 6, price: program.selfStudyPrice }] : []),
-  ...(program.senseiAvailable ? [{ id: `${program.code}-sensei`, code: program.code, program: program.name, status: program.status, mode: "Kelas bersama Sensei", months: 1, price: program.senseiPrice }] : []),
-]);
-const notice = "Perubahan pada tahap prototype belum tersimpan ke server.";
+type PriceRow = { id: string; code: string; program: string; status: string; mode: string; months: number; price: number | null; effective: number | null; discount: number; percentage: number };
+type ApiPromo = { id: number; name: string; program_offer_id: number; discount_percent: number; status: string; starts_at: string | null; ends_at: string | null; note: string | null };
+const notice = "Mandiri: 6 bulan. Sensei: 1 bulan. N1 OPEN.";
 const promoStatuses = ["Draft", "Aktif", "Nonaktif"] as const;
 type PromoStatus = (typeof promoStatuses)[number];
 const rupiah = (value: number) => `Rp${value.toLocaleString("id-ID", { maximumFractionDigits: 2 })}`;
@@ -25,7 +14,7 @@ type Promo = { id: string; name: string; priceId: string; percentage: number; st
 type Draft = Omit<Promo, "percentage"> & { percentage: string };
 
 export function AdminCommercialPrototype() {
-  const [priceRows, setPriceRows] = useState(() => initialPrices.map((row) => ({ ...row })));
+  const [priceRows, setPriceRows] = useState<PriceRow[]>([]);
   const [priceDraft, setPriceDraft] = useState<{ id: string; price: string } | null>(null);
   const [priceError, setPriceError] = useState("");
   const closePriceEditor = useCallback(() => { setPriceDraft(null); setPriceError(""); }, []);
@@ -38,16 +27,22 @@ export function AdminCommercialPrototype() {
   const [message, setMessage] = useState("");
   const closeEditor = useCallback(() => { setDraft(null); setError(""); }, []);
   const closeConfirmation = useCallback(() => setPending(null), []);
+  const refresh = useCallback(async () => {
+    const [offers, promotions] = await Promise.all([commercialData<Offer[]>("/api/admin/offers"), commercialData<ApiPromo[]>("/api/admin/promotions")]);
+    setPriceRows(offers.map(offer => ({ id: String(offer.id), code: commercialCode(offer.program.code), program: offer.program.name, status: offer.status || "OPEN", mode: offer.plan_code === "lms" ? "Belajar Mandiri" : "Kelas bersama Sensei", months: offer.duration_months, price: offer.program.code === "n1" ? null : offer.base_price, effective: offer.effective_price, discount: offer.discount_amount, percentage: offer.discount_percent })));
+    setPromos(promotions.map(promo => ({ id: String(promo.id), name: promo.name, priceId: String(promo.program_offer_id), percentage: Number(promo.discount_percent), status: promo.status === "active" ? "Aktif" : promo.status === "draft" ? "Draft" : "Nonaktif", start: promo.starts_at?.slice(0, 10) || "", end: promo.ends_at?.slice(0, 10) || "", note: promo.note || "" })));
+  }, []);
+  useEffect(() => { let active = true; void Promise.resolve().then(() => { if (active) return refresh(); }).catch(error => { if (active) setMessage(error.message); }); return () => { active = false; }; }, [refresh]);
   const selectedPrice = priceRows.find((row) => row.id === draft?.priceId);
   const percentage = Number(draft?.percentage);
   const validPercentage = Boolean(draft?.percentage.trim()) && Number.isFinite(percentage) && percentage >= 0 && percentage <= 100;
 
   function edit(promo?: Promo) {
     setError("");
-    setDraft(promo ? { ...promo, percentage: String(promo.percentage) } : { id: "", name: "", priceId: priceRows[0].id, percentage: "", status: "Draft", start: "", end: "", note: "" });
+    setDraft(promo ? { ...promo, percentage: String(promo.percentage) } : { id: "", name: "", priceId: priceRows.find(row => row.price !== null)?.id || "", percentage: "", status: "Draft", start: "", end: "", note: "" });
   }
 
-  function save(event: FormEvent<HTMLFormElement>) {
+  async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft) return;
     if (!draft.name.trim()) { setError("Nama promo wajib diisi."); return; }
@@ -56,13 +51,13 @@ export function AdminCommercialPrototype() {
     if (![draft.start, draft.end].every((date) => /^\d{4}-\d{2}-\d{2}$/.test(date) && Number.isFinite(Date.parse(date)) && new Date(date).toISOString().slice(0, 10) === date)) { setError("Tanggal mulai dan tanggal akhir wajib diisi dengan tanggal yang valid."); return; }
     if (draft.end < draft.start) { setError("Tanggal akhir tidak boleh sebelum tanggal mulai."); return; }
     if (draft.status === "Aktif" && promos.some((promo) => promo.id !== draft.id && promo.priceId === draft.priceId && promo.status === "Aktif")) { setError("Program ini sudah memiliki promo aktif. Nonaktifkan promo tersebut terlebih dahulu."); return; }
-    const promo: Promo = { ...draft, id: draft.id || crypto.randomUUID(), name: draft.name.trim(), percentage };
-    setPromos((current) => draft.id ? current.map((item) => item.id === draft.id ? promo : item) : [...current, promo]);
-    setMessage(notice);
-    closeEditor();
+    try {
+      await commercialWrite(`/api/admin/promotions${draft.id ? `/${draft.id}` : ""}`, draft.id ? "PATCH" : "POST", { name: draft.name.trim(), program_offer_id: Number(draft.priceId), discount_percent: percentage, status: draft.status === "Aktif" ? "active" : draft.status === "Draft" ? "draft" : "inactive", starts_at: draft.start, ends_at: draft.end, note: draft.note });
+      await refresh(); closeEditor();
+    } catch (error) { setError(error instanceof Error ? error.message : "Permintaan belum berhasil."); }
   }
 
-  function confirm() {
+  async function confirm() {
     if (!pending) return;
     const { promo, action } = pending;
     if (action === "toggle" && promo.status !== "Aktif" && promos.some((item) => item.id !== promo.id && item.priceId === promo.priceId && item.status === "Aktif")) {
@@ -70,19 +65,21 @@ export function AdminCommercialPrototype() {
       closeConfirmation();
       return;
     }
-    setPromos((current) => action === "delete" ? current.filter((item) => item.id !== promo.id) : current.map((item) => item.id === promo.id ? { ...item, status: item.status === "Aktif" ? "Nonaktif" : "Aktif" } : item));
-    setMessage(notice);
-    closeConfirmation();
+    try {
+      await commercialWrite(`/api/admin/promotions/${promo.id}`, action === "delete" ? "DELETE" : "PATCH", action === "delete" ? undefined : { status: promo.status === "Aktif" ? "inactive" : "active" });
+      await refresh(); closeConfirmation();
+    } catch (error) { setMessage(error instanceof Error ? error.message : "Permintaan belum berhasil."); }
   }
 
-  function savePrice(event: FormEvent<HTMLFormElement>) {
+  async function savePrice(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!priceDraft || !editingPrice || editingPrice.price === null) return;
     const price = Number(priceDraft.price);
     if (!priceDraft.price.trim() || !Number.isSafeInteger(price) || price < 0) { setPriceError("Harga harus berupa angka bulat rupiah minimal 0."); return; }
-    setPriceRows((current) => current.map((row) => row.id === priceDraft.id ? { ...row, price } : row));
-    setMessage(notice);
-    closePriceEditor();
+    try {
+      await commercialWrite(`/api/admin/offers/${priceDraft.id}`, "PATCH", { base_price: price });
+      await refresh(); closePriceEditor();
+    } catch (error) { setPriceError(error instanceof Error ? error.message : "Permintaan belum berhasil."); }
   }
 
   return <AdminShell current="/admin/program-harga"><main className="admin-public-prototype">
@@ -97,8 +94,8 @@ export function AdminCommercialPrototype() {
         { key: "mode", header: "Cara belajar", cell: (row) => row.mode },
         { key: "duration", header: "Durasi", cell: (row) => `${row.months} bulan` },
         { key: "normal", header: "Harga normal", cell: (row) => row.price !== null && Number.isFinite(row.price) && row.price >= 0 ? rupiah(row.price) : "OPEN" },
-        { key: "discount", header: "Diskon aktif", cell: (row) => { const promo = promos.find((item) => item.priceId === row.id && item.status === "Aktif"); return row.price === null ? "OPEN" : promo ? `${promo.percentage}% (${rupiah(row.price * promo.percentage / 100)})` : "Tidak ada"; } },
-        { key: "final", header: "Harga promosi", cell: (row) => { const promo = promos.find((item) => item.priceId === row.id && item.status === "Aktif"); return row.price !== null && Number.isFinite(row.price) && row.price >= 0 ? rupiah(row.price - row.price * (promo?.percentage ?? 0) / 100) : "OPEN"; } },
+        { key: "discount", header: "Diskon aktif", cell: (row) => row.price === null ? "OPEN" : `${row.percentage}% (${rupiah(row.discount)})` },
+        { key: "final", header: "Harga promosi", cell: (row) => row.price === null || row.effective === null ? "OPEN" : rupiah(row.effective) },
       ]} actions={{ cell: (row) => <button type="button" className="button" disabled={row.price === null} onClick={() => { setPriceError(""); setPriceDraft({ id: row.id, price: String(row.price) }); }} aria-label={`Edit Harga ${row.program} ${row.mode}`}>Edit Harga</button> }} />
     </AdminSection>
     <AdminDialog open={Boolean(priceDraft)} title="Edit Harga" close={closePriceEditor}>

@@ -2,55 +2,32 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useState } from "react";
 import { LuSparkles } from "react-icons/lu";
 import { PublicPage } from "@/components/public-shell";
 import { levelCatalog, plans } from "@/lib/public-mock";
-import { usePublishedPrograms } from "@/lib/curriculum-store";
+import { offerPrice, useContent, type PublicOffer, type PublicProgram } from "@/lib/public-content-api";
 
 function ProgramContent() {
-  const publishedPrograms = usePublishedPrograms();
+  const programs = useContent<PublicProgram>("/api/public/programs");
+  const pricing = useContent<PublicOffer>("/api/public/offers");
   const planParam = useSearchParams().get("plan");
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(planParam === "sensei" || planParam === "lms" || planParam === "free" ? planParam : null);
   const [selectedLevel, setSelectedLevel] = useState(levelCatalog[1]);
+  const [clickedPlanId, setClickedPlanId] = useState<string | null>(null);
 
-  const matchedProgram = publishedPrograms.find(
-    (p) => p.code.toLowerCase() === selectedLevel.code.toLowerCase()
-  );
-
-  const currentPlans = useMemo(() => {
-    const orderedPlans = ["free", "sensei", "lms"].map((id) => plans.find((plan) => plan.id === id)).filter((plan): plan is (typeof plans)[number] => Boolean(plan));
-    if (!matchedProgram) return orderedPlans;
-    return orderedPlans.map((plan) => {
-      if (plan.id === "lms" && typeof matchedProgram.selfStudyPrice === "number") {
-        const p = matchedProgram.selfStudyPrice;
-        const formatted = p >= 1000 && p % 1000 === 0 ? `${p / 1000}k` : p.toLocaleString("id-ID");
-        const duration = matchedProgram.accessDurationMonths
-          ? `${matchedProgram.accessDurationMonths} bulan`
-          : plan.period;
-        return {
-          ...plan,
-          price: `Mulai Rp${formatted}${duration ? `/${duration}` : ""}`,
-          period: duration,
-        };
-      }
-      if (plan.id === "sensei" && typeof matchedProgram.senseiPrice === "number") {
-        const p = matchedProgram.senseiPrice;
-        const formatted = p >= 1000 && p % 1000 === 0 ? `${p / 1000}k` : p.toLocaleString("id-ID");
-        return {
-          ...plan,
-          price: `Mulai Rp${formatted}/bulan`,
-        };
-      }
-      return plan;
-    });
-  }, [matchedProgram]);
+  const currentPlans = ["free", "sensei", "lms"].map(id => plans.find(plan => plan.id === id)).filter((plan): plan is (typeof plans)[number] => Boolean(plan)).map(plan => {
+    const offer = selectedLevel.code === "N1" ? undefined : pricing.data.find(item => item.program.code.toLowerCase() === selectedLevel.code.toLowerCase() && item.plan_code === plan.id);
+    return { ...plan, price: plan.id === "free" ? plan.price : pricing.loading ? "Memuat harga…" : pricing.error ? "Harga gagal dimuat" : offerPrice(offer), period: plan.id === "free" ? plan.period : offer ? `${offer.duration_months} bulan` : "", available: plan.id === "free" ? selectedLevel.code !== "N1" : Boolean(offer) };
+  });
+  const levels = levelCatalog.filter(level => level.code === "N1" || programs.data.some(program => program.code.toLowerCase() === level.code.toLowerCase()));
 
   const selectedPlan = currentPlans.find((plan) => plan.id === selectedPlanId);
   const summaryPlan = selectedPlan ?? currentPlans[0];
 
   function handleButtonClick(planId: string) {
     setSelectedPlanId(planId);
+    setClickedPlanId(planId);
     document.querySelector(".level-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
@@ -77,7 +54,7 @@ function ProgramContent() {
                 <article
                   key={plan.id}
                   className={`pricing-card${isPopular ? " pricing-card-popular" : ""}${isSelected ? " selected-pricing-card" : ""}`}
-                  onClick={() => setSelectedPlanId(plan.id)}
+                  onClick={() => { setSelectedPlanId(plan.id); setClickedPlanId(plan.id); }}
                   style={{ cursor: "pointer" }}
                   role="button"
                   tabIndex={0}
@@ -85,6 +62,7 @@ function ProgramContent() {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
                       setSelectedPlanId(plan.id);
+                      setClickedPlanId(plan.id);
                     }
                   }}
                   aria-pressed={isSelected}
@@ -123,7 +101,7 @@ function ProgramContent() {
                   <div className="pricing-card-footer">
                     <button
                       type="button"
-                      className={`button ${isSelected ? "button-primary" : "button-secondary"} pricing-cta-btn`}
+                      className={`button ${clickedPlanId === plan.id ? "button-primary" : "button-secondary"} pricing-cta-btn`}
                       onClick={(e) => {
                         e.stopPropagation();
                         handleButtonClick(plan.id);
@@ -154,8 +132,9 @@ function ProgramContent() {
               </div>
             </div>
           </div>
+          {programs.loading && <p role="status">Memuat program…</p>}{programs.error && <div role="alert">{programs.error} <button type="button" onClick={programs.reload}>Coba lagi</button></div>}{!programs.loading && !programs.error && !programs.data.length && <p>Belum ada program tersedia.</p>}
           <div className="public-levels">
-            {levelCatalog.map((level) => (
+            {levels.map((level) => (
               <button
                 type="button"
                 className={`public-level${selectedLevel.code === level.code ? " selected" : ""}`}
@@ -212,9 +191,7 @@ function ProgramContent() {
             </div>
 
             <div className="summary-action-box" style={{ width: "100%", display: "flex", justifyContent: "center", margin: "20px auto 0" }}>
-              <Link className="button button-primary summary-cta" href={`/register?placement=${selectedLevel.code}&plan=${summaryPlan.id}`} style={{ margin: "0 auto" }}>
-                Lanjutkan Pendaftaran
-              </Link>
+              {summaryPlan.available ? <Link className="button button-primary summary-cta" href={`/register?placement=${selectedLevel.code}&plan=${summaryPlan.id}`} style={{ margin: "0 auto" }}>Lanjutkan Pendaftaran</Link> : <button type="button" className="button button-secondary summary-cta" disabled>Belum tersedia</button>}
             </div>
           </div>
         </aside>

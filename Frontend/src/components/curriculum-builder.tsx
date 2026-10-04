@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AdminCanonicalCurriculum } from "@/components/admin-canonical-curriculum";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { AdminShell } from "@/components/admin-shell";
@@ -86,9 +87,9 @@ export function CurriculumBuilder() {
           onChange={setTab}
           label="Menu Kurikulum & Materi"
         >
-          {currentTab === "Kurikulum" && <CurriculumTab />}
-          {currentTab === "Flashcard" && <FlashcardTab />}
-          {currentTab === "Perpustakaan Materi" && <LibraryTab />}
+          {currentTab === "Kurikulum" && <AdminCanonicalCurriculum nested />}
+          {currentTab === "Flashcard" && <AdminCanonicalCurriculum flashcards nested />}
+          {currentTab === "Perpustakaan Materi" && <div className="library-tab-content"><Link href="/admin/modul">Modul</Link><p>Perpustakaan Materi mengikuti modul published pada chapter.</p></div>}
           {currentTab === "Replay Rekaman" && <ReplayTab />}
         </AdminTabs>
       </main>
@@ -96,7 +97,7 @@ export function CurriculumBuilder() {
   );
 }
 
-function CurriculumTab() {
+export function CurriculumTab() {
   const { store, refresh } = useCurriculumStore();
   const [selectedProgram, setSelectedProgram] = useState<ProgramCode>("N5");
   const [editingChapter, setEditingChapter] = useState<Chapter | null>(null);
@@ -807,7 +808,7 @@ function ChapterEditor({
   );
 }
 
-function FlashcardTab() {
+export function FlashcardTab() {
   const { store, refresh } = useCurriculumStore();
   const [filterProgram, setFilterProgram] = useState<string>("");
   const [editingDeck, setEditingDeck] = useState<FlashcardDeck | null>(null);
@@ -1373,7 +1374,7 @@ function FlashcardFlipModal({
   );
 }
 
-function LibraryTab() {
+export function LibraryTab() {
   const { store, refresh } = useCurriculumStore();
   const [filterType, setFilterType] = useState<string>("");
   const [filterProgram, setFilterProgram] = useState<string>("");

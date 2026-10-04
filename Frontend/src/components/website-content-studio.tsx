@@ -487,8 +487,8 @@ function getStoreSnapshot(): WebsiteStoreData {
   if (typeof window === "undefined") return initialStore;
   const raw = localStorage.getItem(WEBSITE_STORAGE_KEY);
   if (raw !== cachedRaw) {
-    cachedRaw = raw;
     cachedStore = loadStore();
+    cachedRaw = localStorage.getItem(WEBSITE_STORAGE_KEY);
   }
   return cachedStore;
 }
@@ -642,8 +642,8 @@ export function LandingPageStudio() {
           active={activeTab}
           onChange={setActiveTab}
         >
-          {activeTab === "Bagian Halaman" && <LandingSectionsEditor />}
-          {activeTab === "Kampanye & Promo" && <CampaignHub />}
+           {activeTab === "Bagian Halaman" && <><p role="status">Copy dan susunan Landing Page dikunci. Kelola media melalui Showcase, Sensei, dan Testimoni.</p><fieldset disabled style={{ border: 0, padding: 0, minWidth: 0 }}><LandingSectionsEditor /></fieldset></>}
+           {activeTab === "Kampanye & Promo" && <><Link className="button button-primary" href="/admin/program-harga">Program &amp; Harga</Link><p role="status">Kelola promo melalui Program &amp; Harga. Builder kampanye ini belum didukung API.</p><fieldset disabled style={{ border: 0, padding: 0, minWidth: 0 }}><CampaignHub /></fieldset></>}
         </AdminTabs>
       </main>
     </AdminShell>

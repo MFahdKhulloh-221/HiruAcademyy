@@ -99,7 +99,7 @@ class ProgramOfferTest extends TestCase
             ->assertJsonPath('data.0.base_price', 99000)
             ->assertJsonPath('data.0.duration_months', 6);
         foreach ($response->json('data') as $offer) {
-            $this->assertSame(['program', 'plan_code', 'base_price', 'currency', 'duration_months', 'promotion', 'discount_percent', 'discount_amount', 'effective_price'], array_keys($offer));
+            $this->assertSame(['id', 'program', 'plan_code', 'base_price', 'currency', 'duration_months', 'promotion', 'discount_percent', 'discount_amount', 'effective_price'], array_keys($offer));
             $this->assertSame(['code', 'slug', 'name'], array_keys($offer['program']));
             $this->assertIsInt($offer['base_price']);
             $this->assertSame('IDR', $offer['currency']);
@@ -160,6 +160,25 @@ class ProgramOfferTest extends TestCase
     {
         $this->expectException(QueryException::class);
         ProgramOffer::firstOrFail()->update(['program_id' => 0]);
+    }
+
+    public function test_price_patch_authorization_validation_and_n1_guard(): void
+    {
+        $offer = ProgramOffer::where('plan_code', 'lms')->firstOrFail();
+        $this->patchJson("/api/admin/offers/$offer->id", ['base_price' => 123000])->assertUnauthorized();
+        $student = $this->createUser();
+        $this->actingAs($student)->patchJson("/api/admin/offers/$offer->id", ['base_price' => 123000])->assertForbidden();
+        $student->role = 'admin';
+        $student->save();
+        $this->actingAs($student)->patchJson("/api/admin/offers/$offer->id", ['base_price' => -1])->assertUnprocessable();
+        $this->patchJson("/api/admin/offers/$offer->id", ['base_price' => 123000, 'duration_months' => 12])->assertUnprocessable();
+        $this->patchJson("/api/admin/offers/$offer->id", ['base_price' => 123000])->assertOk()->assertJsonPath('data.base_price', 123000);
+        $this->assertSame(6, $offer->fresh()->duration_months);
+        $n1 = ProgramOffer::whereHas('program', fn ($query) => $query->where('code', 'n1'))->firstOrFail();
+        $this->patchJson("/api/admin/offers/$n1->id", ['base_price' => 123000])->assertUnprocessable();
+        $student->account_status = 'inactive';
+        $student->save();
+        $this->patchJson("/api/admin/offers/$offer->id", ['base_price' => 123000])->assertUnauthorized();
     }
 
     private function createUser(string $role = 'student'): User

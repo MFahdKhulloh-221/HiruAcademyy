@@ -82,7 +82,8 @@ class ProgramTest extends TestCase
         $this->assertSame(['interview', 'dasar', 'n5', 'n4', 'n3', 'n2', 'ssw-food'],
             array_column($response->json('data'), 'code'));
         foreach ($response->json('data') as $program) {
-            $this->assertSame(['code', 'slug', 'name', 'family'], array_keys($program));
+            $this->assertSame(['id', 'code', 'slug', 'name', 'family'], array_keys($program));
+            $this->assertSame(Program::where('code', $program['code'])->firstOrFail()->id, $program['id']);
         }
     }
 

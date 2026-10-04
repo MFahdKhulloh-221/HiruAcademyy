@@ -40,6 +40,10 @@ class LearningAttemptService
                 } elseif ($kind === 'reading') {
                     $passage = $question->readingPassage;
                     $item['passage'] = ['id' => $passage->id, 'title' => $passage->title, 'body' => $passage->body];
+                } elseif ($kind === 'mini') {
+                    $item['session'] = $question->session;
+                    $item['part'] = $question->part;
+                    $item['duration_minutes'] = $question->duration_minutes;
                 }
                 $content[] = $item;
                 $grading[$question->id] = ['correct_option' => $question->correct_option, 'explanation' => $question->explanation];
@@ -125,6 +129,11 @@ class LearningAttemptService
                 $correct += ($answers[$id] ?? null) === $grade['correct_option'] ? 1 : 0;
             }
             $result = ['correct' => $correct, 'wrong' => count($answers) - $correct, 'unanswered' => $total - count($answers), 'total' => $total, 'percentage' => round($correct * 100 / $total, 2)];
+            if ($locked->kind === 'mini') {
+                $passingScore = 70;
+                $result['passed'] = $result['percentage'] >= $passingScore;
+                $result['passing_score'] = $passingScore;
+            }
             $locked->update(['answers' => $answers, 'revision' => $locked->revision + 1, 'result_snapshot' => $result, 'status' => 'completed', 'submitted_at' => now()->utc()]);
             if ($locked->kind !== 'mini') {
                 foreach ($eligible as $question) {
@@ -141,7 +150,7 @@ class LearningAttemptService
         abort_if($review && $attempt->status !== 'completed', 403);
         $questions = [];
         foreach ($attempt->content_snapshot as $question) {
-            $item = array_intersect_key($question, array_flip(['id', 'question', 'title', 'audio_url']));
+            $item = array_intersect_key($question, array_flip(['id', 'question', 'title', 'audio_url', 'session', 'part', 'duration_minutes']));
             $item['options'] = array_intersect_key($question['options'], array_flip(['A', 'B', 'C', 'D']));
             if (isset($question['passage'])) {
                 $item['passage'] = array_intersect_key($question['passage'], array_flip(['id', 'title', 'body']));
@@ -156,6 +165,6 @@ class LearningAttemptService
             $questions[] = $item;
         }
 
-        return ['id' => $attempt->id, 'chapter_id' => $attempt->chapter_id, 'kind' => $attempt->kind, 'status' => $attempt->status, 'revision' => $attempt->revision, 'questions' => $questions, 'answers' => $attempt->answers, 'result' => $attempt->status === 'completed' ? array_intersect_key($attempt->result_snapshot, array_flip(['correct', 'wrong', 'unanswered', 'total', 'percentage'])) : null, 'submitted_at' => $attempt->submitted_at?->toISOString()];
+        return ['id' => $attempt->id, 'chapter_id' => $attempt->chapter_id, 'kind' => $attempt->kind, 'status' => $attempt->status, 'revision' => $attempt->revision, 'questions' => $questions, 'answers' => $attempt->answers, 'result' => $attempt->status === 'completed' ? array_intersect_key($attempt->result_snapshot, array_flip(['correct', 'wrong', 'unanswered', 'total', 'percentage', 'passed', 'passing_score'])) : null, 'submitted_at' => $attempt->submitted_at?->toISOString()];
     }
 }

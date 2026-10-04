@@ -1,44 +1,33 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback } from "react";
 import type { LearningActivityKey } from "@/lib/learning-mock";
+import { loadChapterContext, useLearningRequest } from "@/components/learning-hooks";
+import { learningCompletion } from "@/lib/learning-api";
 
-const eventName = "hiru:learning-progress";
+export const requiredChapterActivities: LearningActivityKey[] = [];
 
-export const requiredChapterActivities: LearningActivityKey[] = ["video", "grammar", "kanji", "flashcards", "audio", "reading"];
-
-function storageKey(level: string, chapter: string) {
-  return `hiru:learning-progress:${level}:${chapter}`;
+export function readChapterProgress(level: string, chapter: string): LearningActivityKey[] {
+  void level;
+  void chapter;
+  return [];
 }
 
-export function readChapterProgress(level: string, chapter: string) {
-  if (typeof window === "undefined") return [] as LearningActivityKey[];
-  try {
-    return JSON.parse(localStorage.getItem(storageKey(level, chapter)) ?? "[]") as LearningActivityKey[];
-  } catch {
-    localStorage.removeItem(storageKey(level, chapter));
-    return [] as LearningActivityKey[];
-  }
-}
-
-export function completeChapterActivity(level: string, chapter: string, activity: LearningActivityKey) {
-  const completed = new Set(readChapterProgress(level, chapter));
-  completed.add(activity);
-  localStorage.setItem(storageKey(level, chapter), JSON.stringify([...completed]));
-  window.dispatchEvent(new CustomEvent(eventName));
+export async function completeChapterActivity(level: string, chapter: string, activity: LearningActivityKey) {
+  const context = await loadChapterContext(level, chapter);
+  if (activity === "flashcards") return learningCompletion(context.program.id, context.chapter.id, "flashcard");
+  throw new Error("Canonical resource ID required. Use learningCompletion.");
 }
 
 export function useChapterProgress(level: string, chapter: string) {
-  const [completed, setCompleted] = useState<LearningActivityKey[]>([]);
-  useEffect(() => {
-    const update = () => setCompleted(readChapterProgress(level, chapter));
-    update();
-    window.addEventListener(eventName, update);
-    window.addEventListener("storage", update);
-    return () => {
-      window.removeEventListener(eventName, update);
-      window.removeEventListener("storage", update);
-    };
-  }, [chapter, level]);
+  const load = useCallback((signal: AbortSignal) => loadChapterContext(level, chapter, signal), [level, chapter]);
+  const request = useLearningRequest(load, `progress/${level}/${chapter}`);
+  const activities = request.data?.progress.activities;
+  const completed: LearningActivityKey[] = [];
+  if (activities?.video?.complete) completed.push("video");
+  if (activities?.module?.complete) completed.push("grammar", "kanji");
+  if (activities?.flashcard?.complete) completed.push("flashcards");
+  if (activities?.audio?.complete) completed.push("audio");
+  if (activities?.reading?.complete) completed.push("reading");
   return completed;
 }

@@ -1,82 +1,13 @@
 "use client";
 
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { StudentBreadcrumb } from "@/components/student-breadcrumb";
 import { StudentNavigation } from "@/components/student-navigation";
-import { parseMembership } from "@/lib/dashboard-mock";
+
+export function StudentCertificateCenter() {
+  return <section className="certificate-detail-page"><header className="supporting-header"><p className="dash-kicker">DIGITAL CERTIFICATE</p><h1>Sertifikat</h1><p>Sertifikat resmi digital kelulusan program HIRU Academy.</p></header><section className="library-empty"><h2>Sertifikat belum dapat diterbitkan</h2><p>OPEN: aturan penerbitan sertifikat. Belum ada sertifikat resmi tersedia.</p><Link className="button button-secondary" href="/dashboard">Kembali Dashboard</Link></section></section>;
+}
 
 export function CertificateDetailScreen() {
-  const searchParams = useSearchParams();
-  const membership = parseMembership(searchParams.get("membership") ?? undefined);
-  const query = `?membership=${membership}`;
-  if (membership === "free") return <div className="supporting-shell student-shell"><StudentNavigation membership={membership} /><main className="supporting-main"><section className="sensei-status-panel"><p className="dash-kicker">AKSES PREMIUM</p><h1>Akses ini belum aktif pada Free Member</h1><p>Sertifikat tersedia sesuai membership dan eligibility yang telah diverifikasi.</p><div className="status-actions"><Link className="button button-primary" href={`/renewal${query}`}>Lihat Membership</Link><Link className="button button-secondary" href={`/dashboard${query}`}>Kembali Dashboard</Link></div></section></main></div>;
-
-  return (
-    <div className="supporting-shell student-shell">
-      <StudentNavigation membership={membership} />
-      <main className="supporting-main certificate-detail-page">
-        <StudentBreadcrumb items={[{ label: "Sertifikat", href: `/certificate${query}` }, { label: "N5" }]} />
-        <div className="progress-title-row">
-          <header className="supporting-header">
-            <p className="dash-kicker">DIGITAL CERTIFICATE</p>
-            <p>Sertifikat resmi digital kelulusan program HIRU Academy.</p>
-          </header>
-        </div>
-
-        <section className="certificate-preview">
-          <span aria-hidden="true">証</span>
-          <small>DIGITAL</small><p className="dash-kicker">SERTIFIKAT KELULUSAN</p>
-          <h2>Member •••1</h2>
-          <p>Telah menyelesaikan program JLPT N5</p>
-          <div className="certificate-actions">
-            <button className="button button-dark disabled" type="button" aria-disabled="true">Download PDF</button>
-            <button className="button button-secondary disabled" type="button" aria-disabled="true">Bagikan</button>
-            <button className="button button-secondary disabled" type="button" aria-disabled="true">Salin Verification ID</button>
-          </div>
-        </section>
-
-        <div className="certificate-grid-layout">
-          <section className="certificate-verification">
-            <h2>Status &amp; verifikasi</h2>
-            <div className="verification-status"><span>Issued</span><span>Valid</span></div>
-            <dl>
-              <div><dt>Penerima</dt><dd>Member •••1</dd></div>
-              <div><dt>Program</dt><dd>JLPT N5</dd></div>
-              <div><dt>Verification ID</dt><dd>CERT•••N5</dd></div>
-              <div><dt>Issue date</dt><dd>Terverifikasi</dd></div>
-              <div><dt>Status</dt><dd>Valid</dd></div>
-              <div><dt>Format</dt><dd>Digital PDF</dd></div>
-            </dl>
-          </section>
-
-          <div className="certificate-sidebar">
-            <section className="certificate-activity">
-              <h2>Aktivitas sertifikat</h2>
-              <ul>
-                <li><strong>Diterbitkan</strong><span>Resmi terbit</span><small>Tercatat</small></li>
-                <li><strong>Diunduh</strong><span>Format PDF</span><small>Tersedia</small></li>
-                <li><strong>Dibagikan</strong><span>Share event opsional</span><small>Opsional</small></li>
-              </ul>
-            </section>
-
-            <section className="certificate-eligibility">
-              <h2>Eligibility</h2>
-              <ul>
-                <li>Journey selesai</li>
-                <li>Assessment memenuhi rule</li>
-                <li>Membership valid saat completion</li>
-                <li>Tidak ada revocation</li>
-              </ul>
-            </section>
-          </div>
-        </div>
-
-        <aside className="certificate-notice">
-          <strong>VERIFICATION</strong>
-          <p>Sertifikat digital resmi dilengkapi ID verifikasi unik yang dapat diverifikasi keasliannya.</p>
-        </aside>
-      </main>
-    </div>
-  );
+  return <div className="supporting-shell student-shell"><StudentNavigation membership="free" /><main className="supporting-main"><StudentBreadcrumb items={[{ label: "Sertifikat", href: "/certificate" }, { label: "N5" }]} /><StudentCertificateCenter /></main></div>;
 }

@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Invoice;
 use App\Models\ProgramOffer;
+use App\Models\User;
 use App\Services\InvoiceWorkflowService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -41,6 +42,22 @@ class InvoiceController extends Controller
         }
         $data = $request->validate($rules);
         $invoice = $workflow->create($request->user(), ProgramOffer::findOrFail($data['program_offer_id']), $data);
+
+        return response()->json(['data' => $invoice], 201);
+    }
+
+    public function adminStore(Request $request, InvoiceWorkflowService $workflow): JsonResponse
+    {
+        $data = $request->validate([
+            'user_id' => ['required', 'integer', Rule::exists('users', 'id')->where('role', 'student')->where('account_status', 'active')],
+            'program_offer_id' => ['required', 'integer', 'exists:program_offers,id'],
+            'referral_code' => ['nullable', 'string', 'max:255'],
+            'due_date' => ['nullable', 'date_format:Y-m-d'],
+            'note' => ['nullable', 'string', 'max:5000'],
+            'status' => ['prohibited'], 'base_price' => ['prohibited'], 'total_price' => ['prohibited'],
+            'discount_amount' => ['prohibited'], 'duration_months' => ['prohibited'],
+        ]);
+        $invoice = $workflow->create(User::findOrFail($data['user_id']), ProgramOffer::findOrFail($data['program_offer_id']), $data);
 
         return response()->json(['data' => $invoice], 201);
     }

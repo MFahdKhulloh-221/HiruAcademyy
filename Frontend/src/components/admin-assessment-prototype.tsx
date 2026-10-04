@@ -1,16 +1,22 @@
 "use client";
 
-import { useCallback, useState, type FormEvent } from "react";
+import { useCallback, useState, type FormEvent, type ReactNode } from "react";
+import { useLearningRequest } from "@/components/learning-hooks";
+import { loadAdminTryOuts, saveAdminTryOut, deleteAdminTryOut } from "@/lib/admin-tryout-api";
 import { LuSearch } from "react-icons/lu";
 import { AdminDataTable, AdminDialog, AdminFilterToolbar, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge } from "@/components/admin-primitives";
 import { AdminAssessmentPreview } from "@/components/admin-assessment-preview";
-import { assessmentError, assessmentLetters, assessmentQuestionError, assessmentSections, copyAssessment, createAssessmentFixtures, miniAssessmentContexts, orderedAssessmentQuestions, tryoutAssessmentContexts, validAssessmentAudio, type AdminAssessment, type AdminAssessmentKind, type AdminAssessmentQuestion } from "@/components/admin-assessment-fixtures";
+import { AdminQuestionWorkspace } from "@/components/admin-question-workspace";
+import { assessmentError, assessmentLetters, assessmentQuestionError, assessmentSections, copyAssessment, miniAssessmentContexts, orderedAssessmentQuestions, tryoutAssessmentContexts, validAssessmentAudio, type AdminAssessment, type AdminAssessmentKind, type AdminAssessmentQuestion } from "@/components/admin-assessment-fixtures";
 
-function AssessmentWorkspace({ kind }: { kind: AdminAssessmentKind }) {
+function AssessmentWorkspace({ kind, navigation }: { kind: AdminAssessmentKind; navigation?: ReactNode }) {
   const mini = kind === "mini";
   const title = mini ? "Mini Checkpoint" : "Try Out";
   const contexts: readonly string[] = mini ? miniAssessmentContexts : tryoutAssessmentContexts;
-  const [rows, setRows] = useState(() => createAssessmentFixtures(kind));
+  const load = useCallback((signal: AbortSignal) => mini ? Promise.resolve([]) : loadAdminTryOuts(signal), [mini]);
+  const request = useLearningRequest(load, `admin-${kind}`);
+  const [savedRows, setRows] = useState<AdminAssessment[] | null>(null);
+  const rows = savedRows ?? request.data ?? [];
   const [draft, setDraft] = useState<AdminAssessment | null>(null);
   const [questionDraft, setQuestionDraft] = useState<AdminAssessmentQuestion | null>(null);
   const [view, setView] = useState<string | null>(null);
@@ -25,12 +31,13 @@ function AssessmentWorkspace({ kind }: { kind: AdminAssessmentKind }) {
   const [questionStatus, setQuestionStatus] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const closeEditor = useCallback(() => { setDraft(null); setQuestionDraft(null); setDeleting(null); setError(""); }, []);
-  const closeQuestion = useCallback(() => { setQuestionDraft(null); setError(""); }, []);
-  const closeView = useCallback(() => setView(null), []);
-  const closeDelete = useCallback(() => setDeleting(null), []);
+  const [busy, setBusy] = useState(false);
+  const closeEditor = useCallback(() => { setDraft(null); setQuestionDraft(null); setDeleting(null); setError(""); }, [setDraft, setQuestionDraft, setDeleting, setError]);
+  const closeQuestion = useCallback(() => { setQuestionDraft(null); setError(""); }, [setQuestionDraft, setError]);
+  const closeView = useCallback(() => setView(null), [setView]);
+  const closeDelete = useCallback(() => setDeleting(null), [setDeleting]);
   const query = search.trim().toLowerCase();
-  const visible = rows.filter((row) => (!context || row.context === context) && (!chapter || row.chapter === chapter) && (!status || row.status === status) && [row.title, row.context, row.chapter, row.session, row.part, ...row.questions.map((question) => question.prompt)].some((value) => value.toLowerCase().includes(query))).sort((a, b) => Number(a.order) - Number(b.order) || a.id.localeCompare(b.id));
+  const visible = rows.filter((row) => (!context || row.context === context) && (!chapter || row.chapter === chapter) && (!status || row.status === status) && [row.title, row.context, row.chapter, row.session, row.part, ...row.questions.map((question) => question?.prompt ?? "")].some((value) => (value ?? "").toLowerCase().includes(query))).sort((a, b) => Number(a.order) - Number(b.order) || a.id.localeCompare(b.id));
   const chapters = [...new Set(rows.filter((row) => !context || row.context === context).map((row) => row.chapter).filter(Boolean))];
   const viewItem = rows.find((row) => row.id === view);
   const questions = draft ? orderedAssessmentQuestions(draft) : [];
@@ -39,14 +46,18 @@ function AssessmentWorkspace({ kind }: { kind: AdminAssessmentKind }) {
   function edit(item: AdminAssessment) {
     setDraft(copyAssessment(item)); setError(""); setQuestionSearch(""); setQuestionSection(""); setQuestionType(""); setQuestionStatus("");
   }
-  function save(event: FormEvent<HTMLFormElement>) {
+  async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft) return;
     const issue = assessmentError(draft);
     if (issue) { setError(issue); return; }
     const next = copyAssessment({ ...draft, title: draft.title.trim(), chapter: draft.chapter.trim() });
-    setRows((current) => current.some((row) => row.id === next.id) ? current.map((row) => row.id === next.id ? next : row) : [...current, next]);
-    closeEditor(); setMessage(`${title} disimpan untuk sesi ini. Halaman siswa tidak berubah.`);
+    if (mini) { setError("OPEN: konfigurasi sesi, part, timer Mini belum tersedia di backend."); return; }
+    if (busy) return;
+    setBusy(true);
+    try { setRows(await saveAdminTryOut(next)); closeEditor(); setMessage(`${title} disimpan.`); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Permintaan belum berhasil. Silakan coba lagi."); setRows(null); request.retry(); }
+    finally { setBusy(false); }
   }
   function saveQuestion(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -56,11 +67,12 @@ function AssessmentWorkspace({ kind }: { kind: AdminAssessmentKind }) {
     setDraft({ ...draft, questions: draft.questions.some((question) => question.id === questionDraft.id) ? draft.questions.map((question) => question.id === questionDraft.id ? { ...questionDraft, answers: [...questionDraft.answers] } : question) : [...draft.questions, { ...questionDraft, answers: [...questionDraft.answers] }] });
     closeQuestion();
   }
-  function toggleAssessment(item: AdminAssessment) {
+  async function toggleAssessment(item: AdminAssessment) {
     const next = { ...item, status: item.status === "Draft" ? "Published" : "Draft" } as AdminAssessment;
     const issue = assessmentError(next);
     if (issue) { setMessage(issue); return; }
-    setRows((current) => current.map((row) => row.id === item.id ? next : row)); setMessage("Status diubah untuk sesi ini. Halaman siswa tidak berubah.");
+    try { setRows(await saveAdminTryOut(next)); setMessage("Status diubah."); }
+    catch (cause) { setMessage(cause instanceof Error ? cause.message : "Permintaan belum berhasil. Silakan coba lagi."); }
   }
   function moveQuestion(item: AdminAssessmentQuestion, direction: -1 | 1) {
     if (!draft) return;
@@ -73,9 +85,9 @@ function AssessmentWorkspace({ kind }: { kind: AdminAssessmentKind }) {
     setDraft({ ...draft, questions: draft.questions.map((question) => orders.has(question.id) ? { ...question, order: orders.get(question.id)! } : question) });
   }
   const previewDraft = draft && questionDraft ? { ...draft, questions: draft.questions.filter((question) => question.id !== questionDraft.id).concat(questionDraft) } : draft;
-  return <AdminShell current={mini ? "/admin/mini-checkpoint" : "/admin/tryout"}><main className="admin-public-prototype admin-assessment-prototype">
-    <AdminPageHeader title={title} actions={<button className="button button-primary" type="button" onClick={() => edit({ id: crypto.randomUUID(), kind, title: "", context: context || (mini ? "N4" : "N5"), chapter: mini ? chapter : "", session: mini ? "1" : "", part: mini ? "1" : "", duration: mini ? "" : "125", maxScore: mini ? "100" : "180", passingScore: "", order: String(rows.reduce((max, row) => Math.max(max, Number(row.order)), 0) + 1), status: "Draft", questions: [] })}>Tambah {title}</button>} />
-    <p>Data runtime React saja. OPEN: copy baru, durasi Mini Checkpoint, chapter fixture, dan aturan skor final perlu konfirmasi.</p><p role="status">{message}</p>
+  return <AdminShell current={mini ? "/admin/mini-checkpoint" : "/admin/tryout"}><main className="admin-public-prototype admin-assessment-prototype">{navigation}
+    <AdminPageHeader title={title} actions={<button className="button button-primary" type="button" onClick={() => edit({ id: crypto.randomUUID(), kind, title: "", context: context || (mini ? "N4" : "N5"), chapter: mini ? chapter : "", session: mini ? "1" : "", part: mini ? "1" : "", duration: "", maxScore: mini ? "100" : "180", passingScore: "", order: String(rows.reduce((max, row) => Math.max(max, Number(row.order)), 0) + 1), status: "Draft", questions: [] })}>Tambah {title}</button>} />
+    {mini && <p role="status">OPEN: konfigurasi sesi, part, timer Mini belum tersedia di backend.</p>}{request.error && <p role="alert">{request.error}</p>}<p role="status">{message}</p>
     <AdminSection><AdminFilterToolbar>
       <label className="admin-search-box admin-learning-media-search admin-learning-question-search admin-assessment-search"><input type="search" aria-label={`Cari ${title}`} value={search} onChange={(event) => setSearch(event.target.value)} /><span aria-hidden="true"><LuSearch /></span></label>
       <label className="admin-field">Konteks<select value={context} onChange={(event) => { setContext(event.target.value); setChapter(""); }}><option value="">Semua</option>{contexts.map((value) => <option key={value}>{value}</option>)}</select></label>
@@ -95,7 +107,7 @@ function AssessmentWorkspace({ kind }: { kind: AdminAssessmentKind }) {
         <label className="admin-field">Judul<input required value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
         <label className="admin-field">Konteks<select value={draft.context} onChange={(event) => { setDraft({ ...draft, context: event.target.value }); setQuestionSection(""); }} >{contexts.map((value) => <option key={value}>{value}</option>)}</select></label>
         {mini && <><label className="admin-field">Chapter<input required value={draft.chapter} onChange={(event) => setDraft({ ...draft, chapter: event.target.value })} /></label><label className="admin-field">Sesi<input type="number" min="1" step="1" value={draft.session} onChange={(event) => setDraft({ ...draft, session: event.target.value })} /></label><label className="admin-field">Part<select value={draft.part} onChange={(event) => setDraft({ ...draft, part: event.target.value })}><option>1</option><option>2</option></select></label></>}
-        <label className="admin-field">Durasi (menit)<input type="number" min="1" step="1" value={draft.duration} onChange={(event) => setDraft({ ...draft, duration: event.target.value })} /></label>
+        <label className="admin-field">Durasi (menit)<input disabled={!mini} type="number" min="1" step="1" value={draft.duration} onChange={(event) => setDraft({ ...draft, duration: event.target.value })} /></label>
         <label className="admin-field">Skor maksimal<input type="number" min={mini ? "1" : "76"} step="1" value={draft.maxScore} onChange={(event) => setDraft({ ...draft, maxScore: event.target.value })} /></label>
         <label className="admin-field">{mini ? "Passing score" : "Passing score total"}<input type="number" min="0" max={draft.maxScore} step="any" value={draft.passingScore} onChange={(event) => setDraft({ ...draft, passingScore: event.target.value })} /></label>
         {!mini && <label className="admin-field">Passing score per sesi<input readOnly value="19" /></label>}
@@ -122,6 +134,7 @@ function AssessmentWorkspace({ kind }: { kind: AdminAssessmentKind }) {
       <label className="admin-field">Tipe<select value={questionDraft.type} onChange={(event) => setQuestionDraft({ ...questionDraft, type: event.target.value as AdminAssessmentQuestion["type"], file: null, passage: "" })}>{(["DASAR", "SSW"].includes(draft.context) ? ["Multiple choice"] : ["Multiple choice", "Audio", "Reading"]).map((value) => <option key={value}>{value}</option>)}</select></label>
       {questionDraft.type === "Audio" && <><label className="admin-field">File audio (opsional)<input type="file" accept="audio/*" onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; if (!file) return; if (!validAssessmentAudio(file)) { setError("Pilih file audio yang valid dan tidak kosong."); return; } setError(""); setQuestionDraft({ ...questionDraft, file }); }} /></label>{questionDraft.file ? <div className="admin-learning-media-file"><span>{questionDraft.file.name} • {questionDraft.file.size.toLocaleString("id-ID")} byte</span><button className="button" type="button" onClick={() => setQuestionDraft({ ...questionDraft, file: null })}>Hapus file</button></div> : <p>OPEN: file audio lokal belum tersedia.</p>}</>}
       {questionDraft.type === "Reading" && <label className="admin-field">Teks bacaan<textarea lang="ja" value={questionDraft.passage} onChange={(event) => setQuestionDraft({ ...questionDraft, passage: event.target.value })} /></label>}
+      {!mini && <><label className="admin-field">Point value<input type="number" min="1" step="1" value={questionDraft.pointValue ?? ""} onChange={event => setQuestionDraft({ ...questionDraft, pointValue: event.target.valueAsNumber })} /></label>{questionDraft.type === "Audio" && <label className="admin-field">URL audio<input type="url" value={questionDraft.audioUrl ?? ""} onChange={event => setQuestionDraft({ ...questionDraft, audioUrl: event.target.value })} /></label>}</>}
       <label className="admin-field">Pertanyaan<textarea required value={questionDraft.prompt} onChange={(event) => setQuestionDraft({ ...questionDraft, prompt: event.target.value })} /></label>
       <label className="admin-field">Teks Jepang (opsional)<textarea lang="ja" value={questionDraft.japanese?.text ?? ""} onChange={(event) => setQuestionDraft({ ...questionDraft, japanese: { ...questionDraft.japanese, text: event.target.value } })} /></label>
       <label className="admin-field">Furigana (opsional)<input lang="ja" value={questionDraft.japanese?.reading ?? ""} onChange={(event) => setQuestionDraft({ ...questionDraft, japanese: { text: questionDraft.japanese?.text ?? "", reading: event.target.value } })} /></label>
@@ -134,9 +147,9 @@ function AssessmentWorkspace({ kind }: { kind: AdminAssessmentKind }) {
       {previewDraft && <AdminAssessmentPreview key={questionDraft.id} assessment={previewDraft} initialQuestionId={questionDraft.id} />}{error && <p role="alert">{error}</p>}<div className="admin-page-actions"><button className="button" type="button" onClick={closeQuestion}>Batal</button><button className="button button-primary" type="submit">Simpan Soal</button></div>
     </form>}</AdminDialog>
     <AdminDialog open={Boolean(viewItem)} title={`Detail ${title}`} close={closeView}>{viewItem && <AdminAssessmentPreview key={viewItem.id} assessment={viewItem} />}</AdminDialog>
-    <AdminDialog open={Boolean(deleting)} title={`Hapus ${deleting?.question ? "Soal" : title}?`} close={closeDelete} actions={<><button className="button" type="button" onClick={closeDelete}>Batal</button><button className="button button-primary" type="button" onClick={() => { if (!deleting) return; if (deleting.question && draft) setDraft({ ...draft, questions: draft.questions.filter((question) => question.id !== deleting.id) }); else setRows((current) => current.filter((row) => row.id !== deleting.id)); closeDelete(); }}>Hapus</button></>}><p>Hapus {deleting?.label} dari sesi ini? Halaman siswa tidak berubah.</p></AdminDialog>
+    <AdminDialog open={Boolean(deleting)} title={`Hapus ${deleting?.question ? "Soal" : title}?`} close={closeDelete} actions={<><button className="button" type="button" onClick={closeDelete}>Batal</button><button className="button button-primary" type="button" onClick={async () => { if (!deleting) return; try { if (deleting.question && draft) { const question = draft.questions.find(question => question.id === deleting.id); if (question && /^\d+$/.test(question.id)) setRows(await deleteAdminTryOut(draft.id, question)); setDraft({ ...draft, questions: draft.questions.filter(question => question.id !== deleting.id) }); } else setRows(await deleteAdminTryOut(deleting.id)); closeDelete(); } catch (cause) { setMessage(cause instanceof Error ? cause.message : "Permintaan belum berhasil. Silakan coba lagi."); } }}>Hapus</button></>}><p>Hapus {deleting?.label} dari sesi ini? Halaman siswa tidak berubah.</p></AdminDialog>
   </main></AdminShell>;
 }
 
-export function AdminMiniCheckpointPrototype() { return <AssessmentWorkspace kind="mini" />; }
-export function AdminTryoutPrototype() { return <AssessmentWorkspace kind="tryout" />; }
+export function AdminMiniCheckpointPrototype() { return <AdminQuestionWorkspace kind="Mini Checkpoint" />; }
+export function AdminTryoutPrototype({ navigation }: { navigation?: ReactNode } = {}) { return <AssessmentWorkspace kind="tryout" navigation={navigation} />; }

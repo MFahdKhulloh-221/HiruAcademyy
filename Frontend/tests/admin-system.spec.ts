@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./canonical-fixture";
 
 const responsiveWidths = [360, 390, 768, 820, 1024, 1440];
 
@@ -122,7 +122,7 @@ test.describe("1. Analytics Dashboard (/admin/analitik)", () => {
     const userCard = page.locator(".admin-metric-card", { hasText: "Total pengguna" });
     await expect(userCard).toBeVisible();
     await expect(userCard.getByRole("paragraph")).toHaveText("Total pengguna");
-    await expect(userCard.locator("strong")).toHaveText("5");
+    await expect(userCard.locator("strong")).toHaveText("1");
   });
 });
 
@@ -161,13 +161,16 @@ test.describe("2. Settings & Integrations (/admin/pengaturan-integrasi)", () => 
     await page.getByRole("tab", { name: "Kontak" }).click();
 
     const waInput = page.getByLabel("Nomor WhatsApp");
-    await waInput.fill("089876543210");
+    await waInput.fill("6289876543210");
+    const invoice = { id: 42, user_id: 901, program_id: 2, program_code: "n4", plan_code: "lms", base_price: 99000, discount_amount: 0, total_price: 99000, status: "awaiting_payment", created_at: "2026-10-01T00:00:00Z" };
+    await page.route("**/api/admin/invoices", route => route.fulfill({ json: { data: [invoice] } }));
+    await page.route("**/api/admin/invoices/42", route => route.fulfill({ json: { data: invoice } }));
     await page.getByRole("button", { name: "Simpan Kontak" }).click();
     await expect(page.getByRole("status")).toHaveText("Pengaturan Kontak berhasil disimpan.");
 
     // Navigate to /admin/invoice and check detail modal WhatsApp link
     await page.goto("/admin/invoice");
-    const firstRow = page.locator("tr", { hasText: "INV-2026-001" });
+    const firstRow = page.getByRole("row").filter({ has: page.getByRole("cell", { name: "42", exact: true }) });
     await firstRow.getByRole("button", { name: "Detail" }).click();
 
     const dialog = page.getByRole("dialog");
@@ -254,59 +257,6 @@ test.describe("2. Settings & Integrations (/admin/pengaturan-integrasi)", () => 
     await expect(page.getByLabel("Penyedia rapat")).toHaveValue("Google Meet");
     await expect(page.getByLabel("Nama pengirim")).toHaveValue("Hiru Akademik");
     await expect(page.getByLabel("Email pengirim")).toHaveValue("pengirim@hiruacademy.com");
-  });
-});
-
-test.describe("3. Dashboard Final Data (/admin)", () => {
-  test("displays draft items count derived from dedicated stores, not legacy store", async ({ page }) => {
-    await page.addInitScript(() => {
-      // Seed dedicated stores with drafts
-      localStorage.setItem(
-        "hiru-admin-assessments:v1",
-        JSON.stringify({
-          version: 1,
-          assessments: [
-            { id: "a-draft-1", type: "checkpoint", status: "Draft", title: "Draf 1", description: "", level: "", questions: [], sections: [], updatedAt: "2026-01-01T00:00:00.000Z" },
-            { id: "a-draft-2", type: "tryout", status: "Draft", title: "Draf 2", description: "", level: "", questions: [], sections: [], updatedAt: "2026-01-01T00:00:00.000Z" },
-          ],
-        })
-      );
-      localStorage.setItem(
-        "hiru-admin-curriculum:v1",
-        JSON.stringify({
-          version: 1,
-          programs: [],
-          chapters: [
-            { id: "c-draft-1", programCode: "N5", title: "Bab Draf", slug: "bab-draf", description: "", order: 1, status: "Draft", videoUrl: "", videoDuration: 0, pdfUrl: "", pdfTitle: "", audioUrl: "", audioTitle: "", readingTitle: "", readingPassage: "" },
-          ],
-          flashcardDecks: [],
-          libraryMaterials: [],
-          replays: [],
-        })
-      );
-      localStorage.setItem(
-        "hiru-admin-website:v1",
-        JSON.stringify({
-          version: 1,
-          landing: { id: "landing", status: "Published" },
-          campaigns: [],
-          articles: [
-            { id: "art-draft-1", title: "Artikel Draf", slug: "art-draf", summary: "", category: "Tips", author: "", imageUrl: "", imageAlt: "", blocks: [], seoTitle: "", metaDescription: "", canonicalUrl: "", indexable: true, ogImage: "", ogTitle: "", ogDescription: "", status: "Draft", updatedAt: "2026-01-01T00:00:00.000Z", publishedAt: "2026-01-01T00:00:00.000Z" },
-          ],
-          blogs: [],
-          testimonials: [],
-          announcements: [],
-        })
-      );
-      // Obsolete legacy store key with fake count
-      localStorage.setItem("hiru-admin-demo-store:v1", JSON.stringify({ items: { foo: [{ id: "legacy-1", status: "Draft" }, { id: "legacy-2", status: "Draft" }, { id: "legacy-3", status: "Draft" }, { id: "legacy-4", status: "Draft" }, { id: "legacy-5", status: "Draft" }] } }));
-    });
-
-    await page.goto("/admin");
-    // 2 assessments + 1 chapter + 1 article = 4 draft items
-    const draftCard = page.locator(".admin-metric-card", { hasText: "Item draf" });
-    await expect(draftCard).toBeVisible();
-    await expect(draftCard.locator("strong")).toHaveText("4");
   });
 });
 

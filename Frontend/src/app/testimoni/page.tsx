@@ -2,50 +2,14 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo } from "react";
+import { contentMedia, useContent, type TestimonialContent } from "@/lib/public-content-api";
 import { PublicPage } from "@/components/public-shell";
-import { testimonialVideos, testimonials } from "@/lib/public-mock";
-import { usePublishedTestimonials } from "@/lib/website-store";
+
 
 export default function TestimonialsPage() {
-  const published = usePublishedTestimonials();
-
-  const mergedTestimonials = useMemo(() => {
-    const seen = new Set<string>();
-    const list: Array<{
-      name: string;
-      membership: string;
-      quote: string;
-      avatarSrc?: string;
-      initials?: string;
-    }> = [];
-
-    for (const item of published) {
-      const keyId = item.id ? item.id.trim().toLowerCase() : "";
-      const keyName = item.name.trim().toLowerCase();
-      if ((!keyId || !seen.has(keyId)) && !seen.has(keyName)) {
-        if (keyId) seen.add(keyId);
-        seen.add(keyName);
-        list.push({
-          name: item.name,
-          membership: item.context,
-          quote: item.quote,
-          avatarSrc: item.photoUrl,
-          initials: item.name.slice(0, 2).toUpperCase(),
-        });
-      }
-    }
-
-    for (const fixture of testimonials) {
-      const keyName = fixture.name.trim().toLowerCase();
-      if (!seen.has(keyName)) {
-        seen.add(keyName);
-        list.push(fixture);
-      }
-    }
-
-    return list;
-  }, [published]);
+  const content = useContent<TestimonialContent>("/api/testimonials");
+  const mergedTestimonials = content.data.map(item => ({ name: item.name, membership: item.context, quote: item.quote, avatarSrc: contentMedia(item.image), initials: item.name.slice(0, 2).toUpperCase() }));
+  const testimonialVideos = content.data.filter(item => item.video_url).map(item => ({ name: item.name, membership: item.context, videoSrc: item.video_url ?? "", posterSrc: contentMedia(item.image) }));
 
   return (
     <PublicPage active="Testimoni">
@@ -72,12 +36,13 @@ export default function TestimonialsPage() {
           </article>
         </section>
         <section className="public-section testimonial-section">
+          {content.loading ? <p role="status">Memuat testimoni…</p> : content.error ? <div role="alert">{content.error} <button type="button" onClick={content.reload}>Coba lagi</button></div> : !content.data.length && <p>Belum ada testimoni.</p>}
           <div className="testimonial-grid">
             {mergedTestimonials.map((testimonial) => (
               <article className="testimonial-card" key={testimonial.name}>
                 <div className="testimonial-avatar">
                   {testimonial.avatarSrc ? (
-                    <Image alt={`Foto ${testimonial.name}`} fill sizes="64px" src={testimonial.avatarSrc} />
+                    <Image unoptimized alt={`Foto ${testimonial.name}`} fill sizes="64px" src={testimonial.avatarSrc} />
                   ) : (
                     <span aria-hidden="true">{testimonial.initials || testimonial.name.slice(0, 2).toUpperCase()}</span>
                   )}

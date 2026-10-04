@@ -200,7 +200,7 @@ export function getDashboardData(membership: Membership): DashboardData {
       target: "Des 2026",
       joinDate: "12 Januari 2026",
     },
-    config: configs[membership],
+    config: { ...configs[membership], level: "—", target: "—", continue: { ...configs[membership].continue, title: "Belum tersedia", description: "", primaryHref: "/journey", progress: "—", progressPercent: 0, detail: "—" }, leaderboard: [], progressSummary: [], quickActions: configs[membership].quickActions.map(item => ({ ...item, href: item.href.split("?")[0], access: "available" })) },
   };
 }
 

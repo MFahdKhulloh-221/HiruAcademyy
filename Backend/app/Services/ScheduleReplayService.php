@@ -8,6 +8,7 @@ use App\Models\ReplayPlaylist;
 use App\Models\ReplayVideo;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -82,9 +83,24 @@ class ScheduleReplayService
         if (isset($data['scheduled_at'])) {
             $model->scheduled_at = CarbonImmutable::parse($data['scheduled_at'], config('app.timezone'))->utc();
         }
-        $model->save();
 
-        return $model->fresh();
+        return DB::transaction(function () use ($model) {
+            if ($model instanceof ClassSchedule && $model->status === 'published' && $model->sensei_name && $model->duration_minutes) {
+                DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', ['schedule:'.mb_strtolower(trim($model->sensei_name))]);
+                $start = $model->scheduled_at;
+                $end = $start->addMinutes($model->duration_minutes);
+                $conflict = ClassSchedule::where('status', 'published')->whereRaw('lower(trim(sensei_name)) = ?', [mb_strtolower(trim($model->sensei_name))])
+                    ->when($model->exists, fn ($query) => $query->where('id', '!=', $model->id))
+                    ->where('scheduled_at', '<', $end->toIso8601String())->whereNotNull('duration_minutes')
+                    ->whereRaw("scheduled_at + duration_minutes * interval '1 minute' > CAST(? AS timestamptz)", [$start->toIso8601String()])->exists();
+                if ($conflict) {
+                    throw ValidationException::withMessages(['scheduled_at' => 'Konflik jadwal: Sensei sudah memiliki sesi pada waktu ini.']);
+                }
+            }
+            $model->save();
+
+            return $model->fresh();
+        });
     }
 
     public function payload(Model $model): array

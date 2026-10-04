@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { LuSearch } from "react-icons/lu";
+import { adminLearningContext, adminLearningDelete, adminLearningList, adminLearningSave, type AdminMedia } from "@/lib/admin-learning-api";
 import { AdminDataTable, AdminDialog, AdminFilterToolbar, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge } from "@/components/admin-primitives";
 
 export const learningMediaContexts = ["DASAR", "N5", "N4", "N3", "N2", "N1", "SSW", "Interview"] as const;
@@ -50,7 +51,20 @@ export function AdminLearningMediaPreview({ item }: { item: LearningMedia }) {
 
 export function AdminLearningMediaWorkspace({ kind, initialRows }: { kind: "Video" | "Modul"; initialRows: LearningMedia[] }) {
   const video = kind === "Video";
-  const [rows, setRows] = useState(() => initialRows.map((row) => ({ ...row })));
+  void initialRows;
+  const resource = video ? "video-lessons" : "modules";
+  const [rows, setRows] = useState<LearningMedia[]>([]);
+  const [parents, setParents] = useState<Awaited<ReturnType<typeof adminLearningContext>> | null>(null);
+  const [busy, setBusy] = useState(false);
+  const loadRows = useCallback(async () => {
+    const [context, media] = await Promise.all([adminLearningContext(), adminLearningList<AdminMedia>(resource)]);
+    setParents(context);
+    setRows(media.map(item => {
+      const chapter = context.chapters.find(parent => parent.id === item.chapter_id);
+      const program = context.programs.find(parent => parent.id === chapter?.program_id);
+      return { id: String(item.id), title: item.title, description: item.description ?? "", context: program?.code === "ssw-food" ? "SSW" : program?.code === "interview" ? "Interview" : program?.code.toUpperCase() ?? "", chapter: `Chapter ${chapter?.chapter_number ?? ""}`, type: video ? "Video" : item.module_type === "grammar" ? "Tata Bahasa" : item.module_type === "kanji" ? "Huruf/Kanji" : "Umum", file: null, filename: item.file_url ?? "", url: item.video_url ?? item.file_url ?? "", duration: "", order: String(item.sort_order), status: item.status === "published" ? "Published" : "Draft" };
+    }));
+  }, [resource, video]);
   const [draft, setDraft] = useState<LearningMedia | null>(null);
   const [view, setView] = useState<LearningMedia | null>(null);
   const [deleting, setDeleting] = useState<LearningMedia | null>(null);
@@ -60,13 +74,23 @@ export function AdminLearningMediaWorkspace({ kind, initialRows }: { kind: "Vide
   const [type, setType] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  useEffect(() => { let active = true; void Promise.resolve().then(() => { if (active) return loadRows(); }).catch(cause => { if (active) setError(cause instanceof Error ? cause.message : "Permintaan belum berhasil."); }); return () => { active = false; }; }, [loadRows]);
   const closeEditor = useCallback(() => { setDraft(null); setError(""); }, []);
   const closeView = useCallback(() => setView(null), []);
   const closeDelete = useCallback(() => setDeleting(null), []);
   const query = search.trim().toLowerCase();
   const visible = rows.filter((row) => (!context || row.context === context) && (!status || row.status === status) && (!type || row.type === type) && [row.title, row.description, row.chapter, row.filename, row.context].some((value) => value.toLowerCase().includes(query))).sort((a, b) => Number(a.order) - Number(b.order));
   function edit(row: LearningMedia) { setError(""); setDraft({ ...row }); }
-  function save(event: FormEvent<HTMLFormElement>) {
+  async function persist(item: LearningMedia) {
+    const code = item.context === "SSW" ? "ssw-food" : item.context.toLowerCase();
+    const program = parents?.programs.find(parent => parent.code === code);
+    const chapter = parents?.chapters.find(parent => parent.program_id === program?.id && `Chapter ${parent.chapter_number}` === item.chapter);
+    if (!chapter) throw new Error("Pilih chapter yang tersimpan.");
+    if (item.file) throw new Error("OPEN: penyimpanan upload belum tersedia. Gunakan URL materi.");
+    await adminLearningSave(resource, { chapter_id: chapter.id, title: item.title.trim(), description: item.description.trim(), sort_order: Number(item.order), status: item.status.toLowerCase(), ...(video ? { video_url: item.url } : { file_url: item.url, module_type: item.type === "Tata Bahasa" ? "grammar" : item.type === "Huruf/Kanji" ? "kanji" : "general" }) }, /^\d+$/.test(item.id) ? Number(item.id) : undefined);
+    await loadRows();
+  }
+  async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft) return;
     if (!draft.title.trim()) { setError("Judul wajib diisi."); return; }
@@ -76,14 +100,17 @@ export function AdminLearningMediaWorkspace({ kind, initialRows }: { kind: "Vide
     if (draft.file && (!draft.file.name.trim() || draft.file.size === 0 || (video ? !draft.file.type.startsWith("video/") : draft.file.type !== "application/pdf"))) { setError(video ? "Pilih file video yang valid dan tidak kosong." : "Pilih file PDF yang valid dan tidak kosong."); return; }
     if (video && draft.url.trim() && !safeVideoUrl(draft.url.trim())) { setError("URL video harus menggunakan HTTP atau HTTPS tanpa kredensial."); return; }
     const original = rows.find((row) => row.id === draft.id);
-    if (video ? !draft.file && !draft.url.trim() : !draft.file && !(original && original.filename === draft.filename)) { setError(video ? "Pilih file video atau isi URL video." : "Pilih file PDF."); return; }
-    const next = { ...draft, title: draft.title.trim(), description: draft.description.trim(), chapter: draft.chapter.trim(), url: video && !draft.file ? safeVideoUrl(draft.url.trim()) : "", filename: draft.file?.name ?? draft.filename };
-    setRows((current) => current.some((row) => row.id === next.id) ? current.map((row) => row.id === next.id ? next : row) : [...current, next]);
-    closeEditor(); setMessage(`${kind} disimpan untuk sesi ini. Halaman siswa tidak berubah.`);
+    void original;
+    if (!safeVideoUrl(draft.url.trim())) { setError("URL materi harus menggunakan HTTP atau HTTPS tanpa kredensial."); return; }
+    if (busy) return;
+    setBusy(true);
+    try { await persist({ ...draft, url: safeVideoUrl(draft.url.trim()) }); closeEditor(); setMessage(`${kind} disimpan.`); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Permintaan belum berhasil."); }
+    finally { setBusy(false); }
   }
   return <AdminShell current={video ? "/admin/video-lesson" : "/admin/modul"}><main className="admin-public-prototype admin-learning-media-prototype">
     <AdminPageHeader title={kind} actions={<button className="button button-primary" type="button" onClick={() => edit({ id: crypto.randomUUID(), title: "", description: "", context: "N4", chapter: "", type: video ? "Video" : "Umum", file: null, filename: "", url: "", duration: "", order: String(rows.length + 1), status: "Draft" })}>Tambah {kind}</button>} />
-    <p role="status">{message}</p>
+    <p role="status">{message}</p>{error && !draft && <p role="alert">{error}</p>}
     <AdminSection><AdminFilterToolbar>
       <label className="admin-search-box admin-learning-media-search"><input type="search" aria-label={`Cari ${kind}`} value={search} onChange={(event) => setSearch(event.target.value)} /><span aria-hidden="true"><LuSearch /></span></label>
       <label className="admin-field">Konteks<select value={context} onChange={(event) => setContext(event.target.value)}><option value="">Semua</option>{learningMediaContexts.map((value) => <option key={value}>{value}</option>)}</select></label>
@@ -99,7 +126,7 @@ export function AdminLearningMediaWorkspace({ kind, initialRows }: { kind: "Vide
     ]} actions={{ cell: (row) => <div className="admin-page-actions">
       <button type="button" className="button" aria-label={`Lihat ${row.title}`} onClick={() => setView({ ...row })}>Lihat</button>
       <button type="button" className="button" aria-label={`Edit ${row.title}`} onClick={() => edit(row)}>Edit</button>
-      <button type="button" className="button" aria-label={`${row.status === "Draft" ? "Publish" : "Draft"} ${row.title}`} onClick={() => { setRows((current) => current.map((item) => item.id === row.id ? { ...item, status: item.status === "Draft" ? "Published" : "Draft" } : item)); setMessage("Status diubah untuk sesi ini. Halaman siswa tidak berubah."); }}>{row.status === "Draft" ? "Publish" : "Draft"}</button>
+      <button type="button" className="button" aria-label={`${row.status === "Draft" ? "Publish" : "Draft"} ${row.title}`} disabled={busy} onClick={() => { setBusy(true); void persist({ ...row, status: row.status === "Draft" ? "Published" : "Draft" }).then(() => setMessage("Status disimpan.")).catch(cause => setError(cause instanceof Error ? cause.message : "Permintaan belum berhasil.")).finally(() => setBusy(false)); }}>{row.status === "Draft" ? "Publish" : "Draft"}</button>
       <button type="button" className="button" aria-label={`Hapus ${row.title}`} onClick={() => setDeleting(row)}>Hapus</button>
     </div> }} /></AdminSection>
     <AdminDialog open={Boolean(draft)} title={`${rows.some((row) => row.id === draft?.id) ? "Edit" : "Tambah"} ${kind}`} close={closeEditor}>
@@ -116,15 +143,16 @@ export function AdminLearningMediaWorkspace({ kind, initialRows }: { kind: "Vide
           setError(""); setDraft({ ...draft, file, filename: file.name, url: "" });
         }} /></label>
         {draft.file && <div className="admin-learning-media-file"><span>{draft.file.name} • {draft.file.size.toLocaleString("id-ID")} byte</span><button type="button" className="button" onClick={() => setDraft({ ...draft, file: null, filename: "" })}>Hapus file</button></div>}
+        {!video && <label className="admin-field">URL PDF<input type="url" value={draft.url} onChange={event => setDraft({ ...draft, url: event.target.value, file: null })} /></label>}
         {video && <><label className="admin-field">URL video (opsional)<input type="url" value={draft.url} onChange={(event) => setDraft({ ...draft, url: event.target.value, file: null, filename: "" })} /></label><label className="admin-field">Durasi (menit, opsional)<input type="number" min="0" step="any" value={draft.duration} onChange={(event) => setDraft({ ...draft, duration: event.target.value })} /></label></>}
         <label className="admin-field">Urutan<input type="number" min="1" step="1" required value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })} /></label>
         <label className="admin-field">Status<select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as LearningMedia["status"] })}><option>Draft</option><option>Published</option></select></label>
         <AdminLearningMediaPreview item={draft} />
         {error && <p role="alert">{error}</p>}
-        <div className="admin-page-actions"><button type="button" className="button" onClick={closeEditor}>Batal</button><button type="submit" className="button button-primary">Simpan {kind}</button></div>
+        <div className="admin-page-actions"><button type="button" className="button" onClick={closeEditor}>Batal</button><button type="submit" disabled={busy} className="button button-primary">Simpan {kind}</button></div>
       </form>}
     </AdminDialog>
     <AdminDialog open={Boolean(view)} title={`Detail ${kind}`} close={closeView}>{view && <AdminLearningMediaPreview item={view} />}</AdminDialog>
-    <AdminDialog open={Boolean(deleting)} title={`Hapus ${kind}?`} close={closeDelete} actions={<><button type="button" className="button" onClick={closeDelete}>Batal</button><button type="button" className="button button-primary" onClick={() => { setRows((current) => current.filter((row) => row.id !== deleting?.id)); closeDelete(); setMessage(`${kind} dihapus dari sesi ini.`); }}>Hapus {kind}</button></>}><p>Hapus {deleting?.title} dari sesi ini? Halaman siswa tidak berubah.</p></AdminDialog>
+    <AdminDialog open={Boolean(deleting)} title={`Hapus ${kind}?`} close={closeDelete} actions={<><button type="button" className="button" onClick={closeDelete}>Batal</button><button type="button" className="button button-primary" disabled={busy} onClick={() => { if (!deleting || busy) return; setBusy(true); void adminLearningDelete(resource, Number(deleting.id)).then(loadRows).then(() => { closeDelete(); setMessage(`${kind} dihapus.`); }).catch(cause => setError(cause instanceof Error ? cause.message : "Permintaan belum berhasil.")).finally(() => setBusy(false)); }}>Hapus {kind}</button></>}><p>Hapus {deleting?.title} dari sesi ini? Halaman siswa tidak berubah.</p></AdminDialog>
   </main></AdminShell>;
 }

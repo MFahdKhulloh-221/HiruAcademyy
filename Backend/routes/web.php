@@ -5,10 +5,14 @@ use App\Http\Controllers\AdminAffiliateController;
 use App\Http\Controllers\AdminCommissionController;
 use App\Http\Controllers\AdminLearningController;
 use App\Http\Controllers\AdminNotificationController;
+use App\Http\Controllers\AdminPayoutController;
 use App\Http\Controllers\AdminPlacementController;
+use App\Http\Controllers\AdminPlacementLeadController;
 use App\Http\Controllers\AdminPublicContentController;
 use App\Http\Controllers\AdminScheduleReplayController;
+use App\Http\Controllers\AdminSettingsController;
 use App\Http\Controllers\AdminTryOutController;
+use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\EffectiveAccessController;
 use App\Http\Controllers\InvoiceController;
@@ -59,6 +63,9 @@ Route::prefix('api')->middleware('throttle:identity')->group(function () {
             Route::patch("$resource/{content}", [AdminPlacementController::class, 'update'])->whereNumber('content')->defaults('resource', $resource);
             Route::delete("$resource/{content}", [AdminPlacementController::class, 'destroy'])->whereNumber('content')->defaults('resource', $resource);
         }
+        Route::get('placement-leads', [AdminPlacementLeadController::class, 'index']);
+        Route::patch('placement-leads/{attempt}', [AdminPlacementLeadController::class, 'update']);
+        Route::patch('offers/{offer}', [ProgramOfferController::class, 'update']);
         Route::get('notifications', [AdminNotificationController::class, 'index']);
         Route::post('notifications', [AdminNotificationController::class, 'store']);
         Route::get('notifications/{notification}', [AdminNotificationController::class, 'show'])->whereNumber('notification');
@@ -84,6 +91,12 @@ Route::prefix('api')->middleware('throttle:identity')->group(function () {
             Route::patch('{tryOut}/questions/{question}', [AdminTryOutController::class, 'updateQuestion']);
             Route::delete('{tryOut}/questions/{question}', [AdminTryOutController::class, 'destroyQuestion']);
         });
+        Route::get('payouts', [AdminPayoutController::class, 'index']);
+        Route::post('payouts', [AdminPayoutController::class, 'store']);
+        Route::get('settings', [AdminSettingsController::class, 'index']);
+        Route::patch('settings', [AdminSettingsController::class, 'update']);
+        Route::get('users', [AdminUserController::class, 'index']);
+        Route::post('invoices', [InvoiceController::class, 'adminStore']);
         Route::get('invoices', [InvoiceController::class, 'index']);
         Route::get('invoices/{invoice}', [InvoiceController::class, 'show']);
         Route::post('invoices/{invoice}/transition', [InvoiceController::class, 'transition']);
@@ -98,6 +111,7 @@ Route::prefix('api')->middleware('throttle:identity')->group(function () {
         Route::delete('promotions/{promotion}', [PromotionController::class, 'destroy']);
     });
     Route::middleware(['auth:sanctum', 'active', 'role:student'])->prefix('student')->group(function () {
+        Route::get('library', [StudentLearningController::class, 'library']);
         Route::get('notifications', [StudentNotificationController::class, 'index']);
         Route::patch('notifications/{notification}/read', [StudentNotificationController::class, 'read'])->whereNumber('notification');
         Route::post('notifications/read-all', [StudentNotificationController::class, 'readAll']);

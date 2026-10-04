@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { startAttempt } from "@/lib/assessment-attempt";
 import { PublicPage } from "@/components/public-shell";
 import { usePublishedPlacement } from "@/lib/placement-store";
 
@@ -42,20 +44,21 @@ const reminders = [
 ];
 
 export default function PlacementPage() {
-  const { config: publishedConfig } = usePublishedPlacement();
+  const { config: publishedConfig, error: loadError } = usePublishedPlacement();
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
   const [name, setName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
   const [target, setTarget] = useState("");
   const [privacy, setPrivacy] = useState(false);
   const [whatsappConsent, setWhatsappConsent] = useState(false);
-  const valid = Boolean(name.trim() && whatsapp.trim() && target && privacy && whatsappConsent);
+  const valid = Boolean(name.trim() && whatsapp.trim() && target && privacy && publishedConfig && !busy);
 
-  const introHeading = publishedConfig?.introHeading || "Kenali levelmu sebelum memulai journey";
-  const description =
-    publishedConfig?.description ||
-    "Isi Nama, WhatsApp, dan Target Ujian, lalu jawab 20 soal sekitar 5 menit. Tidak perlu login untuk memulai.";
-  const questionCount = publishedConfig?.questions?.length || 20;
-  const durationMinutes = publishedConfig?.durationMinutes || 5;
+  const introHeading = publishedConfig?.introHeading ?? "";
+  const description = publishedConfig?.description ?? "";
+  const questionCount = publishedConfig?.questions.length ?? "—";
+  const durationMinutes = publishedConfig?.durationMinutes ?? "—";
 
   return (
     <PublicPage active="Placement Test">
@@ -63,7 +66,7 @@ export default function PlacementPage() {
         <section className="placement-hero-card">
           <div className="placement-hero-copy">
             <p className="kicker">PLACEMENT TEST</p>
-            <h1>{introHeading}</h1>
+            {introHeading && <h1>{introHeading}</h1>}
             <p>{description}</p>
             <div className="public-pills">
               <span>Gratis</span>
@@ -109,10 +112,20 @@ export default function PlacementPage() {
             </aside>
           </div>
 
-            <form className="public-form" action="/placement/question" method="get">
-              <input type="hidden" name="name" value={name} />
-              <input type="hidden" name="whatsapp" value={whatsapp} />
-              <input type="hidden" name="target" value={target} />
+            <form className="public-form" onSubmit={async event => {
+              event.preventDefault();
+              if (!valid) return;
+              setBusy(true);
+              setError(undefined);
+              try {
+                const attempt = await startAttempt("/api/placement/attempts", { name, whatsapp, target, privacy, whatsappConsent });
+                router.push(`/placement/question?attempt=${attempt.id}`);
+              } catch (cause) {
+                setError(cause instanceof Error ? cause.message : "Permintaan belum berhasil. Silakan coba lagi.");
+                setBusy(false);
+              }
+            }}>
+              {(error || loadError) && <p role="alert">{error || loadError}</p>}
             <p className="kicker">DATA SEBELUM TES</p>
             <label>
               Nama

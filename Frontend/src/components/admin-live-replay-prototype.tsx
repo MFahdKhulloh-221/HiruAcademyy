@@ -1,9 +1,11 @@
 "use client";
 
 import { type ChangeEvent, type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useClassAdmin } from "@/components/class-admin-hooks";
+import { AdminReplayPlaylists } from "@/components/admin-replay-playlists";
 import { LuSearch } from "react-icons/lu";
 import { AdminDataTable, AdminDialog, AdminFilterToolbar, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge, AdminTabs } from "@/components/admin-primitives";
-import { emptyLiveReplay, liveReplayFixtures, liveReplayLevels, liveReplaySensei, liveStatuses, replayStatuses, type LiveReplayRecord } from "@/lib/admin-live-replay-fixtures";
+import { emptyLiveReplay, liveReplayLevels, liveStatuses, replayStatuses, type LiveReplayRecord } from "@/lib/admin-live-replay-fixtures";
 
 function safeUrl(value: string) {
   try { const url = new URL(value); return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password; } catch { return false; }
@@ -44,7 +46,8 @@ function StudentPreview({ item }: { item: LiveReplayRecord }) {
 }
 
 export function AdminLiveReplayPrototype() {
-  const [rows, setRows] = useState<LiveReplayRecord[]>(() => liveReplayFixtures.map((item) => ({ ...item })));
+  const store = useClassAdmin();
+  const rows = store.rows;
   const [tab, setTab] = useState("Jadwal Live");
   const [draft, setDraft] = useState<LiveReplayRecord | null>(null);
   const [view, setView] = useState<LiveReplayRecord | null>(null);
@@ -59,7 +62,7 @@ export function AdminLiveReplayPrototype() {
   const closeView = useCallback(() => setView(null), []);
   const closeDelete = useCallback(() => setDeleting(null), []);
   const kind = tab === "Jadwal Live" ? "live" : "replay";
-  const statuses = kind === "live" ? liveStatuses : replayStatuses;
+  const statuses = kind === "live" ? ["Draft", ...liveStatuses.filter(value => value !== "Selesai")] : replayStatuses;
   const query = search.trim().toLowerCase();
   const filtered = rows.filter((item) => item.kind === kind && (!program || item.program === program) && (!status || item.status === status) && [item.title, item.chapter, item.sensei, item.description, item.program].some((value) => value.toLowerCase().includes(query)));
   const visible = [...filtered].sort((a, b) => kind === "replay" ? Number(a.order) - Number(b.order) : (a.date ? `${a.date}T${a.start}` : "z").localeCompare(b.date ? `${b.date}T${b.start}` : "z"));
@@ -75,13 +78,13 @@ export function AdminLiveReplayPrototype() {
     if (!file.type.startsWith(field === "video" ? "video/" : "image/")) { setError(field === "video" ? "Pilih file video dengan MIME video/*." : "Pilih thumbnail dengan MIME image/*."); return; }
     setDraft({ ...draft, [field]: file, ...(field === "video" ? { url: "" } : {}) }); setError("");
   }
-  function save(event: FormEvent<HTMLFormElement>) {
+  async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft) return;
     const next = { ...draft, title: draft.title.trim(), chapter: draft.chapter.trim(), url: draft.url.trim(), description: draft.description.trim() };
-    if (!next.title || !liveReplayLevels.includes(next.program) || !next.chapter || !liveReplaySensei.includes(next.sensei)) { setError("Isi judul, program, chapter/sesi, dan Sensei."); return; }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(next.date) || !Number.isFinite(Date.parse(`${next.date}T00:00:00+07:00`)) || new Date(`${next.date}T00:00:00Z`).toISOString().slice(0, 10) !== next.date) { setError("Isi tanggal yang valid."); return; }
-    if (!(next.kind === "live" ? liveStatuses : replayStatuses).includes(next.status)) { setError("Pilih status yang tersedia."); return; }
+    if (!next.title || !liveReplayLevels.includes(next.program) || !next.chapter || !next.sensei.trim()) { setError("Isi judul, program, chapter/sesi, dan Sensei."); return; }
+    if ((next.kind === "live" || next.date) && (!/^\d{4}-\d{2}-\d{2}$/.test(next.date) || !Number.isFinite(Date.parse(`${next.date}T00:00:00+07:00`)) || new Date(`${next.date}T00:00:00Z`).toISOString().slice(0, 10) !== next.date)) { setError("Isi tanggal yang valid."); return; }
+    if (!(next.kind === "live" ? ["Draft", "Terjadwal", "Dibatalkan"] : replayStatuses).includes(next.status)) { setError("Pilih status yang tersedia."); return; }
     if (next.kind === "live") {
       if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(next.start) || (next.end && (!/^([01]\d|2[0-3]):[0-5]\d$/.test(next.end) || next.end <= next.start))) { setError("Jam selesai harus setelah jam mulai pada tanggal yang sama (WIB)."); return; }
       if (!safeUrl(next.url)) { setError("Isi URL Zoom HTTP/HTTPS yang valid tanpa kredensial."); return; }
@@ -90,19 +93,19 @@ export function AdminLiveReplayPrototype() {
       if (next.thumbnail && !next.thumbnail.type.startsWith("image/")) { setError("Thumbnail harus memiliki MIME image/*."); return; }
       if (!/^\d+$/.test(next.order) || !Number.isSafeInteger(Number(next.order)) || Number(next.order) < 1) { setError("Urutan harus angka bulat positif."); return; }
     }
-    setRows((current) => current.some((item) => item.id === next.id) ? current.map((item) => item.id === next.id ? next : item) : [...current, next]);
-    setDraft(null); setError(""); setMessage("Disimpan untuk sesi ini. Jadwal dan replay siswa tidak berubah.");
+    if (next.kind === "replay" && !store.playlists.some(item => String(item.id) === next.playlistId)) { setError("Pilih playlist."); return; }
+    if (!await store.write(next, "save")) return;
+    setDraft(null); setError(""); setMessage("Disimpan.");
   }
-  function remove() {
-    if (!deleting) return;
-    setRows((current) => current.filter((item) => item.id !== deleting.id));
+  async function remove() {
+    if (!deleting || !await store.write(deleting, "delete")) return;
     setView((current) => current?.id === deleting.id ? null : current);
     setDeleting(null); setMessage("Dihapus dari sesi ini.");
   }
   const actions = (item: LiveReplayRecord) => <div className="admin-page-actions">
     <button type="button" className="button" onClick={() => setView({ ...item })} aria-label={`Lihat ${item.title}`}>Lihat</button>
     <button type="button" className="button" onClick={() => edit(item)} aria-label={`Edit ${item.title}`}>Edit</button>
-    {item.kind === "live" && item.status === "Terjadwal" && <button type="button" className="button" aria-label={`Batalkan ${item.title}`} onClick={() => { setRows((current) => current.map((row) => row.id === item.id ? { ...row, status: "Dibatalkan" } : row)); setMessage("Sesi dibatalkan untuk pratinjau lokal."); }}>Batalkan</button>}
+    {item.kind === "live" && item.status === "Terjadwal" && <button type="button" className="button" aria-label={`Batalkan ${item.title}`} disabled={store.busy} onClick={() => void store.write({ ...item, status: "Dibatalkan" }, "save")}>Batalkan</button>}
     <button type="button" className="button" onClick={() => setDeleting(item)} aria-label={`Hapus ${item.title}`}>Hapus</button>
   </div>;
   const table = (items: LiveReplayRecord[], caption: string) => <AdminDataTable caption={caption} rows={items} rowKey={(item) => item.id} columns={[
@@ -116,8 +119,9 @@ export function AdminLiveReplayPrototype() {
   ]} actions={{ cell: actions }} />;
 
   return <AdminShell current="/admin/kelas-jadwal"><main className="admin-public-prototype admin-live-replay-prototype">
-    <AdminPageHeader title="Jadwal & Replay" description="Pratinjau lokal. Perubahan hanya berlaku selama sesi ini; file tidak diunggah." actions={<button type="button" className="button button-primary" onClick={() => edit({ ...emptyLiveReplay(kind), id: crypto.randomUUID(), order: String(rows.filter((item) => item.kind === "replay").length + 1) })}>{kind === "live" ? "Tambah Jadwal Live" : "Tambah Replay"}</button>} />
-    <p role="status">{message}</p>
+    <AdminPageHeader title="Jadwal & Replay" description="Kelola jadwal dan replay kelas." actions={<button type="button" className="button button-primary" onClick={() => edit({ ...emptyLiveReplay(kind), id: crypto.randomUUID(), order: String(rows.filter((item) => item.kind === "replay").length + 1) })}>{kind === "live" ? "Tambah Jadwal Live" : "Tambah Replay"}</button>} />
+    <p role="status">{store.loading ? "Memuat…" : message}</p>{(store.error || store.mutationError) && <p role="alert">{store.error || store.mutationError}</p>}{store.error && <button className="button" onClick={store.retry}>Coba Lagi</button>}
+    {kind === "replay" && <AdminReplayPlaylists store={store} />}
     <AdminTabs tabs={["Jadwal Live", "Replay"]} active={tab} onChange={(value) => { setTab(value); setStatus(""); }} label="Jadwal dan replay">
       <AdminFilterToolbar><label className="alr-search"><input type="search" aria-label="Cari judul, chapter, atau Sensei" placeholder="Cari judul, chapter, atau Sensei" value={search} onChange={(event) => setSearch(event.target.value)} /><LuSearch aria-hidden="true" /></label><label className="admin-field">Program<select value={program} onChange={(event) => setProgram(event.target.value)}><option value="">Semua program</option>{liveReplayLevels.map((level) => <option key={level}>{level}</option>)}</select></label><label className="admin-field">Status<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Semua status</option>{statuses.map((value) => <option key={value}>{value}</option>)}</select></label></AdminFilterToolbar>
       {kind === "live" ? <><AdminSection title="Kalender"><label className="admin-field">Bulan<input type="month" value={calendarMonth} onChange={(event) => setMonth(event.target.value)} /></label>{calendarDate ? <div className="alr-calendar">{["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"].map((day) => <strong key={day}>{day}</strong>)}{Array.from({ length: offset }, (_, index) => <div key={`blank-${index}`} aria-hidden="true" />)}{Array.from({ length: calendarDays }, (_, index) => { const date = `${calendarMonth}-${String(index + 1).padStart(2, "0")}`; return <div key={date}><time dateTime={date}>{index + 1}</time>{visible.filter((item) => item.date === date).map((item) => <button type="button" key={item.id} onClick={() => setView(item)} aria-label={`${item.title}, ${date}, ${item.status}`}><span>{item.start} {item.title}</span><small>{item.status}</small></button>)}</div>; })}</div> : <p>Tanggal fixture belum ditentukan. Kalender muncul setelah tanggal diisi.</p>}</AdminSection><AdminSection title="Daftar Jadwal Live">{table(visible, "Jadwal Live")}</AdminSection></> : liveReplayLevels.filter((level) => !program || program === level).map((level) => <AdminSection key={level} title={level}>{table(visible.filter((item) => item.program === level), `Replay ${level}`)}</AdminSection>)}
@@ -128,16 +132,17 @@ export function AdminLiveReplayPrototype() {
       <label className="admin-field">Chapter / Sesi<input required value={draft.chapter} onChange={(event) => setDraft({ ...draft, chapter: event.target.value })} /></label>
       <label className="admin-field">Tanggal<input required type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} /></label>
       {draft.kind === "live" && <div className="alr-times"><label className="admin-field">Jam mulai (WIB)<input type="time" required value={draft.start} onChange={(event) => setDraft({ ...draft, start: event.target.value })} /></label><label className="admin-field">Jam selesai (WIB, opsional)<input type="time" value={draft.end} onChange={(event) => setDraft({ ...draft, end: event.target.value })} /></label></div>}
-      <label className="admin-field">Sensei<select required value={draft.sensei} onChange={(event) => setDraft({ ...draft, sensei: event.target.value })}><option value="">Pilih Sensei</option>{liveReplaySensei.map((sensei) => <option key={sensei}>{sensei}</option>)}</select></label>
+      <label className="admin-field">Sensei<input required value={draft.sensei} onChange={event => setDraft({ ...draft, sensei: event.target.value })} /></label>
+      {draft.kind === "replay" && <label className="admin-field">Playlist<select required value={draft.playlistId || ""} onChange={event => { const playlist = store.playlists.find(item => String(item.id) === event.target.value); setDraft({ ...draft, playlistId: event.target.value, program: store.programs.find(item => item.id === playlist?.program_id)?.code.toUpperCase() || "" }); }}><option value="">Pilih playlist</option>{store.playlists.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>}
       <label className="admin-field">{draft.kind === "live" ? "URL Zoom" : "URL video (HTTP/HTTPS)"}<input type="url" value={draft.url} onChange={(event) => setDraft({ ...draft, url: event.target.value, ...(draft.kind === "replay" ? { video: null } : {}) })} /></label>
-      {draft.kind === "replay" && <><label className="admin-field">File video (video/*)<input type="file" accept="video/*" onChange={(event) => upload(event, "video")} /><small>{draft.video?.name || "Belum ada file"}</small></label>{draft.video && <button type="button" className="button" onClick={() => setDraft({ ...draft, video: null })}>Hapus file video</button>}<label className="admin-field">Thumbnail (opsional)<input type="file" accept="image/*" onChange={(event) => upload(event, "thumbnail")} /><small>{draft.thumbnail?.name || "Belum ada thumbnail"}</small></label>{draft.thumbnail && <button type="button" className="button" onClick={() => setDraft({ ...draft, thumbnail: null })}>Hapus thumbnail</button>}<label className="admin-field">Urutan<input type="number" min="1" step="1" value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })} /></label></>}
-      <label className="admin-field">Status<select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}>{(draft.kind === "live" ? liveStatuses : replayStatuses).map((value) => <option key={value}>{value}</option>)}</select></label>
+      {draft.kind === "replay" && <><label className="admin-field">File video (video/*)<input type="file" accept="video/*" disabled onChange={(event) => upload(event, "video")} /><small>Upload produksi OPEN. Gunakan URL video.</small><small>{draft.video?.name || "Belum ada file"}</small></label>{draft.video && <button type="button" className="button" onClick={() => setDraft({ ...draft, video: null })}>Hapus file video</button>}<label className="admin-field">Thumbnail (opsional)<input type="file" accept="image/*" disabled onChange={(event) => upload(event, "thumbnail")} /><small>{draft.thumbnail?.name || "Belum ada thumbnail"}</small></label>{draft.thumbnail && <button type="button" className="button" onClick={() => setDraft({ ...draft, thumbnail: null })}>Hapus thumbnail</button>}<label className="admin-field">Urutan<input type="number" min="1" step="1" value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })} /></label></>}
+      <label className="admin-field">Status<select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}>{(draft.kind === "live" ? ["Draft", "Terjadwal", "Dibatalkan"] : replayStatuses).map((value) => <option key={value}>{value}</option>)}</select></label>
       <label className="admin-field">{draft.kind === "live" ? "Catatan" : "Deskripsi (opsional)"}<textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
       <h3>Pratinjau siswa • Draft lokal</h3><StudentPreview item={draft} />
-      {error && <p role="alert">{error}</p>}<div className="admin-page-actions"><button type="button" className="button" onClick={closeEditor}>Batal</button><button type="submit" className="button button-primary">Simpan</button></div>
+      {(error || store.mutationError) && <p role="alert">{error || store.mutationError}</p>}<div className="admin-page-actions"><button type="button" className="button" onClick={closeEditor}>Batal</button><button type="submit" className="button button-primary">Simpan</button></div>
     </form>}</AdminDialog>
     <AdminDialog open={Boolean(view)} title="Pratinjau siswa" close={closeView}>{view && <StudentPreview item={view} />}</AdminDialog>
-    <AdminDialog open={Boolean(deleting)} title="Hapus data?" close={closeDelete} actions={<><button type="button" className="button" onClick={closeDelete}>Batal</button><button type="button" className="button button-primary" onClick={remove}>Hapus</button></>}><p>Hapus {deleting?.title} dari sesi ini? Jadwal dan replay siswa tidak berubah.</p></AdminDialog>
+    <AdminDialog open={Boolean(deleting)} title="Hapus data?" close={closeDelete} actions={<><button type="button" className="button" onClick={closeDelete}>Batal</button><button type="button" className="button button-primary" onClick={remove}>Hapus</button></>}><p>Hapus {deleting?.title}? Data ini tidak lagi tampil pada siswa.</p></AdminDialog>
     <style jsx global>{`
       .admin-live-replay-prototype { display: grid; gap: 20px; }
       .admin-live-replay-prototype .alr-search { display: flex; align-items: center; position: relative; flex: 1; }

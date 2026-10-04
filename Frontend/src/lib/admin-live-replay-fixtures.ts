@@ -7,7 +7,7 @@ export const liveReplaySensei = ["Sensei Hilmy", "Sensei Putri", "Sensei Akira",
 export type LiveReplayRecord = {
   id: string; kind: "live" | "replay"; title: string; program: string; chapter: string;
   date: string; start: string; end: string; sensei: string; url: string; status: string;
-  description: string; order: string; video: File | null; thumbnail: File | null;
+  description: string; order: string; video: File | null; thumbnail: File | null; playlistId?: string;
 };
 export const emptyLiveReplay = (kind: LiveReplayRecord["kind"]): LiveReplayRecord => ({
   id: "", kind, title: "", program: "", chapter: "", date: "", start: "", end: "", sensei: "", url: "",

@@ -1,6 +1,7 @@
 "use client";
 
-import { FormEvent, useMemo, useState, useSyncExternalStore } from "react";
+import { FormEvent, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { commercialData, commercialWrite } from "@/lib/commercial-api";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import {
@@ -10,12 +11,10 @@ import {
   AdminTabs,
 } from "@/components/admin-primitives";
 import {
-  updateBusinessSettings,
   useBusinessAdminStore,
 } from "@/lib/admin-business-store";
 import {
   type AdminSettings,
-  saveAdminSettings,
   useAdminSettings,
 } from "@/lib/admin-settings-store";
 
@@ -57,6 +56,12 @@ function AdminSettingsForm({
   });
   const [message, setMessage] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    let alive = true;
+    void commercialData<Partial<AdminSettings>>("/api/admin/settings").then(data => { if (alive) setDraft(current => ({ ...current, ...data })); }).catch(cause => { if (alive) setMessage(cause.message); });
+    return () => { alive = false; };
+  }, []);
 
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(savedSettings) || invoiceTemplate !== business.settings.invoiceWhatsAppTemplate || JSON.stringify(affiliate) !== JSON.stringify({ affiliateEnabled: business.settings.affiliateEnabled, commissionMode: business.settings.commissionMode, commissionValue: business.settings.commissionValue, validationPeriodDays: business.settings.validationPeriodDays }), [affiliate, business.settings, draft, invoiceTemplate, savedSettings]);
   const ga4Valid = /^G-[A-Z0-9]+$/i.test(draft.integrations.ga4MeasurementId.trim());
@@ -67,9 +72,9 @@ function AdminSettingsForm({
     setMessage("");
   }
 
-  function save(event: FormEvent) {
+  async function save(event: FormEvent) {
     event.preventDefault();
-    if (active === "Profil Admin") return;
+    if (active === "Profil Admin" || busy) return;
     const nextErrors: Record<string, string> = {};
     if (active === "Umum" && !draft.general.siteName.trim()) nextErrors.siteName = "Nama situs wajib diisi.";
     if (active === "Kontak") {
@@ -85,14 +90,18 @@ function AdminSettingsForm({
     }
     setErrors(nextErrors);
     if (Object.keys(nextErrors).length) return;
-    saveAdminSettings(draft);
-    updateBusinessSettings({ invoiceWhatsAppTemplate: invoiceTemplate, ...affiliate });
-    setMessage(`Pengaturan ${active} berhasil disimpan.`);
+    const section = ({ Umum: "general", Branding: "branding", Kontak: "contact", Integrasi: "integrations", Privasi: "privacy" } as const)[active as Exclude<Tab, "Profil Admin">];
+    setBusy(true);
+    try {
+      await commercialWrite("/api/admin/settings", "PATCH", { section, value: draft[section] });
+      setMessage(`Pengaturan ${active} berhasil disimpan.`);
+    } catch (cause) { setMessage(cause instanceof Error ? cause.message : "Permintaan belum berhasil."); }
+    finally { setBusy(false); }
   }
 
   return (
     <>
-      <AdminPageHeader eyebrow="SISTEM" title="Pengaturan & Integrasi" description="Kelola identitas situs, kontak, integrasi, privasi, dan profil admin." actions={<span className={`settings-dirty ${dirty ? "is-dirty" : ""}`}>{dirty ? "Perubahan belum disimpan" : "Semua perubahan tersimpan"}</span>} />
+      <AdminPageHeader eyebrow="SISTEM" title="Pengaturan & Integrasi" description="Kelola identitas situs, kontak, integrasi, privasi, dan profil admin." actions={<span className={`settings-dirty ${dirty ? "is-dirty" : ""}`}>{dirty ? "Perubahan belum disimpan" : "Belum Terhubung"}</span>} />
       <AdminTabs tabs={tabs} active={active} onChange={(tab) => { setActive(tab as Tab); setErrors({}); setMessage(""); }} label="Bagian pengaturan">
         <form className="settings-form" onSubmit={save}>
           {active === "Umum" && <section className="settings-card"><header><div><h2>Pengaturan umum</h2><p>Identitas dan standar tetap situs.</p></div></header><div className="settings-grid">

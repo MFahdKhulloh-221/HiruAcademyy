@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { StaticStudentRoute } from "@/components/static-student-route";
+import { LearningVertical } from "@/components/learning-vertical";
 
 export const metadata: Metadata = { title: "Modul Tata Bahasa", description: "Modul Tata Bahasa HIRU Academy.", robots: { index: false, follow: false } };
 
@@ -10,5 +10,5 @@ export function generateStaticParams() {
 
 export default async function GrammarPage({ params }: { params: Promise<{ level: string; chapter: string }> }) {
   const { level, chapter } = await params;
-  return <Suspense><StaticStudentRoute kind="grammar" level={level} chapter={chapter} /></Suspense>;
+  return <Suspense><LearningVertical kind="grammar" level={level} chapter={chapter} /></Suspense>;
 }

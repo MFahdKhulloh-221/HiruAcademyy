@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { StaticStudentRoute } from "@/components/static-student-route";
+import { LearningJourney } from "@/components/learning-journey";
 
 export const metadata: Metadata = { title: "Learning Journey", description: "Chapter perjalanan belajar HIRU Academy.", robots: { index: false, follow: false } };
 
@@ -10,5 +10,5 @@ export function generateStaticParams() {
 
 export default async function JourneyPage({ params }: { params: Promise<{ level: string }> }) {
   const { level } = await params;
-  return <Suspense><StaticStudentRoute kind="journey" level={level} /></Suspense>;
+  return <Suspense><LearningJourney level={level} /></Suspense>;
 }

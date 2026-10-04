@@ -5,6 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\ProgramOffer;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class ProgramOfferController extends Controller
 {
@@ -18,6 +20,24 @@ class ProgramOfferController extends Controller
         return $this->index(false);
     }
 
+    public function update(Request $request, ProgramOffer $offer): JsonResponse
+    {
+        abort_unless($request->user(), 401);
+        abort_unless($request->user()->account_status === 'active', 401);
+        abort_unless($request->user()->role === 'admin', 403);
+        abort_if($offer->program->code === 'n1', 422, 'N1 commercial availability remains OPEN.');
+        $data = $request->validate([
+            'base_price' => ['required', 'integer', 'min:0', 'max:2147483647'],
+            'program_id' => ['prohibited'], 'plan_code' => ['prohibited'],
+            'currency' => ['prohibited'], 'duration_months' => ['prohibited'], 'status' => ['prohibited'],
+        ]);
+        DB::transaction(function () use ($offer, $data) {
+            ProgramOffer::whereKey($offer->id)->lockForUpdate()->firstOrFail()->update($data);
+        });
+
+        return response()->json(['data' => $offer->fresh()]);
+    }
+
     private function index(bool $public): JsonResponse
     {
         $offers = ProgramOffer::query()
@@ -28,6 +48,7 @@ class ProgramOfferController extends Controller
             ->orderBy('program_id')->orderBy('plan_code')
             ->get()->map(function (ProgramOffer $offer) use ($public) {
                 $data = [
+                    'id' => $offer->id,
                     'program' => $offer->program->only(['code', 'slug', 'name']),
                     'plan_code' => $offer->plan_code,
                     'base_price' => $offer->base_price,

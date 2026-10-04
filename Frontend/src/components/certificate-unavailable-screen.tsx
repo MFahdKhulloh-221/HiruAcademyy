@@ -14,7 +14,7 @@ export function CertificateUnavailableScreen({ level }: { level: "N3" | "N4" }) 
     <div className="supporting-shell student-shell">
       <StudentNavigation membership={membership} />
       <main className="supporting-main">
-        <AssessmentUnavailable eyebrow="CERTIFICATE • UNAVAILABLE" title="Sertifikat belum dapat diterbitkan" description="Selesaikan seluruh eligibility yang ditentukan program sebelum sertifikat digital tersedia." facts={["Modul belum lengkap", "Simulasi perlu diselesaikan", "Penerbitan resmi"]} primary={{ label: "Lihat Kriteria", href: `/certificate${query}` }} secondary={{ label: "Kembali", href: `/certificate${query}` }} />
+        <AssessmentUnavailable eyebrow="CERTIFICATE • UNAVAILABLE" title="Sertifikat belum dapat diterbitkan" description="Selesaikan seluruh eligibility yang ditentukan program sebelum sertifikat digital tersedia." facts={["Penerbitan resmi"]} primary={{ label: "Lihat Kriteria", href: `/certificate${query}` }} secondary={{ label: "Kembali", href: `/certificate${query}` }} />
       </main>
     </div>
   );

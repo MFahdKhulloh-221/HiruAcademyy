@@ -93,6 +93,12 @@ class LearningContentService
             }
         }
 
+        if ($resource === 'mini-checkpoint-questions') {
+            $rules['session'] = ['sometimes', 'required', 'integer', 'min:1', 'max:2147483647'];
+            $rules['part'] = ['sometimes', 'required', 'integer', 'min:1', 'max:2147483647'];
+            $rules['duration_minutes'] = ['sometimes', 'nullable', 'integer', 'min:1', 'max:2147483647'];
+        }
+
         return $rules;
     }
 

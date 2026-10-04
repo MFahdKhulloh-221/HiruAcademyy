@@ -2,11 +2,11 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { usePublishedClassOperations } from "@/lib/class-store";
+import { contentMedia, useContent, type SenseiContent } from "@/lib/public-content-api";
 
 export function SenseiGrid({ limit, reveal = false, carousel = false }: { limit?: number; reveal?: boolean; carousel?: boolean }) {
-  const operations = usePublishedClassOperations();
-  const profiles = limit ? operations.sensei.slice(0, limit) : operations.sensei;
+  const content = useContent<SenseiContent>("/api/sensei-profiles");
+  const profiles = limit ? content.data.slice(0, limit) : content.data;
   const [activeIndex, setActiveIndex] = useState(0);
   const currentIndex = profiles.length ? activeIndex % profiles.length : 0;
   const move = (direction: number) => profiles.length > 1 && setActiveIndex((current) => (current + direction + profiles.length) % profiles.length);
@@ -21,19 +21,21 @@ export function SenseiGrid({ limit, reveal = false, carousel = false }: { limit?
         style={carousel ? ({ "--sensei-position": distance } as React.CSSProperties) : reveal ? ({ "--reveal-index": index } as React.CSSProperties) : undefined}
       >
         <div className="sensei-avatar" aria-label={`Foto ${sensei.name}`}>
-          {sensei.photoUrl ? <Image src={sensei.photoUrl} alt={`Foto profil ${sensei.name}`} fill sizes="(max-width: 768px) 76vw, 270px" className="sensei-avatar-img" /> : <span>{sensei.name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</span>}
+          {contentMedia(sensei.photo) ? <Image unoptimized src={contentMedia(sensei.photo)} alt={`Foto profil ${sensei.name}`} fill sizes="(max-width: 768px) 76vw, 270px" className="sensei-avatar-img" /> : <span>{sensei.name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</span>}
         </div>
         <div className="sensei-card-body">
           <h3>{sensei.name}</h3>
-          <p>{sensei.title}</p>
+          <p>{sensei.role}</p>
           <ul aria-label={`Fokus pembelajaran ${sensei.name}`}>
-            {sensei.specialization.slice(0, carousel ? 3 : undefined).map((expertise) => <li key={expertise}>{expertise}</li>)}
+            {sensei.expertise.slice(0, carousel ? 3 : undefined).map((expertise) => <li key={expertise}>{expertise}</li>)}
           </ul>
         </div>
       </article>
     );
   });
 
+  if (content.loading) return <p role="status">Memuat profil Sensei…</p>;
+  if (content.error) return <div role="alert">{content.error} <button type="button" onClick={content.reload}>Coba lagi</button></div>;
   if (!profiles.length) return <p className="sensei-empty">Belum ada profil Sensei aktif.</p>;
   if (!carousel) return <div className="sensei-grid">{cards}</div>;
 

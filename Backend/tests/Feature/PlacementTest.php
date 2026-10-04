@@ -358,6 +358,42 @@ class PlacementTest extends TestCase
         }
     }
 
+    public function test_placement_recommendation_rules_and_lead_authoring_integration(): void
+    {
+        $rules = [
+            ['minScore' => 0, 'maxScore' => 50, 'recommendedProgramCode' => 'N5', 'resultTitle' => 'N5 Basic', 'resultDescription' => 'Start at N5'],
+            ['minScore' => 51, 'maxScore' => 100, 'recommendedProgramCode' => 'N4', 'resultTitle' => 'N4 Intermediate', 'resultDescription' => 'Start at N4'],
+        ];
+        $config = $this->actingAs($this->admin)->postJson('/api/admin/placement-configs', [...$this->configInput(), 'recommendation_rules' => $rules])->assertCreated()->json('data');
+        $this->actingAs($this->admin)->postJson('/api/admin/placement-questions', $this->questionInput($config['id'], ['correct_option' => 'A']))->assertCreated();
+        $this->actingAs($this->admin)->patchJson('/api/admin/placement-configs/'.$config['id'], ['status' => 'published'])->assertOk();
+
+        $student = $this->user('student');
+        $this->actingAs($student);
+        $attempt = $this->start();
+        $submit = $this->postJson('/api/placement/attempts/'.$attempt['id'].'/submit', [
+            'answers' => [$attempt['questions'][0]['id'] => 'A'],
+        ])->assertOk();
+
+        $this->assertSame(100, $submit->json('data.result.percentage'));
+        $this->assertSame('N4', $submit->json('data.result.recommendation_level'));
+
+        $leads = $this->actingAs($this->admin)->getJson('/api/admin/placement-leads')->assertOk();
+        $lead = collect($leads->json('data'))->firstWhere('id', $attempt['id']);
+        $this->assertNotNull($lead);
+        $this->assertSame('new', $lead['status']);
+        $this->assertSame('N4', $lead['recommended_level']);
+        $this->assertSame(100, $lead['score']);
+
+        $this->actingAs($this->admin)->patchJson('/api/admin/placement-leads/'.$attempt['id'], [
+            'status' => 'contacted',
+        ])->assertOk()->assertJsonPath('data.status', 'contacted');
+
+        $leadsAfter = $this->actingAs($this->admin)->getJson('/api/admin/placement-leads')->assertOk();
+        $leadAfter = collect($leadsAfter->json('data'))->firstWhere('id', $attempt['id']);
+        $this->assertSame('contacted', $leadAfter['status']);
+    }
+
     private function assertDatabaseRejects(callable $operation): void
     {
         try {

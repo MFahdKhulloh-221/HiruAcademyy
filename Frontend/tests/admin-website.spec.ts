@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./canonical-fixture";
 
 const storageKey = "hiru-admin-website:v1";
 const adminRoutes = [
@@ -22,102 +22,59 @@ test.beforeEach(async ({ page }) => {
   await page.evaluate((key) => localStorage.removeItem(key), storageKey);
 });
 
-test("Scenario 1: Landing Hero edit -> Draft hidden on '/' -> Publish -> new copy visible on '/'", async ({
-  page,
-}) => {
-  await page.goto("/admin/landing-page");
-  await expect(page.getByRole("heading", { name: "Pengelolaan Landing Page" })).toBeVisible();
-
-  const headlineInput = page.getByLabel("Judul Utama (Headline)");
-  await headlineInput.fill("Bahasa Jepang Praktis Bersama Sensei");
-
-  await page.getByRole("button", { name: "Simpan Draf", exact: true }).click();
-  await expect(page.getByText("Draf bagian landing page berhasil disimpan.")).toBeVisible();
-
+test("Scenario 1: approved Landing copy remains static and Admin cannot publish replacement", async ({ page }) => {
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1 })).not.toContainText(
-    "Bahasa Jepang Praktis Bersama Sensei"
-  );
-  await expect(page.getByRole("heading", { level: 1 })).toContainText(
-    "Belajar Bahasa Jepang Terarah"
-  );
-
+  const approvedHeading = await page.getByRole("heading", { level: 1 }).textContent();
   await page.goto("/admin/landing-page");
-  await expect(page.getByLabel("Judul Utama (Headline)")).toHaveValue(
-    "Bahasa Jepang Praktis Bersama Sensei"
-  );
-
-  await page.getByRole("button", { name: "Terbitkan Perubahan" }).click();
-  await expect(page.getByText("Landing page berhasil diterbitkan ke publik!")).toBeVisible();
-
+  await expect(page.getByLabel("Judul Utama (Headline)")).toBeDisabled();
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1 })).toContainText(
-    "Bahasa Jepang Praktis Bersama Sensei"
-  );
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(approvedHeading ?? "");
 });
 
-test("Scenario 2: Promo campaign -> N4 promo active -> Landing pricing card shows promo badge/pricing -> base price unaffected", async ({
-  page,
-}) => {
-  await page.goto("/admin/landing-page");
-  await page.getByRole("tab", { name: "Kampanye & Promo" }).click();
-
-  await page.getByRole("button", { name: "+ Buat Kampanye Baru" }).click();
-  await expect(page.getByRole("heading", { name: "Detail Kampanye Promo" })).toBeVisible();
-
-  await page.getByLabel("Nama Kampanye").fill("Promo Kilat JLPT N4");
-  await page.getByLabel("Kode Promo (Kupon)").fill("KILATN4");
-  await page.getByLabel("Teks Banner Pengumuman Promo").fill("Diskon Kilat N4 Spesial!");
-  await page.getByLabel("Tipe Diskon").selectOption("percentage");
-  await page.getByLabel(/Nilai Diskon/).fill("20");
-
-  const n5Btn = page.getByRole("button", { name: /^N5/ });
-  if ((await n5Btn.textContent())?.includes("✓")) {
-    await n5Btn.click();
-  }
-
-  const n4Btn = page.getByRole("button", { name: /^N4/ });
-  if (!(await n4Btn.textContent())?.includes("✓")) {
-    await n4Btn.click();
-  }
-
-  await page.getByRole("button", { name: "Terbitkan Kampanye" }).click();
-  await expect(page.getByText("Kampanye berhasil diterbitkan ke publik!")).toBeVisible();
-
-  await page.goto("/");
-  const mandiriCard = page.getByRole("article").filter({ hasText: "LMS のみ (Only)" });
-  await expect(mandiriCard).toBeVisible();
-  await expect(mandiriCard.getByText("Belajar Mandiri")).toBeVisible();
-  await expect(mandiriCard.getByText("Mulai Rp 99k")).toBeVisible();
-
-  const freeCard = page.getByRole("article").filter({ hasText: "Coba Gratis" });
-  await expect(freeCard.getByText("Rp 0")).toBeVisible();
-  await expect(freeCard.getByText("Free Trial")).toHaveCount(0);
+test("Scenario 2: promotion overlays N4 offer price without mutating base price", async ({ page }) => {
+  const offer = { id: 20, program_id: 2, program: { id: 2, code: "n4", slug: "n4", name: "JLPT N4" }, plan_code: "lms", currency: "IDR", base_price: 99000, effective_price: 99000, discount_amount: 0, discount_percent: 0, duration_months: 6, status: "active" };
+  const promos: Record<string, unknown>[] = [];
+  await page.route("**/api/admin/offers", route => route.fulfill({ json: { data: [offer] } }));
+  await page.route("**/api/admin/promotions", async route => {
+    if (route.request().method() === "POST") { const row = { ...route.request().postDataJSON(), id: 1 }; promos.push(row); offer.discount_percent = 20; offer.discount_amount = 19800; offer.effective_price = 79200; await route.fulfill({ status: 201, json: { data: row } }); return; }
+    await route.fulfill({ json: { data: promos } });
+  });
+  await page.route("**/api/public/offers", route => route.fulfill({ json: { data: [offer] } }));
+  await page.goto("/admin/program-harga");
+  await page.getByRole("button", { name: "Tambah promo", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Nama promo", { exact: true }).fill("Promo Kilat JLPT N4");
+  await dialog.getByLabel("Persentase diskon", { exact: true }).fill("20");
+  await dialog.getByLabel("Tanggal mulai", { exact: true }).fill("2026-10-01");
+  await dialog.getByLabel("Tanggal akhir", { exact: true }).fill("2026-10-31");
+  await dialog.getByRole("combobox", { name: /^Status/ }).selectOption("Aktif");
+  await dialog.getByRole("button", { name: "Simpan promo", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  expect(offer.base_price).toBe(99000);
+  expect(offer.effective_price).toBe(79200);
+  await page.goto("/program");
+  await expect(page.getByText(/Rp\s*79\.200/).first()).toBeVisible();
 });
 
 test("Scenario 3: Blog authoring -> Title, slug, summary, body blocks, SEO -> Draft hidden on '/blog' -> Publish -> visible on '/blog' -> open '/blog/article?slug=...' shows content", async ({
   page,
 }) => {
   await page.goto("/admin/blog-seo");
-  await page.getByRole("link", { name: "+ Buat Artikel Baru" }).click();
-  await expect(page.getByRole("heading", { name: "Informasi Pokok Artikel" })).toBeVisible();
+  await page.getByRole("button", { name: "Tambah Artikel", exact: true }).click();
+  await expect(page.getByRole("dialog")).toBeVisible();
 
   await page.getByLabel("Judul Artikel").fill("Panduan Efektif Menembus JLPT N3");
-  await page.getByLabel(/Slug URL/).fill("panduan-efektif-menembus-jlpt-n3");
-  await page
-    .getByLabel("Ringkasan / Excerpt")
-    .fill("Langkah strategis memahami materi N3 dengan efisien dan terarah.");
-  await page
-    .getByPlaceholder("Ketik paragraf...")
-    .fill("Kunci kelulusan JLPT N3 terletak pada penguasaan dokkai dan variasi pola tata bahasa.");
-
-  await page.getByRole("button", { name: "2. Pengaturan SEO & Pratinjau" }).click();
-  await page.getByLabel(/Meta Title/).fill("Panduan Efektif Menembus JLPT N3 - Hiru Academy");
+  await page.getByRole("textbox", { name: /^Excerpt/ }).fill("Langkah strategis memahami materi N3 dengan efisien dan terarah.");
+  await page.getByRole("textbox", { name: /^Isi Artikel/ }).fill("Kunci kelulusan JLPT N3 terletak pada penguasaan dokkai dan variasi pola tata bahasa.");
+  await page.getByRole("tab").filter({ hasText: "SEO" }).focus();
+  await page.keyboard.press("Enter");
+  await page.getByRole("textbox", { name: /^Slug/ }).fill("panduan-efektif-menembus-jlpt-n3");
+  await page.getByRole("textbox", { name: /^SEO Title/ }).fill("Panduan Efektif Menembus JLPT N3 - Hiru Academy");
   await page
     .getByLabel(/Meta Description/)
     .fill("Pelajari panduan komprehensif menghadapi ujian JLPT N3 bersama Sensei.");
 
-  await page.getByRole("button", { name: "Simpan Draf" }).click();
+  await page.getByRole("button", { name: "Simpan Artikel", exact: true }).click();
 
   await page.goto("/blog");
   await expect(page.getByText("Panduan Efektif Menembus JLPT N3")).toHaveCount(0);
@@ -125,9 +82,8 @@ test("Scenario 3: Blog authoring -> Title, slug, summary, body blocks, SEO -> Dr
   await page.goto("/admin/blog-seo");
   const draftRow = page.getByRole("row").filter({ hasText: "Panduan Efektif Menembus JLPT N3" });
   await expect(draftRow).toBeVisible();
-  await draftRow.getByRole("link", { name: "Ubah" }).click();
-
-  await page.getByRole("button", { name: "Terbitkan" }).click();
+  await draftRow.getByRole("button", { name: "Publikasikan artikel Panduan Efektif Menembus JLPT N3", exact: true }).click();
+  await expect(draftRow).toContainText("Published");
 
   await page.goto("/blog");
   await expect(
@@ -147,19 +103,15 @@ test("Scenario 4: Testimonial -> Create -> Approve -> Featured -> Publish -> app
   page,
 }) => {
   await page.goto("/admin/testimoni");
-  await page.getByRole("link", { name: "+ Tambah Testimoni" }).click();
-  await expect(page.getByRole("heading", { name: "Detail Testimoni & Persetujuan" })).toBeVisible();
-
-  await page.getByLabel("Nama Siswa / Pembelajar").fill("Kenjiro Tanaka");
-  await page.getByLabel("Program / Membership").fill("Belajar Mandiri (N4)");
-  await page
-    .getByLabel("Kutipan Testimoni")
-    .fill("Sistem flashcard dan evaluasi chapter membuat proses belajar terasa jauh lebih ringan!");
-
-  await page.getByLabel(/Persetujuan \(Consent\) Tertulis Siswa/).check();
-  await page.getByLabel(/Tampilkan sebagai Testimoni Unggulan di Beranda/).check();
-
-  await page.getByRole("button", { name: "Terbitkan" }).click();
+  await page.getByRole("button", { name: "Tambah Testimoni", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Nama", { exact: true }).fill("Kenjiro Tanaka");
+  await dialog.getByLabel("Konteks", { exact: true }).fill("Belajar Mandiri (N4)");
+  await dialog.getByLabel("Kutipan", { exact: true }).fill("Sistem flashcard dan evaluasi chapter membuat proses belajar terasa jauh lebih ringan!");
+  await dialog.getByRole("combobox", { name: /^Status/ }).selectOption("published");
+  await dialog.getByRole("combobox", { name: /^Landing/ }).selectOption("yes");
+  await dialog.getByRole("button", { name: "Simpan Testimoni", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
 
   await page.goto("/");
   const landingTesti = page.locator(".landing-testimonials");
@@ -179,27 +131,27 @@ test("Scenario 4: Testimonial -> Create -> Approve -> Featured -> Publish -> app
 test("Scenario 5: Announcement -> Audience = LMS, Priority = Penting, active now -> Publish -> visible on '/notifications?membership=lms' -> absent on '/notifications?membership=free'", async ({
   page,
 }) => {
-  await page.goto("/admin/pengumuman");
-  await page.getByRole("link", { name: "+ Buat Pengumuman Baru" }).click();
-  await expect(page.getByRole("heading", { name: "Konfigurasi Pengumuman" })).toBeVisible();
-
-  await page.getByLabel("Judul Pengumuman").fill("Pemeliharaan Khusus Server LMS");
-  await page
-    .getByLabel("Isi Pesan Pengumuman")
-    .fill("Akses chapter dan latihan mandiri akan diperbarui dengan sistem skor otomatis.");
-  await page.getByLabel("Sasaran Penerima (Audience)").selectOption("lms");
-  await page.getByLabel("Tingkat Prioritas").selectOption("important");
-
-  await page.getByRole("button", { name: "Terbitkan" }).click();
-
-  await page.goto("/notifications?membership=lms");
-  await expect(page.getByText("Pemeliharaan Khusus Server LMS")).toBeVisible();
-  await expect(
-    page.getByText("Akses chapter dan latihan mandiri akan diperbarui")
-  ).toBeVisible();
-  await expect(page.getByText("Penting").first()).toBeVisible();
-
+  const notifications: Record<string, unknown>[] = [];
+  let entitled = true;
+  await page.route("**/api/admin/notifications", async route => {
+    if (route.request().method() === "POST") { const row = { ...route.request().postDataJSON(), id: 7 }; notifications.push(row); await route.fulfill({ status: 201, json: { data: row } }); return; }
+    await route.fulfill({ json: { data: notifications } });
+  });
+  await page.route("**/api/student/notifications", route => route.fulfill({ json: { data: entitled ? notifications.filter(row => row.status === "published").map(row => ({ ...row, read: false })) : [] } }));
+  await page.goto("/admin/notifikasi");
+  await page.getByRole("button", { name: "Tambah Notifikasi", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Judul", { exact: true }).fill("Pemeliharaan Khusus Server LMS");
+  await dialog.getByLabel("Isi", { exact: true }).fill("Akses chapter dan latihan mandiri akan diperbarui dengan sistem skor otomatis.");
+  await dialog.getByRole("combobox", { name: /^Audience/ }).selectOption("Mandiri");
+  await dialog.getByRole("combobox", { name: /^Status/ }).selectOption("Published");
+  await dialog.getByRole("button", { name: "Simpan Notifikasi", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
   await page.goto("/notifications?membership=free");
+  await expect(page.getByRole("heading", { name: "Pemeliharaan Khusus Server LMS" })).toBeVisible();
+  entitled = false;
+  await page.goto("/notifications?membership=lms");
+  await expect(page.getByRole("heading", { name: "Belum ada notifikasi" })).toBeVisible();
   await expect(page.getByText("Pemeliharaan Khusus Server LMS")).toHaveCount(0);
 });
 

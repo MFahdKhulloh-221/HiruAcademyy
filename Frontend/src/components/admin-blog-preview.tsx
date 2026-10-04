@@ -2,12 +2,13 @@
 
 import Image from "next/image";
 import { useState } from "react";
+import { contentMedia } from "@/lib/public-content-api";
 
 export type Article = { id: string; title: string; slug: string; excerpt: string; body: string; thumbnail: string; category: string; seoTitle: string; metaDescription: string; featured: boolean; published: boolean; publishedAt: string; author: string };
 
 export function BlogThumbnail({ src, title, full = false }: { src: string; title: string; full?: boolean }) {
   const [failed, setFailed] = useState(false);
-  return src && !failed ? <Image src={src} alt={`Thumbnail ${title}`} width={full ? 792 : 364} height={full ? 340 : 200} unoptimized className="admin-blog-preview-image" onError={() => setFailed(true)} /> : <span>{failed ? "Gambar tidak dapat dimuat" : "No Image"}</span>;
+  return src && !failed ? <Image src={contentMedia(src)} alt={`Thumbnail ${title}`} width={full ? 792 : 364} height={full ? 340 : 200} unoptimized className="admin-blog-preview-image" onError={() => setFailed(true)} /> : <span>{failed ? "Gambar tidak dapat dimuat" : "No Image"}</span>;
 }
 
 function ArticleMeta({ article, date }: { article: Article; date: string }) {

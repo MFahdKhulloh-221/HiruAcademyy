@@ -1,7 +1,8 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { commercialData } from "@/lib/commercial-api";
 import { AdminShell } from "@/components/admin-shell";
 import { AdminBreadcrumb, AdminDataTable, AdminDialog, AdminPageHeader, AdminSection, AdminStatusBadge } from "@/components/admin-primitives";
 
@@ -14,20 +15,31 @@ const quickActions = [
   { label: "Kelola Placement Test", href: "/admin/placement-hasil", detail: "Buka area Placement Test." },
 ];
 
-const users = [
-  { id: "USR-001", name: "Hilmi Farhan", email: "hilmi@example.com", whatsapp: "081234567801", membership: "Belajar Mandiri", program: "N4", activeUntil: "1 Jan 2027", status: "Aktif" },
-  { id: "USR-002", name: "Ayu Pratama", email: "ayu@example.com", whatsapp: "081234567802", membership: "Free Member", program: "-", activeUntil: "-", status: "Aktif" },
-  { id: "USR-004", name: "Rina Wulandari", email: "rina@example.com", whatsapp: "081234567804", membership: "Kelas bersama Sensei", program: "N4", activeUntil: "1 Jan 2027", status: "Aktif" },
-];
+type DashboardUser = { id: number; name: string; email: string; whatsapp: string; account_status: string; membership: string; program: string; activeUntil: string; status: string };
 
 export default function AdminDashboardPage() {
-  const [selected, setSelected] = useState<(typeof users)[number] | null>(null);
+  const [users, setUsers] = useState<DashboardUser[]>([]);
+  const [error, setError] = useState("");
+  const [selected, setSelected] = useState<DashboardUser | null>(null);
+  useEffect(() => {
+    const controller = new AbortController();
+    void commercialData<DashboardUser[]>("/api/admin/users").then(async rows => {
+      const data = await Promise.all(rows.map(async row => {
+        const access = await commercialData<{ source_grants: { plan_code: string; program_code: string; ends_at: string }[] }>(`/api/admin/users/${row.id}/effective-access`);
+        const grants = access.source_grants;
+        return { ...row, membership: grants.some(grant => grant.plan_code === "sensei") ? "Kelas bersama Sensei" : grants.length ? "Belajar Mandiri" : "Free Member", program: grants.map(grant => grant.program_code.toUpperCase()).join(", ") || "—", activeUntil: grants.map(grant => grant.ends_at).sort().at(-1)?.slice(0, 10) ?? "—", status: row.account_status === "active" ? "Aktif" : "Nonaktif" };
+      }));
+      if (!controller.signal.aborted) setUsers(data);
+    }).catch(cause => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Permintaan belum berhasil."); });
+    return () => controller.abort();
+  }, []);
   return <AdminShell current="/admin"><main className="admin-page admin-dashboard">
     <AdminBreadcrumb items={[{ label: "Admin" }, { label: "Dashboard" }]} />
     <AdminPageHeader title="Dashboard Admin" description="Pilih area pengelolaan dan tinjau status hak akses siswa." />
     <AdminSection title="Menu Cepat"><div className="admin-quick-actions">{quickActions.map((item) => <Link href={item.href} key={item.href}><strong>{item.label}</strong><span>{item.detail}</span></Link>)}</div></AdminSection>
-    <AdminSection title="Daftar Pengguna dan Status Hak Akses" description="Data contoh untuk pratinjau UI. Tidak disimpan dan bukan data produksi.">
-      <AdminDataTable caption="Pengguna dan hak akses — data prototype" rows={users} rowKey={(row) => row.id} columns={[
+    {error && <p role="alert">{error}</p>}
+    <AdminSection title="Daftar Pengguna dan Status Hak Akses">
+      <AdminDataTable caption="Pengguna dan hak akses" rows={users} rowKey={(row) => String(row.id)} columns={[
         { key: "name", header: "Nama Siswa", cell: (row) => <strong>{row.name}</strong> },
         { key: "email", header: "Email", cell: (row) => row.email },
         { key: "whatsapp", header: "WhatsApp", cell: (row) => row.whatsapp },

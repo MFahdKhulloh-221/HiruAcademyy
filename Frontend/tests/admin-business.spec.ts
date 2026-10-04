@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./canonical-fixture";
 
 const BUSINESS_STORAGE_KEY = "hiru-admin-business:v1";
 
@@ -29,247 +29,146 @@ test("Scenario A — INVOICE CREATION: checkout creates invoice, redirects to /i
   expect(invoiceId).toBeTruthy();
 
   await page.goto("/admin/invoice");
-  await expect(page.getByRole("heading", { name: "Invoice Pembayaran" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Invoice", exact: true })).toBeVisible();
 
   const row = page.locator("tr", { hasText: invoiceId! });
   await expect(row).toBeVisible();
-  await expect(row).toContainText("Menunggu pembayaran");
+  await expect(row).toContainText("Menunggu Pembayaran");
   await expect(row).toContainText("N4");
   await expect(row).toContainText("Belajar Mandiri");
 });
 
 test("Scenario B — WHATSAPP: inspect 'Buka WhatsApp' href starts with https://wa.me/, status remains 'Menunggu pembayaran'", async ({ page }) => {
+  const invoice = { id: 42, user_id: 901, program_id: 2, program_code: "n4", plan_code: "lms", base_price: 99000, total_price: 99000, discount_amount: 0, status: "awaiting_payment", created_at: "2026-10-01T00:00:00Z" };
+  let writes = 0;
+  await page.route("**/api/admin/settings", route => route.fulfill({ json: { data: { contact: { whatsappNumber: "6289876543210" } } } }));
+  await page.route("**/api/admin/invoices**", route => { if (route.request().method() !== "GET") writes++; return route.fulfill({ json: { data: route.request().url().endsWith("/42") ? invoice : [invoice] } }); });
   await page.goto("/admin/invoice");
-  const row = page.locator("tr", { hasText: "INV-2026-001" });
-  await expect(row).toContainText("Menunggu pembayaran");
+  const row = page.getByRole("row").filter({ has: page.getByRole("cell", { name: "42", exact: true }) });
+  await expect(row).toContainText("Menunggu Pembayaran");
   await row.getByRole("button", { name: "Detail" }).click();
-
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
-  await expect(dialog.locator(".admin-status-badge", { hasText: "Menunggu pembayaran" })).toBeVisible();
+  await expect(dialog).toContainText("Menunggu Pembayaran");
 
   const waLink = page.getByRole("link", { name: /Buka WhatsApp/ });
   await expect(waLink).toBeVisible();
   const href = await waLink.getAttribute("href");
   expect(href).toMatch(/^https:\/\/wa\.me\//);
 
-  await expect(dialog.locator(".admin-status-badge", { hasText: "Menunggu pembayaran" })).toBeVisible();
-  await expect(dialog.getByText("Membership Siswa Aktif")).toBeHidden();
+  await expect(dialog).toContainText("Menunggu Pembayaran");
+  expect(writes).toBe(0);
+  expect(invoice.status).toBe("awaiting_payment");
+  await expect(dialog.getByText("Membership Siswa Aktif")).toHaveCount(0);
 });
 
-test("Scenario C — PAYMENT WORKFLOW: Menunggu pembayaran -> Sudah bayar -> Diverifikasi -> Aktif -> Persists on reload", async ({ page }) => {
+test("Scenario C — canonical adjacent invoice transitions persist on reload", async ({ page }) => {
+  const invoice = { id: 42, user_id: 901, program_id: 2, program_code: "n4", plan_code: "lms", base_price: 99000, total_price: 99000, discount_amount: 0, status: "awaiting_payment", created_at: "2026-10-01T00:00:00Z" };
+  const transitions: string[] = [];
+  await page.route("**/api/admin/invoices**", route => {
+    if (route.request().method() === "POST") { const status = route.request().postDataJSON().status; expect(status).toBe(({ awaiting_payment: "paid", paid: "verified", verified: "active" } as Record<string, string>)[invoice.status]); transitions.push(status); invoice.status = status; }
+    return route.fulfill({ json: { data: route.request().url().endsWith("/invoices") ? [invoice] : invoice } });
+  });
   await page.goto("/admin/invoice");
-  const row = page.locator("tr", { hasText: "INV-2026-001" });
-  await row.getByRole("button", { name: "Detail" }).click();
-
-  const dialog = page.getByRole("dialog");
-  await expect(dialog.locator(".admin-status-badge", { hasText: "Menunggu pembayaran" })).toBeVisible();
-
-  await page.getByRole("button", { name: "Tandai Sudah Bayar" }).click();
-  await expect(dialog.locator(".admin-status-badge", { hasText: "Sudah bayar" })).toBeVisible();
-
-  await page.getByRole("button", { name: "Verifikasi Pembayaran" }).click();
-  await expect(dialog.locator(".admin-status-badge", { hasText: "Diverifikasi" })).toBeVisible();
-
-  await page.getByRole("button", { name: "Aktifkan Membership" }).click();
-  await expect(dialog.getByText("Membership Siswa Aktif")).toBeVisible();
-  await expect(dialog.locator(".admin-status-badge", { hasText: "Aktif" })).toBeVisible();
-
+  const row = page.getByRole("row").filter({ has: page.getByRole("cell", { name: "42", exact: true }) });
+  for (const label of ["Sudah Bayar", "Diverifikasi", "Aktif"]) {
+    await row.getByRole("button", { name: label, exact: true }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Konfirmasi", exact: true }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(row).toContainText(label);
+  }
   await page.reload();
-  const updatedRow = page.locator("tr", { hasText: "INV-2026-001" });
-  await expect(updatedRow).toContainText("Aktif");
-
-  await updatedRow.getByRole("button", { name: "Detail" }).click();
-  await expect(page.getByRole("dialog").getByText("Membership Siswa Aktif")).toBeVisible();
+  await expect(row).toContainText("Aktif");
+  expect(transitions).toEqual(["paid", "verified", "active"]);
+  await expect(row.getByRole("button", { name: "Aktif", exact: true })).toHaveCount(0);
 });
 
 test("Scenario D — MEMBERSHIP ACTIVATION: N4 Belajar Mandiri activated, access shows DASAR, N5, N4 available; N3, N2, SSW, Interview locked", async ({ page }) => {
-  await page.goto("/admin/invoice");
-  await page.getByRole("button", { name: "+ Buat Invoice" }).click();
-
-  await page.getByLabel("Nama Lengkap Siswa *").fill("Siswa N4 Mandiri");
-  await page.getByLabel("Alamat Email Siswa *").fill("mandiri.n4@example.com");
-  await page.getByLabel("Nomor WhatsApp *").fill("081234567888");
-  await page.getByLabel("Program Belajar").selectOption("N4");
-  await page.getByLabel("Paket Layanan").selectOption("lms");
-  await page.getByRole("button", { name: "Simpan & Terbitkan" }).click();
-
-  const invoiceRow = page.locator("tr", { hasText: "Siswa N4 Mandiri" });
-  await expect(invoiceRow).toBeVisible();
-  await invoiceRow.getByRole("button", { name: "Detail" }).click();
-
-  await page.getByRole("button", { name: "Tandai Sudah Bayar" }).click();
-  await page.getByRole("button", { name: "Verifikasi Pembayaran" }).click();
-  await page.getByRole("button", { name: "Aktifkan Membership" }).click();
-  await expect(page.getByRole("dialog").getByText("Membership Siswa Aktif")).toBeVisible();
-
+  await page.route("**/api/admin/users", route => route.fulfill({ json: { data: [{ id: 7, name: "Siswa N4 Mandiri", email: "mandiri.n4@example.test", whatsapp: "6281999000012", account_status: "active" }] } }));
+  await page.route("**/api/admin/users/7/access", route => route.fulfill({ json: { data: [{ id: 11, program_id: 2, plan_code: "lms", starts_at: "2026-10-01", ends_at: "2027-03-31", status: "active", source_invoice_id: 42 }] } }));
+  await page.route("**/api/admin/users/7/effective-access", route => route.fulfill({ json: { data: { learning: { dasar: "full", n5: "full", n4: "full", n3: "preview", n2: "preview", "ssw-food": "none", interview: "none" }, replay_levels: [], source_grants: [] } } }));
   await page.goto("/admin/pengguna-akses");
-  await expect(page.getByRole("heading", { name: "Pengguna & Akses Belajar" })).toBeVisible();
-
-  const userRow = page.locator("tr", { hasText: "Siswa N4 Mandiri" });
-  await expect(userRow).toBeVisible();
-  await expect(userRow).toContainText("Belajar Mandiri");
-  await expect(userRow).toContainText("N4");
-
-  await userRow.getByRole("button", { name: "Detail" }).click();
-  const userDialog = page.getByRole("dialog");
-  await expect(userDialog).toBeVisible();
-  await expect(userDialog.getByText("Belajar Mandiri")).toBeVisible();
-  await expect(userDialog.getByText("N4", { exact: true })).toBeVisible();
-
-  const dasarCard = userDialog.locator(".access-hierarchy-card", { hasText: "Level Dasar (Fondasi)" });
-  await expect(dasarCard).toHaveClass(/is-unlocked/);
-  await expect(dasarCard).toContainText("Akses Penuh");
-
-  const n5Card = userDialog.locator(".access-hierarchy-card", { hasText: "Level N5 (Pemula)" });
-  await expect(n5Card).toHaveClass(/is-unlocked/);
-  await expect(n5Card).toContainText("Akses Penuh");
-
-  const n4Card = userDialog.locator(".access-hierarchy-card", { hasText: "Level N4 (Dasar Lanjutan)" });
-  await expect(n4Card).toHaveClass(/is-unlocked/);
-  await expect(n4Card).toContainText("Akses Penuh");
-
-  const n3Card = userDialog.locator(".access-hierarchy-card", { hasText: "Level N3 (Menengah)" });
-  await expect(n3Card).toHaveClass(/is-locked/);
-  await expect(n3Card).toContainText("Terkunci");
-
-  const n2Card = userDialog.locator(".access-hierarchy-card", { hasText: "Level N2 (Mahir)" });
-  await expect(n2Card).toHaveClass(/is-locked/);
-  await expect(n2Card).toContainText("Terkunci");
-
-  const sswCard = userDialog.locator(".access-hierarchy-card", { hasText: "Persiapan Kerja SSW" });
-  await expect(sswCard).toHaveClass(/is-locked/);
-  await expect(sswCard).toContainText("Terkunci");
-
-  const interviewCard = userDialog.locator(".access-hierarchy-card", { hasText: "Simulasi Interview Kerja" });
-  await expect(interviewCard).toHaveClass(/is-locked/);
-  await expect(interviewCard).toContainText("Terkunci");
+  await page.getByRole("row").filter({ hasText: "Siswa N4 Mandiri" }).getByRole("button", { name: "Detail", exact: true }).click();
+  const accessTable = page.getByRole("table", { name: "Akses efektif", exact: true });
+  for (const code of ["DASAR", "N5", "N4"]) await expect(accessTable.getByRole("row").filter({ has: page.getByRole("cell", { name: code, exact: true }) })).toContainText("Akses penuh");
+  for (const code of ["N3", "N2"]) await expect(accessTable.getByRole("row").filter({ has: page.getByRole("cell", { name: code, exact: true }) })).toContainText("Preview Chapter 1");
+  for (const code of ["SSW", "INTERVIEW"]) await expect(accessTable.getByRole("row").filter({ has: page.getByRole("cell", { name: code, exact: true }) })).toContainText("Terkunci");
 });
 
-test("Scenario E — SENSEI ACTIVATION: N4 Belajar dengan Sensei activated -> user becomes Sensei", async ({ page }) => {
-  await page.goto("/admin/invoice");
-  await page.getByRole("button", { name: "+ Buat Invoice" }).click();
-
-  await page.getByLabel("Nama Lengkap Siswa *").fill("Siswa N4 Sensei");
-  await page.getByLabel("Alamat Email Siswa *").fill("sensei.n4@example.com");
-  await page.getByLabel("Nomor WhatsApp *").fill("081234567877");
-  await page.getByLabel("Program Belajar").selectOption("N4");
-  await page.getByLabel("Paket Layanan").selectOption("sensei");
-  await page.getByRole("button", { name: "Simpan & Terbitkan" }).click();
-
-  const invoiceRow = page.locator("tr", { hasText: "Siswa N4 Sensei" });
-  await invoiceRow.getByRole("button", { name: "Detail" }).click();
-
-  await page.getByRole("button", { name: "Tandai Sudah Bayar" }).click();
-  await page.getByRole("button", { name: "Verifikasi Pembayaran" }).click();
-  await page.getByRole("button", { name: "Aktifkan Membership" }).click();
-
+test("Scenario E — Sensei grant projects cumulative replay without changing student role", async ({ page }) => {
+  await page.route("**/api/admin/users", route => route.fulfill({ json: { data: [{ id: 7, name: "Siswa N4 Sensei", email: "sensei@example.test", whatsapp: "6281999000012", account_status: "active", role: "student" }] } }));
+  await page.route("**/api/admin/users/7/access", route => route.fulfill({ json: { data: [{ id: 11, program_id: 2, plan_code: "sensei", starts_at: "2026-10-01", ends_at: "2026-10-31", status: "active" }] } }));
+  await page.route("**/api/admin/users/7/effective-access", route => route.fulfill({ json: { data: { learning: { dasar: "full", n5: "full", n4: "full", n3: "preview" }, replay_levels: ["n5", "n4"], source_grants: [{ plan_code: "sensei", program_code: "n4" }] } } }));
   await page.goto("/admin/pengguna-akses");
-  const userRow = page.locator("tr", { hasText: "Siswa N4 Sensei" });
-  await expect(userRow).toBeVisible();
-  await expect(userRow).toContainText("Belajar dengan Sensei");
-  await expect(userRow).toContainText("N4");
-
-  await userRow.getByRole("button", { name: "Detail" }).click();
-  const userDialog = page.getByRole("dialog");
-  await expect(userDialog).toBeVisible();
-  await expect(userDialog.getByText("Belajar dengan Sensei")).toBeVisible();
-
-  const senseiCard = userDialog.locator(".access-hierarchy-card", { hasText: "Sensei Live Class & Mentoring" });
-  await expect(senseiCard).toHaveClass(/is-unlocked/);
-  await expect(senseiCard).toContainText("Akses Live & Diskusi");
+  await page.getByRole("row").filter({ hasText: "Siswa N4 Sensei" }).getByRole("button", { name: "Detail", exact: true }).click();
+  await expect(page.getByRole("table", { name: "Riwayat akses program" })).toContainText("Kelas bersama Sensei");
+  const table = page.getByRole("table", { name: "Akses efektif", exact: true });
+  for (const code of ["N5", "N4"]) await expect(table.getByRole("row").filter({ has: page.getByRole("cell", { name: code, exact: true }) })).toContainText("Akses Replay");
+  await expect(table.getByRole("row").filter({ has: page.getByRole("cell", { name: "N3", exact: true }) })).not.toContainText("Akses Replay");
 });
 
-test("Scenario F — AFFILIATE COMMISSION: verified referral invoice generates one commission, no duplicates on reload or repeated triggers", async ({ page }) => {
-  await page.goto("/admin/invoice");
-  await page.getByRole("button", { name: "+ Buat Invoice" }).click();
-
-  await page.getByLabel("Nama Lengkap Siswa *").fill("Pembeli Referral Hilmi");
-  await page.getByLabel("Alamat Email Siswa *").fill("hilmi.ref@example.com");
-  await page.getByLabel("Nomor WhatsApp *").fill("081234567866");
-  await page.getByLabel("Program Belajar").selectOption("N4");
-  await page.getByLabel("Paket Layanan").selectOption("lms");
-  await page.getByLabel("Kode Referral / Affiliate (Opsional)").fill("HIRU-HILMI25");
-  await page.getByRole("button", { name: "Simpan & Terbitkan" }).click();
-
-  const row = page.locator("tr", { hasText: "Pembeli Referral Hilmi" });
-  const rawId = await row.locator(".invoice-code-cell").textContent();
-  const invoiceId = rawId?.trim() ?? "";
-  expect(invoiceId).toBeTruthy();
-
-  await row.getByRole("button", { name: "Detail" }).click();
-  await page.getByRole("button", { name: "Tandai Sudah Bayar" }).click();
-  await page.getByRole("button", { name: "Verifikasi Pembayaran" }).click();
-  await page.getByRole("button", { name: "Tutup dialog" }).click();
-
+test("Scenario F — canonical verified invoice attribution creates one commission and survives reload", async ({ page }) => {
+  const commissions: Record<string, unknown>[] = [];
+  await page.route("**/api/admin/affiliates", route => route.fulfill({ json: { data: [{ id: 7, name: "Partner", code: "HIRU-PARTNER", rate: 10, status: "active" }] } }));
+  await page.route("**/api/admin/invoices", route => route.fulfill({ json: { data: [{ id: 42, status: "verified", total_price: 99000 }] } }));
+  await page.route("**/api/admin/invoices/42/affiliate-attribution", route => { expect(route.request().postDataJSON()).toEqual({ affiliate_id: 7 }); return route.fulfill({ json: { data: { invoice_id: 42, affiliate_id: 7 } } }); });
+  await page.route("**/api/admin/commissions", async route => {
+    if (route.request().method() === "POST") { expect(route.request().postDataJSON()).toEqual({ invoice_id: 42, affiliate_id: 7 }); if (!commissions.length) commissions.push({ id: 11, invoice_id: 42, affiliate_id: 7, amount: 9900, status: "pending" }); await route.fulfill({ status: 201, json: { data: commissions[0] } }); return; }
+    await route.fulfill({ json: { data: commissions } });
+  });
   await page.goto("/admin/affiliate-komisi");
-  await page.getByRole("tab", { name: "Pembelian & Komisi" }).click();
-
-  const commRows = page.locator("tr", { hasText: invoiceId });
-  await expect(commRows).toHaveCount(1);
-  await expect(commRows).toContainText("HIRU-HILMI25");
-
+  await page.getByRole("tab", { name: "Komisi", exact: true }).click();
+  await page.getByRole("combobox", { name: /^Invoice/ }).selectOption("42");
+  await page.getByRole("combobox", { name: /^Affiliate/ }).selectOption("7");
+  await page.getByRole("button", { name: "Simpan Relasi", exact: true }).click();
+  const row = page.getByRole("row").filter({ hasText: "HIRU-PARTNER" });
+  await expect(row).toContainText("42");
+  await expect(row).toContainText("9.900");
   await page.reload();
-  await page.getByRole("tab", { name: "Pembelian & Komisi" }).click();
-  await expect(page.locator("tr", { hasText: invoiceId })).toHaveCount(1);
-
-  await page.goto("/admin/invoice");
-  await page.locator("tr", { hasText: invoiceId }).getByRole("button", { name: "Detail" }).click();
-  await page.getByRole("button", { name: "Aktifkan Membership" }).click();
-  await page.goto("/admin/affiliate-komisi");
-  await page.getByRole("tab", { name: "Pembelian & Komisi" }).click();
-  await expect(page.locator("tr", { hasText: invoiceId })).toHaveCount(1);
+  await page.getByRole("tab", { name: "Komisi", exact: true }).click();
+  await expect(row).toHaveCount(1);
+  expect(commissions).toHaveLength(1);
 });
 
-test("Scenario G — PAYOUT IDEMPOTENCY: mark payout paid deducts balance once and cannot double-deduct", async ({ page }) => {
-  await page.goto("/admin/affiliate-komisi");
-  const rinaRowBefore = page.locator("tr", { hasText: "Rina Wulandari" });
-  await expect(rinaRowBefore).toContainText("Rp 160.000");
-
+test("Scenario G — settlement excludes pending and paid snapshots and has no wallet amount authority", async ({ page }) => {
+  await page.route("**/api/admin/commissions", route => route.fulfill({ json: { data: [{ id: 1, affiliate_id: 7, amount: 1000, status: "pending" }, { id: 2, affiliate_id: 7, amount: 2000, status: "paid" }] } }));
+  await page.route("**/api/admin/payouts", route => route.fulfill({ json: { data: [{ id: 42, affiliate_id: 7, amount: 2000, paid_at: "2026-10-01" }] } }));
   await page.goto("/admin/pencairan-komisi");
-  const payoutRow = page.locator("tr", { hasText: "PAY-2026-001" });
-  await expect(payoutRow).toContainText("Menunggu");
-
-  await payoutRow.getByRole("button", { name: "Tandai Sudah Dicairkan" }).click();
-  await expect(page.getByRole("heading", { name: "Konfirmasi Pencairan Dana Komisi" })).toBeVisible();
-  await page.getByRole("button", { name: "Ya, Tandai Sudah Dicairkan" }).click();
-
-  await expect(payoutRow.getByText("✓ Selesai")).toBeVisible();
-  await expect(payoutRow).toContainText("Sudah Dicairkan");
-
-  await page.goto("/admin/affiliate-komisi");
-  const rinaRowAfter = page.locator("tr", { hasText: "Rina Wulandari" });
-  await expect(rinaRowAfter).toContainText("Rp 0");
+  await expect(page.getByRole("row").filter({ hasText: "42" })).toContainText("Sudah Dicairkan");
+  await page.getByRole("button", { name: "Tambah Pencairan" }).click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog.getByRole("checkbox")).toHaveCount(0);
+  await expect(dialog.getByRole("spinbutton")).toHaveCount(0);
+  await expect(dialog.getByRole("button", { name: "Tandai Sudah Dicairkan" })).toBeDisabled();
 });
 
-test("Scenario H — AFFILIATE SETTINGS: update commission mode, value, validation period, persists on reload", async ({ page }) => {
+test("Scenario H — canonical affiliate percentage rate persists without rewriting commission snapshots", async ({ page }) => {
+  const affiliate = { id: 7, name: "Partner", code: "PARTNER", email: "partner@example.test", whatsapp: "6281999000012", rate: 10, status: "active" };
+  const commission = { id: 11, invoice_id: 42, affiliate_id: 7, amount: 9900, status: "pending" };
+  await page.route("**/api/admin/affiliates**", async route => {
+    if (route.request().method() === "PATCH") Object.assign(affiliate, route.request().postDataJSON());
+    await route.fulfill({ json: { data: route.request().url().endsWith("/7") ? affiliate : [affiliate] } });
+  });
+  await page.route("**/api/admin/commissions", route => route.fulfill({ json: { data: [commission] } }));
   await page.goto("/admin/affiliate-komisi");
-  await page.getByRole("tab", { name: "Pengaturan" }).click();
-
-  await page.getByLabel("Skema Perhitungan Komisi").selectOption("Nominal");
-  await page.getByLabel(/Nilai Komisi/).fill("50000");
-  await page.getByLabel("Masa Tunggu Validasi Komisi (Hari)").fill("14");
-
-  await page.getByRole("button", { name: "Simpan Pengaturan" }).click();
-  await expect(page.getByText("Pengaturan program afiliasi berhasil disimpan")).toBeVisible();
-
+  await page.getByRole("row").filter({ hasText: "PARTNER" }).getByRole("button", { name: "Edit", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Komisi (%)", { exact: true }).fill("15");
+  await dialog.getByRole("button", { name: "Simpan", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
   await page.reload();
-  await page.getByRole("tab", { name: "Pengaturan" }).click();
-
-  await expect(page.getByLabel("Skema Perhitungan Komisi")).toHaveValue("Nominal");
-  await expect(page.getByLabel(/Nilai Komisi/)).toHaveValue("50000");
-  await expect(page.getByLabel("Masa Tunggu Validasi Komisi (Hari)")).toHaveValue("14");
+  await expect(page.getByRole("row").filter({ hasText: "PARTNER" })).toContainText("15");
+  expect(commission.amount).toBe(9900);
 });
 
-test("Scenario I — QUERY MEMBERSHIP REGRESSION: explicit query parameter is honored on student pages", async ({ page }) => {
-  await page.goto("/dashboard?membership=free");
-  await expect(page.locator(".dash-topbar").getByText("Free Member")).toBeVisible();
-
-  await page.goto("/dashboard?membership=lms");
-  await expect(page.locator(".dash-topbar").getByText("Belajar Mandiri")).toBeVisible();
-
-  await page.goto("/dashboard?membership=sensei");
-  await expect(page.locator(".dash-topbar").getByText("Belajar dengan Sensei")).toBeVisible();
+test("Scenario I — query cannot override canonical server membership", async ({ page }) => {
+  await page.route("**/api/public/programs", route => route.fulfill({ json: { data: [] } }));
+  await page.route("**/api/student/access", route => route.fulfill({ json: { data: { learning: {}, replay_levels: [], source_grants: [] } } }));
+  for (const membership of ["free", "lms", "sensei"]) {
+    await page.goto(`/dashboard?membership=${membership}`);
+    await expect(page.locator(".dash-topbar").getByText("Free Member", { exact: true })).toBeVisible();
+    await expect(page.locator(".dash-topbar").getByText("Belajar Mandiri", { exact: true })).toHaveCount(0);
+  }
 });
 
 const responsiveWidths = [360, 390, 768, 820, 1024, 1440];

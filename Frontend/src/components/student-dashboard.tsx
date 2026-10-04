@@ -127,8 +127,8 @@ export function StudentDashboard({
               </div>
             </section>
             <section className="dashboard-material-grid" aria-label="Progres materi">
-              <article className="dashboard-material-card"><span className="dashboard-material-icon" aria-hidden="true"><LuRoute /></span><p className="dash-kicker">PROGRES MATERI</p><strong>Level N4</strong><small>Journey aktif</small></article>
-              <article className="dashboard-material-card"><span className="dashboard-material-icon" aria-hidden="true"><LuBookOpen /></span><p className="dash-kicker">MODUL SELESAI</p><strong>14 modul</strong><small>Materi telah dipelajari</small></article>
+              <article className="dashboard-material-card"><span className="dashboard-material-icon" aria-hidden="true"><LuRoute /></span><p className="dash-kicker">PROGRES MATERI</p><strong>{config.level}</strong><small>Journey aktif</small></article>
+              <article className="dashboard-material-card"><span className="dashboard-material-icon" aria-hidden="true"><LuBookOpen /></span><p className="dash-kicker">MODUL SELESAI</p><strong>{config.continue.detail}</strong><small>Materi telah dipelajari</small></article>
             </section>
             </div>
 

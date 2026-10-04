@@ -132,7 +132,7 @@ export function ChapterJourney({ membership, level, chapters }: { membership: Me
     <>
       <section className="chapter-progress-card">
         <div>
-          <h2>Chapter {membership === "free" ? "1" : "4"} dari {chapters.length}</h2>
+          <h2>{chapters.length} Chapter</h2>
           <p>Progress{membership === "sensei" ? ", kelas Sensei, dan replay" : " materi dan quiz"} level lain tetap disimpan secara terpisah.</p>
         </div>
 
@@ -145,10 +145,7 @@ export function ChapterJourney({ membership, level, chapters }: { membership: Me
               <div className="chapter-copy">
                 <h2>{chapter.title}</h2>
                 <p>{chapter.description}</p>
-                <div className="chapter-progress-detail" aria-label={`Progress ${chapter.progress}%`}>
-                  <div className="chapter-progress-bar"><span style={{ width: `${chapter.progress}%` }} /></div>
-                  <strong>{chapter.progress}%</strong>
-                </div>
+                {chapter.components.length > 0 && <div className="chapter-progress-detail"><strong>{chapter.components.filter(item => item.complete).length} / {chapter.components.length}</strong></div>}
                 <small className="chapter-checkpoint-status">Checkpoint: {chapter.checkpointUnlocked ? "terbuka" : "terbuka setelah semua bagian selesai"}</small>
               </div>
               <div className="chapter-action">

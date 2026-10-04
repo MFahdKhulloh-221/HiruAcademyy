@@ -9,12 +9,8 @@ export type PracticeAnswerKey = Record<string, number>;
 export type PracticeHistory = { id: string; level: PracticeLevel; category?: PracticeCategory; exercise: number; score: number; correct: number; total: number; at: string };
 export type PracticeDraft = { key: string; answers: Record<string, number>; questionIndex: number };
 
-const questions: PracticeQuestion[] = [
-  { id: "q1", prompt: "Manakah tulisan Jepang untuk “bahasa Jepang”?", options: ["日本語", "英語", "中国語", "韓国語"].map((text, index) => ({ id: `q1-${index}`, text })) },
-  { id: "q2", prompt: "Apa arti “おはよう”?", options: ["Selamat pagi", "Terima kasih", "Sampai jumpa", "Selamat malam"].map((text, index) => ({ id: `q2-${index}`, text })) },
-  { id: "q3", prompt: "Manakah hiragana untuk bunyi “ka”?", options: ["か", "さ", "た", "な"].map((text, index) => ({ id: `q3-${index}`, text })) },
-];
-const answerKey: PracticeAnswerKey = { q1: 0, q2: 0, q3: 0 };
+const questions: PracticeQuestion[] = [];
+const answerKey: PracticeAnswerKey = {};
 
 export function getPracticeQuestions(): PracticeQuestion[] {
   return questions;

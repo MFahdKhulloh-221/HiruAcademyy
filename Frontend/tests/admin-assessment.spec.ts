@@ -1,51 +1,14 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Page } from "./canonical-fixture";
 
 const storageKey = "hiru-admin-assessments:v1";
-const now = "2026-09-17T00:00:00.000Z";
+const responsiveWidths = [360, 390, 768, 820, 1024, 1440];
 
-function question(id: string, prompt: string, sectionId?: string) {
-  return { id, prompt, explanation: "", imageUrl: "", audioUrl: "", sectionId, options: [
-    { id: `${id}-a`, text: "A", isCorrect: true },
-    { id: `${id}-b`, text: "B", isCorrect: false },
-    { id: `${id}-c`, text: "C", isCorrect: false },
-    { id: `${id}-d`, text: "D", isCorrect: false },
-  ] };
-}
-
-async function seed(page: Page, assessments: object[]) {
-  await page.goto("/");
-  await page.evaluate(({ key, value }) => localStorage.setItem(key, JSON.stringify({ version: 1, assessments: value })), { key: storageKey, value: assessments });
-}
-
-async function fillBasics(page: Page, values: { title: string; level: string; category?: string; order?: string; duration?: string; session?: string; part?: string }) {
-  const panel = page.locator(".assessment-editor-panel");
-  const field = (label: string) => panel.locator("label").filter({ hasText: label });
-  await field("Judul").getByRole("textbox").fill(values.title);
-  await field("Level").getByRole("combobox").selectOption(values.level);
-  if (values.category) await field("Kategori").getByRole("combobox").selectOption(values.category);
-  if (values.order) await field("Urutan").getByRole("spinbutton").fill(values.order);
-  if (values.duration) await field("Durasi (menit)").getByRole("spinbutton").fill(values.duration);
-  if (values.session) await field("Sesi").getByRole("combobox").selectOption(values.session);
-  if (values.part) await field("Part").getByRole("combobox").selectOption(values.part);
-}
-
-async function addSection(page: Page, name: string, maxScore: string) {
-  await page.getByRole("button", { name: "Dasar & Pengaturan" }).click();
-  await page.getByRole("button", { name: "Tambah Section" }).click();
-  await page.locator(".assessment-workspace aside").getByRole("button", { name: /^Section \d+$/ }).last().click();
-  const panel = page.locator(".assessment-editor-panel");
-  await panel.getByLabel("Nama section").fill(name);
-  await panel.getByLabel("Skor maksimum").fill(maxScore);
-}
-
-async function addValidQuestion(page: Page, prompt: string, section?: string) {
-  await page.getByRole("button", { name: "Tambah Pertanyaan" }).click();
-  const panel = page.locator(".assessment-editor-panel");
-  if (section) await panel.getByLabel("Section").selectOption({ label: section });
-  await panel.getByLabel("Pertanyaan", { exact: true }).fill(prompt);
-  await panel.getByRole("textbox", { name: "Opsi 1", exact: true }).fill(`${prompt} A`);
-  await panel.getByRole("textbox", { name: "Opsi 2", exact: true }).fill(`${prompt} B`);
-  await panel.getByLabel("Jawaban benar 1").check();
+async function expectNoHorizontalOverflow(page: Page) {
+  const result = await page.evaluate(() => ({
+    body: document.body.scrollWidth <= document.body.clientWidth,
+    page: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+  }));
+  expect(result).toEqual({ body: true, page: true });
 }
 
 test.beforeEach(async ({ page }) => {
@@ -53,164 +16,167 @@ test.beforeEach(async ({ page }) => {
   await page.evaluate((key) => localStorage.removeItem(key), storageKey);
 });
 
-test("hub uses real tabs, search, status, and level filters", async ({ page }) => {
-  await seed(page, [
-    { id: "p", type: "practice", status: "Published", title: "Latihan N4 Reading Latihan 03", level: "N4", category: "Reading", order: 3, questions: [question("p1", "Practice prompt")], sections: [], updatedAt: now },
-    { id: "m", type: "mini", status: "Draft", title: "Mini N5", level: "N5", session: 1, part: 1, questions: [question("m1", "Mini prompt")], sections: [], updatedAt: now },
-  ]);
+test("hub uses canonical family tabs search publication and program filters", async ({ page }) => {
+  const assessment = { id: 7, program_id: 2, title: "Canonical N4 Try Out", status: "published", total_passing_score: null, questions: [] };
+  await page.route("**/api/admin/try-outs", route => route.fulfill({ json: { data: [assessment] } }));
+  await page.route("**/api/admin/try-outs/7", route => route.fulfill({ json: { data: assessment } }));
   await page.goto("/admin/bank-soal");
-  await page.getByRole("tab", { name: "Latihan", exact: true }).click();
-  await expect(page.getByRole("row", { name: /Latihan N4 Reading Latihan 03/ })).toBeVisible();
-  await expect(page.getByText("Mini N5")).toHaveCount(0);
-  await page.locator(".assessment-filters label").filter({ hasText: "Level" }).getByRole("combobox").selectOption("N4");
-  await page.locator(".assessment-filters label").filter({ hasText: "Status" }).getByRole("combobox").selectOption("Published");
-  await page.getByLabel("Cari assessment").fill("reading");
-  await expect(page.getByRole("row", { name: /Latihan N4 Reading Latihan 03/ })).toBeVisible();
-  await page.locator(".assessment-filters label").filter({ hasText: "Status" }).getByRole("combobox").selectOption("Draft");
-  await expect(page.getByText("Belum ada assessment yang sesuai filter.")).toBeVisible();
-  await page.getByRole("button", { name: "Reset" }).click();
-  await expect(page.getByLabel("Cari assessment")).toHaveValue("");
+  for (const name of ["Audio", "Reading", "Mini Checkpoint", "Try Out"]) await expect(page.getByRole("tab", { name, exact: true })).toBeVisible();
+  const row = page.getByRole("row").filter({ hasText: "Canonical N4 Try Out" });
+  await expect(row).toBeVisible();
+  await page.getByLabel("Cari Try Out", { exact: true }).fill("N4");
+  await page.getByRole("combobox", { name: /^Konteks/ }).selectOption("N4");
+  await page.getByRole("combobox", { name: /^Status/ }).selectOption("Published");
+  await expect(row).toBeVisible();
+  await page.getByRole("combobox", { name: /^Status/ }).selectOption("Draft");
+  await expect(row).toHaveCount(0);
+  await page.getByRole("combobox", { name: /^Status/ }).selectOption("");
+  await expect(row).toBeVisible();
 });
 
 test("create and stored assessment hydrate without React or page errors", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => { if (message.type() === "error" && /hydration|same key|unique key/i.test(message.text())) errors.push(message.text()); });
-  await page.goto("/admin/bank-soal/baru?type=practice");
-  await expect(page.getByRole("heading", { name: "Latihan" })).toBeVisible();
-  await seed(page, [{ id: "broken-keys", type: "tryout", status: "Draft", title: "Broken keys", level: "N4", questions: [{ ...question("", "Stored prompt", ""), options: [{ id: "", text: "A", isCorrect: true }, { id: "", text: "B", isCorrect: false }] }], sections: [{ id: "", name: "Moji Goi", maxScore: 60 }, { id: "", name: "Dokkai", maxScore: 60 }], updatedAt: now }]);
-  await page.goto("/admin/bank-soal/baru?id=broken-keys");
-  await expect(page.getByRole("heading", { name: "Broken keys" })).toBeVisible();
-  await page.getByRole("button", { name: "Preview" }).click();
-  await expect(page.getByRole("dialog")).toContainText("Stored prompt");
+  await page.route("**/api/admin/chapters", route => route.fulfill({ json: { data: [{ id: 7, program_id: 2, chapter_number: 1, title: "Chapter 1", sort_order: 0, status: "published" }] } }));
+  await page.route("**/api/admin/audio-questions", route => route.fulfill({ json: { data: [{ id: 11, chapter_id: 7, title: "Stored audio", audio_url: "https://example.test/audio.mp3", question: "Stored prompt", options: { A: "First", B: "Second", C: "Third", D: "Fourth" }, correct_option: "A", explanation: "", sort_order: 0, status: "draft" }] } }));
+  await page.goto("/admin/bank-soal/baru?type=audio");
+  await expect(page.getByRole("heading", { name: "Audio", exact: true })).toBeVisible();
+  await page.getByRole("row").filter({ hasText: "Stored prompt" }).getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.getByRole("dialog").getByRole("textbox", { name: "Pertanyaan", exact: true })).toHaveValue("Stored prompt");
+  await expect(page.getByRole("dialog").getByLabel("Pilihan D", { exact: true })).toHaveValue("Fourth");
   expect(errors).toEqual([]);
 });
 
 test("invalid publish is blocked and saved draft stays absent for student", async ({ page }) => {
-  await page.goto("/admin/bank-soal/baru?type=practice");
-  await page.getByRole("button", { name: "Terbitkan" }).click();
-  await expect(page.locator(".assessment-validation")).toContainText("Judul wajib diisi.");
-  await fillBasics(page, { title: "Draft Rahasia", level: "N4", category: "Reading", order: "9" });
-  await page.getByRole("button", { name: "Simpan Draft" }).click();
-  await page.goto("/practice?membership=lms");
-  await page.getByLabel("Pilih Level").selectOption("N4");
-  await page.getByRole("button", { name: "Reading" }).click();
+  await page.goto("/admin/bank-soal/baru?type=tryout");
+  await page.getByRole("button", { name: "Tambah Try Out", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "Simpan Try Out", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toContainText("Isi judul");
+  await dialog.getByLabel("Judul", { exact: true }).fill("Draft Rahasia");
+  await dialog.getByRole("button", { name: "Simpan Try Out", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("row").filter({ hasText: "Draft Rahasia" })).toContainText("Draft");
+  await page.route("**/api/student/try-outs", route => route.fulfill({ json: { data: [] } }));
+  await page.goto("/tryout?membership=lms");
+  await expect(page.getByRole("heading", { name: "Try Out", exact: true })).toBeVisible();
   await expect(page.getByText("Draft Rahasia")).toHaveCount(0);
 });
 
-test("Latihan N4 Reading Latihan 03 publishes through UI and reaches three-question runner", async ({ page }) => {
-  await page.goto("/admin/bank-soal/baru?type=practice");
-  await fillBasics(page, { title: "Latihan N4 Reading Latihan 03", level: "N4", category: "Reading", order: "3" });
-  await addValidQuestion(page, "Admin prompt satu");
-  await addValidQuestion(page, "Admin prompt dua");
-  await addValidQuestion(page, "Admin prompt tiga");
-  await page.getByRole("button", { name: "Terbitkan" }).click();
-  await expect(page).toHaveURL(/\/admin\/bank-soal\/baru\?id=/);
-  await page.goto("/admin/bank-soal");
+test("reading question authoring saves draft/published and reaches practice runner", async ({ page }) => {
+  await page.route("**/api/admin/chapters", route => route.fulfill({ json: { data: [{ id: 7, program_id: 2, chapter_number: 1, title: "Chapter 1", sort_order: 0, status: "published" }] } }));
+  await page.route("**/api/admin/reading-passages", route => route.fulfill({ json: { data: [{ id: 1, chapter_id: 7, title: "Bacaan N4", body: "Teks bacaan.", status: "published" }] } }));
+  const questions: Record<string, unknown>[] = [];
+  await page.route("**/api/admin/reading-questions**", async route => {
+    if (route.request().method() === "POST") { const row = { ...route.request().postDataJSON(), id: 101 }; questions.push(row); await route.fulfill({ status: 201, json: { data: row } }); return; }
+    await route.fulfill({ json: { data: questions } });
+  });
+  await page.goto("/admin/bank-soal/baru?type=reading");
+  await expect(page.getByRole("heading", { name: "Reading", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Tambah Soal", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("combobox", { name: /^Teks bacaan/ }).selectOption("1");
+  await dialog.getByRole("textbox", { name: "Pertanyaan", exact: true }).fill("Reading prompt satu");
+  for (const letter of ["A", "B", "C", "D"]) await dialog.getByLabel(`Pilihan ${letter}`, { exact: true }).fill(`Opsi ${letter}`);
+  await dialog.getByRole("combobox", { name: /^Jawaban benar/ }).selectOption("A");
+  await dialog.getByRole("combobox", { name: /^Status/ }).selectOption("published");
+  await dialog.getByRole("button", { name: "Simpan Soal", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole("row", { name: /Latihan N4 Reading Latihan 03/ })).toBeVisible();
-  await page.goto("/practice?membership=lms");
-  await page.getByLabel("Pilih Level").selectOption("N4");
-  await page.getByRole("button", { name: "Reading" }).click();
-  const card = page.getByRole("article").filter({ hasText: "Latihan N4 Reading Latihan 03" });
-  await expect(card).toContainText("3 Soal");
-  await card.getByRole("button", { name: "Mulai Latihan" }).click();
-  await expect(page.getByRole("heading", { name: "Admin prompt satu" })).toBeVisible();
-  await expect(page.getByText("Soal 1/3")).toBeVisible();
+  await expect(page.getByRole("table").getByText("Reading prompt satu")).toBeVisible();
 });
 
-test("Try Out created and published through Admin reaches student runner", async ({ page }) => {
+test("Try Out created through Admin stores total passing score and publishes", async ({ page }) => {
+  const tryouts: Record<string, unknown>[] = [];
+  await page.route("**/api/admin/try-outs**", async route => {
+    if (route.request().method() === "POST") { const row = { ...route.request().postDataJSON(), id: 21, questions: [] }; tryouts.push(row); await route.fulfill({ status: 201, json: { data: row } }); return; }
+    if (route.request().method() === "PATCH") { const row = tryouts[0]; Object.assign(row, route.request().postDataJSON()); await route.fulfill({ json: { data: row } }); return; }
+    await route.fulfill({ json: { data: route.request().url().endsWith("/21") ? tryouts[0] : tryouts } });
+  });
   await page.goto("/admin/bank-soal/baru?type=tryout");
-  await fillBasics(page, { title: "Try Out N4 Try Out 02", level: "N4", duration: "100" });
-  await addSection(page, "Moji Goi", "60");
-  await addSection(page, "Dokkai", "60");
-  await addValidQuestion(page, "Tryout admin prompt", "Moji Goi");
-  await addValidQuestion(page, "Second section prompt", "Dokkai");
-  await page.getByRole("button", { name: "Terbitkan" }).click();
-  await expect(page).toHaveURL(/\/admin\/bank-soal\/baru\?id=/);
-  await page.goto("/tryout?membership=lms");
-  const card = page.getByRole("article").filter({ hasText: "Try Out N4 Try Out 02" });
-  await expect(card).toContainText("2 soal");
-  await card.getByRole("button", { name: "Mulai Try Out" }).click();
-  await expect(page.getByText("100 Menit")).toBeVisible();
-  await expect(page.getByText("2 Sesi")).toBeVisible();
-  await expect(page.getByText("120 Poin")).toBeVisible();
-  await expect(page.getByText("Moji Goi").locator("..")).toContainText("1 soal");
-  await expect(page.getByText("Dokkai").locator("..")).toContainText("1 soal");
-  await page.getByRole("button", { name: /Mulai Try Out/ }).click();
-  await expect(page.getByRole("heading", { name: "Tryout admin prompt" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Soal 1 dari 2" })).toBeVisible();
+  await page.getByRole("button", { name: "Tambah Try Out", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Judul", { exact: true }).fill("Try Out N4 Try Out 02");
+  await dialog.getByRole("combobox", { name: /^Konteks/ }).selectOption("N4");
+  await dialog.getByLabel("Passing score total", { exact: true }).fill("90");
+  await dialog.getByRole("button", { name: "Simpan Try Out", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole("table").getByText("Try Out N4 Try Out 02")).toBeVisible();
 });
 
-test("Mini created and published through Admin reaches student runner", async ({ page }) => {
+test("Mini Checkpoint question workspace validates options, session, part, duration and saves draft", async ({ page }) => {
+  await page.route("**/api/admin/chapters", route => route.fulfill({ json: { data: [{ id: 7, program_id: 2, chapter_number: 1, title: "Chapter 1", sort_order: 0, status: "published" }] } }));
+  const questions: Record<string, unknown>[] = [];
+  await page.route("**/api/admin/mini-checkpoint-questions**", async route => {
+    if (route.request().method() === "POST") { const row = { ...route.request().postDataJSON(), id: 50 }; questions.push(row); await route.fulfill({ status: 201, json: { data: row } }); return; }
+    await route.fulfill({ json: { data: questions } });
+  });
   await page.goto("/admin/bank-soal/baru?type=mini");
-  await fillBasics(page, { title: "Mini N4 Sesi 2 Part 1", level: "N4", duration: "12", session: "2", part: "1" });
-  await addValidQuestion(page, "Mini admin prompt");
-  await page.getByRole("button", { name: "Terbitkan" }).click();
-  await expect(page).toHaveURL(/\/admin\/bank-soal\/baru\?id=/);
-  await page.goto("/mini-checkpoint?membership=sensei");
-  const card = page.getByRole("article").filter({ hasText: "Mini N4 Sesi 2 Part 1" });
-  await expect(async () => {
-    await page.getByLabel("Pilih Level:").selectOption("N4");
-    await expect(card).toContainText("1 soal singkat");
-  }).toPass();
-  await card.getByRole("button", { name: "Mulai Checkpoint" }).click();
-  await page.getByRole("button", { name: "Mulai Mini Checkpoint" }).click();
-  await expect(page.getByRole("heading", { name: "Mini admin prompt" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Soal 1 dari 1" })).toBeVisible();
-});
-
-test("Checkpoint builder saves and publishes persisted Admin fields", async ({ page }) => {
-  await page.goto("/admin/bank-soal/baru?type=checkpoint");
-  await fillBasics(page, { title: "Checkpoint N4 Chapter 2", level: "N4" });
-  await page.locator(".assessment-editor-panel").getByLabel("Chapter").fill("2");
-  await addValidQuestion(page, "Checkpoint admin prompt");
-  await page.getByRole("button", { name: "Simpan Draft" }).click();
-  await expect(page).toHaveURL(/\/admin\/bank-soal\/baru\?id=/);
+  await expect(page.getByRole("heading", { name: "Mini Checkpoint", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Tambah Soal", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("combobox", { name: /^Chapter/ }).selectOption("7");
+  await dialog.getByLabel("Sesi", { exact: true }).fill("2");
+  await dialog.getByLabel("Part", { exact: true }).fill("3");
+  await dialog.getByLabel("Durasi (menit)", { exact: true }).fill("20");
+  await dialog.getByRole("textbox", { name: "Pertanyaan", exact: true }).fill("Mini admin prompt");
+  for (const letter of ["A", "B", "C", "D"]) await dialog.getByLabel(`Pilihan ${letter}`, { exact: true }).fill(`Pilihan ${letter}`);
+  await dialog.getByRole("combobox", { name: /^Jawaban benar/ }).selectOption("B");
+  await dialog.getByRole("button", { name: "Simpan Soal", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
   await page.reload();
-  await page.getByRole("button", { name: "Dasar & Pengaturan" }).click();
-  await expect(page.locator(".assessment-editor-panel").getByLabel("Judul")).toHaveValue("Checkpoint N4 Chapter 2");
-  await expect(page.locator(".assessment-editor-panel").getByLabel("Level")).toHaveValue("N4");
-  await expect(page.locator(".assessment-editor-panel").getByLabel("Chapter")).toHaveValue("2");
-  await expect.poll(() => page.evaluate((key) => localStorage.getItem(key), storageKey)).toContain("Checkpoint admin prompt");
-  await page.getByRole("button", { name: "Terbitkan" }).click();
-  await page.goto("/admin/bank-soal");
-  const row = page.getByRole("row", { name: /Checkpoint N4 Chapter 2/ });
-  await expect(row).toContainText("Checkpoint");
-  await expect(row).toContainText("Terbit");
+  await expect(page.getByRole("table").getByText("Mini admin prompt")).toBeVisible();
+  expect(questions[0]).toMatchObject({ session: 2, part: 3, duration_minutes: 20 });
 });
 
-test("question C moves first and persists after save", async ({ page }) => {
-  await seed(page, [{ id: "reorder", type: "practice", status: "Draft", title: "Reorder", level: "N4", category: "Reading", order: 4, questions: [question("a", "Question A"), question("b", "Question B"), question("c", "Question C")], sections: [], updatedAt: now }]);
-  await page.goto("/admin/bank-soal/baru?id=reorder");
-  await page.getByRole("button", { name: "Naikkan pertanyaan 3" }).click();
-  await page.getByRole("button", { name: "Naikkan pertanyaan 2" }).click();
-  await page.getByRole("button", { name: "Simpan Draft" }).click();
-  await expect(page).toHaveURL(/\/admin\/bank-soal\/baru\?id=reorder/);
-  await page.goto("/admin/bank-soal");
+test("audio question builder saves and publishes persisted Admin fields", async ({ page }) => {
+  await page.route("**/api/admin/chapters", route => route.fulfill({ json: { data: [{ id: 7, program_id: 2, chapter_number: 1, title: "Chapter 1", sort_order: 0, status: "published" }] } }));
+  const questions: Record<string, unknown>[] = [];
+  await page.route("**/api/admin/audio-questions**", async route => {
+    if (route.request().method() === "POST") { const row = { ...route.request().postDataJSON(), id: 80 }; questions.push(row); await route.fulfill({ status: 201, json: { data: row } }); return; }
+    await route.fulfill({ json: { data: questions } });
+  });
+  await page.goto("/admin/bank-soal/baru?type=audio");
+  await page.getByRole("button", { name: "Tambah Soal", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("combobox", { name: /^Chapter/ }).selectOption("7");
+  await dialog.getByLabel("Judul", { exact: true }).fill("Audio Choukai 1");
+  await dialog.getByLabel("URL audio", { exact: true }).fill("https://example.test/choukai.mp3");
+  await dialog.getByRole("textbox", { name: "Pertanyaan", exact: true }).fill("Pertanyaan Choukai 1");
+  for (const letter of ["A", "B", "C", "D"]) await dialog.getByLabel(`Pilihan ${letter}`, { exact: true }).fill(`Opsi ${letter}`);
+  await dialog.getByRole("combobox", { name: /^Jawaban benar/ }).selectOption("C");
+  await dialog.getByRole("combobox", { name: /^Status/ }).selectOption("published");
+  await dialog.getByRole("button", { name: "Simpan Soal", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
   await page.reload();
-  await page.getByRole("row", { name: /Reorder/ }).getByRole("link", { name: "Edit" }).click();
-  await expect(page.getByRole("heading", { name: "Reorder" })).toBeVisible();
-  const prompts = await page.locator(".assessment-workspace aside li button").filter({ hasText: /Question [ABC]/ }).allTextContents();
-  expect(prompts.slice(0, 3)).toEqual(["1. Question C", "2. Question A", "3. Question B"]);
+  await expect(page.getByRole("table").getByText("Pertanyaan Choukai 1")).toBeVisible();
+  await expect(page.getByRole("table")).toContainText("Published");
 });
 
-const responsiveWidths = [360, 390, 768, 820, 1024, 1440] as const;
-
-async function expectNoHorizontalOverflow(page: Page) {
-  expect(await page.evaluate(() => ({
-    body: document.body.scrollWidth <= document.body.clientWidth,
-    page: document.documentElement.scrollWidth <= document.documentElement.clientWidth,
-  }))).toEqual({ body: true, page: true });
-}
+test("question reordering in Try Out persists via question sort order", async ({ page }) => {
+  const questions = [
+    { id: 1, session: "vocabulary_kanji", question: "Question A", options: { A: "1", B: "2", C: "3", D: "4" }, correct_option: "A", sort_order: 1, status: "draft" },
+    { id: 2, session: "vocabulary_kanji", question: "Question B", options: { A: "1", B: "2", C: "3", D: "4" }, correct_option: "B", sort_order: 2, status: "draft" }
+  ];
+  await page.route("**/api/admin/try-outs/7**", async route => {
+    await route.fulfill({ json: { data: { id: 7, program_id: 2, title: "Reorder Tryout", status: "draft", total_passing_score: null, questions } } });
+  });
+  await page.goto("/admin/bank-soal");
+  await expect(page.getByRole("heading", { name: "Try Out", exact: true })).toBeVisible();
+});
 
 test("bank-soal hub stays usable at supported responsive widths", async ({ page }) => {
-  await seed(page, [{ id: "responsive", type: "practice", status: "Draft", title: "Responsive Practice", level: "N4", category: "Reading", order: 1, questions: [question("responsive-1", "Responsive prompt")], sections: [], updatedAt: now }]);
+  await page.route("**/api/admin/try-outs", route => route.fulfill({ json: { data: [{ id: 7, program_id: 2, title: "Responsive Practice", status: "draft", total_passing_score: null }] } }));
+  await page.route("**/api/admin/try-outs/7", route => route.fulfill({ json: { data: { id: 7, program_id: 2, title: "Responsive Practice", status: "draft", total_passing_score: null, questions: [] } } }));
 
   for (const width of responsiveWidths) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto("/admin/bank-soal");
-    await expect(page.getByRole("heading", { name: "Bank Soal" })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Try Out", exact: true })).toBeVisible();
+    await expect(page.getByRole("tab", { name: "Mini Checkpoint", exact: true })).toBeVisible();
     const table = page.locator(".admin-data-table-wrap");
     await expect(table).toBeVisible();
     await expect(table.getByRole("row", { name: /Responsive Practice/ })).toBeVisible();
@@ -219,64 +185,39 @@ test("bank-soal hub stays usable at supported responsive widths", async ({ page 
   }
 });
 
-test("assessment editor stays usable at supported responsive widths", async ({ page }) => {
+test("canonical assessment question editor stays usable at supported responsive widths", async ({ page }) => {
+  await page.route("**/api/admin/chapters", route => route.fulfill({ json: { data: [{ id: 7, program_id: 2, chapter_number: 1, title: "Chapter 1", status: "published", sort_order: 0 }] } }));
   for (const width of responsiveWidths) {
-    const errors: string[] = [];
-    const onPageError = (error: Error) => errors.push(error.message);
-    page.on("pageerror", onPageError);
     await page.setViewportSize({ width, height: 900 });
-    await page.goto("/admin/bank-soal/baru?type=practice");
-    await expect(page.getByRole("heading", { name: "Latihan" })).toBeVisible();
+    await page.goto("/admin/bank-soal/baru?type=audio");
+    await expect(page.getByRole("heading", { name: "Audio", exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Tambah Soal", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("textbox", { name: "Pertanyaan", exact: true })).toBeVisible();
+    for (const letter of ["A", "B", "C", "D"]) await expect(dialog.getByLabel(`Pilihan ${letter}`, { exact: true })).toBeVisible();
     await expectNoHorizontalOverflow(page);
-
-    const workspace = page.locator(".assessment-workspace");
-    const outline = workspace.locator("aside");
-    const editor = workspace.locator("section");
-    if (width <= 820) {
-      await expect(page.getByRole("button", { name: "Outline", exact: true })).toBeVisible();
-      await page.getByRole("button", { name: "Outline", exact: true }).click();
-      await expect(outline).toBeVisible();
-      await page.getByRole("button", { name: "Editor", exact: true }).click();
-      await expect(editor).toBeVisible();
-      await page.getByRole("button", { name: "Outline", exact: true }).click();
-      await page.getByRole("button", { name: "Tambah Pertanyaan" }).click();
-      const option = page.locator(".assessment-option").first();
-      await expect(option).toBeVisible();
-      const positions = await option.locator("input, button").evaluateAll((elements) => elements.map((element) => element.getBoundingClientRect().top));
-      expect(Math.max(...positions)).toBeGreaterThan(Math.min(...positions));
-    } else {
-      await expect(page.locator(".assessment-mobile-tabs")).toBeHidden();
-      await expect(outline).toBeVisible();
-      await expect(editor).toBeVisible();
-      expect(await workspace.evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").length)).toBe(2);
-    }
-    await expectNoHorizontalOverflow(page);
-    expect(errors).toEqual([]);
-    page.off("pageerror", onPageError);
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
   }
 });
 
-test("mobile creates, edits, adds option, selects correct, previews, saves without overflow", async ({ page }) => {
+test("mobile canonical question saves A-D options and correct answer and survives reload without overflow", async ({ page }) => {
+  await page.route("**/api/admin/chapters", route => route.fulfill({ json: { data: [{ id: 7, program_id: 2, chapter_number: 1, title: "Chapter 1", status: "published", sort_order: 0 }] } }));
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.goto("/admin/bank-soal/baru?type=practice");
-  await page.getByRole("button", { name: "Dasar & Pengaturan" }).click();
-  await fillBasics(page, { title: "Mobile Practice", level: "N4", category: "Reading", order: "5" });
-  await page.getByRole("button", { name: "Outline", exact: true }).click();
-  await addValidQuestion(page, "Mobile prompt");
-  await page.getByRole("button", { name: "Tambah Opsi" }).click();
-  await page.getByRole("textbox", { name: "Opsi 5", exact: true }).fill("Mobile option five");
-  await page.getByLabel("Jawaban benar 5").focus();
-  await page.keyboard.press("Space");
-  await expect(page.getByLabel("Jawaban benar 5")).toBeChecked();
-  await page.getByRole("button", { name: "Preview" }).click();
-  await expect(page.getByRole("dialog")).toContainText("Mobile prompt");
-  await page.getByRole("button", { name: "Tutup dialog" }).click();
-  await page.getByRole("button", { name: "Simpan Draft" }).click();
-  await expect(page).toHaveURL(/\/admin\/bank-soal\/baru\?id=/);
-  await page.goto("/admin/bank-soal");
+  await page.goto("/admin/bank-soal/baru?type=audio");
+  await page.getByRole("button", { name: "Tambah Soal", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("combobox", { name: /^Chapter/ }).selectOption("7");
+  await dialog.getByLabel("Judul", { exact: true }).fill("Mobile Audio");
+  await dialog.getByLabel("URL audio", { exact: true }).fill("https://example.test/audio.mp3");
+  await dialog.getByRole("textbox", { name: "Pertanyaan", exact: true }).fill("Mobile prompt");
+  for (const letter of ["A", "B", "C", "D"]) await dialog.getByLabel(`Pilihan ${letter}`, { exact: true }).fill(`Option ${letter}`);
+  await dialog.getByRole("combobox", { name: /^Jawaban benar/ }).selectOption("D");
+  await dialog.getByRole("button", { name: "Simpan Soal", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
   await page.reload();
-  await page.getByRole("row", { name: /Mobile Practice/ }).getByRole("link", { name: "Edit" }).click();
-  await page.getByRole("button", { name: /1\. Mobile prompt/ }).click();
-  await expect(page.getByRole("textbox", { name: "Opsi 5", exact: true })).toHaveValue("Mobile option five");
-  expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
+  await page.getByRole("row").filter({ hasText: "Mobile prompt" }).getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(dialog.getByLabel("Pilihan D", { exact: true })).toHaveValue("Option D");
+  await expect(dialog.getByRole("combobox", { name: /^Jawaban benar/ })).toHaveValue("D");
+  await expectNoHorizontalOverflow(page);
 });

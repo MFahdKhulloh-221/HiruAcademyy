@@ -3,12 +3,12 @@
 import { type ChangeEvent, type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { AdminDataTable, AdminDialog, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge, AdminTabs } from "@/components/admin-primitives";
 import { AdminBlogArticlePreview, AdminBlogCardPreview, BlogThumbnail, type Article } from "@/components/admin-blog-preview";
-import { blogArticles, blogDetail, blogFeatured } from "@/lib/public-mock";
+import { useAdminContent } from "@/lib/public-content-api";
 
 const tabs = ["Konten Artikel", "Pengaturan SEO & Pratinjau", "Jadwal & Penulis"];
-const categories = [...new Set([blogFeatured.category, ...blogArticles.map((article) => article.category)])];
-const authors = [...new Set([blogDetail.author, ...blogArticles.map((article) => article.author)])];
-const emptyArticle: Omit<Article, "id"> = { title: "", slug: "", excerpt: "", body: "", thumbnail: "", category: categories[0], seoTitle: "", metaDescription: "", featured: false, published: false, publishedAt: "", author: blogDetail.author };
+const categories = ["Tips Belajar", "Grammar / Bunpou", "Listening / Choukai", "JLPT"];
+const authors = ["Hiru Academy"];
+const emptyArticle: Omit<Article, "id"> = { title: "", slug: "", excerpt: "", body: "", thumbnail: "", category: categories[0], seoTitle: "", metaDescription: "", featured: false, published: false, publishedAt: "", author: "Hiru Academy" };
 function slugFromTitle(title: string) { return title.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""); }
 function publicationDate(value: string) {
   if (!value) return "";
@@ -25,10 +25,6 @@ function displayPublicationDate(value: string) {
   const timestamp = new Date(`${date}T00:00:00+07:00`);
   return date && Number.isFinite(timestamp.getTime()) ? new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "long", year: "numeric" }).format(timestamp) : "—";
 }
-const initialArticles: Article[] = [
-  { ...emptyArticle, id: "article-strategi-n4", title: blogDetail.title, slug: blogDetail.slug, excerpt: blogDetail.description, body: `${blogFeatured.description}\n\n1. Mulai dari checkpoint kecil\n\nFokus pada konsistensi harian 20-30 menit daripada belajar maraton di akhir pekan.`, category: blogDetail.category, seoTitle: "Strategi Rutinitas Belajar N4 - Hiru Academy", metaDescription: "Tips dan panduan menyusun jadwal belajar JLPT N4 efektif bersama Hiru Academy.", featured: true, published: true, publishedAt: "2026-08-20T00:00:00.000Z" },
-  ...blogArticles.map((article, index) => ({ ...emptyArticle, id: `article-${index + 2}`, title: article.title, slug: slugFromTitle(article.title), excerpt: article.description, body: article.description, category: article.category, author: article.author, published: true, publishedAt: article.publishedAt })),
-];
 
 function articleError(article: Article, rows: Article[]) {
   if (!article.title.trim()) return "Judul artikel wajib diisi.";
@@ -37,7 +33,7 @@ function articleError(article: Article, rows: Article[]) {
   if (rows.some((row) => row.id !== article.id && row.slug === article.slug.trim())) return "Slug sudah digunakan. Pilih slug lain.";
   if (!categories.includes(article.category)) return "Pilih kategori artikel yang tersedia.";
   if (!authors.includes(article.author)) return "Pilih penulis artikel yang tersedia.";
-  if (article.publishedAt && !initialArticles.some((row) => row.publishedAt === article.publishedAt)) {
+  if (article.publishedAt && /^\d{4}-\d{2}-\d{2}$/.test(article.publishedAt)) {
     const date = new Date(`${article.publishedAt}T00:00:00Z`);
     if (!/^\d{4}-\d{2}-\d{2}$/.test(article.publishedAt) || !Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== article.publishedAt) return "Tanggal publikasi tidak valid. Pilih tanggal yang benar.";
   }
@@ -45,7 +41,7 @@ function articleError(article: Article, rows: Article[]) {
 }
 
 export function AdminBlogPrototype() {
-  const [rows, setRows] = useState<Article[]>(initialArticles);
+  const { rows, loading, loadError, busy, mutate, reload } = useAdminContent<Article>("blog-articles");
   const [draft, setDraft] = useState<Article | null>(null);
   const [view, setView] = useState<Article | null>(null);
   const [deleting, setDeleting] = useState<Article | null>(null);
@@ -77,27 +73,24 @@ export function AdminBlogPrototype() {
   const closeView = useCallback(() => setView(null), []);
   const closeDelete = useCallback(() => setDeleting(null), []);
 
-  function save(event: FormEvent<HTMLFormElement>) {
+  async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft) return;
     const invalid = articleError(draft, rows);
     if (invalid) { setError(invalid); return; }
     const next: Article = { ...draft, title: draft.title.trim(), slug: draft.slug.trim(), excerpt: draft.excerpt.trim(), body: draft.body.trim(), thumbnail: draft.thumbnail.trim(), seoTitle: draft.seoTitle.trim(), metaDescription: draft.metaDescription.trim(), publishedAt: draft.publishedAt.trim() };
-    setRows((current) => current.some((row) => row.id === next.id) ? current.map((row) => row.id === next.id ? next : row) : [...current, next]);
-    closeEditor();
-    setMessage("Artikel disimpan untuk sesi ini. Halaman publik tidak berubah.");
+    try { await mutate(next); closeEditor(); setMessage("Artikel disimpan."); } catch (error) { setError(error instanceof Error ? error.message : "Artikel gagal disimpan."); }
   }
 
-  function toggle(row: Article) {
+  async function toggle(row: Article) {
     const invalid = row.published ? "" : articleError(row, rows);
     if (invalid) { setMessage(invalid); return; }
-    setRows((current) => current.map((item) => item.id === row.id ? { ...item, published: !item.published } : item));
-    setMessage("Status publikasi diubah untuk sesi ini. Halaman publik tidak berubah.");
+    try { await mutate({ ...row, published: !row.published }); setMessage("Status publikasi disimpan."); } catch (error) { setMessage(error instanceof Error ? error.message : "Publikasi gagal."); }
   }
 
   return <AdminShell current="/admin/blog-seo"><main className="admin-public-prototype">
     <AdminPageHeader title="Blog" actions={<button type="button" className="button button-primary" onClick={() => { setError(""); setActiveTab(tabs[0]); setDraft({ ...emptyArticle, id: crypto.randomUUID() }); }}>Tambah Artikel</button>} />
-    <p>Perubahan hanya berlaku selama sesi ini. Halaman publik tidak berubah.</p>
+    {loading && <p role="status">Memuat artikel…</p>}{loadError && <div role="alert">{loadError} <button type="button" onClick={reload}>Coba lagi</button></div>}
     <p role="status">{message}</p>
     <AdminSection title="Artikel"><AdminDataTable caption="Daftar Artikel Blog" rows={rows} rowKey={(row) => row.id} columns={[
       { key: "thumbnail", header: "Thumbnail", cell: (row) => <div className="admin-blog-table-thumb"><BlogThumbnail key={row.thumbnail} src={row.thumbnail} title={row.title} /></div> },
@@ -117,7 +110,7 @@ export function AdminBlogPrototype() {
       {draft && <form className="admin-prototype-form" onSubmit={save} noValidate>
         <AdminTabs label="Pengaturan Artikel" tabs={tabs} active={activeTab} onChange={setActiveTab}>
           {activeTab === tabs[0] && <div className="admin-blog-content-fields">
-            <label className="admin-field">Thumbnail (opsional)<input type="file" accept="image/*" onChange={uploadThumbnail} /></label>
+            <label className="admin-field">Thumbnail (opsional)<input value={draft.thumbnail} onChange={event => setDraft({ ...draft, thumbnail: event.target.value })} /><small>URL HTTP/HTTPS atau referensi penyimpanan.</small><input type="file" accept="image/*" onChange={uploadThumbnail} disabled /><small>Upload produksi belum tersedia.</small></label>
             <div className="blog-card-thumb admin-blog-upload-thumb"><BlogThumbnail key={draft.thumbnail} src={draft.thumbnail} title={draft.title} /></div>
             <label className="admin-field">Kategori<select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })}>{categories.map((category) => <option key={category}>{category}</option>)}</select></label>
             <label className="admin-field">Judul Artikel<input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} required /></label>
@@ -137,15 +130,15 @@ export function AdminBlogPrototype() {
           </div>}
           {activeTab === tabs[2] && <div className="admin-blog-publication-fields">
             <label className="admin-field">Status<select value={draft.published ? "published" : "draft"} onChange={(event) => setDraft({ ...draft, published: event.target.value === "published" })}><option value="draft">Draft</option><option value="published">Published</option></select></label>
-            <label className="admin-field">Tanggal Publikasi (opsional)<input type="date" value={publicationDate(draft.publishedAt)} onChange={(event) => setDraft({ ...draft, publishedAt: event.target.value })} /><small>Tanggal ditampilkan dalam waktu Jakarta. Tidak menjadwalkan publikasi otomatis.</small></label>
+            <label className="admin-field">Tanggal Publikasi (opsional)<input type="date" value={publicationDate(draft.publishedAt)} onChange={(event) => setDraft({ ...draft, publishedAt: event.target.value })} /><small>Artikel terbit setelah tanggal publikasi. Tanggal tanpa waktu menggunakan UTC.</small></label>
             <label className="admin-field">Nama Penulis / Kontributor<select value={draft.author} onChange={(event) => setDraft({ ...draft, author: event.target.value })}>{authors.map((author) => <option key={author}>{author}</option>)}</select></label>
           </div>}
         </AdminTabs>
         {error && <p role="alert">{error}</p>}
-        <div className="admin-page-actions"><button type="button" className="button" onClick={closeEditor}>Batal</button><button type="submit" className="button button-primary">Simpan Artikel</button></div>
+        <div className="admin-page-actions"><button type="button" className="button" onClick={closeEditor}>Batal</button><button type="submit" disabled={busy} className="button button-primary">Simpan Artikel</button></div>
       </form>}
     </AdminDialog>
     <AdminDialog open={Boolean(view)} title="Pratinjau Artikel" close={closeView}>{view && <AdminBlogArticlePreview article={view} date={displayPublicationDate(view.publishedAt)} />}</AdminDialog>
-    <AdminDialog open={Boolean(deleting)} title="Hapus Artikel?" close={closeDelete} actions={<><button type="button" className="button" onClick={closeDelete}>Batal</button><button type="button" className="button button-primary" onClick={() => { if (!deleting) return; setRows((current) => current.filter((row) => row.id !== deleting.id)); setDeleting(null); setMessage("Artikel dihapus dari sesi ini. Halaman publik tidak berubah."); }}>Hapus Artikel</button></>}><p>Hapus artikel {deleting?.title} dari sesi ini? Halaman publik tidak berubah.</p></AdminDialog>
+    <AdminDialog open={Boolean(deleting)} title="Hapus Artikel?" close={closeDelete} actions={<><button type="button" className="button" onClick={closeDelete}>Batal</button><button type="button" className="button button-primary" disabled={busy} onClick={async () => { if (!deleting) return; try { await mutate(deleting, true); setDeleting(null); setMessage("Artikel dihapus."); } catch (error) { setMessage(error instanceof Error ? error.message : "Artikel gagal dihapus."); } }}>Hapus Artikel</button></>}><p>Hapus artikel {deleting?.title} dari sesi ini? Halaman publik tidak berubah.</p></AdminDialog>
   </main></AdminShell>;
 }

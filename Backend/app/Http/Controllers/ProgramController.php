@@ -12,7 +12,7 @@ class ProgramController extends Controller
         return response()->json(['data' => Program::query()
             ->where('status', 'active')
             ->orderBy('sort_order')->orderBy('id')
-            ->get(['code', 'slug', 'name', 'family'])]);
+            ->get(['id', 'code', 'slug', 'name', 'family'])]);
     }
 
     public function adminIndex(): JsonResponse

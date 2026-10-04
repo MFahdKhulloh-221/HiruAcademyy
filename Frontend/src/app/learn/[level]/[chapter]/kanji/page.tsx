@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
-import { StaticStudentRoute } from "@/components/static-student-route";
+import { LearningVertical } from "@/components/learning-vertical";
 
 export const metadata: Metadata = { title: "Modul Huruf Jepang & Kanji", description: "Modul Huruf Jepang dan Kanji HIRU Academy.", robots: { index: false, follow: false } };
 
@@ -10,5 +10,5 @@ export function generateStaticParams() {
 
 export default async function KanjiPage({ params }: { params: Promise<{ level: string; chapter: string }> }) {
   const { level, chapter } = await params;
-  return <Suspense><StaticStudentRoute kind="kanji" level={level} chapter={chapter} /></Suspense>;
+  return <Suspense><LearningVertical kind="kanji" level={level} chapter={chapter} /></Suspense>;
 }

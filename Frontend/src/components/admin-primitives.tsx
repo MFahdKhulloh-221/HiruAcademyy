@@ -4,8 +4,9 @@ import Link from "next/link";
 import { KeyboardEvent, ReactNode, RefObject, useEffect, useId, useRef } from "react";
 export { AdminShell } from "@/components/admin-shell";
 
-export function AdminPageHeader({ title, description, eyebrow, actions }: { title: string; description?: string; eyebrow?: string; actions?: ReactNode }) {
-  return <header className="admin-page-header"><div>{eyebrow && <p className="admin-kicker">{eyebrow}</p>}<h1>{title}</h1>{description && <p>{description}</p>}</div>{actions && <div className="admin-page-actions">{actions}</div>}</header>;
+export function AdminPageHeader({ title, description, eyebrow, actions, headingLevel = 1 }: { title: string; description?: string; eyebrow?: string; actions?: ReactNode; headingLevel?: 1 | 2 }) {
+  const Heading = headingLevel === 2 ? "h2" : "h1";
+  return <header className="admin-page-header"><div>{eyebrow && <p className="admin-kicker">{eyebrow}</p>}<Heading>{title}</Heading>{description && <p>{description}</p>}</div>{actions && <div className="admin-page-actions">{actions}</div>}</header>;
 }
 
 export function AdminBreadcrumb({ items }: { items: readonly { label: string; href?: string }[] }) {

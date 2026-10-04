@@ -19,7 +19,7 @@ function getActivityIcon(key: string) {
 
 export function LessonOverview({ data }: { data: LearningData }) {
   const completed = useChapterProgress(data.levelSlug, data.chapterSlug);
-  const complete = requiredChapterActivities.every((key) => completed.includes(key));
+  const complete = requiredChapterActivities.length > 0 && requiredChapterActivities.every((key) => completed.includes(key));
   const checkpoint = data.activities.find((activity) => activity.key === "checkpoint");
   const miniCheckpointHref = `/mini-checkpoint?membership=${data.membership}`;
   return <>

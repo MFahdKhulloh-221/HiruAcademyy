@@ -581,4 +581,31 @@ class LearningContentTest extends TestCase
         $this->assertNotNull($other->fresh());
         $this->assertNotNull($unrelated->fresh());
     }
+
+    public function test_mini_checkpoint_question_session_part_and_duration_authoring(): void
+    {
+        $chapter = $this->chapter();
+        $payload = [
+            'chapter_id' => $chapter->id,
+            'question' => 'Pertanyaan Mini Sesi 1 Part 2',
+            'options' => ['A' => 'Opt A', 'B' => 'Opt B', 'C' => 'Opt C', 'D' => 'Opt D'],
+            'correct_option' => 'C',
+            'session' => 1,
+            'part' => 2,
+            'duration_minutes' => 25,
+            'status' => 'published',
+            'sort_order' => 1,
+        ];
+        $response = $this->actingAs($this->admin)->postJson('/api/admin/mini-checkpoint-questions', $payload)->assertCreated();
+        $response->assertJsonPath('data.session', 1)
+            ->assertJsonPath('data.part', 2)
+            ->assertJsonPath('data.duration_minutes', 25);
+
+        $this->actingAs($this->admin)->patchJson('/api/admin/mini-checkpoint-questions/'.$response->json('data.id'), [
+            'part' => 3,
+            'duration_minutes' => 30,
+        ])->assertOk()
+            ->assertJsonPath('data.part', 3)
+            ->assertJsonPath('data.duration_minutes', 30);
+    }
 }

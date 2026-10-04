@@ -1,22 +1,12 @@
 import type { AssessmentConfig } from "@/lib/assessment-mock";
 import type { Membership } from "@/lib/dashboard-mock";
 
-export const scheduleSessions = [
-  { id: "chapter-4", title: "Chapter 4 • Sesi Live", meta: "Hari/Tanggal • Jam WIB • Sensei dari admin", status: "Terjadwal" },
-  { id: "consultation", title: "Konsultasi Cohort", meta: "Jadwal dan topik mengikuti cohort aktif", status: "Terjadwal" },
-  { id: "previous", title: "Sesi sebelumnya", meta: "Replay tersedia setelah dipublikasikan", status: "Selesai" },
-];
+export const scheduleSessions: Array<{ id: string; title: string; meta: string; status: string }> = [];
 
 export const replayLevels = ["N5", "N4", "N3", "N2", "N1"] as const;
 export type ReplayLevel = (typeof replayLevels)[number];
 
-export const replays = [
-  { id: "n5-dasar", level: "N5", title: "N5 — Dasar Bahasa Jepang", description: "Replay materi dasar dan latihan kelas.", category: "N5", featured: true },
-  { id: "n4-grammar", level: "N4", title: "N4 — Review Tata Bahasa", description: "Pembahasan pola kalimat dan latihan.", category: "N4" },
-  { id: "n3-reading", level: "N3", title: "N3 — Strategi Dokkai", description: "Review bacaan dan strategi menjawab.", category: "N3" },
-  { id: "n2-choukai", level: "N2", title: "N2 — Latihan Choukai", description: "Pembahasan audio dan pemahaman konteks.", category: "N2" },
-  { id: "n1-review", level: "N1", title: "N1 — Review Lanjutan", description: "Review materi lanjutan bersama Sensei.", category: "N1" },
-] satisfies Array<{ id: string; level: ReplayLevel; title: string; description: string; category: string; featured?: boolean }>;
+export const replays: Array<{ id: string; level: ReplayLevel; title: string; description: string; category: string; featured?: boolean }> = [];
 
 export function getReplayAccessLevels(membership: Membership, purchasedLevel?: string): ReplayLevel[] {
   if (membership !== "sensei") return [];

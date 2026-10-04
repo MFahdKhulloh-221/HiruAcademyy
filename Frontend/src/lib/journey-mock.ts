@@ -46,7 +46,8 @@ const baseLevels = [
 export const jlptLevels = ["N5", "N4", "N3", "N2", "N1"] as const;
 
 export function getDefaultPurchasedLevel(membership: Membership): string | undefined {
-  return membership === "free" ? undefined : "N4";
+  void membership;
+  return undefined;
 }
 
 export function hasFullLearningAccess(code: string, purchasedLevel?: string, standalonePrograms: readonly string[] = []): boolean {

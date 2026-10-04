@@ -62,7 +62,7 @@ const initialSettings: AdminSettings = {
   general: { siteName: "Hiru Academy", locale: "id-ID", timezone: "Asia/Jakarta" },
   branding: { logoUrl: "", faviconUrl: "", companyLabel: "Hiru Academy" },
   contact: {
-    whatsappNumber: "6281234567890",
+    whatsappNumber: "",
     supportEmail: "",
     address: "",
     instagramUrl: "",

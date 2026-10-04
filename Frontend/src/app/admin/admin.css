@@ -78,6 +78,7 @@
 .admin-shell .admin-public-prototype .button, .admin-shell .admin-dialog .button { min-height: 44px; padding: 0 16px; border: 1px solid var(--line); font: inherit; font-size: 12px; font-weight: 700; cursor: pointer; }
 .admin-shell .admin-public-prototype .button:not(.button-primary), .admin-shell .admin-dialog .button:not(.button-primary) { background: #fff; color: var(--navy); }
 .admin-shell .admin-public-prototype img { object-fit: cover; border-radius: 12px; }
+.admin-shell .admin-tabs[aria-label="Bank Soal"] { flex-wrap: wrap; overflow-x: visible; }
 .admin-shell .admin-prototype-form { display: grid; gap: 16px; }
 .admin-shell .admin-prototype-form .admin-field { display: grid; gap: 8px; font-size: 13px; font-weight: 700; color: var(--navy); }
 .admin-shell .admin-prototype-form input, .admin-shell .admin-prototype-form select, .admin-shell .admin-prototype-form textarea { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); font: inherit; }

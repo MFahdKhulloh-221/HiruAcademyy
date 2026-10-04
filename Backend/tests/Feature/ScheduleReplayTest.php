@@ -49,6 +49,16 @@ class ScheduleReplayTest extends TestCase
         $this->admin = $this->user('admin');
     }
 
+    public function test_published_sensei_overlap_is_rejected_but_adjacent_and_cancelled_are_allowed(): void
+    {
+        $program = Program::where('code', 'n4')->firstOrFail();
+        $payload = ['program_id' => $program->id, 'title' => 'First', 'scheduled_at' => '2026-10-20T12:00:00Z', 'duration_minutes' => 60, 'sensei_name' => 'Hana', 'status' => 'published'];
+        $this->actingAs($this->admin)->postJson('/api/admin/class-schedules', $payload)->assertCreated();
+        $this->postJson('/api/admin/class-schedules', array_replace($payload, ['title' => 'Conflict', 'scheduled_at' => '2026-10-20T12:30:00Z', 'sensei_name' => ' hana ']))->assertUnprocessable()->assertJsonValidationErrors('scheduled_at');
+        $this->postJson('/api/admin/class-schedules', array_replace($payload, ['title' => 'Adjacent', 'scheduled_at' => '2026-10-20T13:00:00Z']))->assertCreated();
+        $this->postJson('/api/admin/class-schedules', array_replace($payload, ['title' => 'Cancelled', 'status' => 'cancelled']))->assertCreated();
+    }
+
     protected function tearDown(): void
     {
         $this->travelBack();

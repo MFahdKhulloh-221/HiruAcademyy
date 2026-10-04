@@ -1,9 +1,7 @@
 "use client";
 
-import { useSyncExternalStore } from "react";
+import { contentMedia, useContent, type ArticleContent, type TestimonialContent } from "@/lib/public-content-api";
 import {
-  WEBSITE_CHANGE_EVENT,
-  WEBSITE_STORAGE_KEY,
   LANDING_SECTION_ORDER,
   type LandingSectionKey,
   type CampaignProgramCode,
@@ -227,10 +225,7 @@ export function extractPublishedWebsite(
   store: WebsiteStore,
   now: Date | string | number = Date.now()
 ): PublishedWebsite {
-  const landing =
-    store.landing.status === "Published"
-      ? toPublishedLanding(store.landing)
-      : toPublishedLanding(initialLandingContent);
+  const landing = toPublishedLanding(initialLandingContent);
 
   const campaigns = store.campaigns
     .filter((c) => c.status === "Published" && isDateWithinWindow(c.startAt, c.endAt, now))
@@ -270,10 +265,7 @@ export function readPublishedLanding(): PublishedLanding {
   if (typeof window === "undefined") {
     return toPublishedLanding(initialLandingContent);
   }
-  const store = readWebsiteStore();
-  return store.landing.status === "Published"
-    ? toPublishedLanding(store.landing)
-    : toPublishedLanding(initialLandingContent);
+  return toPublishedLanding(initialLandingContent);
 }
 
 export function readActiveCampaigns(options?: {
@@ -364,45 +356,12 @@ export function readPublishedWebsite(now?: Date | string | number): PublishedWeb
   return extractPublishedWebsite(store, now);
 }
 
-let cachedRaw: string | null | undefined;
-let cachedSnapshot: PublishedWebsite = extractPublishedWebsite(createInitialWebsiteStore());
-const serverSnapshot: PublishedWebsite = extractPublishedWebsite(createInitialWebsiteStore());
-
-function getPublishedWebsiteSnapshot(): PublishedWebsite {
-  if (typeof window === "undefined") return serverSnapshot;
-  const raw = localStorage.getItem(WEBSITE_STORAGE_KEY);
-  if (raw !== cachedRaw) {
-    cachedRaw = raw;
-    cachedSnapshot = extractPublishedWebsite(readWebsiteStore());
-  }
-  return cachedSnapshot;
-}
-
-function subscribe(onStoreChange: () => void) {
-  const handleStorage = (event: StorageEvent) => {
-    if (event.key === WEBSITE_STORAGE_KEY) {
-      cachedRaw = undefined;
-      onStoreChange();
-    }
-  };
-  const handleCustom = () => {
-    cachedRaw = undefined;
-    onStoreChange();
-  };
-  window.addEventListener("storage", handleStorage);
-  window.addEventListener(WEBSITE_CHANGE_EVENT, handleCustom);
-  return () => {
-    window.removeEventListener("storage", handleStorage);
-    window.removeEventListener(WEBSITE_CHANGE_EVENT, handleCustom);
-  };
-}
-
 export function usePublishedWebsite(): PublishedWebsite {
-  return useSyncExternalStore(subscribe, getPublishedWebsiteSnapshot, () => serverSnapshot);
+  return { landing: toPublishedLanding(initialLandingContent), campaigns: [], articles: usePublishedArticles(), testimonials: usePublishedTestimonials(), featuredTestimonials: usePublishedTestimonials({ featuredOnly: true }), announcements: [] };
 }
 
 export function usePublishedLanding(): PublishedLanding {
-  return usePublishedWebsite().landing;
+  return toPublishedLanding(initialLandingContent);
 }
 
 export function usePublishedCampaigns(options?: {
@@ -424,17 +383,13 @@ export function usePublishedCampaigns(options?: {
 export function usePublishedTestimonials(options?: {
   featuredOnly?: boolean;
 }): PublishedTestimonial[] {
-  const website = usePublishedWebsite();
-  if (options?.featuredOnly) return website.featuredTestimonials;
-  return website.testimonials;
+  const content = useContent<TestimonialContent>(`/api/testimonials${options?.featuredOnly ? "?landing=true" : ""}`);
+  return content.data.map(item => ({ id: String(item.id), name: item.name, context: item.context, quote: item.quote, photoUrl: contentMedia(item.image), videoUrl: item.video_url ?? "", featured: Boolean(options?.featuredOnly), sortOrder: 0 }));
 }
 
 export function usePublishedArticles(category?: string): PublishedArticle[] {
-  const website = usePublishedWebsite();
-  if (category && category !== "Semua") {
-    return website.articles.filter((a) => a.category === category);
-  }
-  return website.articles;
+  const content = useContent<ArticleContent>("/api/blog");
+  return content.data.filter(item => !category || category === "Semua" || item.category === category).map(item => ({ id: String(item.id), title: item.title, slug: item.slug, summary: item.excerpt ?? "", category: item.category, author: item.author, imageUrl: contentMedia(item.thumbnail), imageAlt: item.title, blocks: item.body.split(/\n\s*\n/).map((text, index) => ({ id: String(index), type: "paragraph" as const, text })), seoTitle: item.seo_title ?? "", metaDescription: item.meta_description ?? "", canonicalUrl: "", indexable: true, ogImage: "", ogTitle: "", ogDescription: "", updatedAt: "", publishedAt: item.published_at ?? undefined }));
 }
 
 export function usePublishedAnnouncements(

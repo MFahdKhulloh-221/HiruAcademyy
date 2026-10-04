@@ -54,7 +54,7 @@ class PlacementService
         $text = [$required, 'required', 'string'];
         $status = ['sometimes', 'required', Rule::in(['draft', 'published'])];
         if ($resource === 'placement-configs') {
-            return ['title' => [...$text, 'max:255'], 'intro_heading' => [...$text, 'max:255'], 'duration_minutes' => [$required, 'required', 'integer', 'min:1', 'max:2147483647'], 'description' => $text, 'status' => $status];
+            return ['title' => [...$text, 'max:255'], 'intro_heading' => [...$text, 'max:255'], 'duration_minutes' => [$required, 'required', 'integer', 'min:1', 'max:2147483647'], 'description' => $text, 'status' => $status, 'recommendation_rules' => ['sometimes', 'array'], 'recommendation_rules.*.minScore' => ['required', 'integer', 'between:0,100'], 'recommendation_rules.*.maxScore' => ['required', 'integer', 'between:0,100'], 'recommendation_rules.*.recommendedProgramCode' => ['required', Rule::in(['N5', 'N4', 'N3', 'N2', 'N1'])], 'recommendation_rules.*.resultTitle' => ['required', 'string', 'max:255'], 'recommendation_rules.*.resultDescription' => ['required', 'string', 'max:5000']];
         }
         $media = ['bail', 'sometimes', 'nullable', 'string', function ($attribute, $value, $fail) {
             if (! $this->safeReference($value)) {
@@ -92,6 +92,15 @@ class PlacementService
         return DB::transaction(function () use ($class, $resource, $data, $model) {
             if ($resource === 'placement-configs') {
                 $locked = $model ? PlacementConfig::whereKey($model->id)->lockForUpdate()->firstOrFail() : new PlacementConfig;
+                $rules = $data['recommendation_rules'] ?? $locked->recommendation_rules ?? [];
+                usort($rules, fn ($first, $second) => $first['minScore'] <=> $second['minScore']);
+                $previous = -1;
+                foreach ($rules as $rule) {
+                    if ($rule['maxScore'] < $rule['minScore'] || $rule['minScore'] <= $previous) {
+                        throw ValidationException::withMessages(['recommendation_rules' => 'Rentang skor tidak valid atau tumpang tindih.']);
+                    }
+                    $previous = $rule['maxScore'];
+                }
                 $locked->fill($data)->save();
                 $this->assertPublishable($locked);
             } else {
@@ -135,7 +144,7 @@ class PlacementService
     public function adminPayload(Model $model): array
     {
         return $model instanceof PlacementConfig
-            ? $model->only([...self::CONFIG_FIELDS, 'status'])
+            ? $model->only([...self::CONFIG_FIELDS, 'status', 'recommendation_rules'])
             : $model->only([...self::QUESTION_FIELDS, 'placement_config_id', 'correct_option', 'explanation', 'status']);
     }
 
@@ -209,7 +218,7 @@ class PlacementService
                 'user_id' => $request->user()?->id,
                 'owner_hash' => $request->user() ? null : hash('sha256', $token),
                 'applicant_snapshot' => $data,
-                'config_snapshot' => $config->only(self::CONFIG_FIELDS),
+                'config_snapshot' => $config->only([...self::CONFIG_FIELDS, 'recommendation_rules']),
                 'content_snapshot' => $questions->map(fn ($question) => $question->only(self::QUESTION_FIELDS))->all(),
                 'grading_snapshot' => $grading,
                 'answers' => [],
@@ -266,6 +275,12 @@ class PlacementService
                 $result[$answer === null ? 'unanswered' : ($answer === $correct ? 'correct' : 'wrong')]++;
             }
             $result['percentage'] = (int) round($result['correct'] * 100 / $result['total']);
+            foreach ($locked->config_snapshot['recommendation_rules'] ?? [] as $rule) {
+                if ($result['percentage'] >= $rule['minScore'] && $result['percentage'] <= $rule['maxScore']) {
+                    $result['recommendation_level'] = $rule['recommendedProgramCode'];
+                    break;
+                }
+            }
             $locked->update(['answers' => $answers, 'result_snapshot' => $result, 'status' => 'completed', 'completed_at' => $completed]);
 
             return $locked->fresh();

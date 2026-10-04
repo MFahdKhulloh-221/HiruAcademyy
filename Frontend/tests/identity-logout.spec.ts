@@ -2,19 +2,26 @@ import { expect, test } from "@playwright/test";
 
 const student = { id: 901, name: "Sakura Tanaka", email: "sakura@example.test", whatsapp: "081234567890", role: "student" };
 
-test("current student identity replaces fixtures without changing membership", async ({ page }) => {
+test.beforeEach(async ({ page }) => {
+  await page.route("**/api/public/programs", route => route.fulfill({ json: { data: [] } }));
+  await page.route("**/api/student/access", route => route.fulfill({ json: { data: { learning: { n5: "full" }, replay_levels: [], source_grants: [{ plan_code: "lms", program_code: "n5" }] } } }));
+});
+
+test("current student identity uses canonical membership without fake expiry or certificates", async ({ page }) => {
   await page.route("**/api/me", (route) => route.fulfill({ json: { data: student } }));
   await page.goto("/dashboard?membership=lms");
   await expect(page.getByRole("heading", { name: /Halo, Sakura Tanaka/ })).toBeVisible();
   await expect(page.locator(".dash-avatar")).toHaveText("ST");
-  await expect(page.getByText("Sakura Tanaka (Kamu)", { exact: true })).toBeVisible();
+  await expect(page.locator(".dash-leaderboard-item")).toHaveCount(0);
   await page.goto("/profile?membership=lms");
   await expect(page.getByRole("heading", { name: student.name, exact: true })).toBeVisible();
   await expect(page.getByText(student.email, { exact: true })).toBeVisible();
   await expect(page.locator(".profile-identity > span")).toHaveText("ST");
-  await expect(page.getByText("Akses aktif hingga 31 Desember 2026. Seluruh progres belajar tersimpan.")).toBeVisible();
+  await expect(page.getByText("N5 • Belajar Mandiri", { exact: true })).toBeVisible();
+  await expect(page.getByText("Akses aktif hingga 31 Desember 2026. Seluruh progres belajar tersimpan.")).toHaveCount(0);
   await page.goto("/certificate?membership=lms");
-  await expect(page.getByText("Sakura Tanaka • Program JLPT N5", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sertifikat belum dapat diterbitkan" })).toBeVisible();
+  await expect(page.getByText("Sakura Tanaka • Program JLPT N5", { exact: true })).toHaveCount(0);
 });
 
 for (const mobile of [false, true]) {
