@@ -23,14 +23,18 @@ export default function AdminDashboardPage() {
   const [selected, setSelected] = useState<DashboardUser | null>(null);
   useEffect(() => {
     const controller = new AbortController();
-    void commercialData<DashboardUser[]>("/api/admin/users").then(async rows => {
+    void Promise.resolve().then(() => commercialData<DashboardUser[]>("/api/admin/users", controller.signal)).then(async rows => {
+      controller.signal.throwIfAborted();
       const data = await Promise.all(rows.map(async row => {
-        const access = await commercialData<{ source_grants: { plan_code: string; program_code: string; ends_at: string }[] }>(`/api/admin/users/${row.id}/effective-access`);
+        const access = await commercialData<{ source_grants: { plan_code: string; program_code: string; ends_at: string }[] }>(`/api/admin/users/${row.id}/effective-access`, controller.signal);
         const grants = access.source_grants;
         return { ...row, membership: grants.some(grant => grant.plan_code === "sensei") ? "Kelas bersama Sensei" : grants.length ? "Belajar Mandiri" : "Free Member", program: grants.map(grant => grant.program_code.toUpperCase()).join(", ") || "—", activeUntil: grants.map(grant => grant.ends_at).sort().at(-1)?.slice(0, 10) ?? "—", status: row.account_status === "active" ? "Aktif" : "Nonaktif" };
       }));
       if (!controller.signal.aborted) setUsers(data);
-    }).catch(cause => { if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Permintaan belum berhasil."); });
+    }).catch(cause => {
+      if (!controller.signal.aborted) setError(cause instanceof Error ? cause.message : "Permintaan belum berhasil.");
+      controller.abort();
+    });
     return () => controller.abort();
   }, []);
   return <AdminShell current="/admin"><main className="admin-page admin-dashboard">

@@ -19,6 +19,18 @@ class AppServiceProvider extends ServiceProvider
             config(['mail.default' => 'log']);
         }
         ResetPassword::createUrlUsing(fn ($user, string $token) => rtrim(config('app.frontend_url'), '/').'/reset-password?'.http_build_query(['token' => $token, 'email' => $user->getEmailForPasswordReset()]));
+        RateLimiter::for('api', function (Request $request) {
+            $authenticated = in_array('auth:sanctum', $request->route()->gatherMiddleware(), true);
+            $key = $request->user() ? 'user:'.$request->user()->getAuthIdentifier() : 'ip:'.$request->ip();
+
+            if ($request->isMethodSafe()) {
+                return $authenticated
+                    ? Limit::perMinute(300)->by('authenticated-read:'.$key)
+                    : Limit::perMinute(120)->by('public-read:'.$request->ip());
+            }
+
+            return Limit::perMinute(20)->by('write:'.$key);
+        });
         RateLimiter::for('identity', fn (Request $request) => Limit::perMinute(20)->by($request->ip()));
         RateLimiter::for('recovery', fn (Request $request) => Limit::perMinute(5)->by($request->ip()));
         Event::listen(CommandStarting::class, function (CommandStarting $event) {

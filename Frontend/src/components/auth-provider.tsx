@@ -73,7 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }).catch(cause => {
       if (version.current !== current) return null;
       setUser(null);
-      setApiAuthenticated(false);
+      setApiAuthenticated(false, false);
       const failure = cause instanceof ApiError ? cause : new ApiError(0);
       if (failure.status === 401 || failure.status === 419) return null;
       setError(failure);

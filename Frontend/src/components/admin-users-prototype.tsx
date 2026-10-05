@@ -17,7 +17,15 @@ export function AdminUsersPrototype() {
   const [pending, setPending] = useState<Grant | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
-  useEffect(() => { void commercialData<Offer[]>("/api/admin/offers").then(setOffers).catch(error => setMessage(error.message)); void commercialData<typeof users>("/api/admin/users").then(setUsers).catch(error => setMessage(error.message)); }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    void Promise.resolve().then(async () => {
+      controller.signal.throwIfAborted();
+      const [nextOffers, nextUsers] = await Promise.all([commercialData<Offer[]>("/api/admin/offers", controller.signal), commercialData<typeof users>("/api/admin/users", controller.signal)]);
+      if (!controller.signal.aborted) { setOffers(nextOffers); setUsers(nextUsers); }
+    }).catch(error => { if (!controller.signal.aborted) setMessage(error.message); });
+    return () => controller.abort();
+  }, []);
   const closeDraft = useCallback(() => setDraft(null), []);
   const closeConfirm = useCallback(() => setPending(null), []);
   async function load(id: string) {

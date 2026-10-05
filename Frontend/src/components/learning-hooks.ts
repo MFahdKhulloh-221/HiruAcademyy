@@ -13,7 +13,10 @@ export function useLearningRequest<T>(load: (signal: AbortSignal) => Promise<T>,
   useEffect(() => {
     if (authLoading || !identity) return;
     const controller = new AbortController();
-    load(controller.signal).then(data => {
+    Promise.resolve().then(() => {
+      controller.signal.throwIfAborted();
+      return load(controller.signal);
+    }).then(data => {
       if (!controller.signal.aborted) setState({ key, identity, data });
     }).catch(cause => {
       if (!controller.signal.aborted) setState({ key, identity, error: cause instanceof ApiError ? cause.message : "Permintaan belum berhasil. Silakan coba lagi." });

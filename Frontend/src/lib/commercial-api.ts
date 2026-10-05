@@ -14,7 +14,7 @@ export function commercialSelection(params: { get: (key: string) => string | nul
 }
 export const commercialCode = (code: string) => code === "ssw-food" ? "SSW" : code.toUpperCase();
 export const commercialId = (id: string | number) => { if (!/^\d+$/.test(String(id))) throw new Error("ID tidak valid."); return String(id); };
-export async function commercialData<T>(path: string): Promise<T> { return (await apiRequest<{ data: T }>(path)).data; }
+export async function commercialData<T>(path: string, signal?: AbortSignal): Promise<T> { return (await apiRequest<{ data: T }>(path, { signal })).data; }
 export async function commercialWrite<T>(path: string, method: string, data?: unknown): Promise<T> { return (await apiRequest<{ data: T }>(path, { method, ...(data === undefined ? {} : { body: JSON.stringify(data) }) }))?.data; }
 export async function createCommercialDraft(order: { level: string; plan: "lms" | "sensei"; referral?: string }) {
   const identity = await commercialData<Identity>("/api/me");

@@ -43,7 +43,10 @@ class TryOutAssessmentTest extends TestCase
 
     public function call($method, $uri, $parameters = [], $cookies = [], $files = [], $server = [], $content = null)
     {
-        RateLimiter::clear(md5('identity'.($server['REMOTE_ADDR'] ?? $this->serverVariables['REMOTE_ADDR'] ?? '127.0.0.1')));
+        $ip = $server['REMOTE_ADDR'] ?? $this->serverVariables['REMOTE_ADDR'] ?? '127.0.0.1';
+        $user = auth()->user();
+        RateLimiter::clear(md5('identity'.$ip));
+        RateLimiter::clear(md5('apiwrite:'.($user ? 'user:'.$user->getAuthIdentifier() : 'ip:'.$ip)));
 
         return parent::call($method, $uri, $parameters, $cookies, $files, $server, $content);
     }

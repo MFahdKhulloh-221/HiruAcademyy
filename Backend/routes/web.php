@@ -33,7 +33,7 @@ use App\Services\PublicContentService;
 use App\Services\ScheduleReplayService;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('api')->middleware('throttle:identity')->group(function () {
+Route::prefix('api')->middleware('throttle:api')->group(function () {
     Route::middleware(['auth:sanctum', 'active', 'role:admin'])->prefix('admin')->group(function () {
         foreach (array_keys(ScheduleReplayService::RESOURCES) as $resource) {
             Route::get($resource, [AdminScheduleReplayController::class, 'index'])->defaults('resource', $resource);
@@ -166,7 +166,7 @@ Route::prefix('api')->middleware('throttle:identity')->group(function () {
     Route::get('admin/programs', [ProgramController::class, 'adminIndex'])
         ->middleware(['auth:sanctum', 'active', 'role:admin']);
 
-    Route::prefix('auth')->group(function () {
+    Route::prefix('auth')->withoutMiddleware('throttle:api')->middleware('throttle:identity')->group(function () {
         Route::post('register', [AuthController::class, 'register']);
         Route::post('login', [AuthController::class, 'login']);
         Route::post('logout', [AuthController::class, 'logout'])->middleware(['auth:sanctum']);

@@ -22,10 +22,16 @@ const fieldMessages: Record<string, string> = {
 let authenticated = false;
 let sessionVersion = 0;
 let csrfRequest: Promise<void> | null = null;
+type PendingRead = { controller: AbortController; task: Promise<unknown>; subscribers: number };
+const pendingReads = new Map<string, PendingRead>();
 
-export function setApiAuthenticated(value: boolean) {
+export function setApiAuthenticated(value: boolean, invalidateSession = true) {
+  if (!invalidateSession && authenticated === value) return;
   authenticated = value;
   sessionVersion += 1;
+  csrfRequest = null;
+  for (const read of pendingReads.values()) read.controller.abort();
+  pendingReads.clear();
 }
 
 function apiUrl(path: string) {
@@ -44,11 +50,14 @@ async function request(path: string, options: RequestInit): Promise<Response> {
   const version = sessionVersion;
   let response: Response;
   try {
+    options.signal?.throwIfAborted();
     response = await fetch(apiUrl(path), { ...options, credentials: "include", cache: "no-store", redirect: "error" });
   } catch (error) {
+    options.signal?.throwIfAborted();
     if (error instanceof DOMException && error.name === "AbortError") throw error;
     throw new ApiError(0);
   }
+  options.signal?.throwIfAborted();
   if (!response.ok) {
     if ((response.status === 401 || response.status === 419) && authenticated && version === sessionVersion && typeof window !== "undefined") {
       window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
@@ -69,31 +78,96 @@ async function request(path: string, options: RequestInit): Promise<Response> {
   return response;
 }
 
+function csrfToken() {
+  try {
+    const token = typeof document === "undefined" ? undefined : document.cookie.split(";").map(cookie => cookie.trim()).find(cookie => cookie.startsWith("XSRF-TOKEN="))?.slice("XSRF-TOKEN=".length);
+    return token ? decodeURIComponent(token) : undefined;
+  } catch {
+    throw new ApiError(419);
+  }
+}
+
+async function readResponse<T>(path: string, options: RequestInit): Promise<T> {
+  const response = await request(path, options);
+  if (response.status === 204 || options.method === "HEAD") return undefined as T;
+  try {
+    const data = await response.json() as T;
+    options.signal?.throwIfAborted();
+    return data;
+  } catch {
+    if (options.signal?.aborted) options.signal.throwIfAborted();
+    throw new ApiError(response.status);
+  }
+}
+
+function sharedRead<T>(key: string, path: string, options: RequestInit): Promise<T> {
+  const signal = options.signal;
+  signal?.throwIfAborted();
+  let read = pendingReads.get(key);
+  if (!read) {
+    const controller = new AbortController();
+    read = { controller, subscribers: 0, task: readResponse(path, { ...options, signal: controller.signal }) };
+    pendingReads.set(key, read);
+    const current = read;
+    const remove = () => { if (pendingReads.get(key) === current) pendingReads.delete(key); };
+    void read.task.then(remove, remove);
+  }
+  const current = read;
+  current.subscribers += 1;
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    function release() {
+      settled = true;
+      signal?.removeEventListener("abort", abort);
+      current.subscribers -= 1;
+      if (!current.subscribers) {
+        if (pendingReads.get(key) === current) pendingReads.delete(key);
+        current.controller.abort();
+      }
+    }
+    function abort() {
+      if (settled) return;
+      release();
+      reject(signal?.reason ?? new DOMException("Aborted", "AbortError"));
+    }
+    signal?.addEventListener("abort", abort, { once: true });
+    current.task.then(data => {
+      if (settled) return;
+      release();
+      try { resolve(structuredClone(data) as T); } catch (error) { reject(error); }
+    }, error => {
+      if (settled) return;
+      release();
+      reject(error);
+    });
+  });
+}
+
 export async function apiRequest<T>(path: string, options: RequestInit = {}): Promise<T> {
+  options.signal?.throwIfAborted();
+  const version = sessionVersion;
   const method = (options.method ?? "GET").toUpperCase();
   const headers = new Headers(options.headers);
   headers.set("Accept", "application/json");
   if (!["GET", "HEAD", "OPTIONS"].includes(method)) {
-    if (!csrfRequest) {
-      csrfRequest = request("/sanctum/csrf-cookie", { headers: { Accept: "application/json" } }).then(() => undefined).finally(() => { csrfRequest = null; });
+    let token = csrfToken();
+    if (!token) {
+      if (!csrfRequest) {
+        const task = request("/sanctum/csrf-cookie", { headers: { Accept: "application/json" } }).then(() => undefined).finally(() => { if (csrfRequest === task) csrfRequest = null; });
+        csrfRequest = task;
+      }
+      await csrfRequest;
+      token = csrfToken();
     }
-    await csrfRequest;
-    let token: string | undefined;
-    try {
-      token = typeof document === "undefined" ? undefined : document.cookie.split(";").map(cookie => cookie.trim()).find(cookie => cookie.startsWith("XSRF-TOKEN="))?.slice("XSRF-TOKEN=".length);
-      token = token ? decodeURIComponent(token) : undefined;
-    } catch {
-      throw new ApiError(419);
-    }
-    if (!token) throw new ApiError(419);
+    options.signal?.throwIfAborted();
+    if (version !== sessionVersion || !token) throw new ApiError(419);
     headers.set("X-XSRF-TOKEN", token);
   }
   if (typeof options.body === "string" && !headers.has("Content-Type")) headers.set("Content-Type", "application/json");
-  const response = await request(path, { ...options, method, headers });
-  if (response.status === 204 || method === "HEAD") return undefined as T;
-  try {
-    return await response.json() as T;
-  } catch {
-    throw new ApiError(response.status);
+  const init = { ...options, method, headers };
+  if (typeof window !== "undefined" && method === "GET" && Object.keys(options).every(key => ["method", "headers", "signal"].includes(key))) {
+    const key = JSON.stringify([sessionVersion, apiUrl(path), Array.from(headers.entries()).sort()]);
+    return sharedRead<T>(key, path, init);
   }
+  return readResponse<T>(path, init);
 }

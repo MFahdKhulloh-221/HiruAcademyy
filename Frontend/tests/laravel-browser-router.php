@@ -17,5 +17,4 @@ if (! is_dir($cache) && ! mkdir($cache, 0700, true) && ! is_dir($cache)) {
     throw new RuntimeException('Cannot create isolated browser test cache.');
 }
 config(['cache.stores.file.path' => $cache, 'cache.stores.file.lock_path' => $cache]);
-Illuminate\Support\Facades\RateLimiter::for('identity', fn () => Illuminate\Cache\RateLimiting\Limit::perMinute(10000));
 $app->handleRequest(Illuminate\Http\Request::capture());
