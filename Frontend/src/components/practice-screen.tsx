@@ -123,6 +123,7 @@ export function PracticeScreen({ membership }: { membership: Membership }) {
                     {assessmentKind ? (
                       <button
                         type="button"
+                        className="button button-primary"
                         onClick={() =>
                           setSelected({
                             level: programSlug(program.code),
@@ -136,11 +137,11 @@ export function PracticeScreen({ membership }: { membership: Membership }) {
                     ) : (
                       <Link
                         href={`/learn/${programSlug(program.code)}/chapter-${chapter.chapter_number}${
-                          kind === "Kosakata" ? "/flashcards" : ""
+                          kind === "Kosakata" ? "/flashcards" : kind === "Kanji" ? "/kanji" : "/grammar"
                         }`}
-                        className="button"
+                        className="button button-primary"
                       >
-                        Mulai Belajar
+                        Mulai Latihan
                       </Link>
                     )}
                   </div>

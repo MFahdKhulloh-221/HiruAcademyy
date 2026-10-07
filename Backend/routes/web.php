@@ -15,6 +15,7 @@ use App\Http\Controllers\AdminSettingsController;
 use App\Http\Controllers\AdminTryOutController;
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CommunityController;
 use App\Http\Controllers\EffectiveAccessController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\ProgramController;
@@ -112,9 +113,13 @@ Route::prefix('api')->middleware('throttle:api')->group(function () {
         Route::post('promotions', [PromotionController::class, 'store']);
         Route::patch('promotions/{promotion}', [PromotionController::class, 'update']);
         Route::delete('promotions/{promotion}', [PromotionController::class, 'destroy']);
+        Route::patch('community/threads/{thread}', [CommunityController::class, 'adminUpdateThread']);
+        Route::patch('community/replies/{reply}', [CommunityController::class, 'adminUpdateReply']);
     });
     Route::middleware(['auth:sanctum', 'active', 'role:student'])->prefix('student')->group(function () {
         Route::get('library', [StudentLearningController::class, 'library']);
+        Route::get('flashcards', [StudentLearningController::class, 'flashcards']);
+        Route::get('progress', [StudentLearningController::class, 'overallProgress']);
         Route::get('notifications', [StudentNotificationController::class, 'index']);
         Route::patch('notifications/{notification}/read', [StudentNotificationController::class, 'read'])->whereNumber('notification');
         Route::post('notifications/read-all', [StudentNotificationController::class, 'readAll']);
@@ -178,8 +183,14 @@ Route::prefix('api')->middleware('throttle:api')->group(function () {
     });
 
     Route::middleware(['auth:sanctum', 'active'])->group(function () {
+        Route::get('community/topics', [CommunityController::class, 'topics']);
+        Route::get('community/threads', [CommunityController::class, 'threads']);
+        Route::get('community/threads/{thread}', [CommunityController::class, 'show'])->whereNumber('thread');
+        Route::post('community/threads', [CommunityController::class, 'storeThread']);
+        Route::post('community/threads/{thread}/replies', [CommunityController::class, 'storeReply'])->whereNumber('thread');
         Route::get('me', [AuthController::class, 'me']);
         Route::patch('me', [AuthController::class, 'update']);
+        Route::put('me/password', [AuthController::class, 'updatePassword']);
         Route::get('auth/me', [AuthController::class, 'me']);
         Route::patch('auth/me', [AuthController::class, 'update']);
     });

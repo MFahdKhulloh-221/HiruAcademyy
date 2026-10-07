@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Support\Identity;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
@@ -43,5 +44,15 @@ class User extends Authenticatable
     public function getEmailForPasswordReset(): string
     {
         return $this->email_normalized;
+    }
+
+    public function senseiProfile(): HasOne
+    {
+        return $this->hasOne(SenseiProfile::class);
+    }
+
+    public function isSenseiInstructor(): bool
+    {
+        return $this->role === 'admin' || $this->senseiProfile()->exists();
     }
 }

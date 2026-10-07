@@ -1,6 +1,6 @@
 import { apiRequest, ApiError } from "./api";
 
-export type AttemptQuestion = { id: number; question?: string; prompt?: string; session?: string; title?: string; options: Record<string, string>; audio_url?: string | null; image_url?: string | null; reading_passage?: string | null; passage?: { title: string; body: string }; correct_option?: string; explanation?: string | null; selected_answer?: string | null; status?: string };
+export type AttemptQuestion = { id: number; question?: string; prompt?: string; session?: string; title?: string; options: Record<string, string>; audio_url?: string | null; audio_url_resolved_url?: string | null; image_url?: string | null; reading_passage?: string | null; passage?: { title: string; body: string }; correct_option?: string; explanation?: string | null; selected_answer?: string | null; status?: string };
 export type AttemptResult = { correct: number; wrong: number; unanswered: number; total?: number; percentage?: number; earned?: number; max?: number; overall_pass?: boolean | null; total_passing_score?: number | null; recommendation_level?: string | null; sessions?: { code: string; label: string; earned: number; max: number; passing_score: number; pass: boolean }[] };
 export type ServerAttempt = { id: number; status: "in_progress" | "completed"; revision?: number; current_session?: number; completed_sessions?: string[]; questions: AttemptQuestion[]; answers: Record<string, string>; result: AttemptResult | null; expires_at?: string; started_at?: string };
 export const assessmentSessions = ["vocabulary_kanji", "grammar", "reading", "audio"] as const;
@@ -37,7 +37,7 @@ export class AttemptPersistence {
       this.attempt = response.data;
       return this.attempt;
     } catch (error) {
-      this.blocked = true;
+      if (suffix === "/submit") this.blocked = true;
       throw error;
     }
   }
@@ -45,7 +45,6 @@ export class AttemptPersistence {
     if (this.submitting) return this.submitting;
     const snapshot = { ...answers };
     return this.enqueue(async () => {
-      if (this.blocked) throw new ApiError(409);
       if (this.attempt.status === "completed") return this.attempt;
       const body = this.domain === "placement" ? { answers: snapshot } : this.domain === "tryout" ? { answers: currentAnswers(this.attempt, snapshot), revision: this.attempt.revision, finish_session: finishSession } : { answers: snapshot, revision: this.attempt.revision };
       return this.write("/answers", body, "PUT");
@@ -55,7 +54,6 @@ export class AttemptPersistence {
     if (this.submitting) return this.submitting;
     const snapshot = { ...answers };
     this.submitting = this.enqueue(async () => {
-      if (this.blocked) throw new ApiError(409);
       if (this.attempt.status === "completed") return this.attempt;
       const body = this.domain === "placement" ? { answers: snapshot } : this.domain === "tryout" ? { revision: this.attempt.revision } : { answers: snapshot, revision: this.attempt.revision };
       return this.write("/submit", body, "POST");

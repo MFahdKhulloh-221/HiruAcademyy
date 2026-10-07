@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   LuBookOpen,
   LuChevronDown,
@@ -16,102 +16,13 @@ import {
 } from "react-icons/lu";
 import { StudentNavigation } from "@/components/student-navigation";
 import { parseMembership } from "@/lib/dashboard-mock";
-import { usePublishedCurriculum } from "@/lib/curriculum-store";
-
-type DeckItem = {
-  level: string;
-  chapter: string;
-  title: string;
-  category: string;
-  cardCount: number;
-  progress: number;
-  glyph: string;
-  description: string;
-  action: "Mulai" | "Lanjutkan" | "Ulangi" | "Review";
-  ctaLabel: string;
-};
-
-const decks: DeckItem[] = [
-  {
-    level: "N5",
-    chapter: "Chapter 1",
-    title: "Kosakata Chapter 1",
-    category: "Bahasa Jepang",
-    cardCount: 40,
-    progress: 65,
-    glyph: "語",
-    description: "Kosakata utama dari chapter gratis yang sudah terbuka.",
-    action: "Review",
-    ctaLabel: "Review Flashcards",
-  },
-  {
-    level: "N5",
-    chapter: "Chapter 1",
-    title: "Huruf Jepang Dasar",
-    category: "Bahasa Jepang",
-    cardCount: 80,
-    progress: 90,
-    glyph: "字",
-    description: "Deck penguatan hiragana, katakana, dan pengenalan kanji.",
-    action: "Mulai",
-    ctaLabel: "Mulai Belajar",
-  },
-  {
-    level: "N5",
-    chapter: "Chapter 1",
-    title: "Pola Kalimat Chapter 1",
-    category: "Bahasa Jepang",
-    cardCount: 35,
-    progress: 30,
-    glyph: "文",
-    description: "Flashcard grammar ringkas untuk review cepat.",
-    action: "Ulangi",
-    ctaLabel: "Review Flashcards",
-  },
-  {
-    level: "N5",
-    chapter: "Chapter 2",
-    title: "Kosakata Chapter 2",
-    category: "Bahasa Jepang",
-    cardCount: 45,
-    progress: 15,
-    glyph: "本",
-    description: "Kosakata lanjutan untuk chapter berikutnya pada level aktif.",
-    action: "Mulai",
-    ctaLabel: "Mulai Belajar",
-  },
-];
-
-const summaryMetrics = [
-  {
-    label: "KARTU DIPELAJARI",
-    value: "658",
-    note: "+15 hari ini",
-    icon: LuBookOpen,
-  },
-  {
-    label: "PERLU DIULANG",
-    value: "42",
-    note: "Perlu segera",
-    icon: LuRotateCcw,
-  },
-  {
-    label: "DECK SELESAI",
-    value: "12",
-    note: "Selesai dipelajari",
-    icon: LuCircleCheck,
-  },
-  {
-    label: "KONSISTENSI",
-    value: "19 hari",
-    note: "Tetap konsisten",
-    icon: LuFlame,
-  },
-];
+import { useLearningRequest } from "@/components/learning-hooks";
+import { studentFlashcards, type FlashcardDeck } from "@/lib/learning-api";
 
 export function FlashcardCollection() {
   const membership = parseMembership(useSearchParams().get("membership") ?? undefined);
-  const curriculum = usePublishedCurriculum();
+  const request = useLearningRequest(studentFlashcards, "student-flashcards");
+
   const [search, setSearch] = useState("");
   const [filterMode, setFilterMode] = useState<"all" | "level" | "chapter" | "review">("all");
   const [selectedLevel, setSelectedLevel] = useState("N5");
@@ -119,7 +30,6 @@ export function FlashcardCollection() {
   const [levelOpen, setLevelOpen] = useState(false);
   const [chapterOpen, setChapterOpen] = useState(false);
 
-  const paid = membership !== "free";
   const query = `?membership=${membership}`;
 
   useEffect(() => {
@@ -134,47 +44,56 @@ export function FlashcardCollection() {
     return () => document.removeEventListener("click", handleOutside);
   }, []);
 
-  const allDecks = useMemo(() => {
-    if (!curriculum.flashcardDecks || curriculum.flashcardDecks.length === 0) {
-      return decks;
-    }
-    const publishedDeckItems: DeckItem[] = curriculum.flashcardDecks.map((deck) => {
-      const chapter = curriculum.chapters.find((c) => c.id === deck.chapterId);
-      const chapterLabel = chapter ? `Chapter ${chapter.order}` : "Chapter 1";
-      return {
-        level: deck.programCode,
-        chapter: chapterLabel,
-        title: deck.title,
-        category: "Bahasa Jepang",
-        cardCount: deck.cards?.length ?? 0,
-        progress: 0,
-        glyph: deck.title.charAt(0) || "札",
-        description: deck.description || "Flashcard kosakata dan pola penting.",
-        action: "Mulai" as const,
-        ctaLabel: "Mulai Belajar",
-      };
-    });
-    return [
-      ...decks.filter((d) => !publishedDeckItems.some((pub) => pub.title.toLowerCase() === d.title.toLowerCase())),
-      ...publishedDeckItems,
-    ];
-  }, [curriculum.flashcardDecks, curriculum.chapters]);
+  const decks: FlashcardDeck[] = request.data?.decks ?? [];
+  const metrics = request.data?.metrics ?? {
+    cards_studied: 0,
+    cards_available: 0,
+    decks_completed: 0,
+    streak_days: 0,
+  };
 
-  const visible = allDecks.filter((deck) => {
-    const matchesSearch = `${deck.chapter} ${deck.title} ${deck.category}`
+  const summaryMetrics = [
+    {
+      label: "KARTU DIPELAJARI",
+      value: String(metrics.cards_studied),
+      note: metrics.cards_studied > 0 ? "Dari deck yang selesai" : "Belum ada kartu selesai",
+      icon: LuBookOpen,
+    },
+    {
+      label: "TOTAL KARTU TERSEDIA",
+      value: String(metrics.cards_available),
+      note: "Kartu dalam aksesmu",
+      icon: LuRotateCcw,
+    },
+    {
+      label: "DECK SELESAI",
+      value: String(metrics.decks_completed),
+      note: "Selesai dipelajari",
+      icon: LuCircleCheck,
+    },
+    {
+      label: "KONSISTENSI",
+      value: `${metrics.streak_days} hari`,
+      note: metrics.streak_days > 0 ? "Tetap konsisten" : "Mulai belajar hari ini",
+      icon: LuFlame,
+    },
+  ];
+
+  const visible = decks.filter((deck) => {
+    const matchesSearch = `${deck.chapter_number} ${deck.title} ${deck.category} ${deck.level}`
       .toLowerCase()
       .includes(search.toLowerCase());
     if (!matchesSearch) return false;
 
     if (filterMode === "all") return true;
     if (filterMode === "review") {
-      return deck.action === "Ulangi" || deck.action === "Review" || deck.progress < 50;
+      return deck.action === "Review" || (deck.progress > 0 && deck.progress < 100);
     }
     if (filterMode === "level") {
       return deck.level === selectedLevel;
     }
     if (filterMode === "chapter") {
-      return deck.chapter === selectedChapter;
+      return `Chapter ${deck.chapter_number}` === selectedChapter;
     }
     return true;
   });
@@ -183,6 +102,14 @@ export function FlashcardCollection() {
     <div className="supporting-shell student-shell">
       <StudentNavigation membership={membership} />
       <main className="supporting-main flashcard-collection">
+        {request.error && (
+          <p role="alert">
+            {request.error}
+            <button type="button" onClick={request.retry}>Coba Lagi</button>
+          </p>
+        )}
+        {request.loading && <p role="status">Memuat flashcard…</p>}
+
         {/* 1. Summary Statistics */}
         <section className="fc-summary-grid" aria-label="Ringkasan Flashcard">
           {summaryMetrics.map((item) => {
@@ -220,7 +147,6 @@ export function FlashcardCollection() {
           </label>
 
           <div className="fc-filter-pills" role="toolbar" aria-label="Filter kategori deck">
-            {/* Semua Deck (bukan dropdown) */}
             <button
               className={`fc-filter-pill${filterMode === "all" ? " active" : ""}`}
               type="button"
@@ -233,7 +159,7 @@ export function FlashcardCollection() {
               Semua Deck
             </button>
 
-            {/* Dropdown N5 (opsi N4, N3, N2, N1) */}
+            {/* Dropdown Level */}
             <div className="fc-dropdown-wrap">
               <button
                 className={`fc-filter-pill fc-dropdown-btn${filterMode === "level" ? " active" : ""}`}
@@ -250,7 +176,7 @@ export function FlashcardCollection() {
               </button>
               {levelOpen && (
                 <div className="fc-dropdown-menu" role="listbox">
-                  {["N5", "N4", "N3", "N2", "N1"].map((lvl) => (
+                  {["DASAR", "N5", "N4", "N3", "N2", "N1"].map((lvl) => (
                     <button
                       key={lvl}
                       type="button"
@@ -270,7 +196,7 @@ export function FlashcardCollection() {
               )}
             </div>
 
-            {/* Dropdown Chapter 1 (opsi Chapter 2, Chapter 3, dst.) */}
+            {/* Dropdown Chapter */}
             <div className="fc-dropdown-wrap">
               <button
                 className={`fc-filter-pill fc-dropdown-btn${filterMode === "chapter" ? " active" : ""}`}
@@ -287,7 +213,7 @@ export function FlashcardCollection() {
               </button>
               {chapterOpen && (
                 <div className="fc-dropdown-menu" role="listbox">
-                  {["Chapter 1", "Chapter 2", "Chapter 3", "Chapter 4", "Chapter 5"].map((ch) => (
+                  {["Chapter 1", "Chapter 2", "Chapter 3", "Chapter 4"].map((ch) => (
                     <button
                       key={ch}
                       type="button"
@@ -307,7 +233,6 @@ export function FlashcardCollection() {
               )}
             </div>
 
-            {/* Perlu Diulang (bukan dropdown) */}
             <button
               className={`fc-filter-pill${filterMode === "review" ? " active" : ""}`}
               type="button"
@@ -322,21 +247,20 @@ export function FlashcardCollection() {
           </div>
         </section>
 
-        {/* 3. Flashcard Deck Grid */}
-        <section className="fc-deck-section" aria-label="Daftar Deck Flashcard">
+        {/* 3. Deck Grid */}
+        <section aria-label="Daftar Deck Flashcard">
           <div className="fc-deck-grid">
             {visible.length === 0 ? (
               <div className="fc-empty-state">
-                <p>
-                  Tidak ada deck yang sesuai dengan filter{" "}
-                  <strong>{filterMode === "level" ? selectedLevel : selectedChapter}</strong>.
-                </p>
+                <p>Tidak ada deck yang sesuai dengan filter.</p>
                 <button
                   type="button"
-                  className="button button-secondary"
+                  className="fc-filter-pill active"
                   onClick={() => {
-                    setFilterMode("all");
                     setSearch("");
+                    setFilterMode("all");
+                    setSelectedLevel("N5");
+                    setSelectedChapter("Chapter 1");
                   }}
                 >
                   Reset Filter
@@ -344,29 +268,24 @@ export function FlashcardCollection() {
               </div>
             ) : (
               visible.map((deck) => {
-                const locked = !paid && deck.chapter === "Chapter 2";
                 return (
-                  <article className={`fc-deck-card${locked ? " is-locked" : ""}`} key={deck.title}>
-                    {/* Decorative Kanji Character */}
+                  <article className={`fc-deck-card${deck.locked ? " is-locked" : ""}`} key={`${deck.program_code}-${deck.chapter_number}`}>
                     <span className="fc-deck-glyph" aria-hidden="true">
                       {deck.glyph}
                     </span>
 
-                    {/* Top: Title & Count Badge */}
                     <div className="fc-deck-header">
                       <div className="fc-deck-title-area">
                         <h2 className="fc-deck-title">{deck.title}</h2>
                         <div className="fc-deck-meta">
-                          <span className="fc-meta-badge fc-cat-badge">{deck.category}</span>
+                          <span className="fc-meta-badge fc-cat-badge">{deck.level} • {deck.category}</span>
                         </div>
                       </div>
-                      <span className="fc-meta-badge fc-count-badge">{deck.cardCount} Kartu</span>
+                      <span className="fc-meta-badge fc-count-badge">{deck.card_count} Kartu</span>
                     </div>
 
-                    {/* Description */}
                     <p className="fc-deck-desc">{deck.description}</p>
 
-                    {/* Progress Row */}
                     <div className="fc-deck-progress-row">
                       <div
                         className="fc-deck-progress-track"
@@ -380,18 +299,17 @@ export function FlashcardCollection() {
                       <span className="fc-deck-progress-pct">{deck.progress}%</span>
                     </div>
 
-                    {/* Action CTA */}
                     <div className="fc-deck-action-row">
-                      {locked ? (
+                      {deck.locked ? (
                         <span className="fc-deck-btn is-disabled">
                           <LuLock aria-hidden="true" /> Terkunci
                         </span>
                       ) : (
                         <Link
                           className="fc-deck-btn"
-                          href={`/learn/n4/${membership === "free" ? "chapter-1" : "chapter-4"}/flashcards${query}`}
+                          href={`${deck.href}${query}`}
                         >
-                          {deck.ctaLabel}
+                          {deck.cta_label}
                         </Link>
                       )}
                     </div>
@@ -431,7 +349,7 @@ export function FlashcardCollection() {
           </div>
           <Link
             className="fc-sensei-banner-btn"
-            href={membership === "free" ? `/program/n4${query}` : `/progress${query}`}
+            href={membership === "free" ? `/membership${query}` : `/progress${query}`}
           >
             {membership === "free" ? "Pelajari Lebih Lanjut" : "Lihat Progress"}
           </Link>
@@ -440,4 +358,3 @@ export function FlashcardCollection() {
     </div>
   );
 }
-

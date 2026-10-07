@@ -26,7 +26,7 @@ export function useCommercialOrder(level: string, plan: "lms" | "sensei") {
     catch (error) { setError(error instanceof Error ? error.message : "Permintaan belum berhasil."); return null; }
     finally { inFlight.current = false; setBusy(false); }
   }
-  return { offer, invoice, error, busy, create };
+  return { offer, offers, invoice, error, busy, create };
 }
 export function useCommercialInvoice(id: string) {
   const version = useRef(0);

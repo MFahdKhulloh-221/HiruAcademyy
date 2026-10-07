@@ -119,4 +119,22 @@ class AuthController extends Controller
                 : 'Tautan reset tidak valid atau kedaluwarsa.',
         ], $status === Password::PASSWORD_RESET ? 200 : 422);
     }
+
+    public function updatePassword(Request $request)
+    {
+        $data = $request->validate([
+            'current_password' => ['required', 'string'],
+            'password' => ['required', 'string', 'max:72', 'confirmed', PasswordRule::min(8)],
+        ]);
+
+        $user = $request->user();
+        if (! Hash::check($data['current_password'], $user->password)) {
+            return response()->json(['message' => 'Kata sandi saat ini tidak sesuai.'], 422);
+        }
+
+        $user->password = $data['password'];
+        $user->save();
+
+        return response()->json(['message' => 'Kata sandi berhasil diperbarui.']);
+    }
 }

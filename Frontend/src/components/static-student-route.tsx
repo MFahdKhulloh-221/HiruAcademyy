@@ -7,6 +7,7 @@ import { LearningJourney } from "@/components/learning-journey";
 import { LearningVertical } from "@/components/learning-vertical";
 import { LearningShell } from "@/components/learning-shell";
 import { loadChapterContext, useLearningCatalog, useLearningRequest } from "@/components/learning-hooks";
+import { AskSenseiScreen } from "@/components/ask-sensei-screen";
 import { MiniCheckpointScreen } from "@/components/mini-checkpoint-screen";
 import { ClassDetailScreen, ReplayPlayerScreen, ReplayScreen, ScheduleScreen } from "@/components/sensei-screens";
 import { SenseiShell } from "@/components/sensei-shell";
@@ -47,6 +48,6 @@ function StudentServiceRoute({ kind }: { kind: RouteKind }) {
     {kind === "replay" && <ReplayScreen />}
     {kind === "replay-player" && <ReplayPlayerScreen />}
     {kind === "mini" && <MiniCheckpointScreen membership={membership} />}
-    {kind === "ask" && <section className="sensei-status-panel"><h1>Tanya Sensei</h1><p role="status">OPEN: layanan Tanya Sensei belum tersedia.</p></section>}
+    {kind === "ask" && <AskSenseiScreen />}
   </SenseiShell>;
 }

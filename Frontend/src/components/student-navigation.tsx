@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
 import { useEffect, useRef, useState } from "react";
-import { LuBell, LuEllipsis, LuHouse, LuLockKeyhole, LuLogOut, LuMenu, LuMessagesSquare, LuPlay, LuRoute, LuSettings, LuTrendingUp, LuUser, LuX } from "react-icons/lu";
+import { LuBell, LuEllipsis, LuHouse, LuLockKeyhole, LuLogOut, LuMenu, LuMessagesSquare, LuRoute, LuSettings, LuTrendingUp, LuUser, LuX } from "react-icons/lu";
 import type { IconType } from "react-icons";
 import { BrandLogo } from "@/components/brand-logo";
 import type { Membership } from "@/lib/dashboard-mock";
@@ -183,14 +183,14 @@ export function StudentNavigation({ membership }: { membership: Membership }) {
         return <button className={`student-nav-item state-${stateClass}${feedback === item.label ? " locked-feedback" : ""}`} type="button" onClick={(event) => openModal(item.label, variant, event.currentTarget)} key={item.label}><span aria-hidden="true"><Icon /></span>{item.label}{item.entitlement === "locked" && <i aria-hidden="true"><LuLockKeyhole /></i>}</button>;
       })}</nav>
       <div className="student-nav-bottom">
-        <button type="button" onClick={(event) => openModal("Mulai Belajar", "notImplemented", event.currentTarget)}>
-          <span aria-hidden="true"><LuPlay /></span>
-          <span>Mulai Belajar</span>
-        </button>
-        <button type="button" onClick={(event) => openModal("Pengaturan", "notImplemented", event.currentTarget)}>
+        <Link
+          className="student-nav-item"
+          href={`/profile?membership=${membership}#pengaturan`}
+          onClick={() => setMobileOpen(false)}
+        >
           <span aria-hidden="true"><LuSettings /></span>
           <span>Pengaturan</span>
-        </button>
+        </Link>
         <button type="button" onClick={handleLogout} disabled={loggingOut} aria-busy={loggingOut}>
           <span aria-hidden="true"><LuLogOut /></span>
           <span>{loggingOut ? "Memuat..." : "Keluar"}</span>

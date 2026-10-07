@@ -7,7 +7,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class TryOutQuestion extends Model
 {
-    protected $fillable = ['session', 'question', 'options', 'correct_option', 'explanation', 'point_value', 'reading_passage', 'audio_url', 'sort_order', 'status'];
+    protected $fillable = ['try_out_id', 'session', 'question', 'options', 'correct_option', 'explanation', 'point_value', 'reading_passage', 'audio_url', 'sort_order', 'status'];
 
     protected $hidden = ['correct_option', 'explanation'];
 

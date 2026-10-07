@@ -4,19 +4,22 @@ namespace App\Http\Controllers;
 
 use App\Models\TryOut;
 use App\Models\TryOutAttempt;
+use App\Services\ChapterAccessPolicy;
 use App\Services\TryOutAttemptService;
 use App\Services\TryOutService;
 use Illuminate\Http\Request;
 
 class StudentTryOutController extends Controller
 {
-    public function index(Request $request, TryOutAttemptService $attempts, TryOutService $content)
+    public function index(Request $request, TryOutAttemptService $attempts, TryOutService $content, ChapterAccessPolicy $access)
     {
         abort_unless($request->user()?->role === 'student' && $request->user()?->account_status === 'active', 403);
-        $items = TryOut::where('status', 'published')->whereHas('program', fn ($query) => $query->where('status', 'active')->where('family', 'jlpt')->whereIn('code', ['n5', 'n4', 'n3', 'n2', 'n1']))->orderBy('id')->get();
-        foreach ($items as $tryOut) {
-            $attempts->authorize($request->user(), $tryOut);
-        }
+        $items = TryOut::where('status', 'published')
+            ->whereHas('program', fn ($query) => $query->where('status', 'active')->where('family', 'jlpt')->whereIn('code', ['n5', 'n4', 'n3', 'n2', 'n1']))
+            ->with('program')
+            ->orderBy('id')->get()
+            ->filter(fn ($tryOut) => $access->canAccessChapter($request->user(), $tryOut->program->code, 1))
+            ->values();
 
         return response()->json(['data' => $items->map(fn ($tryOut) => $content->payload($tryOut))]);
     }

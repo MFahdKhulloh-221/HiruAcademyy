@@ -56,10 +56,10 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain) {
     pending.current = false;
   }
   function answer(id: number, option: string) {
-    if (!current?.attempt || current.attempt.status === "completed" || current.error || !persistence.current) return;
+    if (!current?.attempt || current.attempt.status === "completed" || !persistence.current) return;
     const answers = { ...current.answers, [id]: option };
-    setState(previous => ({ ...previous, answers }));
-    void run(() => persistence.current!.save(answers));
+    setState(previous => ({ ...previous, answers, error: undefined }));
+    persistence.current.save(answers).catch(() => undefined);
   }
   async function finishSession() {
     if (!persistence.current || !current || current.busy || pending.current) return;
@@ -68,7 +68,10 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain) {
     pending.current = false;
     return result;
   }
-  function submit() { if (persistence.current && current) return run(() => persistence.current!.submit(current.answers)); }
+  function submit() {
+    if (!persistence.current || !current || current.busy) return;
+    return run(() => persistence.current!.submit(current.answers));
+  }
   async function review() {
     if (current?.attempt?.status !== "completed") return;
     return run(() => readAttempt(`${path}/${current.attempt!.id}/review`));

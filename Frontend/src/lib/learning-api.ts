@@ -13,7 +13,61 @@ export type CanonicalChapter = LearningResource & {
   mini_checkpoint?: { exists: boolean };
 };
 export type ChapterProgress = { chapter_id: number; activities: Record<string, { total: number; completed: number; complete: boolean }>; mini_unlocked: boolean };
-export type LibraryModule = LearningModule & { program: LearningProgram; chapter: { id: number; chapter_number: number; title: string } };
+export type LibraryModule = {
+  id: string;
+  resource_id: number;
+  category: string;
+  type?: string;
+  title: string;
+  description: string;
+  level: string;
+  program: LearningProgram;
+  chapter: { id: number; chapter_number: number; title: string };
+  file_url?: string | null;
+  file_url_resolved_url?: string | null;
+  href: string;
+  locked: boolean;
+};
+
+export type FlashcardDeck = {
+  id: number;
+  program_code: string;
+  program_name: string;
+  level: string;
+  chapter_number: number;
+  chapter_title: string;
+  title: string;
+  category: string;
+  card_count: number;
+  progress: number;
+  glyph: string;
+  description: string;
+  action: "Mulai" | "Review";
+  cta_label: string;
+  locked: boolean;
+  href: string;
+};
+
+export type FlashcardCatalogData = {
+  metrics: {
+    cards_studied: number;
+    cards_available: number;
+    decks_completed: number;
+    streak_days: number;
+  };
+  decks: FlashcardDeck[];
+};
+
+export type OverallProgressData = {
+  overall_percentage: number;
+  streak_days: number;
+  kanji_mastered: number;
+  practice_completed: number;
+  accuracy: number;
+  active_program: { name: string; level: string; percentage: number };
+  programs: { code: string; name: string; level: string; required: number; completed: number; percentage: number }[];
+  chapters: { chapter_id: number; program_code: string; chapter_number: number; title: string; required: number; completed: number; percentage: number; is_complete: boolean }[];
+};
 
 export function programCode(slug: string) { return slug === "ssw-pengolahan-makanan" ? "ssw-food" : slug.toLowerCase(); }
 export function programSlug(code: string) { return code === "ssw-food" ? "ssw-pengolahan-makanan" : code; }
@@ -67,4 +121,12 @@ export function learningCompletion(programId: number, chapterId: number, type: "
 }
 export async function learningLibrary(signal?: AbortSignal) {
   return (await apiRequest<{ data: LibraryModule[] }>("/api/student/library", { signal })).data;
+}
+
+export async function studentFlashcards(signal?: AbortSignal) {
+  return (await apiRequest<{ data: FlashcardCatalogData }>("/api/student/flashcards", { signal })).data;
+}
+
+export async function studentOverallProgress(signal?: AbortSignal) {
+  return (await apiRequest<{ data: OverallProgressData }>("/api/student/progress", { signal })).data;
 }
