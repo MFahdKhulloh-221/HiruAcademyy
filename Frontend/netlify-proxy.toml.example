@@ -1,0 +1,11 @@
+[[redirects]]
+  from = "/api/*"
+  to = "RENDER_URL/api/:splat"
+  status = 200
+  force = true
+
+[[redirects]]
+  from = "/sanctum/*"
+  to = "RENDER_URL/sanctum/:splat"
+  status = 200
+  force = true
