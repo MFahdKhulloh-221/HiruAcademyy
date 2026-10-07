@@ -36,8 +36,9 @@ class LearningProgressService
     public function requiredTypes(Program $program): array
     {
         return match ($program->family) {
-            'ssw' => ['video', 'module', 'flashcard'],
-            'foundation', 'jlpt' => ['video', 'module', 'flashcard', 'audio', 'reading'],
+            'foundation', 'ssw' => ['video', 'module', 'flashcard'],
+            'jlpt' => ['video', 'module', 'flashcard', 'audio', 'reading'],
+            'interview' => ['video', 'module'],
             default => [],
         };
     }
@@ -49,12 +50,20 @@ class LearningProgressService
         $activities = [];
         foreach ($types as $type) {
             $ids = $this->resources($chapter, $type)->pluck('id')->all();
-            $completed = ActivityCompletion::where('user_id', $user->id)->where('type', $type)->whereIn('resource_id', $ids)->count();
+            $completedIds = ActivityCompletion::where('user_id', $user->id)->where('type', $type)->whereIn('resource_id', $ids)->pluck('resource_id')->map(fn ($id) => (int) $id)->all();
+            $completed = count($completedIds);
             $ready = $type !== 'reading' || ! $chapter->readingPassages()->where('status', 'published')->whereDoesntHave('questions', fn ($query) => $query->where('status', 'published'))->exists();
-            $activities[$type] = ['total' => count($ids), 'completed' => $completed, 'complete' => $ready && count($ids) > 0 && $completed === count($ids)];
+            $activities[$type] = [
+                'total' => count($ids),
+                'completed' => $completed,
+                'complete' => $ready && count($ids) > 0 && $completed === count($ids),
+                'completed_ids' => $completedIds,
+            ];
         }
 
-        return ['chapter_id' => $chapter->id, 'activities' => $activities, 'mini_unlocked' => $types !== [] && ! in_array(false, array_column($activities, 'complete'), true)];
+        $required = array_filter($activities, fn ($activity) => $activity['total'] > 0);
+
+        return ['chapter_id' => $chapter->id, 'activities' => $activities, 'mini_unlocked' => $program->family !== 'interview' && $required !== [] && ! in_array(false, array_column($required, 'complete'), true)];
     }
 
     public function complete(User $user, Program $program, Chapter $chapter, string $type, ?int $resourceId): array

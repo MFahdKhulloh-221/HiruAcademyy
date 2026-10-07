@@ -21,7 +21,7 @@ class StudentScheduleReplayController extends Controller
             'period' => ['sometimes', 'required', Rule::in(['upcoming', 'past'])],
         ]);
         $codes = $this->livePrograms($request);
-        $query = ClassSchedule::query()->where('status', 'published')
+        $query = ClassSchedule::query()->with('program')->where('status', 'published')
             ->whereHas('program', fn ($query) => $query->whereIn('code', $codes));
         if (isset($filters['program_id'])) {
             $query->where('program_id', $filters['program_id']);
@@ -46,9 +46,10 @@ class StudentScheduleReplayController extends Controller
     {
         $levels = $this->entitlements->effectiveAccess($request->user())['replay_levels'];
 
-        return response()->json(['data' => ReplayPlaylist::query()->where('status', 'published')
+        return response()->json(['data' => ReplayPlaylist::query()->with('program')->where('status', 'published')
             ->whereHas('program', fn ($query) => $query->whereIn('code', $levels))
-            ->orderBy('sort_order')->orderBy('id')->get()]);
+            ->orderBy('sort_order')->orderBy('id')->get()
+            ->map(fn ($model) => $this->content->payload($model))]);
     }
 
     public function playlist(Request $request): JsonResponse
@@ -56,7 +57,7 @@ class StudentScheduleReplayController extends Controller
         $playlist = ReplayPlaylist::query()->where('status', 'published')->findOrFail($this->id($request, 'playlist'));
         $levels = $this->entitlements->effectiveAccess($request->user())['replay_levels'];
         abort_unless(in_array($playlist->program->code, $levels, true), 403);
-        $data = $playlist->toArray();
+        $data = $this->content->payload($playlist);
         $data['videos'] = $playlist->videos()->where('status', 'published')->orderBy('sort_order')->orderBy('id')->get()
             ->map(fn ($model) => $this->content->payload($model))->all();
 

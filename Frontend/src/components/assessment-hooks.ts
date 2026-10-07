@@ -11,18 +11,24 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain) {
   const persistence = useRef<AttemptPersistence | null>(null);
   const generation = useRef(0);
   const pending = useRef(false);
+  const latestAnswers = useRef<Record<string, string>>({});
+  const saveVersion = useRef(0);
   const [state, setState] = useState<{ identity: typeof identity; path: string; attempt?: ServerAttempt; answers: Record<string, string>; busy: boolean; error?: string }>({ identity: undefined, path: "", answers: {}, busy: false });
   const current = state.identity === identity && state.path === path && (domain === "placement" || !loading) ? state : undefined;
   useEffect(() => {
     const version = ++generation.current;
     persistence.current = null;
     pending.current = false;
+    latestAnswers.current = {};
+    saveVersion.current++;
     const controller = new AbortController();
     const id = new URLSearchParams(window.location.search).get("attempt");
     if (identity && id && /^[1-9]\d*$/.test(id)) {
+      if (domain === "tryout") setState({ identity, path, answers: {}, busy: true });
       readAttempt(`${path}/${id}`, controller.signal).then(attempt => {
         if (version !== generation.current || controller.signal.aborted) return;
         persistence.current = new AttemptPersistence(attempt, `${path}/${attempt.id}`, domain);
+        latestAnswers.current = attempt.answers;
         setState({ identity, path, attempt, answers: attempt.answers, busy: false });
       }).catch(error => {
         if (!controller.signal.aborted) setState({ identity, path, answers: {}, busy: false, error: error instanceof Error ? error.message : new ApiError(0).message });
@@ -35,7 +41,10 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain) {
     setState(previous => ({ ...previous, identity, path, busy: true, error: undefined }));
     try {
       const attempt = await action();
-      if (version === generation.current) setState(previous => ({ identity, path, attempt, answers: replaceAnswers ? attempt.answers : previous.answers, busy: false }));
+      if (version === generation.current) {
+        if (replaceAnswers) latestAnswers.current = attempt.answers;
+        setState(previous => ({ identity, path, attempt, answers: replaceAnswers ? attempt.answers : previous.answers, busy: false }));
+      }
       return attempt;
     } catch (error) {
       if (version === generation.current) setState(previous => ({ ...previous, busy: false, error: error instanceof Error ? error.message : new ApiError(0).message }));
@@ -57,9 +66,21 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain) {
   }
   function answer(id: number, option: string) {
     if (!current?.attempt || current.attempt.status === "completed" || !persistence.current) return;
-    const answers = { ...current.answers, [id]: option };
-    setState(previous => ({ ...previous, answers, error: undefined }));
-    persistence.current.save(answers).catch(() => undefined);
+    if (pending.current) return;
+    const answers = { ...latestAnswers.current, [id]: option };
+    latestAnswers.current = answers;
+    const version = generation.current;
+    const saved = ++saveVersion.current;
+    setState(previous => ({ ...previous, answers, busy: domain === "tryout" ? true : previous.busy, error: undefined }));
+    persistence.current.save(answers).then(attempt => {
+      if (domain === "tryout" && version === generation.current && saved === saveVersion.current && !pending.current) {
+        setState(previous => ({ ...previous, attempt, busy: false }));
+      }
+    }).catch(error => {
+      if (domain === "tryout" && version === generation.current && saved === saveVersion.current && !pending.current) {
+        setState(previous => ({ ...previous, busy: false, error: error instanceof Error ? error.message : new ApiError(0).message }));
+      }
+    });
   }
   async function finishSession() {
     if (!persistence.current || !current || current.busy || pending.current) return;
@@ -68,13 +89,16 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain) {
     pending.current = false;
     return result;
   }
-  function submit() {
-    if (!persistence.current || !current || current.busy) return;
-    return run(() => persistence.current!.submit(current.answers));
+  async function submit() {
+    if (!persistence.current || !current || (domain !== "tryout" && current.busy) || pending.current) return;
+    pending.current = true;
+    const result = await run(() => persistence.current!.submit(latestAnswers.current));
+    pending.current = false;
+    return result;
   }
   async function review() {
     if (current?.attempt?.status !== "completed") return;
     return run(() => readAttempt(`${path}/${current.attempt!.id}/review`));
   }
-  return { attempt: current?.attempt, answers: current?.answers ?? {}, busy: current?.busy ?? false, error: current?.error, start, answer, finishSession, submit, review };
+  return { attempt: current?.attempt, answers: current?.answers ?? {}, busy: current?.busy ?? false, submitting: pending.current && Boolean(current?.busy), error: current?.error, start, answer, finishSession, submit, review };
 }

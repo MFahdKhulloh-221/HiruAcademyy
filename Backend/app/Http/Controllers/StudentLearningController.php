@@ -260,6 +260,7 @@ class StudentLearningController extends Controller
         abort_unless($program->status === 'active', 404);
         $access = $entitlements->effectiveAccess($request->user())['learning'][$program->code] ?? 'none';
         $chapters = Chapter::where('program_id', $program->id)->where('status', 'published')
+            ->withExists(['miniCheckpointQuestions as mini_checkpoint_exists' => fn ($query) => $query->where('status', 'published')])
             ->orderBy('sort_order')->orderBy('chapter_number')->orderBy('id')->get();
         foreach ($chapters as $chapter) {
             $chapter->setAttribute('access', $policy->canAccessChapter($request->user(), $program->code, $chapter->chapter_number) ? $access : 'locked');

@@ -47,8 +47,8 @@ class StudentTryOutController extends Controller
 
     public function save(Request $request, TryOut $tryOut, TryOutAttempt $attempt, TryOutAttemptService $attempts, TryOutService $content)
     {
-        $data = $content->validateInput($request->all(), ['answers' => ['present', 'array'], 'revision' => ['required', 'integer', 'min:0'], 'finish_session' => ['required', 'boolean']]);
-        $saved = $attempts->save($request->user(), $tryOut, $attempt, $data['answers'], $data['revision'], (bool) $data['finish_session']);
+        $data = $content->validateInput($request->all(), ['answers' => ['present', 'array'], 'revision' => ['required', 'integer', 'min:0'], 'finish_session' => ['sometimes', 'boolean']]);
+        $saved = $attempts->save($request->user(), $tryOut, $attempt, $data['answers'], $data['revision'], (bool) ($data['finish_session'] ?? false));
 
         return response()->json(['data' => $attempts->payload($saved)]);
     }

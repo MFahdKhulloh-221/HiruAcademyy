@@ -45,27 +45,28 @@ class TryOutAttemptService
         }, 3);
     }
 
-    public function save(User $user, TryOut $tryOut, TryOutAttempt $attempt, array $answers, int $revision, bool $finishSession): TryOutAttempt
+    public function save(User $user, TryOut $tryOut, TryOutAttempt $attempt, array $answers, int $revision, bool $finishSession = false): TryOutAttempt
     {
         return DB::transaction(function () use ($user, $tryOut, $attempt, $answers, $revision, $finishSession) {
             $locked = TryOutAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
             $this->authorize($user, $tryOut, $locked);
-            abort_unless($locked->status === 'in_progress' && $locked->current_session < 4, 409, 'All sessions already finished.');
+            abort_unless($locked->status === 'in_progress', 409, 'Try out attempt is already finished.');
             abort_unless($locked->revision === $revision, 409, 'Stale answer revision.');
-            $session = array_keys(TryOutService::SESSIONS)[$locked->current_session];
-            $ids = array_map('strval', array_column(array_filter($locked->content_snapshot, fn ($question) => $question['session'] === $session), 'id'));
+            $allIds = array_map('strval', array_column($locked->content_snapshot, 'id'));
             foreach ($answers as $id => $answer) {
-                if (! in_array((string) $id, $ids, true) || ! in_array($answer, ['A', 'B', 'C', 'D'], true)) {
-                    throw ValidationException::withMessages(['answers' => 'Only current-session questions and A–D options allowed.']);
+                if (! in_array((string) $id, $allIds, true) || ! in_array($answer, ['A', 'B', 'C', 'D'], true)) {
+                    throw ValidationException::withMessages(['answers' => 'Only valid try out questions and A–D options allowed.']);
                 }
             }
-            $persisted = array_diff_key($locked->answers, array_fill_keys($ids, true));
-            $persisted = array_replace($persisted, $answers);
+            $persisted = array_replace($locked->answers, $answers);
             $completed = $locked->completed_sessions;
-            if ($finishSession) {
-                $completed[] = $session;
+            if ($finishSession && $locked->current_session < 4) {
+                $session = array_keys(TryOutService::SESSIONS)[$locked->current_session];
+                if (! in_array($session, $completed, true)) {
+                    $completed[] = $session;
+                }
             }
-            $locked->update(['answers' => $persisted, 'completed_sessions' => $completed, 'current_session' => count($completed), 'revision' => $locked->revision + 1]);
+            $locked->update(['answers' => $persisted, 'completed_sessions' => $completed, 'revision' => $locked->revision + 1]);
 
             return $locked;
         }, 3);
@@ -80,9 +81,6 @@ class TryOutAttemptService
                 return $locked;
             }
             abort_unless($locked->revision === $revision, 409, 'Stale answer revision.');
-            if ($locked->current_session !== 4 || $locked->completed_sessions !== array_keys(TryOutService::SESSIONS)) {
-                throw ValidationException::withMessages(['sessions' => 'Finish all four sessions before completion.']);
-            }
             $result = ['earned' => 0, 'max' => 180, 'correct' => 0, 'wrong' => 0, 'unanswered' => 0, 'sessions' => [], 'total_passing_score' => $locked->grading_snapshot['total_passing_score'], 'overall_pass' => null];
             foreach (TryOutService::SESSIONS as $session => $label) {
                 $section = ['code' => $session, 'label' => $label, 'earned' => 0, 'max' => 0, 'correct' => 0, 'wrong' => 0, 'unanswered' => 0, 'passing_score' => 19, 'pass' => false];
@@ -106,7 +104,7 @@ class TryOutAttemptService
             if ($result['total_passing_score'] !== null) {
                 $result['overall_pass'] = $result['earned'] >= $result['total_passing_score'] && ! in_array(false, array_column($result['sessions'], 'pass'), true);
             }
-            $locked->update(['result_snapshot' => $result, 'status' => 'completed', 'completed_at' => now(), 'revision' => $locked->revision + 1]);
+            $locked->update(['result_snapshot' => $result, 'status' => 'completed', 'completed_sessions' => array_keys(TryOutService::SESSIONS), 'current_session' => 4, 'completed_at' => now(), 'revision' => $locked->revision + 1]);
 
             return $locked->fresh();
         }, 3);

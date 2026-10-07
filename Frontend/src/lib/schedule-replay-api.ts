@@ -3,9 +3,9 @@
 import { apiRequest, ApiError } from "@/lib/api";
 import type { EffectiveAccess } from "@/lib/commercial-api";
 
-export type ClassSchedule = { id: number; program_id: number; title: string; description: string | null; scheduled_at: string; duration_minutes: number | null; meeting_url: string | null; chapter: string | null; session: string | null; sensei_name: string | null; status: string; sort_order: number };
-export type ReplayVideo = { id: number; replay_playlist_id: number; title: string; description: string | null; video_url: string; recorded_at: string | null; chapter: string | null; session: string | null; sensei_name: string | null; status: string; sort_order: number };
-export type ReplayPlaylist = { id: number; program_id: number; title: string; description: string | null; status: string; sort_order: number; videos?: ReplayVideo[] };
+export type ClassSchedule = { id: number; program_id: number; program?: SystemProgram; title: string; description: string | null; scheduled_at: string; duration_minutes: number | null; meeting_url: string | null; chapter: string | null; session: string | null; sensei_name: string | null; status: string; sort_order: number };
+export type ReplayVideo = { id: number; replay_playlist_id: number; title: string; description: string | null; video_url: string | null; video_url_resolved_url?: string | null; recorded_at: string | null; chapter: string | null; session: string | null; sensei_name: string | null; status: string; sort_order: number };
+export type ReplayPlaylist = { id: number; program_id: number; program?: SystemProgram; title: string; description: string | null; status: string; sort_order: number; videos?: ReplayVideo[] };
 export type SystemProgram = { id: number; code: string; name: string };
 export type SystemNotification = { id: number; type: string; title: string; body: string; cta_label: string | null; preset: string; path: string | null; audience: string; level: string | null; status: string; time: string | null; read: boolean; read_at: string | null };
 export function systemId(value: string | number) { if (!/^[1-9]\d*$/.test(String(value))) throw new ApiError(404); return String(value); }

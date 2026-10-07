@@ -11,6 +11,7 @@ class StudentChapterResource extends JsonResource
     {
         $data = $this->resource->only(['id', 'chapter_number', 'title', 'description', 'sort_order']);
         $data['access'] = $this->resource->getAttribute('access');
+        $data['mini_checkpoint'] = ['exists' => (bool) $this->resource->mini_checkpoint_exists];
         if (! $this->resource->relationLoaded('videoLessons')) {
             return $data;
         }
@@ -27,7 +28,6 @@ class StudentChapterResource extends JsonResource
                 'questions' => $passage->questions->map(fn ($question) => $question->only(['id', 'question', 'options', 'sort_order']))->all(),
             ];
         })->all();
-        $data['mini_checkpoint'] = ['exists' => (bool) $this->resource->mini_checkpoint_exists];
 
         return $data;
     }

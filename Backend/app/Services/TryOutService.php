@@ -12,7 +12,7 @@ use Illuminate\Validation\ValidationException;
 
 class TryOutService
 {
-    public const SESSIONS = ['vocabulary_kanji' => 'Kosakata & Kanji', 'grammar' => 'Tata Bahasa', 'reading' => 'Reading / Dokkai', 'audio' => 'Audio / Choukai'];
+    public const SESSIONS = ['vocabulary_kanji' => 'Kosakata & Kanji', 'grammar' => 'Tata Bahasa', 'reading' => 'Reading (Dokkai)', 'audio' => 'Audio (Choukai)'];
 
     public function validateInput(array $input, array $rules): array
     {
@@ -161,7 +161,7 @@ class TryOutService
 
     public function payload(TryOut $tryOut): array
     {
-        return ['id' => $tryOut->id, 'program_id' => $tryOut->program_id, 'title' => $tryOut->title, 'status' => $tryOut->status, 'max_score' => 180, 'section_passing_score' => 19, 'total_passing_score' => $tryOut->total_passing_score, 'sessions' => self::SESSIONS];
+        return ['id' => $tryOut->id, 'program_id' => $tryOut->program_id, 'level' => strtoupper($tryOut->program->code), 'title' => $tryOut->title, 'status' => $tryOut->status, 'max_score' => 180, 'section_passing_score' => 19, 'total_passing_score' => $tryOut->total_passing_score, 'sessions' => self::SESSIONS];
     }
 
     public function adminQuestion(TryOutQuestion $question): array

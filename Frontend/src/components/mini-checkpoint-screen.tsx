@@ -3,8 +3,9 @@
 import { useCallback, useState } from "react";
 import { LuFileCheck, LuArrowLeft } from "react-icons/lu";
 import { ChapterAssessment } from "@/components/chapter-assessment";
-import { useLearningRequest, loadChapterContext } from "@/components/learning-hooks";
-import { learningCatalog, learningChapters, programSlug } from "@/lib/learning-api";
+import { useLearningRequest } from "@/components/learning-hooks";
+import { MiniLockedDialog } from "@/components/mini-locked-dialog";
+import { learningCatalog, learningChapters, learningProgress, programSlug } from "@/lib/learning-api";
 import type { Membership } from "@/lib/dashboard-mock";
 
 export function MiniCheckpointScreen({ membership = "sensei" }: { membership?: Membership } = {}) {
@@ -20,14 +21,14 @@ export function MiniCheckpointScreen({ membership = "sensei" }: { membership?: M
           const chapters = await learningChapters(program.id, signal);
           return Promise.all(
             chapters
-              .filter(chapter => chapter.access !== "none")
-              .map(chapter =>
-                loadChapterContext(
-                  programSlug(program.code),
-                  `chapter-${chapter.chapter_number}`,
-                  signal
-                )
-              )
+              .filter(chapter => chapter.mini_checkpoint?.exists)
+              .map(async chapter => ({
+                program,
+                chapter,
+                progress: ["full", "preview"].includes(chapter.access)
+                  ? await learningProgress(program.id, chapter.id, signal)
+                  : undefined,
+              }))
           );
         })
     );
@@ -96,7 +97,7 @@ export function MiniCheckpointScreen({ membership = "sensei" }: { membership?: M
 
       <section className="mini-vertical-cards-section" aria-label="Daftar Mini Checkpoint" style={{ display: "grid", gap: "16px" }}>
         {items.map(context => {
-          const unlocked = context.progress.mini_unlocked;
+          const unlocked = context.progress?.mini_unlocked ?? false;
           return (
             <article className="mini-checkpoint-card" key={`${context.program.id}/${context.chapter.id}`}>
               <div className="mini-checkpoint-card-left">
@@ -106,7 +107,7 @@ export function MiniCheckpointScreen({ membership = "sensei" }: { membership?: M
                 <div>
                   <h3>{context.program.name} • Mini Checkpoint Chapter {context.chapter.chapter_number}</h3>
                   <p>
-                    {context.chapter.title} • {unlocked ? "Seluruh aktivitas chapter telah selesai" : "Selesaikan seluruh aktivitas chapter untuk membuka"}
+                    {context.chapter.title} • {unlocked ? "Seluruh aktivitas chapter telah selesai" : !["full", "preview"].includes(context.chapter.access) ? "Mini Checkpoint belum dapat dibuka karena chapter ini belum termasuk dalam akses belajarmu." : "Selesaikan seluruh aktivitas chapter untuk membuka"}
                   </p>
                 </div>
               </div>
@@ -128,13 +129,7 @@ export function MiniCheckpointScreen({ membership = "sensei" }: { membership?: M
                     Mulai Mini Checkpoint
                   </button>
                 ) : (
-                  <button
-                    type="button"
-                    className="button button-secondary disabled"
-                    disabled
-                  >
-                    Terkunci
-                  </button>
+                  <MiniLockedDialog access={context.chapter.access} progress={context.progress} chapterHref={`/learn/${programSlug(context.program.code)}/chapter-${context.chapter.chapter_number}`} />
                 )}
               </div>
             </article>

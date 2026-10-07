@@ -111,6 +111,9 @@ class ScheduleReplayService
     public function payload(Model $model): array
     {
         $data = $model->toArray();
+        if ($model instanceof ClassSchedule || $model instanceof ReplayPlaylist) {
+            $data['program'] = $model->program->only(['id', 'code', 'name']);
+        }
         if ($model instanceof ClassSchedule) {
             $data['meeting_url'] = $model->meeting_url;
         } elseif ($model instanceof ReplayVideo) {

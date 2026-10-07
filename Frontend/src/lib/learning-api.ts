@@ -12,7 +12,7 @@ export type CanonicalChapter = LearningResource & {
   flashcards?: { id: number; japanese: string; reading: string; meaning: string; example: string | null; sort_order: number }[];
   mini_checkpoint?: { exists: boolean };
 };
-export type ChapterProgress = { chapter_id: number; activities: Record<string, { total: number; completed: number; complete: boolean }>; mini_unlocked: boolean };
+export type ChapterProgress = { chapter_id: number; activities: Record<string, { total: number; completed: number; complete: boolean; completed_ids?: number[] }>; mini_unlocked: boolean };
 export type LibraryModule = {
   id: string;
   resource_id: number;
