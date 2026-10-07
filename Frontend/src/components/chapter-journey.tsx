@@ -145,7 +145,7 @@ export function ChapterJourney({ membership, level, chapters }: { membership: Me
               <div className="chapter-copy">
                 <h2>{chapter.title}</h2>
                 <p>{chapter.description}</p>
-                {chapter.components.length > 0 && <div className="chapter-progress-detail"><strong>{chapter.components.filter(item => item.complete).length} / {chapter.components.length}</strong></div>}
+                {chapter.components.length > 0 && <div className="chapter-progress-detail"><strong>{chapter.progress}%</strong><progress value={chapter.progress} max={100} aria-label={`Progress ${chapter.title}`} /></div>}
                 <small className="chapter-checkpoint-status">Checkpoint: {chapter.checkpointUnlocked ? "terbuka" : "terbuka setelah semua bagian selesai"}</small>
               </div>
               <div className="chapter-action">
@@ -176,7 +176,7 @@ export function ChapterJourney({ membership, level, chapters }: { membership: Me
         </section>
         <aside className="chapter-milestone">
           <h2>Milestone berikutnya</h2>
-          <p>Selesaikan Chapter 4 untuk membuka materi berikutnya dan menjaga konsistensi belajar.</p>
+          <p>{chapters.find(chapter => chapter.href && chapter.progress < 100)?.title ?? level.title}</p>
 
           <Link href={"/journey?membership=" + membership}>Kembali ke Level</Link>
         </aside>

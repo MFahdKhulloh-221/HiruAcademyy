@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { apiRequest } from "@/lib/api";
 
-export type SenseiContent = { id: number; name: string; role: string; bio: string; photo: string; expertise: string[]; level: string | null; active?: boolean; sort_order?: number };
-export type TestimonialContent = { id: number; name: string; context: string; quote: string; image: string | null; video_url: string | null; video_title: string | null; published?: boolean; landing?: boolean; sort_order?: number };
+export type SenseiContent = { id: number; name: string; role: string; bio: string; photo: string; photo_resolved_url?: string | null; expertise: string[]; level: string | null; active?: boolean; sort_order?: number };
+export type TestimonialContent = { id: number; name: string; context: string; quote: string; image: string | null; image_resolved_url?: string | null; video_url: string | null; video_url_resolved_url?: string | null; video_title: string | null; published?: boolean; landing?: boolean; sort_order?: number };
 export type ArticleContent = { id: number; title: string; slug: string; excerpt: string | null; body: string; thumbnail: string | null; category: string; seo_title: string | null; meta_description: string | null; featured: boolean; published_at: string | null; author: string; published?: boolean };
 export type ShowcaseContent = { id: number; key: string; label: string; image_src: string; alt: string; visible?: boolean; sort_order?: number };
 export type PublicOffer = { program: { code: string; slug: string; name: string }; plan_code: string; base_price: number; effective_price: number; currency: string; duration_months: number; discount_percent: number };
@@ -21,10 +21,15 @@ export function useContent<T>(path: string, single = false) {
       if (!Array.isArray(data)) throw new Error("Respons konten tidak valid.");
       if (!controller.signal.aborted) setState({ data, loading: false, error: "" });
     }).catch(error => {
-      if (!controller.signal.aborted) setState({ data: [], loading: false, error: error instanceof Error ? error.message : "Konten gagal dimuat." });
+      if (controller.signal.aborted) return;
+      if (error instanceof Error && (error.name === "AbortError" || error.message.toLowerCase().includes("abort"))) {
+        reload();
+        return;
+      }
+      setState({ data: [], loading: false, error: error instanceof Error ? error.message : "Konten gagal dimuat." });
     });
     return () => controller.abort();
-  }, [path, version, single]);
+  }, [path, version, single, reload]);
   return { ...state, reload };
 }
 
@@ -66,12 +71,26 @@ export function useAdminContent<T extends { id: string }>(resource: string) {
   return { rows, loading: remote.loading, loadError: remote.error, reload: remote.reload, busy, mutate };
 }
 
-export function contentMedia(value: string | null | undefined): string {
-  if (!value) return "";
+export function contentMedia(value: string | null | undefined, resolved?: string | null): string {
+  const source = resolved || value;
+  if (!source) return "";
+  if (/[\u0000-\u0020\u007f\\]/.test(source) || source.startsWith("//")) return "";
   try {
-    const url = new URL(value, `${process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "")}/storage/`);
+    const url = /^[a-z][a-z\d+.-]*:/i.test(source) ? new URL(source) : new URL(source, `${process.env.NEXT_PUBLIC_API_URL?.replace(/\/+$/, "")}/storage/`);
     return ["http:", "https:"].includes(url.protocol) && !url.username && !url.password ? url.href : "";
   } catch { return ""; }
+}
+
+export function testimonialVideo(value: string | null | undefined, resolved?: string | null) {
+  const source = contentMedia(value, resolved);
+  if (!source) return null;
+  const url = new URL(source);
+  const youtube = ["youtube.com", "www.youtube.com", "m.youtube.com", "youtube-nocookie.com", "www.youtube-nocookie.com"].includes(url.hostname);
+  if (youtube || url.hostname === "youtu.be") {
+    const id = url.hostname === "youtu.be" ? url.pathname.slice(1) : url.pathname === "/watch" ? url.searchParams.get("v") : /^\/(?:embed|shorts)\/([^/]+)$/.exec(url.pathname)?.[1];
+    return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? { kind: "youtube" as const, src: `https://www.youtube-nocookie.com/embed/${id}` } : null;
+  }
+  return { kind: "native" as const, src: source };
 }
 
 export function offerPrice(offer: PublicOffer | undefined) {

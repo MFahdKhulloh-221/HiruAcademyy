@@ -8,6 +8,7 @@ use App\Models\Program;
 use App\Services\ChapterAccessPolicy;
 use App\Services\EntitlementService;
 use App\Services\LearningLibraryService;
+use App\Services\MediaService;
 use Illuminate\Http\Request;
 
 class StudentLearningController extends Controller
@@ -45,6 +46,6 @@ class StudentLearningController extends Controller
             'readingPassages.questions' => $published,
         ])->loadExists(['miniCheckpointQuestions as mini_checkpoint_exists' => $published]);
 
-        return new StudentChapterResource($chapter);
+        return response()->json(['data' => app(MediaService::class)->payload((new StudentChapterResource($chapter))->resolve($request))]);
     }
 }

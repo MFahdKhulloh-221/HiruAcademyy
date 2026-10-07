@@ -1,9 +1,10 @@
 "use client";
 
-import { type ChangeEvent, type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type FormEvent, useCallback, useState } from "react";
+import { AdminMediaUpload } from "@/components/admin-media-upload";
 import { AdminDataTable, AdminDialog, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge, AdminTabs } from "@/components/admin-primitives";
 import { AdminBlogArticlePreview, AdminBlogCardPreview, BlogThumbnail, type Article } from "@/components/admin-blog-preview";
-import { useAdminContent } from "@/lib/public-content-api";
+import { useAdminContent } from "@/lib/admin-content-api";
 
 const tabs = ["Konten Artikel", "Pengaturan SEO & Pratinjau", "Jadwal & Penulis"];
 const categories = ["Tips Belajar", "Grammar / Bunpou", "Listening / Choukai", "JLPT"];
@@ -48,27 +49,6 @@ export function AdminBlogPrototype() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [activeTab, setActiveTab] = useState(tabs[0]);
-  const objectUrls = useRef(new Set<string>());
-  useEffect(() => {
-    const retained = new Set([...rows, draft, view, deleting].filter((article) => article !== null).map((article) => article.thumbnail));
-    for (const url of objectUrls.current) {
-      if (!retained.has(url)) { URL.revokeObjectURL(url); objectUrls.current.delete(url); }
-    }
-  }, [rows, draft, view, deleting]);
-  useEffect(() => {
-    const urls = objectUrls.current;
-    return () => { for (const url of urls) URL.revokeObjectURL(url); urls.clear(); };
-  }, []);
-  function uploadThumbnail(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file || !draft) return;
-    if (!/^image\/[a-z0-9.+-]+$/i.test(file.type)) { setError("Pilih file gambar dengan MIME image/*."); return; }
-    const thumbnail = URL.createObjectURL(file);
-    objectUrls.current.add(thumbnail);
-    setDraft({ ...draft, thumbnail });
-    setError("");
-  }
   const closeEditor = useCallback(() => { setDraft(null); setError(""); }, []);
   const closeView = useCallback(() => setView(null), []);
   const closeDelete = useCallback(() => setDeleting(null), []);
@@ -110,7 +90,7 @@ export function AdminBlogPrototype() {
       {draft && <form className="admin-prototype-form" onSubmit={save} noValidate>
         <AdminTabs label="Pengaturan Artikel" tabs={tabs} active={activeTab} onChange={setActiveTab}>
           {activeTab === tabs[0] && <div className="admin-blog-content-fields">
-            <label className="admin-field">Thumbnail (opsional)<input value={draft.thumbnail} onChange={event => setDraft({ ...draft, thumbnail: event.target.value })} /><small>URL HTTP/HTTPS atau referensi penyimpanan.</small><input type="file" accept="image/*" onChange={uploadThumbnail} disabled /><small>Upload produksi belum tersedia.</small></label>
+            <label className="admin-field">Thumbnail (opsional)<input value={draft.thumbnail} onChange={event => setDraft({ ...draft, thumbnail: event.target.value })} /><small>URL HTTP/HTTPS atau referensi penyimpanan.</small></label><AdminMediaUpload kind="image" onUploaded={thumbnail => setDraft({ ...draft, thumbnail })} />
             <div className="blog-card-thumb admin-blog-upload-thumb"><BlogThumbnail key={draft.thumbnail} src={draft.thumbnail} title={draft.title} /></div>
             <label className="admin-field">Kategori<select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })}>{categories.map((category) => <option key={category}>{category}</option>)}</select></label>
             <label className="admin-field">Judul Artikel<input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} required /></label>

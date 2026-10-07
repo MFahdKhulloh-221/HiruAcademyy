@@ -4,6 +4,7 @@ use App\Http\Controllers\AccessGrantController;
 use App\Http\Controllers\AdminAffiliateController;
 use App\Http\Controllers\AdminCommissionController;
 use App\Http\Controllers\AdminLearningController;
+use App\Http\Controllers\AdminMediaController;
 use App\Http\Controllers\AdminNotificationController;
 use App\Http\Controllers\AdminPayoutController;
 use App\Http\Controllers\AdminPlacementController;
@@ -35,6 +36,8 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('api')->middleware('throttle:api')->group(function () {
     Route::middleware(['auth:sanctum', 'active', 'role:admin'])->prefix('admin')->group(function () {
+        Route::post('media', [AdminMediaController::class, 'store']);
+        Route::delete('media', [AdminMediaController::class, 'destroy']);
         foreach (array_keys(ScheduleReplayService::RESOURCES) as $resource) {
             Route::get($resource, [AdminScheduleReplayController::class, 'index'])->defaults('resource', $resource);
             Route::post($resource, [AdminScheduleReplayController::class, 'store'])->defaults('resource', $resource);

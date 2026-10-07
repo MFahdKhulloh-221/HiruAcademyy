@@ -1,12 +1,14 @@
 "use client";
 
 import { useState } from "react";
+import { rememberAdminMedia } from "@/lib/admin-media";
 import { useLearningRequest } from "@/components/learning-hooks";
 import { emptyLiveReplay, type LiveReplayRecord } from "@/lib/admin-live-replay-fixtures";
 import { systemData, systemWrite, type ClassSchedule, type ReplayPlaylist, type ReplayVideo, type SystemProgram } from "@/lib/schedule-replay-api";
 
 async function loadClassAdmin(signal: AbortSignal) {
   const [schedules, playlists, videos, programs] = await Promise.all([systemData<ClassSchedule[]>("/api/admin/class-schedules", signal), systemData<ReplayPlaylist[]>("/api/admin/replay-playlists", signal), systemData<ReplayVideo[]>("/api/admin/replay-videos", signal), systemData<SystemProgram[]>("/api/admin/programs", signal)]);
+  videos.forEach(item => rememberAdminMedia(item as unknown as Record<string, unknown>));
   const code = (id?: number) => programs.find(item => item.id === id)?.code.toUpperCase() || "";
   const rows: LiveReplayRecord[] = schedules.map(item => { const date = new Date(item.scheduled_at); const parts = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(date).split(" "); const end = item.duration_minutes ? new Intl.DateTimeFormat("en-GB", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit", hourCycle: "h23" }).format(new Date(date.getTime() + item.duration_minutes * 60000)) : ""; return { ...emptyLiveReplay("live"), id: String(item.id), title: item.title, program: code(item.program_id), chapter: item.chapter || item.session || "", sensei: item.sensei_name || "", date: parts[0], start: parts[1], end, url: item.meeting_url || "", status: item.status === "cancelled" ? "Dibatalkan" : item.status === "draft" ? "Draft" : "Terjadwal", description: item.description || "", order: String(item.sort_order) }; });
   rows.push(...videos.map(item => ({ ...emptyLiveReplay("replay"), id: String(item.id), playlistId: String(item.replay_playlist_id), title: item.title, program: code(playlists.find(value => value.id === item.replay_playlist_id)?.program_id), chapter: item.chapter || item.session || "", sensei: item.sensei_name || "", date: item.recorded_at || "", url: item.video_url, status: item.status === "published" ? "Published" : "Draft", description: item.description || "", order: String(item.sort_order) })));

@@ -1,14 +1,16 @@
 "use client";
 
 import Image from "next/image";
+import { AdminMediaUpload } from "@/components/admin-media-upload";
 import { LuSearch } from "react-icons/lu";
-import { type ChangeEvent, type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { AdminDataTable, AdminDialog, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge } from "@/components/admin-primitives";
-import { contentMedia, useAdminContent } from "@/lib/public-content-api";
+import { adminMediaUrl as contentMedia } from "@/lib/admin-media";
+import { useAdminContent } from "@/lib/admin-content-api";
 import { AdminSenseiPreview } from "@/components/admin-profile-preview";
 
 const levels = ["N5", "N4", "N3", "N2", "N1"];
-type Sensei = { id: string; name: string; role: string; bio: string; photo: string; expertise: string[]; active: boolean; order: number; level: string };
+type Sensei = { id: string; name: string; role: string; bio: string; photo: string; photo_resolved_url?: string; expertise: string[]; active: boolean; order: number; level: string };
 type Draft = Omit<Sensei, "expertise" | "order"> & { expertise: string; order: string };
 
 export function AdminSenseiPrototype() {
@@ -40,13 +42,7 @@ export function AdminSenseiPrototype() {
   function changePhoto(photo: string) {
     if (!draft) return;
     if (!rows.some((row) => row.photo === draft.photo)) release(draft.photo);
-    setDraft({ ...draft, photo }); setError("");
-  }
-  function choosePhoto(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]; event.target.value = "";
-    if (!file || !draft) return;
-    if (!["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type)) { setError("Pilih foto PNG, JPEG, WebP, atau GIF yang valid."); return; }
-    const url = URL.createObjectURL(file); temporaryUrls.current.add(url); changePhoto(url);
+    setDraft({ ...draft, photo, photo_resolved_url: undefined }); setError("");
   }
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -58,7 +54,7 @@ export function AdminSenseiPrototype() {
     if (!draft.role.trim()) { setError("Peran Sensei wajib diisi."); return; }
     if (!draft.bio.trim()) { setError("Bio singkat wajib diisi."); return; }
     if (!expertise.length) { setError("Isi minimal satu label keahlian, pisahkan dengan koma."); return; }
-    if (!draft.photo.trim() || draft.photo.startsWith("blob:")) { setError("Gunakan URL foto atau referensi penyimpanan. Upload produksi belum tersedia."); return; }
+    if (draft.photo.startsWith("blob:")) { setError("Pilih foto yang tersimpan."); return; }
     if (draft.level && !levels.includes(draft.level)) { setError("Pilih level utama yang tersedia."); return; }
     if (!/^\d+$/.test(draft.order) || !Number.isSafeInteger(order) || order < 1 || order > maxOrder) { setError(`Urutan harus berupa angka bulat dari 1 hingga ${maxOrder}.`); return; }
     const next: Sensei = { ...draft, name: draft.name.trim(), role: draft.role.trim(), bio: draft.bio.trim(), expertise, order };
@@ -100,11 +96,11 @@ export function AdminSenseiPrototype() {
         <label className="admin-field">Bio singkat<textarea value={draft.bio} onChange={(event) => setDraft({ ...draft, bio: event.target.value })} required /></label>
         <label className="admin-field">Keahlian<input value={draft.expertise} onChange={(event) => setDraft({ ...draft, expertise: event.target.value })} required /><small>Pisahkan beberapa label dengan koma.</small></label>
         <label className="admin-field">Foto<input value={draft.photo} onChange={event => changePhoto(event.target.value)} required /><small>URL HTTP/HTTPS atau referensi penyimpanan.</small></label>
-        <label className="admin-field">Unggah foto sementara<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={choosePhoto} disabled /><small>File tidak diunggah ke server.</small></label>
+        <AdminMediaUpload kind="image" onUploaded={(photo, url) => setDraft({ ...draft, photo, photo_resolved_url: url })} />
         <label className="admin-field">Level utama (opsional)<select value={draft.level} onChange={(event) => setDraft({ ...draft, level: event.target.value })}><option value="">Tidak ditentukan</option>{levels.map((level) => <option key={level}>{level}</option>)}</select></label>
         <label className="admin-field">Status<select value={draft.active ? "active" : "inactive"} onChange={(event) => setDraft({ ...draft, active: event.target.value === "active" })}><option value="active">Aktif</option><option value="inactive">Nonaktif</option></select></label>
         <label className="admin-field">Urutan<input type="number" min="1" step="1" value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })} required /><small>Urutan tampil profil.</small></label>
-        <AdminSenseiPreview profile={{ ...draft, expertise: [...new Set(draft.expertise.split(",").map((label) => label.trim()).filter(Boolean))] }} onPhotoError={() => { changePhoto(""); setError("Foto tidak dapat dibaca. Pilih foto lain sebelum menyimpan."); }} />
+        <AdminSenseiPreview profile={{ ...draft, expertise: [...new Set(draft.expertise.split(",").map((label) => label.trim()).filter(Boolean))] }} onPhotoError={() => setError("Foto tidak dapat dibaca. Pilih foto lain sebelum menyimpan.")} />
         {error && <p role="alert">{error}</p>}
         <div className="admin-page-actions"><button type="button" className="button" onClick={closeEditor}>Batal</button><button type="submit" disabled={busy} className="button button-primary">Simpan Sensei</button></div>
       </form>}

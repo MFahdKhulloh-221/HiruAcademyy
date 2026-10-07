@@ -1,17 +1,18 @@
 "use client";
 
 import Image from "next/image";
+import { AdminMediaUpload } from "@/components/admin-media-upload";
+import { validVideoReference } from "@/lib/admin-media";
 import { LuSearch } from "react-icons/lu";
-import { type ChangeEvent, type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { AdminDataTable, AdminDialog, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge } from "@/components/admin-primitives";
-import { contentMedia, useAdminContent } from "@/lib/public-content-api";
+import { adminMediaUrl as contentMedia } from "@/lib/admin-media";
+import { useAdminContent } from "@/lib/admin-content-api";
 import { AdminTestimonialPreview } from "@/components/admin-profile-preview";
 
-type Testimonial = { id: string; name: string; context: string; quote: string; image: string; videoUrl: string; videoTitle: string; published: boolean; landing: boolean; order: number };
+type Testimonial = { id: string; name: string; context: string; quote: string; image: string; image_resolved_url?: string; videoUrl: string; video_url_resolved_url?: string; videoTitle: string; published: boolean; landing: boolean; order: number };
 type Draft = Omit<Testimonial, "order"> & { order: string };
-function safeVideoUrl(value: string) {
-  try { const url = new URL(value); return /^https?:\/\//i.test(value) && ["https:", "http:"].includes(url.protocol) && !url.username && !url.password; } catch { return false; }
-}
+function safeVideoUrl(value: string) { return validVideoReference(value); }
 
 export function AdminTestimonialPrototype() {
   const { rows, loading, loadError, busy, mutate, reload } = useAdminContent<Testimonial>("testimonials");
@@ -42,13 +43,7 @@ export function AdminTestimonialPrototype() {
   function changeImage(image: string) {
     if (!draft) return;
     if (!rows.some((row) => row.image === draft.image)) release(draft.image);
-    setDraft({ ...draft, image }); setError("");
-  }
-  function chooseImage(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]; event.target.value = "";
-    if (!file || !draft) return;
-    if (!["image/png", "image/jpeg", "image/webp", "image/gif"].includes(file.type)) { setError("Pilih gambar PNG, JPEG, WebP, atau GIF yang valid."); return; }
-    const url = URL.createObjectURL(file); temporaryUrls.current.add(url); changeImage(url);
+    setDraft({ ...draft, image, image_resolved_url: undefined }); setError("");
   }
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -60,7 +55,6 @@ export function AdminTestimonialPrototype() {
     if (!draft.name.trim()) { setError("Nama pemberi testimoni wajib diisi."); return; }
     if (!draft.context.trim()) { setError("Konteks testimoni wajib diisi."); return; }
     if (!draft.quote.trim()) { setError("Kutipan testimoni wajib diisi."); return; }
-    if (draft.image.startsWith("blob:")) { setError("Gunakan URL gambar atau referensi penyimpanan. Upload produksi belum tersedia."); return; }
     if (videoUrl && !safeVideoUrl(videoUrl)) { setError("URL video harus berupa URL lengkap dengan skema http:// atau https:// tanpa nama pengguna dan kata sandi."); return; }
     if (videoUrl && !videoTitle) { setError("Judul video wajib diisi jika URL video tersedia."); return; }
     if (!videoUrl && videoTitle) { setError("Isi URL video atau kosongkan judul video."); return; }
@@ -80,7 +74,7 @@ export function AdminTestimonialPrototype() {
 
   return <AdminShell current="/admin/testimoni"><main className="admin-public-prototype">
     <AdminPageHeader title="Testimoni" description="Konten testimoni." actions={<button type="button" className="button button-primary" onClick={() => { setError(""); setDraft({ id: crypto.randomUUID(), name: "", context: "", quote: "", image: "", videoUrl: "", videoTitle: "", published: false, landing: false, order: String(rows.length + 1) }); }}>Tambah Testimoni</button>} />
-    <p>Draft tidak ditampilkan pada halaman publik. OPEN: aturan upload produksi.</p>
+    <p>Draft tidak ditampilkan pada halaman publik.</p>
     {loading && <p role="status">Memuat testimoni…</p>}{loadError && <div role="alert">{loadError} <button type="button" onClick={reload}>Coba lagi</button></div>}
     <p role="status">{message}</p>
     <AdminSection title="Konten Testimoni"><label className="admin-search-box"><span aria-hidden="true"><LuSearch /></span><input type="search" aria-label="Cari testimoni" value={search} onChange={(event) => setSearch(event.target.value)} /></label><AdminDataTable caption="Daftar Testimoni" rows={[...visibleRows].sort((a, b) => a.order - b.order)} rowKey={(row) => row.id} columns={[
@@ -104,13 +98,14 @@ export function AdminTestimonialPrototype() {
         <label className="admin-field">Konteks<input value={draft.context} onChange={(event) => setDraft({ ...draft, context: event.target.value })} required /></label>
         <label className="admin-field">Kutipan<textarea value={draft.quote} onChange={(event) => setDraft({ ...draft, quote: event.target.value })} required /></label>
         <label className="admin-field">Gambar (opsional)<input value={draft.image} onChange={event => changeImage(event.target.value)} /><small>URL HTTP/HTTPS atau referensi penyimpanan.</small></label>
-        <label className="admin-field">Unggah gambar sementara<input type="file" accept="image/png,image/jpeg,image/webp,image/gif" onChange={chooseImage} disabled /><small>File tidak diunggah ke server.</small></label>
-        <label className="admin-field">URL video (opsional)<input type="url" value={draft.videoUrl} onChange={(event) => setDraft({ ...draft, videoUrl: event.target.value })} /><small>Gunakan URL lengkap http:// atau https://. Video dibuka sebagai tautan, bukan embed.</small></label>
+        <AdminMediaUpload kind="image" onUploaded={(image, url) => setDraft({ ...draft, image, image_resolved_url: url })} />
+        <AdminMediaUpload kind="video" onUploaded={(videoUrl, url) => setDraft({ ...draft, videoUrl, video_url_resolved_url: url })} />
+        <label className="admin-field">URL video (opsional)<input value={draft.videoUrl} onChange={(event) => setDraft({ ...draft, videoUrl: event.target.value, video_url_resolved_url: undefined })} /><small>YouTube, MP4, atau WebM.</small></label>
         <label className="admin-field">Judul video<input value={draft.videoTitle} onChange={(event) => setDraft({ ...draft, videoTitle: event.target.value })} required={Boolean(draft.videoUrl.trim())} /></label>
         <label className="admin-field">Status<select value={draft.published ? "published" : "draft"} onChange={(event) => setDraft({ ...draft, published: event.target.value === "published" })}><option value="draft">Draft</option><option value="published">Published</option></select></label>
         <label className="admin-field">Landing<select value={draft.landing ? "yes" : "no"} onChange={(event) => setDraft({ ...draft, landing: event.target.value === "yes" })}><option value="no">Tidak</option><option value="yes">Ya</option></select><small>Hanya testimoni Published yang tampil di Landing.</small></label>
         <label className="admin-field">Urutan<input type="number" min="1" step="1" value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })} required /><small>Urutan tampil testimoni.</small></label>
-        <AdminTestimonialPreview testimonial={{ ...draft, videoUrl: safeVideoUrl(draft.videoUrl.trim()) ? draft.videoUrl.trim() : "" }} onImageError={() => { changeImage(""); setError("Gambar tidak dapat dibaca. Pilih gambar lain atau simpan tanpa gambar."); }} />
+        <AdminTestimonialPreview testimonial={{ ...draft, videoUrl: safeVideoUrl(draft.videoUrl.trim()) ? draft.videoUrl.trim() : "" }} onImageError={() => setError("Gambar tidak dapat dibaca. Pilih gambar lain atau simpan tanpa gambar.")} />
         {error && <p role="alert">{error}</p>}
         <div className="admin-page-actions"><button type="button" className="button" onClick={closeEditor}>Batal</button><button type="submit" disabled={busy} className="button button-primary">Simpan Testimoni</button></div>
       </form>}

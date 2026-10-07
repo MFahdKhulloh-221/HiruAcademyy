@@ -76,12 +76,12 @@ class LearningAssessmentTest extends TestCase
     {
         $this->getJson($this->base.'/progress')->assertOk()->assertJsonPath('data.mini_unlocked', false);
         $this->prerequisites();
-        $video = VideoLesson::create(['chapter_id' => $this->chapter->id, 'title' => 'Second', 'video_url' => 'fixture.mp4', 'status' => 'published']);
-        VideoLesson::create(['chapter_id' => $this->chapter->id, 'title' => 'Draft', 'video_url' => 'fixture.mp4', 'status' => 'draft']);
-        $this->getJson($this->base.'/progress')->assertJsonPath('data.activities.video.total', 2)->assertJsonPath('data.activities.video.complete', false)->assertJsonPath('data.activities.audio.complete', false);
-        $this->postJson($this->base.'/completions', ['type' => 'video', 'resource_id' => $video->id])->assertOk();
-        $this->postJson($this->base.'/completions', ['type' => 'video', 'resource_id' => $video->id])->assertOk();
-        $this->assertSame(2, ActivityCompletion::where('type', 'video')->count());
+        $module = LearningModule::create(['chapter_id' => $this->chapter->id, 'title' => 'Second', 'file_url' => 'fixture.pdf', 'module_type' => 'general', 'status' => 'published']);
+        LearningModule::create(['chapter_id' => $this->chapter->id, 'title' => 'Draft', 'file_url' => 'fixture.pdf', 'module_type' => 'general', 'status' => 'draft']);
+        $this->getJson($this->base.'/progress')->assertJsonPath('data.activities.video.total', 1)->assertJsonPath('data.activities.video.complete', true)->assertJsonPath('data.activities.module.total', 2)->assertJsonPath('data.activities.module.complete', false)->assertJsonPath('data.activities.audio.complete', false);
+        $this->postJson($this->base.'/completions', ['type' => 'module', 'resource_id' => $module->id])->assertOk();
+        $this->postJson($this->base.'/completions', ['type' => 'module', 'resource_id' => $module->id])->assertOk();
+        $this->assertSame(2, ActivityCompletion::where('type', 'module')->count());
         $this->postJson($this->base.'/completions', ['type' => 'audio', 'resource_id' => 1])->assertUnprocessable();
         $this->postJson($this->base.'/completions', ['type' => 'reading', 'resource_id' => 1])->assertUnprocessable();
         $this->postJson($this->base.'/completions', ['type' => 'flashcard', 'known' => true])->assertUnprocessable();
@@ -172,6 +172,14 @@ class LearningAssessmentTest extends TestCase
         MiniCheckpointQuestion::create($this->question(['chapter_id' => $this->chapter->id]));
         $this->postJson($this->base.'/attempts', ['kind' => 'mini'])->assertForbidden();
         $this->prerequisites();
+        $audio = $this->audio(['audio_url' => 'https://media.example.test/dasar.mp3']);
+        $passage = ReadingPassage::create(['chapter_id' => $this->chapter->id, 'title' => 'Fixture', 'body' => 'Fixture', 'status' => 'published']);
+        $reading = ReadingQuestion::create($this->question(['reading_passage_id' => $passage->id]));
+        $this->getJson($this->base.'/progress')->assertJsonPath('data.mini_unlocked', false);
+        foreach (['audio' => $audio, 'reading' => $reading] as $kind => $question) {
+            $practice = $this->start($kind);
+            $this->postJson($this->base.'/attempts/'.$practice['id'].'/submit', ['answers' => [$question->id => 'B'], 'revision' => 0])->assertOk();
+        }
         $this->getJson($this->base.'/progress')->assertJsonPath('data.mini_unlocked', true);
         for ($i = 0; $i < 3; $i++) {
             $attempt = $this->start('mini');
@@ -348,6 +356,13 @@ class LearningAssessmentTest extends TestCase
         $this->chapter->update(['program_id' => Program::where('code', 'dasar')->firstOrFail()->id]);
         $this->base = '/api/student/programs/'.$this->chapter->program_id.'/chapters/'.$this->chapter->id;
         $this->prerequisites();
+        $audio = $this->audio();
+        $passage = ReadingPassage::create(['chapter_id' => $this->chapter->id, 'title' => 'Fixture', 'body' => 'Fixture', 'status' => 'published']);
+        $reading = ReadingQuestion::create($this->question(['reading_passage_id' => $passage->id]));
+        foreach (['audio' => $audio, 'reading' => $reading] as $kind => $question) {
+            $practice = $this->start($kind);
+            $this->postJson($this->base.'/attempts/'.$practice['id'].'/submit', ['answers' => [$question->id => 'B'], 'revision' => 0])->assertOk();
+        }
         $correct = MiniCheckpointQuestion::create($this->question(['chapter_id' => $this->chapter->id]));
         $wrong = MiniCheckpointQuestion::create($this->question(['chapter_id' => $this->chapter->id]));
         $unanswered = MiniCheckpointQuestion::create($this->question(['chapter_id' => $this->chapter->id]));

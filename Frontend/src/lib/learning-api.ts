@@ -3,11 +3,11 @@ import { apiRequest } from "@/lib/api";
 export type LearningProgram = { id: number; code: string; name: string; family: string };
 export type LearningAccess = { learning: Record<string, "full" | "preview" | "none">; replay_levels: string[]; source_grants: { plan_code: string; program_code: string }[] };
 export type LearningResource = { id: number; title: string; description?: string | null; sort_order: number };
-export type LearningModule = LearningResource & { module_type: "grammar" | "kanji" | "general"; file_url: string };
+export type LearningModule = LearningResource & { module_type: "grammar" | "kanji" | "general"; file_url: string | null; file_url_resolved_url?: string | null };
 export type CanonicalChapter = LearningResource & {
   chapter_number: number;
   access: string;
-  video_lessons?: (LearningResource & { video_url: string })[];
+  video_lessons?: (LearningResource & { video_url: string | null; video_url_resolved_url?: string | null })[];
   modules?: LearningModule[];
   flashcards?: { id: number; japanese: string; reading: string; meaning: string; example: string | null; sort_order: number }[];
   mini_checkpoint?: { exists: boolean };
@@ -26,6 +26,22 @@ export function safeLearningUrl(value?: string | null) {
     const url = new URL(value ?? "");
     return ["https:", "http:"].includes(url.protocol) && !url.username && !url.password ? url.href : "";
   } catch { return ""; }
+}
+export function completionPercent(activities: ChapterProgress["activities"]) {
+  const totals = Object.values(activities).reduce((sum, activity) => ({ total: sum.total + activity.total, completed: sum.completed + activity.completed }), { total: 0, completed: 0 });
+  return totals.total > 0 ? Math.min(100, Math.max(0, Math.round(totals.completed / totals.total * 100))) : 0;
+}
+export function learningVideo(value?: string | null): { kind: "native" | "youtube"; url: string } | undefined {
+  const safe = safeLearningUrl(value);
+  if (!safe) return;
+  const url = new URL(safe);
+  const host = url.hostname.toLowerCase();
+  let id: string | null = null;
+  if (["youtube.com", "www.youtube.com", "m.youtube.com", "youtube-nocookie.com", "www.youtube-nocookie.com"].includes(host)) {
+    id = url.pathname === "/watch" ? url.searchParams.get("v") : /^\/(?:embed|shorts)\/([A-Za-z0-9_-]{11})$/.exec(url.pathname)?.[1] ?? null;
+  } else if (host === "youtu.be") id = url.pathname.slice(1);
+  if (id && /^[A-Za-z0-9_-]{11}$/.test(id)) return { kind: "youtube", url: `https://www.youtube-nocookie.com/embed/${id}` };
+  if (/\.(mp4|webm)$/i.test(url.pathname)) return { kind: "native", url: safe };
 }
 export function learningMembership(access: LearningAccess): "free" | "lms" | "sensei" {
   return access.source_grants.some(item => item.plan_code === "sensei") ? "sensei" : access.source_grants.some(item => item.plan_code === "lms") ? "lms" : "free";

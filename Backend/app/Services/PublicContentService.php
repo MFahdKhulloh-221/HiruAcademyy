@@ -44,6 +44,11 @@ class PublicContentService
 
     public function save(string $resource, array $input, ?Model $model = null): Model
     {
+        return app(MediaService::class)->locked(fn () => $this->saveContent($resource, $input, $model));
+    }
+
+    private function saveContent(string $resource, array $input, ?Model $model): Model
+    {
         $class = $this->model($resource);
         $model ??= new $class;
         $required = $model->exists ? 'sometimes' : 'required';
@@ -52,16 +57,12 @@ class PublicContentService
         $optional = ['bail', 'sometimes', 'nullable', 'string'];
         $boolean = ['sometimes', 'required', 'boolean'];
         $order = ['sometimes', 'required', 'integer', 'min:1', 'max:2147483647'];
-        $media = function ($attribute, $value, $fail) {
-            if (! $this->safeReference($value)) {
-                $fail('Use a safe storage-relative reference or HTTP/HTTPS URL without credentials.');
-            }
-        };
+        $media = app(MediaService::class)->rule('image');
         $rules = match ($resource) {
             'showcase-items' => [
                 'key' => [$required, 'required', Rule::in(array_keys(self::SHOWCASE_LABELS)), Rule::unique('showcase_items', 'key')->ignore($model)],
                 'label' => ['sometimes', 'required', 'string'],
-                'image_src' => [...$text, $media],
+                'image_src' => [...$optional, $media],
                 'alt' => $text,
                 'sort_order' => $order,
                 'visible' => $boolean,
@@ -70,7 +71,7 @@ class PublicContentService
                 'name' => $string,
                 'role' => $string,
                 'bio' => $text,
-                'photo' => [...$text, $media],
+                'photo' => [...$optional, $media],
                 'expertise' => [$required, 'required', 'array', 'list', 'min:1'],
                 'expertise.*' => ['required', 'string', 'max:255', 'distinct:strict'],
                 'active' => $boolean,
@@ -82,7 +83,7 @@ class PublicContentService
                 'context' => $text,
                 'quote' => $text,
                 'image' => [...$optional, $media],
-                'video_url' => ['bail', 'sometimes', 'nullable', 'string', 'url:http,https', $media],
+                'video_url' => [...$optional, app(MediaService::class)->rule('video')],
                 'video_title' => $optional,
                 'published' => $boolean,
                 'landing' => $boolean,
@@ -177,32 +178,7 @@ class PublicContentService
             $data[$field] = $value instanceof \DateTimeInterface ? CarbonImmutable::instance($value)->utc()->toISOString() : $value;
         }
 
-        return $data;
-    }
-
-    private function safeReference(string $value): bool
-    {
-        $decoded = $value;
-        for ($i = 0; $i < 3; $i++) {
-            $decoded = rawurldecode($decoded);
-        }
-        if (preg_match('/[\x00-\x20\x7f\\\\]/', $decoded) || str_contains($decoded, '%') || str_starts_with($decoded, '//')) {
-            return false;
-        }
-        $parts = parse_url($decoded);
-        if ($parts === false || isset($parts['user']) || isset($parts['pass'])) {
-            return false;
-        }
-        if (isset($parts['scheme'])) {
-            if (! in_array(strtolower($parts['scheme']), ['http', 'https'], true) || ! filter_var($value, FILTER_VALIDATE_URL) || empty($parts['host'])) {
-                return false;
-            }
-        } elseif (str_starts_with($decoded, '/') || isset($parts['host']) || str_contains($decoded, ':') || isset($parts['query']) || isset($parts['fragment'])) {
-            return false;
-        }
-
-        return ! preg_match('~(?:^|/)(?:\.{1,2})(?:/|$)~', $parts['path'] ?? '')
-            && (isset($parts['scheme']) || ($parts['path'] ?? '') !== '');
+        return app(MediaService::class)->payload($data);
     }
 
     private function validDate(string $value): bool

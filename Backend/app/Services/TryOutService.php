@@ -69,7 +69,7 @@ class TryOutService
             'explanation' => ['nullable', 'string'],
             'point_value' => ['required', 'integer', 'min:1', 'max:180'],
             'reading_passage' => ['nullable', 'string'],
-            'audio_url' => ['nullable', 'url:http,https'],
+            'audio_url' => ['nullable', 'string', app(MediaService::class)->rule('audio')],
             'sort_order' => ['sometimes', 'required', 'integer', 'min:0', 'max:2147483647'],
             'status' => ['sometimes', 'required', Rule::in(['draft', 'published'])],
         ];
@@ -93,6 +93,11 @@ class TryOutService
     }
 
     public function saveQuestion(TryOut $tryOut, array $input, ?TryOutQuestion $question = null): TryOutQuestion
+    {
+        return app(MediaService::class)->locked(fn () => $this->saveQuestionContent($tryOut, $input, $question));
+    }
+
+    private function saveQuestionContent(TryOut $tryOut, array $input, ?TryOutQuestion $question): TryOutQuestion
     {
         return DB::transaction(function () use ($tryOut, $input, $question) {
             $parent = TryOut::whereKey($tryOut->id)->lockForUpdate()->firstOrFail();
@@ -161,6 +166,6 @@ class TryOutService
 
     public function adminQuestion(TryOutQuestion $question): array
     {
-        return $question->only(['id', 'try_out_id', 'session', 'question', 'options', 'correct_option', 'explanation', 'point_value', 'reading_passage', 'audio_url', 'sort_order', 'status']);
+        return app(MediaService::class)->payload($question->only(['id', 'try_out_id', 'session', 'question', 'options', 'correct_option', 'explanation', 'point_value', 'reading_passage', 'audio_url', 'sort_order', 'status']));
     }
 }

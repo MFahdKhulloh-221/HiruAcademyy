@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import { useState } from "react";
-import { contentMedia } from "@/lib/public-content-api";
+import { adminMediaUrl as contentMedia } from "@/lib/admin-media";
 
 export type Article = { id: string; title: string; slug: string; excerpt: string; body: string; thumbnail: string; category: string; seoTitle: string; metaDescription: string; featured: boolean; published: boolean; publishedAt: string; author: string };
 

@@ -32,6 +32,11 @@ class ScheduleReplayService
 
     public function save(string $resource, array $input, ?Model $model = null): Model
     {
+        return app(MediaService::class)->locked(fn () => $this->saveContent($resource, $input, $model));
+    }
+
+    private function saveContent(string $resource, array $input, ?Model $model): Model
+    {
         $class = $this->model($resource);
         $model ??= new $class;
         $required = $model->exists ? 'sometimes' : 'required';
@@ -62,7 +67,7 @@ class ScheduleReplayService
             'replay-playlists' => ['program_id' => [$required, 'required', 'integer', 'exists:programs,id']],
             'replay-videos' => [
                 'replay_playlist_id' => [$required, 'required', 'integer', 'exists:replay_playlists,id'],
-                'video_url' => [$required, 'required', 'url:http,https', $url],
+                'video_url' => ['sometimes', 'nullable', 'string', app(MediaService::class)->rule('video')],
                 'recorded_at' => ['sometimes', 'nullable', 'date_format:Y-m-d'],
             ],
         };
@@ -112,6 +117,6 @@ class ScheduleReplayService
             $data['video_url'] = $model->video_url;
         }
 
-        return $data;
+        return app(MediaService::class)->payload($data);
     }
 }

@@ -2,18 +2,19 @@
 
 import { type FormEvent, useCallback, useState } from "react";
 import { useSystemAdminRows } from "@/components/system-admin-hooks";
-import { safeSystemUrl } from "@/lib/schedule-replay-api";
+import { adminMediaUrl, rememberAdminMedia } from "@/lib/admin-media";
+import { AdminMediaUpload } from "@/components/admin-media-upload";
 import { LuSearch } from "react-icons/lu";
 import { AdminDataTable, AdminDialog, AdminFilterToolbar, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge } from "@/components/admin-primitives";
 
 type Certificate = { id: string; program: string; title: string; description: string; image: string | null; status: string; order: number };
 type Draft = Omit<Certificate, "order"> & { order: string };
 type CertificateResponse = Omit<Certificate, "id" | "order"> & { id: number; sort_order: number };
-const decodeCertificate = (row: CertificateResponse): Certificate => ({ ...row, id: String(row.id), order: row.sort_order, status: row.status === "published" ? "Published" : "Draft" });
+const decodeCertificate = (row: CertificateResponse): Certificate => { rememberAdminMedia(row); return { ...row, id: String(row.id), order: row.sort_order, status: row.status === "published" ? "Published" : "Draft" }; };
 const encodeCertificate = (row: Certificate) => ({ program: row.program, title: row.title, description: row.description, image: row.image || null, sort_order: row.order, status: row.status.toLowerCase() });
 
 function CertificatePreview({ item }: { item: Pick<Certificate, "title" | "program" | "description" | "image"> }) {
-  const imageUrl = safeSystemUrl(item.image) ? item.image : null;
+  const imageUrl = adminMediaUrl(item.image);
   return <section className="certificate-detail-page" aria-label="Pratinjau template sertifikat">
     <header className="supporting-header"><p className="dash-kicker">DIGITAL CERTIFICATE</p><p>{item.description}</p></header>
     <section className="certificate-preview">
@@ -45,7 +46,6 @@ export function AdminCertificatePrototype() {
     const order = Number(draft.order);
     const maximum = rows.length + (rows.some((row) => row.id === draft.id) ? 0 : 1);
     if (!draft.program.trim() || !draft.title.trim() || !draft.description.trim()) { setError("Program, judul, dan deskripsi wajib diisi."); return; }
-    if (draft.image && !safeSystemUrl(draft.image)) { setError("Isi URL gambar HTTP/HTTPS tanpa kredensial."); return; }
     if (!["Draft", "Published"].includes(draft.status)) { setError("Status tidak valid."); return; }
     if (!/^\d+$/.test(draft.order) || !Number.isSafeInteger(order) || order < 1 || order > maximum) { setError(`Urutan harus berupa angka bulat dari 1 hingga ${maximum}.`); return; }
     const next: Certificate = { ...draft, program: draft.program.trim(), title: draft.title.trim(), description: draft.description.trim(), order };
@@ -59,7 +59,7 @@ export function AdminCertificatePrototype() {
   }
   return <AdminShell current="/admin/sertifikat"><main className="admin-public-prototype">
     <AdminPageHeader title="Sertifikat" actions={<button type="button" className="button button-primary" onClick={() => { setError(""); setDraft({ id: crypto.randomUUID(), program: "", title: "", description: "", image: null, status: "Draft", order: String(rows.length + 1) }); }}>Tambah Sertifikat</button>} />
-    <p>Template bukan penerbitan sertifikat siswa. OPEN: aturan upload produksi. PDF tidak dibuat atau diunggah.</p><p role="status">{store.loading ? "Memuat…" : message}</p>{(store.error || store.mutationError) && <p role="alert">{store.error || store.mutationError}</p>}{store.error && <button className="button" onClick={store.retry}>Coba Lagi</button>}
+    <p>Template bukan penerbitan sertifikat siswa. PDF tidak dibuat atau diunggah.</p><p role="status">{store.loading ? "Memuat…" : message}</p>{(store.error || store.mutationError) && <p role="alert">{store.error || store.mutationError}</p>}{store.error && <button className="button" onClick={store.retry}>Coba Lagi</button>}
     <AdminSection title="Template Sertifikat"><AdminFilterToolbar>
       <label className="admin-field">Program<select value={program} onChange={(event) => setProgram(event.target.value)}><option value="">Semua</option>{[...new Set(rows.map((row) => row.program))].map((value) => <option key={value}>{value}</option>)}</select></label>
       <label className="admin-field">Status<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Semua</option><option>Draft</option><option>Published</option></select></label>
@@ -72,7 +72,7 @@ export function AdminCertificatePrototype() {
     </div> }} /></AdminSection>
     <AdminDialog open={Boolean(draft)} title={rows.some((row) => row.id === draft?.id) ? "Edit Sertifikat" : "Tambah Sertifikat"} close={closeEditor}>{draft && <form className="admin-prototype-form" onSubmit={save} noValidate>
       <label className="admin-field">Program<input value={draft.program} onChange={(event) => setDraft({ ...draft, program: event.target.value })} required /></label><label className="admin-field">Judul<input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} required /></label><label className="admin-field">Deskripsi<textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} required /></label>
-      <label className="admin-field">Gambar template (opsional)<input type="url" value={draft.image || ""} onChange={event => setDraft({ ...draft, image: event.target.value || null })} /><small>URL gambar. Upload produksi OPEN.</small></label>{draft.image && <button type="button" className="button" onClick={() => setDraft({ ...draft, image: null })}>Hapus Gambar</button>}
+      <label className="admin-field">Gambar template (opsional)<input value={draft.image || ""} onChange={event => setDraft({ ...draft, image: event.target.value || null })} /><small>URL gambar atau referensi penyimpanan.</small></label><AdminMediaUpload kind="image" onUploaded={image => setDraft({ ...draft, image })} />{draft.image && <button type="button" className="button" onClick={() => setDraft({ ...draft, image: null })}>Hapus Gambar</button>}
       <label className="admin-field">Status<select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}><option>Draft</option><option>Published</option></select></label><label className="admin-field">Urutan<input type="number" min="1" step="1" value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })} required /></label>
       <CertificatePreview item={draft} />{(error || store.mutationError) && <p role="alert">{error || store.mutationError}</p>}<div className="admin-page-actions"><button type="button" className="button" onClick={closeEditor}>Batal</button><button type="submit" disabled={store.busy || store.loading} className="button button-primary">Simpan Sertifikat</button></div>
     </form>}</AdminDialog>

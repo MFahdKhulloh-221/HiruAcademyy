@@ -104,6 +104,10 @@ function sharedRead<T>(key: string, path: string, options: RequestInit): Promise
   const signal = options.signal;
   signal?.throwIfAborted();
   let read = pendingReads.get(key);
+  if (read?.controller.signal.aborted) {
+    pendingReads.delete(key);
+    read = undefined;
+  }
   if (!read) {
     const controller = new AbortController();
     read = { controller, subscribers: 0, task: readResponse(path, { ...options, signal: controller.signal }) };

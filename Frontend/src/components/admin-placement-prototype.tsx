@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useCallback, useState } from "react";
+import { AdminMediaUpload } from "@/components/admin-media-upload";
 import { AdminDataTable, AdminDialog, AdminEmptyState, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge, AdminTabs } from "@/components/admin-primitives";
 import { AdminPlacementPreview, PlacementMedia, type PlacementQuestion, type PlacementSettings } from "@/components/admin-placement-preview";
 import { useLearningRequest } from "@/components/learning-hooks";
@@ -132,11 +133,6 @@ function PlacementEditor({ initial }: { initial: Awaited<ReturnType<typeof loadA
     }
   }
 
-  function selectMedia(kind: "image" | "audio", file?: File) {
-    if (!draft || !file) return;
-    if (!file.type.startsWith(`${kind}/`)) { setError(kind === "image" ? "Pilih file gambar dengan MIME image/*." : "Pilih file audio dengan MIME audio/*."); return; }
-    setError(""); setDraft({ ...draft, [kind]: file });
-  }
 
   async function move(id: string, direction: number) {
     if (!configId) return;
@@ -230,8 +226,8 @@ function PlacementEditor({ initial }: { initial: Awaited<ReturnType<typeof loadA
           <label className="admin-field placement-span-full">Pertanyaan<textarea rows={3} value={draft.prompt} onChange={(event) => setDraft({ ...draft, prompt: event.target.value })} required /></label>
           <label className="admin-field">Kategori<select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} required>{categories.map((category) => <option key={category}>{category}</option>)}</select></label>
           <label className="admin-field">Status<select value={draft.published ? "published" : "draft"} onChange={(event) => setDraft({ ...draft, published: event.target.value === "published" })}><option value="draft">Draft</option><option value="published">Published</option></select></label>
-          <label className="admin-field">Gambar (Opsional)<input type="file" accept="image/*" onChange={(event) => { selectMedia("image", event.target.files?.[0]); event.target.value = ""; }} /></label>
-          <label className="admin-field">Audio (Opsional)<input type="file" accept="audio/*" onChange={(event) => { selectMedia("audio", event.target.files?.[0]); event.target.value = ""; }} /></label>
+          <label className="admin-field">Gambar (Opsional)<input value={draft.imageUrl ?? ""} onChange={event => setDraft({ ...draft, imageUrl: event.target.value })} /></label><AdminMediaUpload kind="image" onUploaded={imageUrl => setDraft({ ...draft, image: undefined, imageUrl })} />
+          <label className="admin-field">Audio (Opsional)<input value={draft.audioUrl ?? ""} onChange={event => setDraft({ ...draft, audioUrl: event.target.value })} /></label><AdminMediaUpload kind="audio" onUploaded={audioUrl => setDraft({ ...draft, audio: undefined, audioUrl })} />
           <div className="placement-span-full"><PlacementMedia image={draft.image} audio={draft.audio} /><div className="placement-editor-actions">{draft.image && <button type="button" className="button" onClick={() => setDraft({ ...draft, image: undefined })}>Hapus Gambar</button>}{draft.audio && <button type="button" className="button" onClick={() => setDraft({ ...draft, audio: undefined })}>Hapus Audio</button>}</div></div>
           <label className="admin-field placement-span-full">Penjelasan / Pembahasan (Opsional)<textarea rows={2} value={draft.explanation} onChange={(event) => setDraft({ ...draft, explanation: event.target.value })} /></label>
         </div>

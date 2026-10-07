@@ -1,4 +1,5 @@
 import { apiRequest } from "@/lib/api";
+import { uploadAdminMedia } from "@/lib/admin-media";
 import type { PlacementSettings, PlacementQuestion } from "@/components/admin-placement-preview";
 
 export type RecommendationRule = {
@@ -38,9 +39,10 @@ export async function updateAdminPlacementLead(id: number, status: "new" | "cont
   return (await apiRequest<{ data: { id: number; status: string } }>(`/api/admin/placement-leads/${id}`, { method: "PATCH", body: JSON.stringify({ status }) })).data;
 }
 export async function saveAdminPlacementQuestion(question: PlacementQuestion, config: number, order: number) {
-  if (question.image || question.audio) throw new Error("OPEN: upload media backend belum tersedia.");
+  const imageUrl = question.image ? (await uploadAdminMedia(question.image, "image")).path : question.imageUrl;
+  const audioUrl = question.audio ? (await uploadAdminMedia(question.audio, "audio")).path : question.audioUrl;
   const saved = /^\d+$/.test(question.id);
-  return (await apiRequest<{ data: Question }>(`/api/admin/placement-questions${saved ? `/${question.id}` : ""}`, { method: saved ? "PATCH" : "POST", body: JSON.stringify({ placement_config_id: config, prompt: question.prompt, options: Object.fromEntries(question.answers.map((answer, index) => [["A", "B", "C", "D"][index], answer])), correct_option: question.correct, category: question.category, explanation: question.explanation || null, sort_order: order, status: question.published ? "published" : "draft", image_url: question.imageUrl || null, audio_url: question.audioUrl || null }) })).data;
+  return (await apiRequest<{ data: Question }>(`/api/admin/placement-questions${saved ? `/${question.id}` : ""}`, { method: saved ? "PATCH" : "POST", body: JSON.stringify({ placement_config_id: config, prompt: question.prompt, options: Object.fromEntries(question.answers.map((answer, index) => [["A", "B", "C", "D"][index], answer])), correct_option: question.correct, category: question.category, explanation: question.explanation || null, sort_order: order, status: question.published ? "published" : "draft", image_url: imageUrl || null, audio_url: audioUrl || null }) })).data;
 }
 export function placementQuestionView(question: Question): PlacementQuestion {
   return { id: String(question.id), prompt: question.prompt, answers: ["A", "B", "C", "D"].map(option => question.options[option]), correct: question.correct_option, category: question.category, published: question.status === "published", explanation: question.explanation ?? "", imageUrl: question.image_url ?? "", audioUrl: question.audio_url ?? "" };

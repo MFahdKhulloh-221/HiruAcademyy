@@ -163,6 +163,9 @@ class LearningContentTest extends TestCase
         if ($resource === 'chapters') {
             $secondPayload['chapter_number'] = 101;
         }
+        if ($resource === 'video-lessons') {
+            $secondPayload['chapter_id'] = $this->chapter(number: 2)->id;
+        }
         $second = $this->postJson($url, $secondPayload)->assertCreated()->json('data.id');
         $this->patchJson($url.'/'.$id, ['status' => 'published', 'sort_order' => 2])
             ->assertOk()->assertJsonPath('data.status', 'published')->assertJsonPath('data.sort_order', 2);
@@ -206,7 +209,7 @@ class LearningContentTest extends TestCase
     public static function familyMatrix(): array
     {
         $allowed = [
-            'dasar' => ['chapters', 'video-lessons', 'modules', 'flashcards', 'mini-checkpoint-questions'],
+            'dasar' => ['chapters', 'video-lessons', 'modules', 'flashcards', 'audio-questions', 'reading-passages', 'reading-questions', 'mini-checkpoint-questions'],
             'n5' => array_keys(self::MODELS),
             'ssw-food' => ['chapters', 'video-lessons', 'modules', 'flashcards', 'mini-checkpoint-questions'],
             'interview' => ['chapters', 'video-lessons', 'modules'],
@@ -235,6 +238,12 @@ class LearningContentTest extends TestCase
         } else {
             $field = $resource === 'reading-questions' ? 'reading_passage_id' : 'chapter_id';
             $response->assertUnprocessable()->assertJsonValidationErrors($field);
+        }
+        if ($resource === 'video-lessons') {
+            if ($allowed) {
+                VideoLesson::findOrFail($response->json('data.id'))->delete();
+            }
+            $source = $this->chapter(number: 3);
         }
         $sourcePayload = $this->payload($resource, $source);
         if ($resource === 'chapters') {
@@ -340,7 +349,7 @@ class LearningContentTest extends TestCase
     {
         $chapter = $this->chapter();
         $this->item('audio-questions', $chapter);
-        $this->actingAs($this->admin)->patchJson('/api/admin/chapters/'.$chapter->id, ['program_id' => $this->program('dasar')->id])
+        $this->actingAs($this->admin)->patchJson('/api/admin/chapters/'.$chapter->id, ['program_id' => $this->program('ssw-food')->id])
             ->assertUnprocessable()->assertJsonValidationErrors('program_id');
         $this->assertSame($this->program()->id, $chapter->fresh()->program_id);
         $this->patchJson('/api/admin/chapters/'.$chapter->id, ['program_id' => $this->program('n4')->id])->assertOk();
@@ -477,6 +486,13 @@ class LearningContentTest extends TestCase
         ];
         $expected = [];
         foreach ($fields as $resource => [$key]) {
+            if ($resource === 'video-lessons') {
+                $video = $this->item($resource, $chapter, ['status' => 'published']);
+                $this->item($resource, $other, ['status' => 'draft']);
+                $expected[$key] = [$video->id];
+
+                continue;
+            }
             $later = $this->item($resource, $chapter, ['status' => 'published', 'sort_order' => 20]);
             $earlier = $this->item($resource, $chapter, ['status' => 'published', 'sort_order' => 10]);
             $tie = $this->item($resource, $chapter, ['status' => 'published', 'sort_order' => 10]);
@@ -506,7 +522,8 @@ class LearningContentTest extends TestCase
         foreach ($fields as [$key, $publicFields]) {
             $this->assertSame($expected[$key], array_column($data[$key], 'id'));
             foreach ($data[$key] as $row) {
-                $this->assertKeys(['id', 'sort_order', ...$publicFields], $row);
+                $resolved = array_map(fn ($field) => $field.'_resolved_url', array_values(array_intersect($publicFields, ['video_url', 'file_url', 'audio_url'])));
+                $this->assertKeys(['id', 'sort_order', ...$publicFields, ...$resolved], $row);
             }
         }
         $questions = $data['reading_passages'][0]['questions'];

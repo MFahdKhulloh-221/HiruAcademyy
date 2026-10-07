@@ -122,7 +122,7 @@ class PublicContentTest extends TestCase
         auth('web')->logout();
         $response = $this->getJson('/api/showcase')->assertOk();
         $this->assertSame(['evaluation', 'dashboard', 'journey', 'flashcard'], array_column($response->json('data'), 'key'));
-        $this->assertSame(['id', 'key', 'label', 'image_src', 'alt'], array_keys($response->json('data.0')));
+        $this->assertSame(['id', 'key', 'label', 'image_src', 'alt', 'image_src_resolved_url'], array_keys($response->json('data.0')));
     }
 
     public function test_sensei_active_filter_n1_and_expertise_validation(): void
@@ -148,9 +148,9 @@ class PublicContentTest extends TestCase
         $landing = $this->create('testimonials', ['published' => true, 'landing' => true]);
         $other = $this->create('testimonials', ['published' => true]);
         $url = '/api/admin/testimonials/'.$landing['id'];
-        $this->patchJson($url, ['video_url' => 'https://media.example.test/video'])->assertUnprocessable();
+        $this->patchJson($url, ['video_url' => 'https://media.example.test/video.mp4'])->assertUnprocessable();
         $this->patchJson($url, ['video_title' => 'Video'])->assertUnprocessable();
-        $this->patchJson($url, ['video_url' => 'https://media.example.test/video', 'video_title' => 'Video'])->assertOk();
+        $this->patchJson($url, ['video_url' => 'https://media.example.test/video.mp4', 'video_title' => 'Video'])->assertOk();
         $this->patchJson($url, ['video_url' => null])->assertUnprocessable();
         $this->patchJson($url, ['video_title' => 'Updated'])->assertOk();
         $this->patchJson($url, ['video_url' => null, 'video_title' => null])->assertOk();
@@ -236,7 +236,8 @@ class PublicContentTest extends TestCase
             $response = $this->patchJson($url, $data)->assertUnprocessable()->assertJsonValidationErrors($field);
             $this->assertStringNotContainsString('username:password', $response->getContent());
         }
-        foreach (['https://media.example.test/file.png', 'http://media.example.test/file.png'] as $safe) {
+        $extension = $field === 'video_url' ? 'mp4' : 'png';
+        foreach (["https://media.example.test/file.{$extension}", "http://media.example.test/file.{$extension}"] as $safe) {
             $data = [$field => $safe];
             if ($field === 'video_url') {
                 $data['video_title'] = 'Video';
@@ -254,7 +255,9 @@ class PublicContentTest extends TestCase
         $item = $this->create($resource);
         $url = '/api/admin/'.$resource.'/'.$item['id'];
         foreach ($this->payload($resource) as $field => $value) {
-            if ($field !== 'level') {
+            if (in_array($field, ['image_src', 'photo', 'image', 'thumbnail'], true)) {
+                $this->patchJson($url, [$field => null])->assertOk();
+            } elseif ($field !== 'level') {
                 $this->patchJson($url, [$field => null])->assertUnprocessable();
             }
         }

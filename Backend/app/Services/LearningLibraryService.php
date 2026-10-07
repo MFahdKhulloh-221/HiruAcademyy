@@ -19,6 +19,6 @@ class LearningLibraryService
             ->map(fn ($module) => $module->only(['id', 'title', 'description', 'module_type', 'file_url', 'sort_order']) + [
                 'program' => $module->chapter->program->only(['id', 'code', 'name', 'family']),
                 'chapter' => $module->chapter->only(['id', 'chapter_number', 'title']),
-            ])->values()->all();
+            ])->map(fn ($data) => app(MediaService::class)->payload($data))->values()->all();
     }
 }

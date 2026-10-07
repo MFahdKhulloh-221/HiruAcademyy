@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { LuFlag } from "react-icons/lu";
+import { adminMediaUrl } from "@/lib/admin-media";
 import { assessmentLetters, assessmentSections, orderedAssessmentQuestions, type AdminAssessment, type AdminAssessmentQuestion } from "@/components/admin-assessment-fixtures";
 
 function AssessmentAudio({ question }: { question: AdminAssessmentQuestion }) {
@@ -14,7 +15,7 @@ function AssessmentAudio({ question }: { question: AdminAssessmentQuestion }) {
     element.src = url;
     return () => { element.pause(); element.removeAttribute("src"); element.load(); URL.revokeObjectURL(url); };
   }, [file]);
-  return <section className="audio-player"><strong>{question.section}</strong>{file ? <audio ref={player} controls preload="metadata" aria-label={question.prompt} /> : <p>OPEN: file audio lokal belum tersedia.</p>}</section>;
+  return <section className="audio-player"><strong>{question.section}</strong>{file ? <audio ref={player} controls preload="metadata" aria-label={question.prompt} /> : question.audioUrl ? <audio src={adminMediaUrl(question.audioUrl)} controls preload="metadata" aria-label={question.prompt} /> : <p>Belum ada audio.</p>}</section>;
 }
 
 export function AdminAssessmentPreview({ assessment, initialQuestionId }: { assessment: AdminAssessment; initialQuestionId?: string }) {

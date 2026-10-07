@@ -137,7 +137,7 @@ class TryOutAttemptService
             if ($review) {
                 $item += array_intersect_key($grade, array_flip(['correct_option', 'explanation', 'point_value']));
             }
-            $questions[] = $item;
+            $questions[] = app(MediaService::class)->payload($item);
         }
 
         return ['id' => $attempt->id, 'try_out_id' => $attempt->try_out_id, 'status' => $attempt->status, 'revision' => $attempt->revision, 'current_session' => $attempt->current_session, 'completed_sessions' => $attempt->completed_sessions, 'questions' => $questions, 'answers' => $attempt->answers, 'result' => $this->result($attempt), 'started_at' => $attempt->started_at->toISOString(), 'completed_at' => $attempt->completed_at?->toISOString()];

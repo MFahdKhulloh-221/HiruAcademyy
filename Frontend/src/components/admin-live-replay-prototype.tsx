@@ -1,6 +1,8 @@
 "use client";
 
-import { type ChangeEvent, type FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { type FormEvent, useCallback, useState } from "react";
+import { AdminMediaUpload, AdminVideoPreview } from "@/components/admin-media-upload";
+import { validVideoReference } from "@/lib/admin-media";
 import { useClassAdmin } from "@/components/class-admin-hooks";
 import { AdminReplayPlaylists } from "@/components/admin-replay-playlists";
 import { LuSearch } from "react-icons/lu";
@@ -12,26 +14,7 @@ function safeUrl(value: string) {
 }
 
 function ReplayMedia({ item }: { item: LiveReplayRecord }) {
-  const video = useRef<HTMLVideoElement>(null);
-  const thumbnail = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const player = video.current;
-    const image = thumbnail.current;
-    const videoUrl = item.video ? URL.createObjectURL(item.video) : "";
-    const imageUrl = item.thumbnail ? URL.createObjectURL(item.thumbnail) : "";
-    if (player && videoUrl) { player.src = videoUrl; player.load(); }
-    if (image) image.style.backgroundImage = imageUrl ? `url("${imageUrl}")` : "";
-    return () => {
-      if (player) { player.pause(); player.removeAttribute("src"); player.load(); }
-      if (image) image.style.backgroundImage = "";
-      if (videoUrl) URL.revokeObjectURL(videoUrl);
-      if (imageUrl) URL.revokeObjectURL(imageUrl);
-    };
-  }, [item.video, item.thumbnail]);
-  return <div className="replay-featured-preview alr-media">
-    <div ref={thumbnail} role="img" aria-label={item.thumbnail ? `Thumbnail ${item.title}` : "Thumbnail belum tersedia"} className="alr-thumbnail" />
-    {item.video ? <video ref={video} controls preload="metadata" aria-label={item.title} /> : safeUrl(item.url) ? <a className="button button-primary" href={item.url} target="_blank" rel="noopener noreferrer">Tonton Replay</a> : <p>Rekaman belum tersedia</p>}
-  </div>;
+  return <div className="replay-featured-preview alr-media"><AdminVideoPreview value={item.url} title={item.title} /></div>;
 }
 
 function StudentPreview({ item }: { item: LiveReplayRecord }) {
@@ -72,12 +55,6 @@ export function AdminLiveReplayPrototype() {
   const offset = calendarDate ? (calendarDate.getUTCDay() + 6) % 7 : 0;
 
   function edit(item: LiveReplayRecord) { setError(""); setDraft({ ...item }); }
-  function upload(event: ChangeEvent<HTMLInputElement>, field: "video" | "thumbnail") {
-    const file = event.target.files?.[0]; event.target.value = "";
-    if (!file || !draft) return;
-    if (!file.type.startsWith(field === "video" ? "video/" : "image/")) { setError(field === "video" ? "Pilih file video dengan MIME video/*." : "Pilih thumbnail dengan MIME image/*."); return; }
-    setDraft({ ...draft, [field]: file, ...(field === "video" ? { url: "" } : {}) }); setError("");
-  }
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft) return;
@@ -89,7 +66,7 @@ export function AdminLiveReplayPrototype() {
       if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(next.start) || (next.end && (!/^([01]\d|2[0-3]):[0-5]\d$/.test(next.end) || next.end <= next.start))) { setError("Jam selesai harus setelah jam mulai pada tanggal yang sama (WIB)."); return; }
       if (!safeUrl(next.url)) { setError("Isi URL Zoom HTTP/HTTPS yang valid tanpa kredensial."); return; }
     } else {
-      if (next.video ? !next.video.type.startsWith("video/") : !safeUrl(next.url)) { setError("Pilih video dengan MIME video/* atau URL HTTP/HTTPS yang valid tanpa kredensial."); return; }
+      if (!validVideoReference(next.url)) { setError("Pilih video dengan MIME video/* atau URL HTTP/HTTPS yang valid tanpa kredensial."); return; }
       if (next.thumbnail && !next.thumbnail.type.startsWith("image/")) { setError("Thumbnail harus memiliki MIME image/*."); return; }
       if (!/^\d+$/.test(next.order) || !Number.isSafeInteger(Number(next.order)) || Number(next.order) < 1) { setError("Urutan harus angka bulat positif."); return; }
     }
@@ -134,8 +111,8 @@ export function AdminLiveReplayPrototype() {
       {draft.kind === "live" && <div className="alr-times"><label className="admin-field">Jam mulai (WIB)<input type="time" required value={draft.start} onChange={(event) => setDraft({ ...draft, start: event.target.value })} /></label><label className="admin-field">Jam selesai (WIB, opsional)<input type="time" value={draft.end} onChange={(event) => setDraft({ ...draft, end: event.target.value })} /></label></div>}
       <label className="admin-field">Sensei<input required value={draft.sensei} onChange={event => setDraft({ ...draft, sensei: event.target.value })} /></label>
       {draft.kind === "replay" && <label className="admin-field">Playlist<select required value={draft.playlistId || ""} onChange={event => { const playlist = store.playlists.find(item => String(item.id) === event.target.value); setDraft({ ...draft, playlistId: event.target.value, program: store.programs.find(item => item.id === playlist?.program_id)?.code.toUpperCase() || "" }); }}><option value="">Pilih playlist</option>{store.playlists.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>}
-      <label className="admin-field">{draft.kind === "live" ? "URL Zoom" : "URL video (HTTP/HTTPS)"}<input type="url" value={draft.url} onChange={(event) => setDraft({ ...draft, url: event.target.value, ...(draft.kind === "replay" ? { video: null } : {}) })} /></label>
-      {draft.kind === "replay" && <><label className="admin-field">File video (video/*)<input type="file" accept="video/*" disabled onChange={(event) => upload(event, "video")} /><small>Upload produksi OPEN. Gunakan URL video.</small><small>{draft.video?.name || "Belum ada file"}</small></label>{draft.video && <button type="button" className="button" onClick={() => setDraft({ ...draft, video: null })}>Hapus file video</button>}<label className="admin-field">Thumbnail (opsional)<input type="file" accept="image/*" disabled onChange={(event) => upload(event, "thumbnail")} /><small>{draft.thumbnail?.name || "Belum ada thumbnail"}</small></label>{draft.thumbnail && <button type="button" className="button" onClick={() => setDraft({ ...draft, thumbnail: null })}>Hapus thumbnail</button>}<label className="admin-field">Urutan<input type="number" min="1" step="1" value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })} /></label></>}
+      <label className="admin-field">{draft.kind === "live" ? "URL Zoom" : "URL video (HTTP/HTTPS)"}<input type={draft.kind === "live" ? "url" : "text"} value={draft.url} onChange={(event) => setDraft({ ...draft, url: event.target.value, ...(draft.kind === "replay" ? { video: null } : {}) })} /></label>
+      {draft.kind === "replay" && <><AdminMediaUpload kind="video" onUploaded={url => setDraft({ ...draft, url, video: null })} /><label className="admin-field">Urutan<input type="number" min="1" step="1" value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })} /></label></>}
       <label className="admin-field">Status<select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}>{(draft.kind === "live" ? ["Draft", "Terjadwal", "Dibatalkan"] : replayStatuses).map((value) => <option key={value}>{value}</option>)}</select></label>
       <label className="admin-field">{draft.kind === "live" ? "Catatan" : "Deskripsi (opsional)"}<textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
       <h3>Pratinjau siswa • Draft lokal</h3><StudentPreview item={draft} />

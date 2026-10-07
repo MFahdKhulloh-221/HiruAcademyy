@@ -6,7 +6,7 @@ import { JourneyShell } from "@/components/journey-shell";
 import { ChapterJourney } from "@/components/chapter-journey";
 import { LevelSelection } from "@/components/level-selection";
 import { useLearningRequest } from "@/components/learning-hooks";
-import { learningCatalog, learningChapters, learningMembership, learningProgress, programCode, programSlug } from "@/lib/learning-api";
+import { completionPercent, learningCatalog, learningChapters, learningMembership, learningProgress, programCode, programSlug } from "@/lib/learning-api";
 import type { JourneyChapter, JourneyLevel } from "@/lib/journey-mock";
 
 export function LearningJourney({ level }: { level?: string }) {
@@ -14,13 +14,13 @@ export function LearningJourney({ level }: { level?: string }) {
     const catalog = await learningCatalog(signal);
     const levels: JourneyLevel[] = catalog.programs.map(program => {
       const access = catalog.access.learning[program.code];
-      return { slug: programSlug(program.code), code: program.code.toUpperCase(), title: program.name, description: access === "preview" ? "Chapter 1 tersedia sebagai akses preview pada level ini." : "", access: access === "full" ? "owned" : access === "preview" ? "freePreview" : "notPurchased", cohort: "none", progression: "available", statusLabel: access === "full" ? "LEVEL DIMILIKI" : access === "preview" ? "CHAPTER 1 TERSEDIA" : "TERKUNCI", actionLabel: access === "full" ? "Buka perjalanan" : access === "preview" ? "Buka Chapter 1" : "Upgrade Membership" };
+      return { slug: programSlug(program.code), code: program.code.toUpperCase(), title: program.name, description: ({ dasar: "Hiragana, Katakana, salam, dan pola dasar pemula.", n5: "Tata bahasa dasar, kanji pemula, dan percakapan harian.", n4: "Pola kalimat lanjutan, kanji esensial, dan percakapan kontekstual.", n3: "Tata bahasa menengah, teks umum, dan kemampuan komunikasi.", n2: "Tata bahasa kompleks, artikel opini, dan pemahaman profesional.", n1: "Nuansa bahasa tingkat tinggi, teks kompleks, dan strategi JLPT N1.", "ssw-food": "SOP industri makanan Jepang, higienitas, dan instruksi lapangan.", interview: "Etika wawancara kerja, motivasi, dan simulasi profesional." } as Record<string, string>)[program.code] ?? "", access: access === "full" ? "owned" : access === "preview" ? "freePreview" : "notPurchased", cohort: "none", progression: "available", statusLabel: access === "full" ? "LEVEL DIMILIKI" : access === "preview" ? "CHAPTER 1 TERSEDIA" : "TERKUNCI", actionLabel: access === "full" ? "Buka perjalanan" : access === "preview" ? "Buka Chapter 1" : "Upgrade Membership" };
     });
     const program = catalog.programs.find(item => item.code === programCode(level ?? ""));
     const chapters: JourneyChapter[] = !program ? [] : await Promise.all((await learningChapters(program.id, signal)).map(async chapter => {
       const locked = chapter.access === "locked" || chapter.access === "none";
       const progress = locked ? undefined : await learningProgress(program.id, chapter.id, signal);
-      return { key: `chapter-${chapter.chapter_number}`, orderLabel: String(chapter.chapter_number).padStart(2, "0"), title: chapter.title, description: chapter.description ?? "", state: locked ? "entitlementLocked" as const : "available" as const, statusLabel: locked ? "Terkunci • Upgrade" : "Buka", progress: 0, components: Object.entries(progress?.activities ?? {}).map(([label, activity]) => ({ label, weight: 0, complete: activity.complete })), checkpointUnlocked: progress?.mini_unlocked ?? false, href: locked ? undefined : `/learn/${programSlug(program.code)}/chapter-${chapter.chapter_number}` };
+      return { key: `chapter-${chapter.chapter_number}`, orderLabel: String(chapter.chapter_number).padStart(2, "0"), title: chapter.title, description: chapter.description ?? "", state: locked ? "entitlementLocked" as const : "available" as const, statusLabel: locked ? "Terkunci • Upgrade" : "Buka", progress: completionPercent(progress?.activities ?? {}), components: Object.entries(progress?.activities ?? {}).map(([label, activity]) => ({ label, weight: 0, complete: activity.complete })), checkpointUnlocked: progress?.mini_unlocked ?? false, href: locked ? undefined : `/learn/${programSlug(program.code)}/chapter-${chapter.chapter_number}` };
     }));
     return { levels, chapters, membership: learningMembership(catalog.access) };
   }, [level]);

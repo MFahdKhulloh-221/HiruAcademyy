@@ -275,6 +275,7 @@ class PlacementService
                 $result[$answer === null ? 'unanswered' : ($answer === $correct ? 'correct' : 'wrong')]++;
             }
             $result['percentage'] = (int) round($result['correct'] * 100 / $result['total']);
+            $result['areas'] = $this->categoryResults($locked, $answers);
             foreach ($locked->config_snapshot['recommendation_rules'] ?? [] as $rule) {
                 if ($result['percentage'] >= $rule['minScore'] && $result['percentage'] <= $rule['maxScore']) {
                     $result['recommendation_level'] = $rule['recommendedProgramCode'];
@@ -287,6 +288,17 @@ class PlacementService
         }, 3);
     }
 
+    private function categoryResults(PlacementAttempt $attempt, array $answers): array
+    {
+        return array_map(function ($category) use ($attempt, $answers) {
+            $questions = array_filter($attempt->content_snapshot, fn ($question) => $question['category'] === $category);
+            $correct = count(array_filter($questions, fn ($question) => isset($answers[$question['id']]) && $answers[$question['id']] === ($attempt->grading_snapshot[$question['id']] ?? null)));
+            $total = count($questions);
+
+            return ['name' => $category, 'score' => $total > 0 ? (int) round($correct * 100 / $total) : 0, 'correct' => $correct, 'total' => $total];
+        }, self::CATEGORIES);
+    }
+
     public function attemptPayload(PlacementAttempt $attempt): array
     {
         return [
@@ -296,7 +308,7 @@ class PlacementService
             'config' => array_intersect_key($attempt->config_snapshot, array_flip(self::CONFIG_FIELDS)),
             'questions' => array_map(fn ($question) => $this->publicQuestion($question), $attempt->content_snapshot),
             'answers' => $attempt->answers,
-            'result' => $attempt->status === 'completed' ? array_intersect_key($attempt->result_snapshot, array_flip(['correct', 'wrong', 'unanswered', 'total', 'percentage', 'recommendation_level'])) : null,
+            'result' => $attempt->status === 'completed' ? [...array_intersect_key($attempt->result_snapshot, array_flip(['correct', 'wrong', 'unanswered', 'total', 'percentage', 'recommendation_level'])), 'areas' => $attempt->result_snapshot['areas'] ?? $this->categoryResults($attempt, $attempt->answers)] : null,
             'started_at' => $attempt->started_at->utc()->toISOString(),
             'expires_at' => $attempt->expires_at->utc()->toISOString(),
             'completed_at' => $attempt->completed_at?->utc()->toISOString(),

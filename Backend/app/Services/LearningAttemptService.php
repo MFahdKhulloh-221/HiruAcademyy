@@ -26,7 +26,7 @@ class LearningAttemptService
                 abort_unless($this->progress->progress($user, $program, $chapter)['mini_unlocked'], 403);
                 $questions = $chapter->miniCheckpointQuestions()->where('status', 'published')->get();
             } else {
-                abort_unless($program->family === 'jlpt', 404);
+                abort_unless(in_array($program->family, ['foundation', 'jlpt'], true), 404);
                 $questions = $this->progress->resources($chapter, $kind);
             }
             abort_if($questions->isEmpty(), 422, 'Published questions required.');
@@ -162,7 +162,7 @@ class LearningAttemptService
                 $item['selected_answer'] = $attempt->answers[$question['id']] ?? null;
                 $item['status'] = $item['selected_answer'] === null ? 'unanswered' : ($item['selected_answer'] === $grade['correct_option'] ? 'correct' : 'wrong');
             }
-            $questions[] = $item;
+            $questions[] = app(MediaService::class)->payload($item);
         }
 
         return ['id' => $attempt->id, 'chapter_id' => $attempt->chapter_id, 'kind' => $attempt->kind, 'status' => $attempt->status, 'revision' => $attempt->revision, 'questions' => $questions, 'answers' => $attempt->answers, 'result' => $attempt->status === 'completed' ? array_intersect_key($attempt->result_snapshot, array_flip(['correct', 'wrong', 'unanswered', 'total', 'percentage', 'passed', 'passing_score'])) : null, 'submitted_at' => $attempt->submitted_at?->toISOString()];

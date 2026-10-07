@@ -33,7 +33,7 @@ class LearningContentService
     ];
 
     public const ACTIVITIES = [
-        'foundation' => ['video', 'module', 'flashcard', 'mini_checkpoint'],
+        'foundation' => ['video', 'module', 'flashcard', 'audio', 'reading', 'mini_checkpoint'],
         'jlpt' => ['video', 'module', 'flashcard', 'audio', 'reading', 'mini_checkpoint'],
         'ssw' => ['video', 'module', 'flashcard', 'mini_checkpoint'],
         'interview' => ['video', 'module'],
@@ -70,11 +70,11 @@ class LearningContentService
         $table = $resource === 'reading-questions' ? 'reading_passages' : 'chapters';
         $rules[$parent] = [$required, 'required', 'integer', "exists:{$table},id"];
         $rules += match ($resource) {
-            'video-lessons' => ['title' => $title, 'video_url' => [$required, 'required', 'url:http,https']],
-            'modules' => ['title' => $title, 'file_url' => [$required, 'required', 'url:http,https'], 'module_type' => [$required, 'required', Rule::in(['grammar', 'kanji', 'general'])]],
+            'video-lessons' => ['title' => $title, 'video_url' => ['sometimes', 'nullable', 'string', app(MediaService::class)->rule('video')]],
+            'modules' => ['title' => $title, 'file_url' => ['sometimes', 'nullable', 'string', app(MediaService::class)->rule()], 'module_type' => [$required, 'required', Rule::in(['grammar', 'kanji', 'general'])]],
             'flashcards' => ['japanese' => $text, 'reading' => $text, 'meaning' => $text, 'example' => ['sometimes', 'nullable', 'string']],
             'reading-passages' => ['title' => $title, 'body' => $text],
-            'audio-questions' => ['title' => ['sometimes', 'nullable', 'string', 'max:255'], 'audio_url' => [$required, 'required', 'url:http,https']],
+            'audio-questions' => ['title' => ['sometimes', 'nullable', 'string', 'max:255'], 'audio_url' => ['sometimes', 'nullable', 'string', app(MediaService::class)->rule('audio')]],
             default => [],
         };
         if (in_array($resource, ['audio-questions', 'reading-questions', 'mini-checkpoint-questions'])) {
@@ -103,6 +103,11 @@ class LearningContentService
     }
 
     public function save(string $resource, array $input, ?Model $model = null): Model
+    {
+        return app(MediaService::class)->locked(fn () => $this->saveContent($resource, $input, $model));
+    }
+
+    private function saveContent(string $resource, array $input, ?Model $model): Model
     {
         $class = $this->model($resource);
         $model ??= new $class;
@@ -142,6 +147,10 @@ class LearningContentService
                         $chapterId = $model->chapter_id;
                     }
                     $chapter = Chapter::whereKey($chapterId)->lockForUpdate()->firstOrFail();
+                    if ($resource === 'video-lessons' && VideoLesson::where('chapter_id', $chapterId)
+                        ->when($model->exists, fn ($query) => $query->whereKeyNot($model->getKey()))->exists()) {
+                        throw ValidationException::withMessages(['chapter_id' => 'Only one video is allowed per chapter.']);
+                    }
                     if (! $this->allowed($chapter->program()->firstOrFail()->family, self::RESOURCES[$resource][1])) {
                         throw ValidationException::withMessages([$parent => 'Content is not allowed in this program family.']);
                     }
@@ -151,6 +160,9 @@ class LearningContentService
                 return $model->fresh();
             }, 3);
         } catch (UniqueConstraintViolationException $exception) {
+            if ($resource === 'video-lessons') {
+                throw ValidationException::withMessages(['chapter_id' => 'Only one video is allowed per chapter.']);
+            }
             if ($resource !== 'chapters') {
                 throw $exception;
             }

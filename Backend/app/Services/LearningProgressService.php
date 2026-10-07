@@ -36,8 +36,8 @@ class LearningProgressService
     public function requiredTypes(Program $program): array
     {
         return match ($program->family) {
-            'foundation', 'ssw' => ['video', 'module', 'flashcard'],
-            'jlpt' => ['video', 'module', 'flashcard', 'audio', 'reading'],
+            'ssw' => ['video', 'module', 'flashcard'],
+            'foundation', 'jlpt' => ['video', 'module', 'flashcard', 'audio', 'reading'],
             default => [],
         };
     }

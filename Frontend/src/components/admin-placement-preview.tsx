@@ -1,12 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { adminMediaUrl } from "@/lib/admin-media";
 import { LuArrowLeft, LuArrowRight, LuCheck, LuClock } from "react-icons/lu";
 
 export type PlacementSettings = { title: string; introHeading: string; minutes: string; description: string };
 export type PlacementQuestion = { id: string; prompt: string; answers: string[]; correct: string; category: string; published: boolean; explanation: string; image?: File; audio?: File; imageUrl?: string; audioUrl?: string };
 
-export function PlacementMedia({ image, audio }: { image?: File; audio?: File }) {
+export function PlacementMedia({ image, audio, imageUrl, audioUrl }: { image?: File; audio?: File; imageUrl?: string; audioUrl?: string }) {
   const imageRef = useRef<HTMLImageElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   useEffect(() => {
@@ -24,6 +25,8 @@ export function PlacementMedia({ image, audio }: { image?: File; audio?: File })
     return () => { element.pause(); element.removeAttribute("src"); element.load(); URL.revokeObjectURL(url); };
   }, [audio]);
   return <div className="placement-runner-media admin-placement-media">
+    {!image && imageUrl && <figure><picture><img src={adminMediaUrl(imageUrl)} alt="Ilustrasi soal" /></picture></figure>}
+    {!audio && audioUrl && <audio src={adminMediaUrl(audioUrl)} controls preload="metadata" aria-label="Audio soal" />}
     {image && <figure><picture><img ref={imageRef} alt="Ilustrasi soal" /></picture><figcaption>{image.name}</figcaption></figure>}
     {audio && <figure><audio ref={audioRef} controls preload="metadata" aria-label={audio.name} /><figcaption>{audio.name}</figcaption></figure>}
   </div>;
@@ -56,7 +59,7 @@ export function AdminPlacementPreview({ settings, questions, initialQuestionId }
         <div className="question-header-row"><span className="question-area-badge">{question.category}</span><span className="question-number-pill">Soal {index + 1}/{questions.length}</span></div>
         <h2 className="placement-question-prompt">{question.prompt}</h2>
         {question.category === "Choukai" && <div className="placement-audio-hint" role="note"><div><strong>Soal Menyimak (Choukai)</strong><small>Dengarkan audio dan baca pertanyaan dengan teliti sebelum memilih jawaban.</small></div></div>}
-        <PlacementMedia image={question.image} audio={question.audio} />
+        <PlacementMedia image={question.image} audio={question.audio} imageUrl={question.imageUrl} audioUrl={question.audioUrl} />
         <fieldset className="placement-answers-group"><legend className="sr-only">Pilih satu jawaban</legend>{question.answers.map((answer, optionIndex) => <label className={`placement-option ${answers[question.id] === optionIndex ? "selected" : ""}`} key={optionIndex}>
           <input type="radio" name={`preview-${question.id}`} checked={answers[question.id] === optionIndex} onChange={() => setAnswers({ ...answers, [question.id]: optionIndex })} /><span className="option-badge">{String.fromCharCode(65 + optionIndex)}</span><span className="option-text">{answer}</span>{answers[question.id] === optionIndex && <span className="option-selected-check" aria-hidden="true"><LuCheck /></span>}
         </label>)}</fieldset>

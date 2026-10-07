@@ -2,14 +2,17 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { contentMedia, useContent, type TestimonialContent } from "@/lib/public-content-api";
+import { contentMedia, testimonialVideo, useContent, type TestimonialContent } from "@/lib/public-content-api";
 import { PublicPage } from "@/components/public-shell";
 
 
 export default function TestimonialsPage() {
   const content = useContent<TestimonialContent>("/api/testimonials");
-  const mergedTestimonials = content.data.map(item => ({ name: item.name, membership: item.context, quote: item.quote, avatarSrc: contentMedia(item.image), initials: item.name.slice(0, 2).toUpperCase() }));
-  const testimonialVideos = content.data.filter(item => item.video_url).map(item => ({ name: item.name, membership: item.context, videoSrc: item.video_url ?? "", posterSrc: contentMedia(item.image) }));
+  const mergedTestimonials = content.data.map(item => ({ name: item.name, membership: item.context, quote: item.quote, avatarSrc: contentMedia(item.image, item.image_resolved_url), initials: item.name.slice(0, 2).toUpperCase() }));
+  const testimonialVideos = content.data.flatMap(item => {
+    const media = testimonialVideo(item.video_url, item.video_url_resolved_url);
+    return media ? [{ id: item.id, name: item.name, membership: item.context, title: item.video_title || `Video testimoni ${item.name}`, media, posterSrc: contentMedia(item.image, item.image_resolved_url) }] : [];
+  });
 
   return (
     <PublicPage active="Testimoni">
@@ -65,16 +68,7 @@ export default function TestimonialsPage() {
             {testimonialVideos.map((testimonial) => (
               <article key={testimonial.name}>
                 <div className="testimonial-video-frame">
-                  {testimonial.videoSrc ? (
-                    <video controls poster={testimonial.posterSrc || undefined} src={testimonial.videoSrc} />
-                  ) : (
-                    <>
-                      <button type="button" aria-label={`Putar video testimoni ${testimonial.name}`} disabled>
-                        <span aria-hidden="true">▶</span>
-                      </button>
-                      <strong>Video Testimoni</strong>
-                    </>
-                  )}
+                  {testimonial.media.kind === "youtube" ? <iframe title={testimonial.title} src={testimonial.media.src} loading="lazy" referrerPolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation" allow="fullscreen; picture-in-picture" allowFullScreen style={{ width: "100%", height: "100%", border: 0 }} /> : <video controls preload="metadata" aria-label={testimonial.title} poster={testimonial.posterSrc || undefined} src={testimonial.media.src} />}
                 </div>
                 <footer>
                   <strong>{testimonial.name}</strong>

@@ -21,7 +21,7 @@ export function SenseiGrid({ limit, reveal = false, carousel = false }: { limit?
         style={carousel ? ({ "--sensei-position": distance } as React.CSSProperties) : reveal ? ({ "--reveal-index": index } as React.CSSProperties) : undefined}
       >
         <div className="sensei-avatar" aria-label={`Foto ${sensei.name}`}>
-          {contentMedia(sensei.photo) ? <Image unoptimized src={contentMedia(sensei.photo)} alt={`Foto profil ${sensei.name}`} fill sizes="(max-width: 768px) 76vw, 270px" className="sensei-avatar-img" /> : <span>{sensei.name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</span>}
+          {contentMedia(sensei.photo, sensei.photo_resolved_url) ? <Image unoptimized src={contentMedia(sensei.photo, sensei.photo_resolved_url)} alt={`Foto profil ${sensei.name}`} fill sizes="(max-width: 768px) 76vw, 270px" className="sensei-avatar-img" /> : <span>{sensei.name.split(" ").map((part) => part[0]).join("").slice(0, 2).toUpperCase()}</span>}
         </div>
         <div className="sensei-card-body">
           <h3>{sensei.name}</h3>

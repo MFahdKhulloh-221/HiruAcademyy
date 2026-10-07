@@ -3,8 +3,9 @@ import base from "./playwright.config";
 
 export default defineConfig({
   ...base,
-  testMatch: "laravel-smoke.spec.ts",
+  testMatch: /laravel-(smoke|regression)\.spec\.ts/,
   testIgnore: [],
+  expect: { timeout: 15000 },
   use: { ...base.use, baseURL: "http://localhost:3020" },
   webServer: [{
     command: "node --experimental-strip-types tests/laravel-browser-server.ts",

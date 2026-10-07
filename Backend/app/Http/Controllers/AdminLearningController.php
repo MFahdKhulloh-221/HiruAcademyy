@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Services\LearningContentService;
+use App\Services\MediaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
@@ -14,19 +15,19 @@ class AdminLearningController extends Controller
     {
         $class = $this->content->model($this->resource($request));
 
-        return response()->json(['data' => $class::query()->orderBy('sort_order')->orderBy('id')->get()]);
+        return response()->json(['data' => app(MediaService::class)->payload($class::query()->orderBy('sort_order')->orderBy('id')->get()->toArray())]);
     }
 
     public function store(Request $request): JsonResponse
     {
-        return response()->json(['data' => $this->content->save($this->resource($request), $request->all())], 201);
+        return response()->json(['data' => app(MediaService::class)->payload($this->content->save($this->resource($request), $request->all())->toArray())], 201);
     }
 
     public function show(Request $request): JsonResponse
     {
         $class = $this->content->model($this->resource($request));
 
-        return response()->json(['data' => $class::query()->whereKey($this->id($request))->firstOrFail()]);
+        return response()->json(['data' => app(MediaService::class)->payload($class::query()->whereKey($this->id($request))->firstOrFail()->toArray())]);
     }
 
     public function update(Request $request): JsonResponse
@@ -35,7 +36,7 @@ class AdminLearningController extends Controller
         $class = $this->content->model($resource);
         $model = $class::query()->whereKey($this->id($request))->firstOrFail();
 
-        return response()->json(['data' => $this->content->save($resource, $request->all(), $model)]);
+        return response()->json(['data' => app(MediaService::class)->payload($this->content->save($resource, $request->all(), $model)->toArray())]);
     }
 
     public function destroy(Request $request): JsonResponse

@@ -10,8 +10,10 @@ use App\Services\TryOutService;
 use Database\Seeders\ProgramSeeder;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 class TryOutAssessmentTest extends TestCase
@@ -87,6 +89,35 @@ class TryOutAssessmentTest extends TestCase
         }
 
         return $this->postJson($this->base.'/attempts/'.$attempt['id'].'/submit', ['revision' => $attempt['revision']])->assertOk()->json('data');
+    }
+
+    public function test_managed_audio_admin_validation_and_snapshot_resolution(): void
+    {
+        config(['media.disk' => 'public']);
+        Storage::fake('public');
+        $this->actingAs($this->admin);
+        $wav = 'RIFF'.pack('V', 38).'WAVEfmt '.pack('VvvVVvv', 16, 1, 1, 8000, 16000, 2, 16).'data'.pack('V', 2)."\x00\x00";
+        $upload = $this->post('/api/admin/media', ['kind' => 'audio', 'file' => UploadedFile::fake()->createWithContent('audio.wav', $wav)], ['Accept' => 'application/json'])->assertCreated()->json('data');
+        $question = $this->postJson($this->adminBase.'/questions', $this->question('audio', 70, ['audio_url' => $upload['path']]))->assertCreated()->assertJsonPath('data.audio_url_resolved_url', $upload['url'])->json('data.id');
+        foreach (['javascript:alert(1)', 'https://user:pass@example.test/audio.mp3', 'https://example.test/page', 'media/audio/missing.mp3', '../audio.mp3'] as $unsafe) {
+            $this->patchJson($this->adminBase.'/questions/'.$question, ['audio_url' => $unsafe])->assertUnprocessable()->assertJsonValidationErrors('audio_url');
+        }
+        foreach (['vocabulary_kanji' => 20, 'grammar' => 40, 'reading' => 50] as $session => $points) {
+            app(TryOutService::class)->saveQuestion($this->tryOut, $this->question($session, $points));
+        }
+        $this->tryOut = app(TryOutService::class)->save(['status' => 'published'], $this->tryOut);
+        $this->actingAs($this->student);
+        $attempt = $this->start();
+        $audio = collect($attempt['questions'])->firstWhere('session', 'audio');
+        $this->assertSame($upload['path'], $audio['audio_url']);
+        $this->assertSame($upload['url'], $audio['audio_url_resolved_url']);
+        $this->assertArrayNotHasKey('correct_option', $audio);
+        $snapshot = TryOutAttempt::findOrFail($attempt['id'])->content_snapshot;
+        $this->finish($attempt);
+        $this->getJson($this->base.'/attempts/'.$attempt['id'].'/review')->assertOk();
+        $this->assertSame($snapshot, TryOutAttempt::findOrFail($attempt['id'])->content_snapshot);
+        $this->actingAs($this->admin)->patchJson($this->adminBase.'/questions/'.$question, ['audio_url' => 'https://example.test/new.mp3'])->assertOk();
+        $this->deleteJson('/api/admin/media', ['path' => $upload['path']])->assertStatus(409);
     }
 
     public function test_admin_crud_and_exact_fixed_configuration(): void

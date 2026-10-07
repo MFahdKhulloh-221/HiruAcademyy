@@ -394,6 +394,44 @@ class PlacementTest extends TestCase
         $this->assertSame('contacted', $leadAfter['status']);
     }
 
+    public function test_recovered_rules_migration_preserves_custom_configs_and_attempts(): void
+    {
+        $config = $this->published(4);
+        $attempt = $this->start();
+        $original = PlacementAttempt::findOrFail($attempt['id'])->getRawOriginal();
+        $custom = app(PlacementService::class)->save('placement-configs', [...$this->configInput(), 'recommendation_rules' => [['minScore' => 0, 'maxScore' => 100, 'recommendedProgramCode' => 'N1', 'resultTitle' => 'Custom', 'resultDescription' => 'Custom']]]);
+        $migration = require database_path('migrations/2026_10_07_000019_recover_empty_placement_recommendation_rules.php');
+        $migration->up();
+        $migration->up();
+        $rules = $config->fresh()->recommendation_rules;
+        $this->assertSame([[0, 39, 'N5'], [40, 59, 'N4'], [60, 74, 'N3'], [75, 100, 'N2']], array_map(fn ($rule) => [$rule['minScore'], $rule['maxScore'], $rule['recommendedProgramCode']], $rules));
+        $this->assertSame('N1', $custom->fresh()->recommendation_rules[0]['recommendedProgramCode']);
+        $this->assertSame($original, PlacementAttempt::findOrFail($attempt['id'])->getRawOriginal());
+        $fresh = $this->start();
+        $answers = array_fill_keys(array_column($fresh['questions'], 'id'), 'B');
+        $this->postJson('/api/placement/attempts/'.$fresh['id'].'/submit', ['answers' => $answers])->assertOk()->assertJsonPath('data.result.recommendation_level', 'N2');
+        foreach ([0 => 'N5', 39 => 'N5', 40 => 'N4', 59 => 'N4', 60 => 'N3', 74 => 'N3', 75 => 'N2', 90 => 'N2', 100 => 'N2'] as $score => $level) {
+            $this->assertSame($level, collect($rules)->first(fn ($rule) => $score >= $rule['minScore'] && $score <= $rule['maxScore'])['recommendedProgramCode']);
+        }
+    }
+
+    public function test_category_results_use_attempt_snapshot_and_missing_categories_are_zero(): void
+    {
+        $this->published(3);
+        $attempt = $this->start();
+        $ids = array_column($attempt['questions'], 'id');
+        app(PlacementService::class)->save('placement-questions', ['category' => 'Choukai', 'correct_option' => 'A'], PlacementQuestion::findOrFail($ids[0]));
+        $response = $this->postJson('/api/placement/attempts/'.$attempt['id'].'/submit', ['answers' => [$ids[0] => 'B', $ids[1] => 'A']])->assertOk();
+        $this->assertEquals([
+            ['name' => 'Bunpou', 'score' => 100, 'correct' => 1, 'total' => 1],
+            ['name' => 'Moji・Goi', 'score' => 0, 'correct' => 0, 'total' => 1],
+            ['name' => 'Dokkai', 'score' => 0, 'correct' => 0, 'total' => 1],
+            ['name' => 'Choukai', 'score' => 0, 'correct' => 0, 'total' => 0],
+        ], $response->json('data.result.areas'));
+        $this->assertNoSecrets($response->json());
+        $this->getJson('/api/placement/attempts/'.$attempt['id'])->assertOk()->assertJsonPath('data.result.areas', $response->json('data.result.areas'));
+    }
+
     private function assertDatabaseRejects(callable $operation): void
     {
         try {
