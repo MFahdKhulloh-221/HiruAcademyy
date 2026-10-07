@@ -40,7 +40,10 @@ class AppServiceProvider extends ServiceProvider
                 if (! $this->app->environment('testing') && ! $programSeed && in_array($event->command, ['migrate:fresh', 'migrate:refresh', 'migrate:reset', 'migrate:rollback', 'db:wipe', 'db:seed'], true)) {
                     throw new \RuntimeException('Operasi destruktif diblokir pada database normal.');
                 }
-                DatabaseSafety::assertTarget($this->app->environment('testing'));
+                $productionMigrate = $this->app->environment('production') && $event->command === 'migrate';
+                if (! $productionMigrate) {
+                    DatabaseSafety::assertTarget($this->app->environment('testing'));
+                }
             }
         });
     }
