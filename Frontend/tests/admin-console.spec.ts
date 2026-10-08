@@ -58,7 +58,13 @@ test("mobile drawer locks body and traps all focusable selectors", async ({ page
 
 test("dedicated Sensei dialog focuses and persists canonical API data", async ({ page }) => {
   const rows: Record<string, unknown>[] = [];
-  await page.route("**/sensei-test.svg", route => route.fulfill({ contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="orange"/></svg>' }));
+  const photo = "media/image/12345678-1234-1234-1234-123456789012.png";
+  await page.route("**/storage/media/image/**", route => route.fulfill({ contentType: "image/png", body: Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXioAAAAASUVORK5CYII=", "base64") }));
+  await page.route("**/api/admin/media", async route => {
+    expect(route.request().headers()["content-type"]).toContain("multipart/form-data; boundary=");
+    expect(route.request().headers()["x-xsrf-token"]).toBeTruthy();
+    await route.fulfill({ status: 201, json: { data: { path: photo, url: `http://localhost:8000/storage/${photo}`, mime_type: "image/png" } } });
+  });
   await page.route("**/sanctum/csrf-cookie", route => route.fulfill({ status: 204, headers: { "set-cookie": "XSRF-TOKEN=test; Path=/" } }));
   await page.route("**/api/admin/sensei-profiles", async route => {
     if (route.request().method() === "POST") { rows.push({ ...route.request().postDataJSON(), id: 7 }); await route.fulfill({ status: 201, json: { data: rows[0] } }); return; }
@@ -71,9 +77,12 @@ test("dedicated Sensei dialog focuses and persists canonical API data", async ({
   await dialog.getByLabel("Peran", { exact: true }).fill("Pengajar");
   await dialog.getByLabel("Bio singkat", { exact: true }).fill("Pengajar bahasa Jepang.");
   await dialog.getByRole("textbox", { name: /^Keahlian/ }).fill("JLPT N5");
-  await dialog.getByRole("textbox", { name: /^Foto/ }).fill("http://localhost:3000/sensei-test.svg");
+  await dialog.getByLabel("Foto", { exact: true }).setInputFiles({ name: "sensei.png", mimeType: "image/png", buffer: Buffer.from("image") });
+  await expect(dialog.getByLabel("Foto", { exact: true })).toBeEnabled();
+  await expect(dialog.getByRole("img", { name: "Foto profil Sensei Kenji" })).toHaveAttribute("src", `http://localhost:8000/storage/${photo}`);
   await dialog.getByRole("button", { name: "Simpan Sensei", exact: true }).click();
   await expect(dialog).toHaveCount(0);
+  expect(rows[0].photo).toBe(photo);
   await page.reload();
   await expect(page.getByRole("cell", { name: "Sensei Kenji", exact: true })).toBeVisible();
 });

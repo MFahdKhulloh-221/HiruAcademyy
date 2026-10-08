@@ -3543,6 +3543,18 @@ rt { color: var(--secondary); }
   border: 1px solid #dee1ea !important;
   box-shadow: 0 4px 18px rgba(42, 49, 61, 0.04) !important;
 }
+.profile-page .profile-identity > div {
+  min-width: 0;
+}
+.profile-page .profile-identity p {
+  overflow-wrap: anywhere;
+}
+@media (max-width: 639px) {
+  .profile-page .profile-identity {
+    flex-wrap: wrap;
+    padding: 20px;
+  }
+}
 .profile-cert-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -6626,4 +6638,97 @@ video { height: auto; }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; scroll-behavior: auto !important; }
+}
+
+:is(.dashboard-shell, .journey-shell, .learning-shell, .sensei-shell, .supporting-shell) > :is(main, div),
+:is(.dash-content, .journey-content, .learning-content, .sensei-content, .supporting-main) :is(section, article, header, footer, form, fieldset, label) { min-width: 0; }
+:is(.dash-content, .journey-content, .learning-content, .sensei-content, .supporting-main) :is(h1, h2, h3, p, strong, small, code) { overflow-wrap: anywhere; }
+:is(.dash-content, .journey-content, .learning-content, .sensei-content, .supporting-main) :is(input:not([type="radio"]):not([type="checkbox"]), select, textarea) { min-width: 0; max-width: 100%; }
+:is(.dash-content, .journey-content, .learning-content, .sensei-content, .supporting-main) :is(button, select, .button, .sensei-back, .learning-top-back, .document-toolbar > a, .document-footer > a, .video-chapter-rail a) { min-height: 44px; min-width: 44px; }
+:is(.dash-content, .journey-content, .learning-content, .sensei-content, .supporting-main) .button { max-width: 100%; white-space: normal; text-align: center; }
+:is(.dash-content, .journey-content, .learning-content, .sensei-content, .supporting-main) :is(audio, video, iframe, img) { max-width: 100%; }
+.learning-question-card audio { width: 100%; }
+.learning-module-pdf { display: block; width: 100%; height: 70dvh; min-height: 280px; border: 0; }
+.learning-content .video-surface:has(video, iframe) { display: block; }
+.learning-content .video-surface > :is(video, iframe) { display: block; width: 100%; height: 100%; object-fit: contain; }
+.learning-content > .student-breadcrumb { margin-left: 0; }
+.student-breadcrumb a { display: inline-flex; align-items: center; min-height: 44px; }
+.learning-main:has(.flashcard-page) .student-breadcrumb { position: static; }
+.learning-main:has(.flashcard-page) > .learning-content { padding-top: 24px; }
+.student-mobile-nav > aside { max-height: 100dvh; overscroll-behavior-y: contain; }
+.student-mobile-nav nav { flex: 1; min-height: 0; }
+.student-mobile-close { flex-shrink: 0; }
+.student-nav-bottom :is(button, a) { min-height: 44px; }
+.student-nav-bottom .student-nav-item > span:last-child { width: auto; flex: 1; text-align: left; }
+:is(.locked-modal > section, .mini-locked-dialog, .library-locked > section) { max-height: calc(100dvh - 32px); overflow-y: auto; overscroll-behavior-y: contain; overflow-wrap: anywhere; }
+.locked-modal > section { padding-top: 64px; }
+.student-shell .tryout-submit-modal section { max-height: calc(100dvh - 40px); overflow-y: auto; overscroll-behavior-y: contain; }
+.student-shell .tryout-submit-modal section > div { flex-wrap: wrap; }
+.student-shell .tryout-option-letter { flex-shrink: 0; }
+.student-shell .tryout-focus-question label > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+.student-shell .tryout-number-grid { grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); }
+:is(.library-filters, .flashcard-filters, .progress-tabs, .replay-tabs, .tryout-list-filters, .mini-filters, .practice-category-tabs, .practice-level-tabs) { min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-inline: contain; padding-block: 4px; }
+:is(.library-filters, .flashcard-filters, .progress-tabs, .replay-tabs, .tryout-list-filters, .mini-filters, .practice-category-tabs, .practice-level-tabs) > :is(button, a) { flex: 0 0 auto; }
+:is(.document-toolbar, .document-footer, .document-footer > div, .learning-question-actions, .practice-runner-actions, .profile-section-header, .fc-deck-meta) { flex-wrap: wrap; }
+.learning-activity-icon { flex: 0 0 48px; }
+
+@media (min-width: 640px) and (max-width: 1023px) {
+  .learning-activity-grid, .lesson-activity-grid, .library-material-grid, .practice-mode-grid, .certificate-grid, .community-access-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .video-learning-layout, .learning-question-layout { grid-template-columns: minmax(0, 1fr); }
+  .supporting-main.renewal-page { padding-top: 80px !important; }
+}
+
+@media (max-width: 639px) {
+  .dashboard-bento, .dashboard-bento-left, .dashboard-bottom-grid, .lms-quick-grid, .lms-entitlement-grid,
+  .learning-activity-grid, .lesson-activity-grid, .library-material-grid, .practice-mode-grid, .practice-summary,
+  .flashcard-metrics, .flashcard-decks > div, .fc-deck-grid, .fc-summary-grid, .certificate-grid, .community-access-grid,
+  .profile-stats, .profile-certificates > div, .profile-settings > div, .progress-achievements > div:last-child,
+  .checkpoint-result-stats, .checkpoint-breakdown, .mini-info, .mini-grid, .mini-runner-stats, .tryout-runner-stats,
+  .tryout-info-tiles, .tryout-section-scores, .sensei-active-grid, .sensei-progress-grid, .replay-grid,
+  .active-level-summary, .chapter-progress-card, .learning-progress-card, .progress-summary, .practice-recommendation,
+  .video-learning-layout, .learning-question-layout, .document-layout { grid-template-columns: minmax(0, 1fr); }
+  .supporting-main.renewal-page { padding-top: 80px !important; }
+  :is(.dash-topbar, .journey-topbar, .learning-topbar, .sensei-topbar) { height: auto; min-height: 68px; gap: 8px; padding-right: 12px; flex-wrap: wrap; padding-block: 10px; }
+  .dash-top-actions { min-width: 0; flex-wrap: wrap; gap: 8px; }
+  :is(.dash-topbar, .journey-topbar, .learning-topbar, .sensei-topbar) > a { min-width: 0; }
+  .learning-content .flashcard-head { flex-direction: column; align-items: stretch; }
+  .flash-progress { min-width: 0; width: 100%; padding-inline: 16px; }
+  .flash-face { overflow-y: auto; overscroll-behavior-y: contain; }
+  .flash-face ruby { max-width: 100%; overflow-wrap: anywhere; }
+  .flashcard-confidence { gap: 12px; flex-wrap: wrap; }
+  .flashcard-confidence button { flex: 1 1 100px; }
+  .flashcard-complete-summary, .flashcard-difficult > div { grid-template-columns: minmax(0, 1fr); }
+  .flashcard-complete-actions { flex-direction: column; }
+  .document-paper, .learning-question-card, .reading-passage { padding: 20px 16px; }
+  .document-pages { display: flex; overflow-x: auto; max-width: 100%; gap: 8px; padding-block: 4px; }
+  .document-pages button { flex: 0 0 130px; }
+  .document-toolbar > div:last-child { flex-wrap: wrap; }
+  .document-footer { gap: 12px; }
+  .document-footer > :is(a, button), .document-footer > div { width: 100%; }
+  .document-footer > div > * { flex: 1 1 120px; }
+  .japanese-mode-control { flex-wrap: wrap; justify-content: flex-start; }
+  .learning-question-sidebar nav > div { grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); }
+  .learning-question-card label > input { flex-shrink: 0; }
+  .learning-question-card label > span { min-width: 0; overflow-wrap: anywhere; }
+  .learning-question-actions > *, .practice-runner-actions > * { flex: 1 1 120px; }
+  .learning-checkpoint-navy { flex-direction: column; align-items: stretch; padding: 24px 20px !important; }
+  .checkpoint-lock-pill { white-space: normal; }
+  .chapter-action { flex-wrap: wrap; gap: 12px; }
+  .chapter-action > a, .chapter-action-button { width: 100%; }
+  .practice-header, .practice-context, .profile-membership, .profile-section-header, .fc-page-header, .fc-deck-header { flex-direction: column; align-items: stretch; }
+  .practice-header label, .fc-search-wrap { min-width: 0; width: 100%; }
+  .practice-history article { grid-template-columns: minmax(0, 1fr); }
+  .library-select-item { min-width: 0; width: 100%; flex-wrap: wrap; }
+  .library-select-item select { min-height: 44px; min-width: 0; flex: 1; }
+  .library-recent > div { grid-template-columns: 36px minmax(0, 1fr); }
+  .library-recent > div > a { grid-column: 2; }
+  .progress-milestones article { grid-template-columns: 42px minmax(0, 1fr); }
+  .progress-milestones article > :last-child { grid-column: 2; }
+  .profile-page .profile-section-header .button { width: 100%; }
+  .notification-pagination nav button { flex-basis: 44px; height: 44px; }
+  .renewal-plan-price-box { flex-wrap: wrap; }
+  .renewal-submit-button { padding: 12px 16px; white-space: normal; }
+  .fc-filter-pill { min-height: 44px; }
+  .batch3-replay .replay-tabs-group { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; padding-block: 4px; }
+  .batch3-replay .replay-tabs-group > button { flex: 0 0 auto; }
 }

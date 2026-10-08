@@ -5,7 +5,7 @@ import { BrandLogo } from "@/components/brand-logo";
 
 export function PublicHeader({ active }: { active?: string }) {
   const links = [["Program", "/program"], ["Placement Test", "/placement"], ["Testimoni", "/testimoni"], ["Blog", "/blog"]];
-  return <header className="public-header"><div className="public-wrap"><Link href="/" aria-label="Hiru Academy"><BrandLogo /></Link><nav aria-label="Navigasi utama">{links.map(([label, href]) => <Link className={active === label ? "active" : ""} key={href} href={href}>{label}</Link>)}</nav><Link className="public-login" href="/login">Login</Link></div></header>;
+  return <header className="public-header"><div className="public-wrap"><Link href="/" aria-label="Hiru Academy"><BrandLogo /></Link><nav className="public-desktop-nav" aria-label="Navigasi utama">{links.map(([label, href]) => <Link className={active === label ? "active" : ""} key={href} href={href}>{label}</Link>)}</nav><Link className="public-login" href="/login">Login</Link><details className="mobile-menu public-mobile-menu"><summary aria-label="Navigasi utama"><span /><span /><span /></summary><nav aria-label="Navigasi utama seluler">{links.map(([label, href]) => <Link className={active === label ? "active" : ""} aria-current={active === label ? "page" : undefined} key={href} href={href}>{label}</Link>)}</nav></details></div></header>;
 }
 
 export function PublicFooter() {

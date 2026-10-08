@@ -24,8 +24,17 @@ async function saveSensei(page: Page, name: string, specialization: string, stat
   await dialog.getByLabel("Peran", { exact: true }).fill(`Mentor ${specialization.split(",")[0]}`);
   await dialog.getByLabel("Bio singkat").fill("Sensei untuk kelas JLPT.");
   await dialog.getByRole("textbox", { name: /^Keahlian/ }).fill(specialization);
-  await page.route("**/sensei-test.svg", route => route.fulfill({ contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100"><rect width="100" height="100" fill="orange"/></svg>' }));
-  await dialog.getByRole("textbox", { name: /^Foto/ }).fill("http://localhost:3000/sensei-test.svg");
+  const photo = "media/image/12345678-1234-1234-1234-123456789012.png";
+  const image = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aXioAAAAASUVORK5CYII=", "base64");
+  await page.route("**/storage/media/image/**", route => route.fulfill({ contentType: "image/png", body: image }));
+  await page.route("**/api/admin/media", async route => {
+    expect(route.request().method()).toBe("POST");
+    expect(route.request().headers()["content-type"]).toContain("multipart/form-data; boundary=");
+    await route.fulfill({ status: 201, json: { data: { path: photo, url: `http://localhost:8000/storage/${photo}`, mime_type: "image/png" } } });
+  });
+  await dialog.getByLabel("Foto", { exact: true }).setInputFiles({ name: "sensei.png", mimeType: "image/png", buffer: image });
+  await expect(dialog.getByLabel("Foto", { exact: true })).toBeEnabled();
+  await expect(dialog.getByRole("img", { name: `Foto profil ${name}`, exact: true })).toHaveAttribute("src", `http://localhost:8000/storage/${photo}`);
   await dialog.getByRole("combobox", { name: /^Status/ }).selectOption(status === "Aktif" ? "active" : "inactive");
   await dialog.getByRole("button", { name: "Simpan Sensei", exact: true }).click();
   await expect(dialog).toHaveCount(0);

@@ -39,11 +39,6 @@ export function AdminSenseiPrototype() {
   const closeView = useCallback(() => setView(null), []);
   const closeDelete = useCallback(() => setDeleting(null), []);
 
-  function changePhoto(photo: string) {
-    if (!draft) return;
-    if (!rows.some((row) => row.photo === draft.photo)) release(draft.photo);
-    setDraft({ ...draft, photo, photo_resolved_url: undefined }); setError("");
-  }
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft) return;
@@ -95,8 +90,7 @@ export function AdminSenseiPrototype() {
         <label className="admin-field">Peran<input value={draft.role} onChange={(event) => setDraft({ ...draft, role: event.target.value })} required /></label>
         <label className="admin-field">Bio singkat<textarea value={draft.bio} onChange={(event) => setDraft({ ...draft, bio: event.target.value })} required /></label>
         <label className="admin-field">Keahlian<input value={draft.expertise} onChange={(event) => setDraft({ ...draft, expertise: event.target.value })} required /><small>Pisahkan beberapa label dengan koma.</small></label>
-        <label className="admin-field">Foto<input value={draft.photo} onChange={event => changePhoto(event.target.value)} required /><small>URL HTTP/HTTPS atau referensi penyimpanan.</small></label>
-        <AdminMediaUpload kind="image" onUploaded={(photo, url) => setDraft({ ...draft, photo, photo_resolved_url: url })} />
+        <AdminMediaUpload label="Foto" kind="image" onUploaded={(photo, url) => setDraft({ ...draft, photo, photo_resolved_url: url })} />
         <label className="admin-field">Level utama (opsional)<select value={draft.level} onChange={(event) => setDraft({ ...draft, level: event.target.value })}><option value="">Tidak ditentukan</option>{levels.map((level) => <option key={level}>{level}</option>)}</select></label>
         <label className="admin-field">Status<select value={draft.active ? "active" : "inactive"} onChange={(event) => setDraft({ ...draft, active: event.target.value === "active" })}><option value="active">Aktif</option><option value="inactive">Nonaktif</option></select></label>
         <label className="admin-field">Urutan<input type="number" min="1" step="1" value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })} required /><small>Urutan tampil profil.</small></label>

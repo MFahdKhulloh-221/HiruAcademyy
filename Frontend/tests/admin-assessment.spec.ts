@@ -118,6 +118,7 @@ test("Mini Checkpoint question workspace validates options, session, part, durat
   await expect(page.getByRole("heading", { name: "Mini Checkpoint", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Tambah Soal", exact: true }).click();
   const dialog = page.getByRole("dialog");
+  await dialog.getByRole("combobox", { name: "Program", exact: true }).selectOption("2");
   await dialog.getByRole("combobox", { name: /^Chapter/ }).selectOption("7");
   await dialog.getByLabel("Sesi", { exact: true }).fill("2");
   await dialog.getByLabel("Part", { exact: true }).fill("3");
@@ -142,6 +143,7 @@ test("audio question builder saves and publishes persisted Admin fields", async 
   await page.goto("/admin/bank-soal/baru?type=audio");
   await page.getByRole("button", { name: "Tambah Soal", exact: true }).click();
   const dialog = page.getByRole("dialog");
+  await dialog.getByRole("combobox", { name: "Program", exact: true }).selectOption("2");
   await dialog.getByRole("combobox", { name: /^Chapter/ }).selectOption("7");
   await dialog.getByLabel("Judul", { exact: true }).fill("Audio Choukai 1");
   await dialog.getByLabel("URL audio", { exact: true }).fill("https://example.test/choukai.mp3");
@@ -207,6 +209,7 @@ test("mobile canonical question saves A-D options and correct answer and survive
   await page.goto("/admin/bank-soal/baru?type=audio");
   await page.getByRole("button", { name: "Tambah Soal", exact: true }).click();
   const dialog = page.getByRole("dialog");
+  await dialog.getByRole("combobox", { name: "Program", exact: true }).selectOption("2");
   await dialog.getByRole("combobox", { name: /^Chapter/ }).selectOption("7");
   await dialog.getByLabel("Judul", { exact: true }).fill("Mobile Audio");
   await dialog.getByLabel("URL audio", { exact: true }).fill("https://example.test/audio.mp3");

@@ -86,14 +86,25 @@ test("Scenario C — PUBLISH: Create valid questions -> Publish -> Public Placem
   await page.route("**/api/placement", route => route.fulfill({ json: { data: { id: 1, title: "Official Placement", intro_heading: "Ketahui Level Bahasa Jepangmu", duration_minutes: 5, description: "Official Description", questions: [{ id: 10, category: "Bunpou", prompt: "Pertanyaan Terbitan Resmi Hiru", options: { A: "Opsi Resmi A", B: "Opsi Resmi B", C: "Opsi Resmi C", D: "Opsi Resmi D" } }] } } }));
   const attempt = { id: 77, status: "in_progress", questions: [{ id: 10, category: "Bunpou", prompt: "Pertanyaan Terbitan Resmi Hiru", options: { A: "Opsi Resmi A", B: "Opsi Resmi B", C: "Opsi Resmi C", D: "Opsi Resmi D" } }], answers: {}, result: null };
   await page.route("**/api/placement/attempts**", route => route.fulfill({ status: route.request().method() === "POST" ? 201 : 200, json: { data: attempt } }));
+  let releaseAuth!: () => void;
+  const authReady = new Promise<void>(resolve => { releaseAuth = resolve; });
+  await page.route("**/api/me", async route => {
+    await authReady;
+    await route.fulfill({ json: { data: { id: 901, name: "Browser Student", email: "browser.student@example.test", whatsapp: "6281999000012", role: "student", account_status: "active" } } });
+  });
   await page.goto("/placement");
   await page.getByLabel("Nama", { exact: true }).fill("Budi");
   await page.getByLabel("Nomor WhatsApp", { exact: true }).fill("081234567890");
   await page.getByRole("combobox", { name: /^Target Ujian/ }).selectOption("N4");
   await page.getByRole("checkbox").first().check();
-  await page.getByRole("button", { name: "Mulai Placement Test Gratis", exact: true }).click();
-  await expect(page.getByRole("heading", { level: 2, name: "Pertanyaan Terbitan Resmi Hiru" })).toBeVisible();
-  await expect(page.getByRole("radio", { name: "A. Opsi Resmi A" })).toBeVisible();
+  const start = page.getByRole("button", { name: "Mulai Placement Test Gratis", exact: true });
+  await expect(start).toBeDisabled();
+  releaseAuth();
+  await expect(page.getByRole("heading", { level: 1, name: "Ketahui Level Bahasa Jepangmu", exact: true })).toBeVisible();
+  await expect(start).toBeEnabled();
+  await start.click();
+  await expect(page.getByRole("heading", { level: 1, name: "Pertanyaan Terbitan Resmi Hiru" })).toBeVisible();
+  await expect(page.getByRole("radio", { name: "A Opsi Resmi A", exact: true })).toBeVisible();
 });
 
 test("Scenario G — PREVIEW: Admin runs preview modal without creating public attempt", async ({ page }) => {

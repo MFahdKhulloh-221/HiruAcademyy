@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { adminMediaUrl, mediaAccept, uploadAdminMedia, videoEmbed, type MediaKind } from "@/lib/admin-media";
 
 export function AdminVideoPreview({ value, resolved, title }: { value: string; resolved?: string | null; title: string }) {
@@ -9,7 +9,8 @@ export function AdminVideoPreview({ value, resolved, title }: { value: string; r
   return embed ? <iframe src={embed} title={title} allowFullScreen style={{ width: "100%", aspectRatio: "16 / 9", border: 0 }} /> : url ? <video src={url} controls preload="metadata" aria-label={title} style={{ width: "100%", maxHeight: 360 }} /> : null;
 }
 
-export function AdminMediaUpload({ kind, onUploaded }: { kind: MediaKind; onUploaded: (path: string, url: string) => void }) {
+export function AdminMediaUpload({ kind, onUploaded, label }: { kind: MediaKind; onUploaded: (path: string, url: string) => void; label?: string }) {
+  const inputId = useId();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const input = useRef<HTMLInputElement>(null);
@@ -20,7 +21,7 @@ export function AdminMediaUpload({ kind, onUploaded }: { kind: MediaKind; onUplo
     form?.addEventListener("submit", block, true);
     return () => form?.removeEventListener("submit", block, true);
   }, []);
-  return <div className="admin-field"><input ref={input} aria-label={`Upload ${kind}`} type="file" accept={mediaAccept[kind]} disabled={busy} onChange={async event => {
+  return <div className="admin-field">{label && <label htmlFor={inputId}>{label}</label>}<input id={inputId} ref={input} aria-label={label ? undefined : `Upload ${kind}`} type="file" accept={mediaAccept[kind]} disabled={busy} onChange={async event => {
     const file = event.target.files?.[0]; event.target.value = "";
     if (!file || uploading.current) return;
     uploading.current = true; setBusy(true); setError("");

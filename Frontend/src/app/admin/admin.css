@@ -79,9 +79,15 @@
 .admin-shell .admin-public-prototype .button:not(.button-primary), .admin-shell .admin-dialog .button:not(.button-primary) { background: #fff; color: var(--navy); }
 .admin-shell .admin-public-prototype img { object-fit: cover; border-radius: 12px; }
 .admin-shell .admin-tabs[aria-label="Bank Soal"] { flex-wrap: wrap; overflow-x: visible; }
-.admin-shell .admin-prototype-form { display: grid; gap: 16px; }
+.admin-shell .admin-dialog-content:has(> .admin-prototype-form) { display: block; min-width: 0; margin-top: 0; }
+.admin-shell .admin-dialog:has(.admin-prototype-form) > header, .admin-shell .admin-dialog:has(.admin-prototype-form) > footer { flex-shrink: 0; }
+.admin-shell .admin-dialog:has(.admin-prototype-form .admin-profile-preview) { width: min(720px, calc(100vw - 32px)); max-width: 720px; }
+.admin-shell .admin-prototype-form { display: grid; width: 100%; min-width: 0; gap: 16px; }
+.admin-shell .admin-prototype-form > *, .admin-shell .admin-prototype-form .admin-field, .admin-shell .admin-blog-seo-layout > * { min-width: 0; }
+.admin-shell .admin-prototype-form fieldset { min-inline-size: 0; }
+.admin-shell .admin-prototype-form .admin-page-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
 .admin-shell .admin-prototype-form .admin-field { display: grid; gap: 8px; font-size: 13px; font-weight: 700; color: var(--navy); }
-.admin-shell .admin-prototype-form input, .admin-shell .admin-prototype-form select, .admin-shell .admin-prototype-form textarea { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); font: inherit; }
+.admin-shell .admin-prototype-form input, .admin-shell .admin-prototype-form select, .admin-shell .admin-prototype-form textarea { box-sizing: border-box; width: 100%; min-width: 0; max-width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); font: inherit; }
 .admin-shell .admin-prototype-form input[type="checkbox"] { width: 20px; min-height: 20px; }
 .admin-shell .admin-prototype-form small { color: var(--muted); font-weight: 400; }
 .admin-shell .admin-prototype-form textarea { resize: vertical; min-height: 100px; }
@@ -109,7 +115,7 @@
 .admin-shell .admin-user-detail dt { color: var(--muted); }
 .admin-shell .admin-user-detail dd { margin: 0; overflow-wrap: anywhere; }
 .admin-shell .admin-nav-item:focus-visible, .admin-shell .admin-detail-button:focus-visible, .admin-shell .admin-quick-actions a:focus-visible { outline: 3px solid var(--orange-dark); outline-offset: 3px; }
-@media (max-width: 1024px) {
+@media (max-width: 1023px) {
   .admin-shell .admin-sidebar:not(.open) { visibility: hidden; }
   .admin-shell .admin-sidebar nav { overflow-y: auto; }
   .admin-shell .admin-dashboard .admin-quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -119,4 +125,64 @@
   .admin-shell .admin-topbar span { max-width: 140px; text-align: right; }
   .admin-shell .admin-dashboard .admin-quick-actions { grid-template-columns: 1fr; }
   .admin-shell .admin-user-detail > div { grid-template-columns: 1fr; gap: 4px; }
+}
+
+.admin-shell :is(.admin-page, .admin-public-prototype, .admin-section, .admin-dialog-content, .admin-field, .form-grid > *, .settings-grid > *, .assessment-editor-panel label) { min-width: 0; }
+.admin-shell :is(.admin-page-header, .admin-header, .admin-section > header, .admin-toolbar, .admin-filter-toolbar, .publication-actions, .builder-main-actions, .placement-editor-actions, .placement-pub-actions, .cards-builder-header, .card-item-header) { flex-wrap: wrap; }
+.admin-shell :is(.admin-page-header > div, .admin-section > header > div, .admin-page-actions, .admin-dialog h2) { min-width: 0; overflow-wrap: anywhere; }
+.admin-shell :is(button, .button, select, summary) { min-height: 44px; min-width: 44px; }
+.admin-shell :is(button, .button) { white-space: normal; overflow-wrap: anywhere; }
+.admin-shell :is(input:not([type="checkbox"]):not([type="radio"]), select, textarea) { box-sizing: border-box; min-width: 0; max-width: 100%; min-height: 44px; }
+.admin-shell :is(.admin-field select, .admin-filter-toolbar select) { padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); font: inherit; }
+.admin-shell .admin-search-box { min-width: 0; max-width: 100%; }
+.admin-shell .admin-search-box input { min-width: 0; width: 100%; }
+.admin-shell :is(.admin-data-table-wrap, .admin-table-container) { min-width: 0; max-width: 100%; overflow-x: auto; overscroll-behavior-x: contain; }
+.admin-shell .admin-data-table { min-width: 680px; }
+.admin-shell :is(.admin-data-table td, .admin-metric-card, .admin-empty-state, .settings-field, .admin-dialog-content p) { overflow-wrap: anywhere; }
+.admin-shell :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible { outline: 3px solid var(--orange-dark); outline-offset: 3px; }
+.admin-shell .admin-dialog-layer { padding: 16px; align-items: center; }
+.admin-shell .admin-dialog { min-width: 0; max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px); }
+.admin-shell .admin-dialog > :is(header, footer) { flex-shrink: 0; }
+.admin-shell .admin-dialog > header button { flex: 0 0 44px; }
+.admin-shell .admin-dialog > footer { flex-wrap: wrap; }
+.admin-shell .admin-dialog-content { min-width: 0; min-height: 0; overscroll-behavior-y: contain; }
+.admin-shell :is(video, audio, iframe) { max-width: 100%; min-width: 0; }
+.admin-shell .admin-assessment-preview .tryout-sections > div { grid-template-columns: minmax(0, 1fr); }
+.admin-shell .admin-assessment-preview .tryout-sections strong { overflow-wrap: anywhere; }
+.admin-shell .admin-sidebar { height: 100dvh; }
+
+@media (max-width: 1023px) {
+  .admin-shell { grid-template-columns: minmax(0, 1fr); }
+  .admin-shell .admin-mobile-toggle { position: absolute; top: 10px; left: auto; right: 16px; bottom: auto; width: 44px; height: 44px; border-radius: 12px; }
+  .admin-shell .admin-topbar { padding-left: 16px; padding-right: 76px; }
+  .admin-shell .admin-sidebar { width: min(280px, calc(100vw - 32px)); }
+  .admin-shell :is(.builder-layout, .builder-form-grid, .a2-builder-layout, .admin-blog-seo-layout) { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 639px) {
+  .admin-shell :is(.admin-page, .admin-public-prototype) { padding: 24px 16px 40px; }
+  .admin-shell .admin-section { padding: 16px; }
+  .admin-shell :is(.admin-page-header, .admin-header, .admin-section > header, .admin-filter-toolbar, .admin-header-actions, .admin-settings-workspace .admin-page-header) { flex-direction: column; align-items: stretch; }
+  .admin-shell :is(.admin-filter-toolbar > *, .admin-page-header > *, .admin-header-actions > *, .admin-prototype-search, .admin-public-prototype .admin-search-box) { width: 100%; margin-left: 0; }
+  .admin-shell :is(.admin-page-actions > *, .publication-actions > *, .builder-main-actions > *) { max-width: 100%; }
+  .admin-shell :is(.form-grid, .settings-grid, .placement-field-grid, .placement-settings-grid, .admin-kpi-grid, .analytics-metrics, .analytics-section-grid, .analytics-snapshot-table, .tryout-prestart-layout, .tryout-info-tiles, .tryout-focus-layout, .tryout-score-report, .tryout-lower-grid, .learning-question-layout) { grid-template-columns: minmax(0, 1fr); }
+  .admin-shell :is(.builder-main, .builder-sidebar, .settings-card, .admin-blog-live-preview, .admin-blog-article-preview, .tryout-prestart-info, .tryout-sections, .tryout-focus-question, .learning-question-card, .document-paper) { padding: 16px; }
+  .admin-shell :is(.tryout-focus-header, .tryout-focus-actions, .learning-question-actions, .audio-player, .analytics-external, .program-select-label) { flex-wrap: wrap; }
+  .admin-shell :is(.tryout-focus-navigator, .learning-question-sidebar) { position: static; }
+  .admin-shell :is(.tryout-number-grid, .question-navigator) { grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); }
+  .admin-shell .admin-tabs { flex-wrap: wrap; overflow-x: visible; }
+  .admin-shell .admin-tabs button { flex: 1 1 auto; white-space: normal; }
+  .admin-shell .admin-dialog-layer { padding: 8px; }
+  .admin-shell .admin-dialog { max-width: calc(100vw - 16px); max-height: calc(100dvh - 16px); border-radius: 16px; }
+  .admin-shell .admin-dialog > :is(header, footer), .admin-shell .admin-dialog-content { padding: 16px; }
+  .admin-shell .admin-dialog > header h2 { font-size: 18px; }
+  .admin-shell .admin-prototype-form :is(input, select, textarea), .admin-shell .settings-field :is(input, select, textarea) { font-size: 16px; }
+  .admin-shell label:has(> input:is([type="checkbox"], [type="radio"])) { min-height: 44px; }
+  .admin-shell .admin-prototype-form input:is([type="checkbox"], [type="radio"]) { width: 20px; min-height: 20px; flex-shrink: 0; }
+  .admin-shell .admin-topbar { gap: 8px; padding-right: 76px; }
+  .admin-shell .admin-topbar span { max-width: 100px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .admin-shell .admin-sidebar { transition: none; }
 }
