@@ -4,13 +4,31 @@ namespace App\Services;
 
 use App\Models\AccessGrant;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\ValidationException;
 
 class EntitlementService
 {
     private const JLPT_LEVELS = ['n5', 'n4', 'n3', 'n2', 'n1'];
 
+    public function qualifyingGrants(): Builder
+    {
+        $today = now(config('app.timezone'))->toDateString();
+
+        return AccessGrant::with('program')->where('status', 'active')
+            ->where('starts_at', '<=', $today)->where('ends_at', '>=', $today)->orderBy('id');
+    }
+
     public function effectiveAccess(User $user): array
+    {
+        if ($user->role !== 'student') {
+            throw ValidationException::withMessages(['user_id' => 'Effective access requires a student account.']);
+        }
+
+        return $this->project($user, $this->qualifyingGrants()->where('user_id', $user->id)->get());
+    }
+
+    public function project(User $user, iterable $grants): array
     {
         if ($user->role !== 'student') {
             throw ValidationException::withMessages(['user_id' => 'Effective access requires a student account.']);
@@ -20,10 +38,6 @@ class EntitlementService
         $learning += ['ssw-food' => 'none', 'interview' => 'none'];
         $replay = [];
         $sources = [];
-        $today = now(config('app.timezone'))->toDateString();
-        $grants = AccessGrant::with('program')->where('user_id', $user->id)
-            ->where('status', 'active')->where('starts_at', '<=', $today)
-            ->where('ends_at', '>=', $today)->orderBy('id')->get();
 
         foreach ($grants as $grant) {
             $code = $grant->program->code;

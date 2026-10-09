@@ -25,9 +25,12 @@ use App\Http\Controllers\PublicContentController;
 use App\Http\Controllers\PublicPlacementController;
 use App\Http\Controllers\StudentAffiliateController;
 use App\Http\Controllers\StudentAssessmentController;
+use App\Http\Controllers\StudentGamificationController;
 use App\Http\Controllers\StudentLearningController;
 use App\Http\Controllers\StudentNotificationController;
+use App\Http\Controllers\StudentProfileAvatarController;
 use App\Http\Controllers\StudentScheduleReplayController;
+use App\Http\Controllers\StudentTestimonialController;
 use App\Http\Controllers\StudentTryOutController;
 use App\Services\LearningContentService;
 use App\Services\PlacementService;
@@ -117,6 +120,13 @@ Route::prefix('api')->middleware('throttle:api')->group(function () {
         Route::patch('community/replies/{reply}', [CommunityController::class, 'adminUpdateReply']);
     });
     Route::middleware(['auth:sanctum', 'active', 'role:student'])->prefix('student')->group(function () {
+        Route::get('testimonial', [StudentTestimonialController::class, 'show']);
+        Route::put('testimonial', [StudentTestimonialController::class, 'update']);
+        Route::post('profile/avatar', [StudentProfileAvatarController::class, 'store']);
+        Route::delete('profile/avatar', [StudentProfileAvatarController::class, 'destroy']);
+        Route::get('gamification', [StudentGamificationController::class, 'show']);
+        Route::get('leaderboard', [StudentGamificationController::class, 'leaderboard']);
+        Route::get('dashboard', [StudentLearningController::class, 'dashboard']);
         Route::get('library', [StudentLearningController::class, 'library']);
         Route::get('flashcards', [StudentLearningController::class, 'flashcards']);
         Route::get('progress', [StudentLearningController::class, 'overallProgress']);

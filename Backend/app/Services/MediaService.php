@@ -180,8 +180,9 @@ class MediaService
     private function deleteUnreferenced(string $path): void
     {
         abort_unless($this->managed($path), 422, 'Only managed media paths may be deleted.');
-        DB::statement('LOCK TABLE sensei_profiles, showcase_items, testimonials, blog_articles, certificate_templates, video_lessons, audio_questions, learning_modules, replay_videos, placement_questions, try_out_questions, learning_attempts, placement_attempts, try_out_attempts IN SHARE ROW EXCLUSIVE MODE');
+        DB::statement('LOCK TABLE users, sensei_profiles, showcase_items, testimonials, blog_articles, certificate_templates, video_lessons, audio_questions, learning_modules, replay_videos, placement_questions, try_out_questions, learning_attempts, placement_attempts, try_out_attempts IN SHARE ROW EXCLUSIVE MODE');
         foreach ([
+            'users' => ['avatar'],
             'sensei_profiles' => ['photo'], 'showcase_items' => ['image_src'],
             'testimonials' => ['image', 'video_url'], 'blog_articles' => ['thumbnail'],
             'certificate_templates' => ['image'], 'video_lessons' => ['video_url'],

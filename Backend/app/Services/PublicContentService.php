@@ -50,6 +50,9 @@ class PublicContentService
     private function saveContent(string $resource, array $input, ?Model $model): Model
     {
         $class = $this->model($resource);
+        if ($resource === 'testimonials' && $model?->exists) {
+            $model = $class::query()->lockForUpdate()->findOrFail($model->getKey());
+        }
         $model ??= new $class;
         $required = $model->exists ? 'sometimes' : 'required';
         $text = ['bail', $required, 'required', 'string'];
@@ -120,6 +123,15 @@ class PublicContentService
                 'status' => ['sometimes', 'required', Rule::in(['draft', 'published'])],
             ],
         };
+        if ($model instanceof Testimonial && $model->source === 'student') {
+            $rules = [
+                'moderation_status' => ['sometimes', 'required', Rule::in(['pending', 'approved', 'rejected'])],
+                'moderation_note' => $optional,
+                'published' => $boolean,
+                'landing' => $boolean,
+                'sort_order' => $order,
+            ];
+        }
         $unknown = array_diff(array_keys($input), array_keys($rules));
         if ($unknown !== []) {
             throw ValidationException::withMessages(array_fill_keys($unknown, 'Field is prohibited.'));
@@ -132,6 +144,21 @@ class PublicContentService
                 throw ValidationException::withMessages(['label' => 'Label is locked to showcase key.']);
             }
             $model->label = $label;
+        }
+        if ($model instanceof Testimonial) {
+            if (! $model->exists) {
+                $model->forceFill(['source' => 'admin', 'user_id' => null, 'moderation_status' => 'approved', 'consent_public' => true]);
+            }
+            if ($model->moderation_status !== 'approved') {
+                $model->published = false;
+                $model->landing = false;
+            }
+            if ($model->source === 'student' && $model->published && ! $model->consent_public) {
+                throw ValidationException::withMessages(['published' => 'Student publication requires approval and public consent.']);
+            }
+            if (! $model->published) {
+                $model->landing = false;
+            }
         }
         if ($model instanceof Testimonial && (filled($model->video_url) !== filled($model->video_title))) {
             throw ValidationException::withMessages(['video_title' => 'Video URL and title must be provided or cleared together.']);
@@ -148,6 +175,9 @@ class PublicContentService
     {
         $class = $this->model($resource);
         $query = $class::query();
+        if ($resource === 'testimonials') {
+            $query->with('user:id,name,avatar');
+        }
 
         return $resource === 'blog-articles'
             ? $query->orderByRaw('published_at DESC NULLS LAST')->orderByDesc('id')
@@ -176,6 +206,30 @@ class PublicContentService
         foreach ($fields as $field) {
             $value = $model->getAttribute($field);
             $data[$field] = $value instanceof \DateTimeInterface ? CarbonImmutable::instance($value)->utc()->toISOString() : $value;
+        }
+
+        if ($model instanceof Testimonial) {
+            if (! $public) {
+                foreach (['source', 'user_id', 'consent_public'] as $field) {
+                    $data[$field] = $model->getAttribute($field);
+                }
+            }
+            if ($model->source === 'student') {
+                $model->loadMissing('user:id,name,avatar');
+                $data['name'] = $model->user?->name ?? $model->name;
+                $data['image'] = $model->user?->avatar;
+                $data['video_url'] = null;
+                $data['video_title'] = null;
+                try {
+                    $data['image_resolved_url'] = app(MediaService::class)->url($data['image']);
+                } catch (\Throwable $exception) {
+                    report($exception);
+                    $data['image_resolved_url'] = null;
+                }
+                $data['video_url_resolved_url'] = null;
+
+                return $data;
+            }
         }
 
         return app(MediaService::class)->payload($data);

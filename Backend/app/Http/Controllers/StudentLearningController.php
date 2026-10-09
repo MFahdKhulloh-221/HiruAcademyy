@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\LearningProgramResource;
 use App\Http\Resources\StudentChapterResource;
 use App\Models\ActivityCompletion;
 use App\Models\Chapter;
@@ -10,13 +11,39 @@ use App\Models\LearningModule;
 use App\Models\Program;
 use App\Services\ChapterAccessPolicy;
 use App\Services\EntitlementService;
+use App\Services\GamificationService;
 use App\Services\LearningLibraryService;
+use App\Services\LearningProgressService;
 use App\Services\MediaService;
-use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 
 class StudentLearningController extends Controller
 {
+    public function dashboard(Request $request, EntitlementService $entitlements, LearningProgressService $progress)
+    {
+        $access = $entitlements->effectiveAccess($request->user());
+        $programs = Program::where('status', 'active')->orderBy('sort_order')->orderBy('id')->get();
+        $chapters = Chapter::whereIn('program_id', $programs->modelKeys())->where('status', 'published')
+            ->withExists(['miniCheckpointQuestions as mini_checkpoint_exists' => fn ($query) => $query->where('status', 'published')])
+            ->orderBy('sort_order')->orderBy('chapter_number')->orderBy('id')->get();
+        $byId = $programs->keyBy('id');
+        foreach ($chapters as $chapter) {
+            $state = $access['learning'][$byId->get($chapter->program_id)->code] ?? 'none';
+            $chapter->setAttribute('access', $state === 'full' || ($state === 'preview' && $chapter->chapter_number === 1) ? $state : 'locked');
+        }
+        $rows = $programs->flatMap(fn ($program) => $chapters->where('program_id', $program->id)->map(fn ($chapter) => [
+            'program_id' => $program->id,
+            'chapter' => (new StudentChapterResource($chapter))->resolve($request),
+        ]));
+        $progressById = $progress->batch($request->user(), $chapters->filter(fn ($chapter) => $chapter->access !== 'locked'), $byId);
+
+        return response()->json(['data' => [
+            'programs' => LearningProgramResource::collection($programs),
+            'access' => $access,
+            'chapters' => $rows->map(fn ($row) => isset($progressById[$row['chapter']['id']]) ? $row + ['progress' => $progressById[$row['chapter']['id']]] : $row)->values(),
+        ]]);
+    }
+
     public function library(Request $request, LearningLibraryService $library)
     {
         return response()->json(['data' => $library->modules($request->user())]);
@@ -79,30 +106,7 @@ class StudentLearningController extends Controller
             ];
         }
 
-        $streakDays = 0;
-        $dates = ActivityCompletion::where('user_id', $user->id)
-            ->selectRaw('DATE(completed_at) as comp_date')
-            ->distinct()
-            ->orderByDesc('comp_date')
-            ->pluck('comp_date')
-            ->all();
-        if ($dates !== []) {
-            $currentDate = now()->toDateString();
-            $yesterday = now()->subDay()->toDateString();
-            if ($dates[0] === $currentDate || $dates[0] === $yesterday) {
-                $check = CarbonImmutable::parse($dates[0]);
-                $streakDays = 1;
-                for ($i = 1; $i < count($dates); $i++) {
-                    $prev = CarbonImmutable::parse($dates[$i]);
-                    if ($check->subDays(1)->toDateString() === $prev->toDateString()) {
-                        $streakDays++;
-                        $check = $prev;
-                    } else {
-                        break;
-                    }
-                }
-            }
-        }
+        $streakDays = app(GamificationService::class)->streak($user);
 
         return response()->json([
             'data' => [
@@ -213,30 +217,7 @@ class StudentLearningController extends Controller
         $accuracy = $totalMax > 0 ? (int) round($totalEarned * 100 / $totalMax) : 0;
 
         // Real streak days
-        $streakDays = 0;
-        $dates = ActivityCompletion::where('user_id', $user->id)
-            ->selectRaw('DATE(completed_at) as comp_date')
-            ->distinct()
-            ->orderByDesc('comp_date')
-            ->pluck('comp_date')
-            ->all();
-        if ($dates !== []) {
-            $currentDate = now()->toDateString();
-            $yesterday = now()->subDay()->toDateString();
-            if ($dates[0] === $currentDate || $dates[0] === $yesterday) {
-                $check = CarbonImmutable::parse($dates[0]);
-                $streakDays = 1;
-                for ($i = 1; $i < count($dates); $i++) {
-                    $prev = CarbonImmutable::parse($dates[$i]);
-                    if ($check->subDays(1)->toDateString() === $prev->toDateString()) {
-                        $streakDays++;
-                        $check = $prev;
-                    } else {
-                        break;
-                    }
-                }
-            }
-        }
+        $streakDays = app(GamificationService::class)->streak($user);
 
         // Milestones
         $activeProg = $programStats[0] ?? ['name' => 'JLPT N5', 'level' => 'N5', 'percentage' => 0];
@@ -282,6 +263,7 @@ class StudentLearningController extends Controller
             'audioQuestions' => $published,
             'readingPassages' => $published,
             'readingPassages.questions' => $published,
+            'miniCheckpointQuestions' => $published,
         ])->loadExists(['miniCheckpointQuestions as mini_checkpoint_exists' => $published]);
 
         return response()->json(['data' => app(MediaService::class)->payload((new StudentChapterResource($chapter))->resolve($request))]);

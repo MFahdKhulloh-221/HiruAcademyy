@@ -21,7 +21,7 @@ class LearningAttempt extends Model
     protected static function booted(): void
     {
         static::updating(function (self $attempt) {
-            if ($attempt->isDirty(['user_id', 'chapter_id', 'kind', 'content_snapshot', 'grading_snapshot']) || ($attempt->getOriginal('status') === 'completed' && $attempt->isDirty())) {
+            if ($attempt->isDirty(['user_id', 'chapter_id', 'kind', 'content_snapshot', 'grading_snapshot', 'created_at']) || ($attempt->getOriginal('status') === 'completed' && $attempt->isDirty())) {
                 throw new LogicException('Attempt snapshots and completed attempts are immutable.');
             }
         });

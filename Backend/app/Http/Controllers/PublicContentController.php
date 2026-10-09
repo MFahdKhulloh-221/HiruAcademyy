@@ -26,7 +26,8 @@ class PublicContentController extends Controller
     public function testimonials(Request $request): JsonResponse
     {
         $filters = $request->validate(['landing' => ['sometimes', 'required', Rule::in(['true', 'false', '1', '0'])]]);
-        $query = $this->content->ordered('testimonials')->where('published', true);
+        $query = $this->content->ordered('testimonials')->where('published', true)
+            ->where('moderation_status', 'approved')->where('consent_public', true);
         if (isset($filters['landing'])) {
             $query->where('landing', $request->boolean('landing'));
         }

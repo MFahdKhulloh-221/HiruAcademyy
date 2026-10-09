@@ -75,6 +75,7 @@ class TryOutAttemptService
     public function submit(User $user, TryOut $tryOut, TryOutAttempt $attempt, int $revision): TryOutAttempt
     {
         return DB::transaction(function () use ($user, $tryOut, $attempt, $revision) {
+            app(GamificationService::class)->lock($user);
             $locked = TryOutAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
             $this->authorize($user, $tryOut, $locked);
             if ($locked->status === 'completed') {
@@ -105,6 +106,10 @@ class TryOutAttemptService
                 $result['overall_pass'] = $result['earned'] >= $result['total_passing_score'] && ! in_array(false, array_column($result['sessions'], 'pass'), true);
             }
             $locked->update(['result_snapshot' => $result, 'status' => 'completed', 'completed_sessions' => array_keys(TryOutService::SESSIONS), 'current_session' => 4, 'completed_at' => now(), 'revision' => $locked->revision + 1]);
+
+            if (count($locked->answers ?? []) > 0) {
+                app(GamificationService::class)->award($user, 'tryout:'.$tryOut->id.':'.now('Asia/Jakarta')->toDateString(), 20);
+            }
 
             return $locked->fresh();
         }, 3);

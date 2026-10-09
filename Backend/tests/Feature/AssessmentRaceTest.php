@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Models\AudioQuestion;
 use App\Models\Chapter;
 use App\Models\LearningAttempt;
+use App\Models\MiniCheckpointQuestion;
 use App\Models\Program;
 use App\Models\TryOut;
 use App\Models\TryOutAttempt;
@@ -76,7 +77,7 @@ class AssessmentRaceTest extends TestCase
         }
     }
 
-    private function fixture(string $kind): array
+    private function fixture(string $kind, bool $expired = true): array
     {
         $program = Program::where('code', 'n5')->first();
         if (! $program) {
@@ -112,8 +113,17 @@ class AssessmentRaceTest extends TestCase
         $service = app(LearningAttemptService::class);
         $attempt = $service->start($this->student, $program, $this->chapter, 'audio');
         $attempt = $service->save($this->student, $program, $this->chapter, $attempt, [$question->id => 'B'], 0);
+        if ($kind === 'mini') {
+            $service->submit($this->student, $program, $this->chapter, $attempt, $attempt->answers, $attempt->revision);
+            $question = MiniCheckpointQuestion::create(['chapter_id' => $this->chapter->id, 'question' => 'Mini race', 'options' => $options, 'correct_option' => 'B', 'status' => 'published', 'session' => 2, 'part' => 3, 'duration_minutes' => 1]);
+            $attempt = $service->start($this->student, $program, $this->chapter, 'mini', 2, 3);
+            $attempt = $service->save($this->student, $program, $this->chapter, $attempt, [$question->id => 'B'], 0);
+            if ($expired) {
+                DB::table('learning_attempts')->where('id', $attempt->id)->update(['created_at' => now()->utc()->subMinutes(2)->format('Y-m-d H:i:sP')]);
+            }
+        }
 
-        return ['kind' => $kind, 'table' => 'learning_attempts', 'id' => $attempt->id, 'parent' => $this->chapter->id, 'program' => $program->id, 'user' => $this->student->id, 'revision' => $attempt->revision, 'answers' => $attempt->answers];
+        return ['kind' => $kind, 'table' => 'learning_attempts', 'id' => $attempt->id, 'parent' => $this->chapter->id, 'program' => $program->id, 'user' => $this->student->id, 'revision' => $attempt->revision, 'answers' => $attempt->answers, 'expired' => $expired];
     }
 
     private function worker(array $fixture, string $operation, string $name): Process
@@ -144,7 +154,7 @@ try {
         $program = App\Models\Program::findOrFail($f['program']);
         $parent = App\Models\Chapter::findOrFail($f['parent']);
         $attempt = App\Models\LearningAttempt::findOrFail($f['id']);
-        $result = $save ? $service->save($user, $program, $parent, $attempt, [], $f['revision'] - 1) : $service->submit($user, $program, $parent, $attempt, $f['answers'], $f['revision']);
+        $result = $save ? $service->save($user, $program, $parent, $attempt, [], $f['revision'] - 1) : $service->submit($user, $program, $parent, $attempt, $f['kind'] === 'mini' && $f['expired'] ? [999999 => 'E'] : $f['answers'], $f['kind'] === 'mini' && $f['expired'] ? 0 : $f['revision']);
     }
     echo json_encode(['http' => 200, 'status' => $result->status, 'revision' => $result->revision, 'result' => $result->result_snapshot, 'answers' => $result->answers], JSON_THROW_ON_ERROR);
 } catch (Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $exception) {
@@ -157,9 +167,14 @@ PHP;
         return new Process([PHP_BINARY, '-r', $code], base_path(), ['APP_ENV' => 'testing', 'APP_CONFIG_CACHE' => base_path('bootstrap/cache/race-nonexistent.php'), 'DB_URL' => '', 'RACE_CONNECTION' => json_encode($connection, JSON_THROW_ON_ERROR), 'RACE_FIXTURE' => json_encode($fixture, JSON_THROW_ON_ERROR), 'RACE_OPERATION' => $operation, 'RACE_NAME' => $name], null, 25);
     }
 
-    private function race(string $kind, bool $staleSave): void
+    private function race(string $kind, bool $staleSave, bool $expired = true, bool $crossDeadline = false): void
     {
-        $fixture = $this->fixture($kind);
+        $fixture = $this->fixture($kind, $crossDeadline ? false : $expired);
+        if ($crossDeadline) {
+            DB::table('learning_attempts')->where('id', $fixture['id'])->update(['created_at' => now()->utc()->subSeconds(55)->format('Y-m-d H:i:sP')]);
+            $this->assertTrue(now()->utc()->lessThan(LearningAttempt::findOrFail($fixture['id'])->created_at->copy()->utc()->addMinute()));
+            $fixture['expired'] = true;
+        }
         $names = ['race_'.bin2hex(random_bytes(8)), 'race_'.bin2hex(random_bytes(8))];
         $workers = [$this->worker($fixture, 'submit', $names[0]), $this->worker($fixture, $staleSave ? 'save' : 'submit', $names[1])];
         DB::beginTransaction();
@@ -181,6 +196,12 @@ PHP;
                 usleep(20000);
             } while (microtime(true) < $deadline);
             $this->assertCount(2, $blocked, 'Both separate PHP workers must block on the assessment row lock.');
+            if ($crossDeadline) {
+                $expiresAt = LearningAttempt::findOrFail($fixture['id'])->created_at->copy()->utc()->addMinute();
+                while (now()->utc()->lessThan($expiresAt)) {
+                    usleep(20000);
+                }
+            }
             DB::commit();
             $results = [];
             foreach ($workers as $worker) {
@@ -190,7 +211,7 @@ PHP;
             $this->assertSame(200, $results[0]['http']);
             $this->assertSame('completed', $results[0]['status']);
             $this->assertSame($fixture['revision'] + 1, $results[0]['revision']);
-            if (! $staleSave) {
+            if (! $staleSave || $kind === 'mini') {
                 $this->assertEquals($results[0], $results[1]);
             } else {
                 $this->assertContains($results[1]['http'], $kind === 'try_out' ? [409] : [200, 409]);
@@ -203,8 +224,12 @@ PHP;
             $this->assertEquals($results[0]['result'], $model->result_snapshot);
             $this->assertSame($fixture['revision'] + 1, $model->revision);
             $this->assertSame($kind === 'try_out' ? 180 : 1, $model->result_snapshot[$kind === 'try_out' ? 'earned' : 'correct']);
-            if ($kind === 'learning') {
+            if ($kind === 'learning' || $kind === 'mini') {
                 $this->assertSame(1, DB::table('activity_completions')->where('user_id', $this->student->id)->count());
+            }
+            if ($kind === 'mini') {
+                $this->assertTrue($model->result_snapshot['passed']);
+                $this->assertSame(1, DB::table('gamification_rewards')->where('user_id', $this->student->id)->where('reward_key', 'like', 'exercise:mini:%')->count());
             }
         } finally {
             while (DB::transactionLevel() > 0) {
@@ -216,6 +241,26 @@ PHP;
                 }
             }
         }
+    }
+
+    public function test_mini_expired_autosave_submit_collision(): void
+    {
+        $this->race('mini', true);
+    }
+
+    public function test_mini_autosave_submit_cross_deadline_while_waiting_for_lock(): void
+    {
+        $this->race('mini', true, true, true);
+    }
+
+    public function test_mini_live_double_submit(): void
+    {
+        $this->race('mini', false, false);
+    }
+
+    public function test_mini_expired_double_submit(): void
+    {
+        $this->race('mini', false);
     }
 
     public function test_try_out_double_submit_manual_automatic_collision(): void

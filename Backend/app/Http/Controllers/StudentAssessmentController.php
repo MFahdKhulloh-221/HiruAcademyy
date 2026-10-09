@@ -37,15 +37,19 @@ class StudentAssessmentController extends Controller
 
     public function start(Request $request, Program $program, Chapter $chapter, LearningAttemptService $attempts)
     {
-        $data = $this->input($request, ['kind' => ['required', Rule::in(['audio', 'reading', 'mini'])]]);
-        $attempt = $attempts->start($request->user(), $program, $chapter, $data['kind']);
+        $data = $this->input($request, [
+            'kind' => ['required', Rule::in(['audio', 'reading', 'mini'])],
+            'session' => ['required_if:kind,mini', 'prohibited_unless:kind,mini', 'integer', 'min:1', 'max:2147483647'],
+            'part' => ['required_if:kind,mini', 'prohibited_unless:kind,mini', 'integer', 'min:1', 'max:2147483647'],
+        ]);
+        $attempt = $attempts->start($request->user(), $program, $chapter, $data['kind'], isset($data['session']) ? (int) $data['session'] : null, isset($data['part']) ? (int) $data['part'] : null);
 
         return response()->json(['data' => $attempts->payload($attempt)], 201);
     }
 
     public function show(Request $request, Program $program, Chapter $chapter, LearningAttempt $attempt, LearningAttemptService $attempts)
     {
-        $attempts->authorize($request->user(), $program, $chapter, $attempt);
+        $attempt = $attempts->show($request->user(), $program, $chapter, $attempt);
 
         return response()->json(['data' => $attempts->payload($attempt)]);
     }
@@ -68,7 +72,7 @@ class StudentAssessmentController extends Controller
 
     public function review(Request $request, Program $program, Chapter $chapter, LearningAttempt $attempt, LearningAttemptService $attempts)
     {
-        $attempts->authorize($request->user(), $program, $chapter, $attempt);
+        $attempt = $attempts->show($request->user(), $program, $chapter, $attempt);
 
         return response()->json(['data' => $attempts->payload($attempt, true)]);
     }

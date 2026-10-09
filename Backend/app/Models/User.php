@@ -46,6 +46,11 @@ class User extends Authenticatable
         return $this->email_normalized;
     }
 
+    public function testimonial(): HasOne
+    {
+        return $this->hasOne(Testimonial::class);
+    }
+
     public function senseiProfile(): HasOne
     {
         return $this->hasOne(SenseiProfile::class);

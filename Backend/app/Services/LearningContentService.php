@@ -155,6 +155,14 @@ class LearningContentService
                         throw ValidationException::withMessages([$parent => 'Content is not allowed in this program family.']);
                     }
                 }
+                if ($resource === 'mini-checkpoint-questions' && $model->status === 'published') {
+                    $group = MiniCheckpointQuestion::where('chapter_id', $model->chapter_id)
+                        ->where('session', $model->session)->where('part', $model->part)->where('status', 'published')
+                        ->when($model->exists, fn ($query) => $query->whereKeyNot($model->getKey()))->get()
+                        ->map(fn ($question) => $question->only(['session', 'part', 'duration_minutes']))->all();
+                    $group[] = $model->only(['session', 'part', 'duration_minutes']);
+                    app(LearningAttemptService::class)->miniConfiguration($group);
+                }
                 $model->save();
 
                 return $model->fresh();

@@ -2,13 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Models\Testimonial;
 use App\Models\User;
+use App\Services\MediaService;
 use App\Services\PublicContentService;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Support\Facades\DB;
 use PHPUnit\Framework\Attributes\DataProvider;
+use RuntimeException;
 use Tests\TestCase;
 
 class PublicContentTest extends TestCase
@@ -160,6 +163,109 @@ class PublicContentTest extends TestCase
         $this->getJson('/api/testimonials?landing=true')->assertOk()->assertJsonPath('data.0.id', $landing['id'])->assertJsonCount(1, 'data');
         $this->getJson('/api/testimonials?landing=false')->assertOk()->assertJsonPath('data.0.id', $other['id']);
         $this->getJson('/api/testimonials?landing=anything')->assertUnprocessable();
+    }
+
+    public function test_student_testimonial_owner_validation_and_resubmission(): void
+    {
+        $student = $this->user('student');
+        $input = ['context' => 'JLPT N5', 'quote' => str_repeat('Belajar ', 5), 'consent_public' => true];
+        $this->actingAs($student)->getJson('/api/student/testimonial')->assertOk()->assertJsonPath('data', null);
+        foreach ([['name' => 'Spoof'], ['user_id' => $this->admin->id], ['published' => true], ['image' => 'public/file.png'], ['source' => 'admin']] as $unknown) {
+            $this->putJson('/api/student/testimonial', array_replace($input, $unknown))->assertUnprocessable()->assertJsonValidationErrors(array_keys($unknown));
+        }
+        foreach ([['context' => str_repeat('a', 256)], ['quote' => 'short'], ['quote' => str_repeat('a', 501)], ['consent_public' => false], ['consent_public' => null]] as $invalid) {
+            $this->putJson('/api/student/testimonial', array_replace($input, $invalid))->assertUnprocessable();
+        }
+        $item = $this->putJson('/api/student/testimonial', $input)->assertOk()->assertJsonPath('data.name', $student->name)
+            ->assertJsonPath('data.moderation_status', 'pending')->assertJsonPath('data.published', false)->json('data');
+        $this->assertSame(['id', 'name', 'context', 'quote', 'moderation_status', 'moderation_note', 'consent_public', 'published', 'created_at', 'updated_at'], array_keys($item));
+        $this->actingAs($this->user('student'))->getJson('/api/student/testimonial')->assertOk()->assertJsonPath('data', null);
+        $this->actingAs($this->admin)->patchJson('/api/admin/testimonials/'.$item['id'], ['moderation_status' => 'rejected', 'moderation_note' => 'Revise'])->assertOk();
+        $this->actingAs($student)->putJson('/api/student/testimonial', $input)->assertOk()->assertJsonPath('data.id', $item['id'])
+            ->assertJsonPath('data.moderation_status', 'pending')->assertJsonPath('data.moderation_note', null);
+        $this->assertSame(1, $student->testimonial()->count());
+        $this->assertNull($student->testimonial()->first()->image);
+        $this->actingAs($this->admin)->patchJson('/api/admin/testimonials/'.$item['id'], ['moderation_status' => 'approved'])->assertOk()->assertJsonPath('data.published', false);
+        $this->actingAs($student)->putJson('/api/student/testimonial', $input)->assertConflict()
+            ->assertJsonPath('message', 'Testimoni yang sudah disetujui tidak dapat diedit. Hubungi admin jika ingin melakukan perubahan.');
+    }
+
+    public function test_student_testimonial_routes_require_active_student(): void
+    {
+        foreach (['GET', 'PUT'] as $method) {
+            $this->json($method, '/api/student/testimonial')->assertUnauthorized();
+        }
+        foreach ([['admin', 'active', 403], ['student', 'inactive', 401]] as [$role, $status, $expected]) {
+            $this->actingAs($this->user($role, $status));
+            foreach (['GET', 'PUT'] as $method) {
+                $this->json($method, '/api/student/testimonial')->assertStatus($expected);
+            }
+        }
+    }
+
+    public function test_student_testimonial_moderation_identity_and_stale_model_safety(): void
+    {
+        $student = $this->user('student');
+        $student->forceFill(['avatar' => 'https://media.example.test/avatar.png'])->save();
+        $item = $this->actingAs($student)->putJson('/api/student/testimonial', ['context' => 'JLPT N5', 'quote' => str_repeat('Belajar ', 5), 'consent_public' => true])->assertOk()->json('data');
+        $stale = Testimonial::findOrFail($item['id']);
+        $url = '/api/admin/testimonials/'.$item['id'];
+        $this->actingAs($this->admin);
+        foreach (['name', 'context', 'quote', 'image', 'video_url', 'video_title', 'source', 'user_id', 'consent_public'] as $field) {
+            $this->patchJson($url, [$field => 'Spoof'])->assertUnprocessable()->assertJsonValidationErrors($field);
+        }
+        $this->patchJson($url, ['published' => true, 'landing' => true])->assertOk()->assertJsonPath('data.published', false)->assertJsonPath('data.landing', false);
+        $this->patchJson($url, ['moderation_status' => 'approved'])->assertOk()->assertJsonPath('data.published', false);
+        $this->patchJson($url, ['published' => true, 'landing' => true])->assertOk()->assertJsonPath('data.image', $student->avatar);
+        $student->update(['name' => 'Current name']);
+        $public = $this->getJson('/api/testimonials?landing=true')->assertOk()->assertJsonFragment(['id' => $item['id'], 'name' => 'Current name', 'image' => $student->avatar]);
+        $row = collect($public->json('data'))->firstWhere('id', $item['id']);
+        foreach (['user', 'user_id', 'moderation_note', 'email', 'avatar'] as $private) {
+            $this->assertArrayNotHasKey($private, $row);
+        }
+        $this->assertNull($row['video_url']);
+        $this->patchJson($url, ['moderation_status' => 'rejected'])->assertOk()->assertJsonPath('data.published', false)->assertJsonPath('data.landing', false);
+        $this->actingAs($student)->putJson('/api/student/testimonial', ['context' => 'Updated context', 'quote' => str_repeat('Updated ', 5), 'consent_public' => true])->assertOk();
+        $saved = app(PublicContentService::class)->save('testimonials', ['sort_order' => 3], $stale);
+        $this->assertSame('Updated context', $saved->context);
+        $this->assertSame('pending', $saved->moderation_status);
+        $saved->forceFill(['moderation_status' => 'approved', 'consent_public' => false])->save();
+        $this->actingAs($this->admin)->patchJson($url, ['published' => true])->assertUnprocessable()->assertJsonValidationErrors('published');
+        $saved->forceFill(['published' => true])->save();
+        $this->getJson('/api/testimonials')->assertOk()->assertJsonMissing(['id' => $item['id']]);
+        $student->delete();
+        $orphan = app(PublicContentService::class)->payload($saved->fresh(), true);
+        $this->assertSame('Current name', $orphan['name']);
+        $this->assertNull($orphan['image']);
+    }
+
+    public function test_student_avatar_resolution_outage_does_not_break_testimonial_payload(): void
+    {
+        $student = $this->user('student');
+        $student->forceFill(['avatar' => 'public/avatar.png']);
+        $testimonial = new Testimonial;
+        $testimonial->forceFill(['source' => 'student', 'name' => 'Snapshot', 'image' => 'public/never-use.png']);
+        $testimonial->setRelation('user', $student);
+        $this->mock(MediaService::class, function ($mock) {
+            $mock->shouldReceive('url')->once()->with('public/avatar.png')->andThrow(new RuntimeException('Storage unavailable'));
+        });
+        $payload = app(PublicContentService::class)->payload($testimonial, true);
+        $this->assertSame($student->name, $payload['name']);
+        $this->assertSame('public/avatar.png', $payload['image']);
+        $this->assertNull($payload['image_resolved_url']);
+        $this->assertNull($payload['video_url']);
+    }
+
+    public function test_admin_testimonial_metadata_cannot_be_spoofed(): void
+    {
+        foreach (['source', 'user_id', 'moderation_status', 'moderation_note', 'consent_public'] as $field) {
+            $this->actingAs($this->admin)->postJson('/api/admin/testimonials', array_replace($this->payload('testimonials'), [$field => 'Spoof']))->assertUnprocessable()->assertJsonValidationErrors($field);
+        }
+        $item = $this->create('testimonials');
+        $this->assertSame('admin', $item['source']);
+        $this->assertNull($item['user_id']);
+        $this->assertSame('approved', $item['moderation_status']);
+        $this->assertTrue($item['consent_public']);
     }
 
     public function test_blog_public_time_boundary_offsets_order_filters_and_internal_secrecy(): void

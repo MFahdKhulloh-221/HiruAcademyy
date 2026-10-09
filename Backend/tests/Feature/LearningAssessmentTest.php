@@ -21,6 +21,7 @@ use Carbon\CarbonImmutable;
 use Database\Seeders\ProgramOfferSeeder;
 use Database\Seeders\ProgramSeeder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
+use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
@@ -58,7 +59,7 @@ class LearningAssessmentTest extends TestCase
 
     private function start(string $kind): array
     {
-        return $this->postJson($this->base.'/attempts', ['kind' => $kind])->assertCreated()->json('data');
+        return $this->postJson($this->base.'/attempts', ['kind' => $kind, ...($kind === 'mini' ? ['session' => 1, 'part' => 1] : [])])->assertCreated()->json('data');
     }
 
     private function prerequisites(): void
@@ -70,6 +71,90 @@ class LearningAssessmentTest extends TestCase
             $this->postJson($this->base.'/completions', ['type' => $type, 'resource_id' => $id])->assertOk();
         }
         $this->postJson($this->base.'/completions', ['type' => 'flashcard'])->assertOk();
+    }
+
+    public function test_mini_groups_validation_snapshot_deadline_and_expiry_on_every_endpoint(): void
+    {
+        $this->withoutMiddleware(ThrottleRequests::class);
+        $this->prerequisites();
+        foreach ([[], ['session' => 0, 'part' => 1], ['session' => 1, 'part' => 1.5]] as $selection) {
+            $this->postJson($this->base.'/attempts', ['kind' => 'mini', ...$selection])->assertUnprocessable();
+        }
+        $question = MiniCheckpointQuestion::create($this->question(['chapter_id' => $this->chapter->id, 'session' => 1, 'part' => 1, 'duration_minutes' => 5]));
+        $second = MiniCheckpointQuestion::create($this->question(['chapter_id' => $this->chapter->id, 'session' => 1, 'part' => 1, 'duration_minutes' => 5]));
+        MiniCheckpointQuestion::create($this->question(['chapter_id' => $this->chapter->id, 'session' => 2, 'part' => 3, 'duration_minutes' => null]));
+        MiniCheckpointQuestion::create($this->question(['chapter_id' => $this->chapter->id, 'session' => 9, 'part' => 9, 'status' => 'draft']));
+        $groups = $this->getJson($this->base)->assertOk()->json('data.mini_checkpoints');
+        $this->assertSame([
+            ['session' => 1, 'part' => 1, 'duration_minutes' => 5, 'question_count' => 2, 'configuration_valid' => true],
+            ['session' => 2, 'part' => 3, 'duration_minutes' => null, 'question_count' => 1, 'configuration_valid' => false],
+        ], $groups);
+        $this->postJson($this->base.'/attempts', ['kind' => 'mini', 'session' => 2, 'part' => 3])->assertUnprocessable()->assertJsonValidationErrors('duration_minutes');
+        foreach (['show', 'save', 'submit', 'review'] as $endpoint) {
+            $this->travelTo(CarbonImmutable::parse('2026-10-08T10:00:00+07:00'));
+            $attempt = $this->start('mini');
+            $this->assertCount(2, $attempt['questions']);
+            $this->assertSame(5, $attempt['duration_minutes']);
+            $this->assertSame('2026-10-08T03:00:00.000000Z', $attempt['started_at']);
+            $this->assertSame('2026-10-08T03:05:00.000000Z', $attempt['expires_at']);
+            $this->assertSame($attempt['started_at'], $attempt['server_now']);
+            $url = $this->base.'/attempts/'.$attempt['id'];
+            $this->putJson($url.'/answers', ['answers' => [$question->id => 'B'], 'revision' => 0])->assertOk()->assertJsonPath('data.expires_at', $attempt['expires_at']);
+            $this->getJson($url.'/review')->assertForbidden();
+            $question->update(['duration_minutes' => 20]);
+            $second->update(['duration_minutes' => 20]);
+            $this->travelTo(CarbonImmutable::parse('2026-10-08T03:05:00Z'));
+            $late = ['answers' => [999999 => 'E'], 'revision' => 0];
+            $response = match ($endpoint) {
+                'show' => $this->getJson($url),
+                'save' => $this->putJson($url.'/answers', $late),
+                'submit' => $this->postJson($url.'/submit', $late),
+                'review' => $this->getJson($url.'/review'),
+            };
+            $response->assertOk()->assertJsonPath('data.status', 'completed')->assertJsonPath('data.revision', 2)
+                ->assertJsonPath('data.result.correct', 1)->assertJsonPath('data.result.unanswered', 1)
+                ->assertJsonPath('data.result.passed', false)->assertJsonPath('data.expires_at', $attempt['expires_at']);
+            if ($endpoint !== 'review') {
+                $this->assertStringNotContainsString('correct_option', $response->getContent());
+            }
+            $this->postJson($url.'/submit', $late)->assertOk()->assertJsonPath('data.revision', 2);
+            $question->update(['duration_minutes' => 5]);
+            $second->update(['duration_minutes' => 5]);
+        }
+        $this->travelBack();
+    }
+
+    public function test_mini_admin_publishing_and_legacy_snapshots_fail_safe(): void
+    {
+        $this->prerequisites();
+        $this->student->forceFill(['role' => 'admin'])->save();
+        $payload = $this->question(['chapter_id' => $this->chapter->id, 'session' => 1, 'part' => 1]);
+        $this->postJson('/api/admin/mini-checkpoint-questions', $payload)->assertUnprocessable()->assertJsonValidationErrors('duration_minutes');
+        $draft = $this->postJson('/api/admin/mini-checkpoint-questions', [...$payload, 'status' => 'draft'])->assertCreated()->json('data.id');
+        $this->patchJson('/api/admin/mini-checkpoint-questions/'.$draft, ['status' => 'published'])->assertUnprocessable();
+        $this->patchJson('/api/admin/mini-checkpoint-questions/'.$draft, ['status' => 'published', 'duration_minutes' => 5])->assertOk();
+        $this->postJson('/api/admin/mini-checkpoint-questions', [...$payload, 'duration_minutes' => 6])->assertUnprocessable();
+        $this->student->forceFill(['role' => 'student'])->save();
+        $attempt = $this->start('mini');
+        $model = LearningAttempt::findOrFail($attempt['id']);
+        $snapshot = $model->content_snapshot;
+        $snapshot[0]['duration_minutes'] = null;
+        DB::table('learning_attempts')->where('id', $model->id)->update(['content_snapshot' => json_encode($snapshot)]);
+        $url = $this->base.'/attempts/'.$model->id;
+        $this->getJson($url)->assertUnprocessable()->assertJsonValidationErrors('duration_minutes');
+        $this->getJson($url.'/review')->assertUnprocessable();
+        $this->putJson($url.'/answers', ['answers' => [], 'revision' => 0])->assertUnprocessable();
+        $this->postJson($url.'/submit', ['answers' => [], 'revision' => 0])->assertUnprocessable();
+        $this->assertSame('in_progress', $model->fresh()->status);
+        foreach ([0, -1, '5'] as $invalid) {
+            $snapshot[0]['duration_minutes'] = $invalid;
+            DB::table('learning_attempts')->where('id', $model->id)->update(['content_snapshot' => json_encode($snapshot)]);
+            $this->getJson($url)->assertUnprocessable()->assertJsonValidationErrors('duration_minutes');
+        }
+        $snapshot[0]['duration_minutes'] = 5;
+        $snapshot[] = [...$snapshot[0], 'id' => 999999, 'duration_minutes' => 6];
+        DB::table('learning_attempts')->where('id', $model->id)->update(['content_snapshot' => json_encode($snapshot)]);
+        $this->getJson($url)->assertUnprocessable()->assertJsonValidationErrors('duration_minutes');
     }
 
     public function test_progress_requires_each_nonempty_published_type_and_individual_resources(): void
@@ -117,7 +202,7 @@ class LearningAssessmentTest extends TestCase
         $audioAttempt = $this->start('audio');
         $this->postJson($this->base.'/attempts/'.$audioAttempt['id'].'/submit', ['answers' => [$audio->id => 'A'], 'revision' => 0])->assertOk()->assertJsonPath('data.result.wrong', 1);
         $this->getJson($this->base.'/progress')->assertJsonPath('data.mini_unlocked', true);
-        MiniCheckpointQuestion::create($this->question(['chapter_id' => $this->chapter->id]));
+        MiniCheckpointQuestion::create($this->question(['chapter_id' => $this->chapter->id, 'session' => 1, 'part' => 1, 'duration_minutes' => 5]));
         MiniCheckpointQuestion::create($this->question(['chapter_id' => $this->chapter->id, 'status' => 'draft']));
         $mini = $this->start('mini');
         $this->assertCount(1, $mini['questions']);
@@ -169,8 +254,8 @@ class LearningAssessmentTest extends TestCase
     {
         $this->chapter->update(['program_id' => Program::where('code', 'dasar')->firstOrFail()->id]);
         $this->base = '/api/student/programs/'.$this->chapter->program_id.'/chapters/'.$this->chapter->id;
-        MiniCheckpointQuestion::create($this->question(['chapter_id' => $this->chapter->id]));
-        $this->postJson($this->base.'/attempts', ['kind' => 'mini'])->assertForbidden();
+        MiniCheckpointQuestion::create($this->question(['chapter_id' => $this->chapter->id, 'session' => 1, 'part' => 1, 'duration_minutes' => 5]));
+        $this->postJson($this->base.'/attempts', ['kind' => 'mini', 'session' => 1, 'part' => 1])->assertForbidden();
         $this->prerequisites();
         $audio = $this->audio(['audio_url' => 'https://media.example.test/dasar.mp3']);
         $passage = ReadingPassage::create(['chapter_id' => $this->chapter->id, 'title' => 'Fixture', 'body' => 'Fixture', 'status' => 'published']);
@@ -190,7 +275,7 @@ class LearningAssessmentTest extends TestCase
         $this->assertSame([], app(LearningProgressService::class)->requiredTypes($interview));
         AccessGrant::create(['user_id' => $this->student->id, 'program_id' => $interview->id, 'plan_code' => 'lms', 'status' => 'active', 'starts_at' => now()->subDay(), 'ends_at' => now()->addDay()]);
         $this->base = '/api/student/programs/'.$interview->id.'/chapters/'.$this->chapter->id;
-        $this->postJson($this->base.'/attempts', ['kind' => 'mini'])->assertForbidden();
+        $this->postJson($this->base.'/attempts', ['kind' => 'mini', 'session' => 1, 'part' => 1])->assertForbidden();
         $this->assertSame(['video', 'module', 'flashcard'], app(LearningProgressService::class)->requiredTypes(Program::where('code', 'ssw-food')->firstOrFail()));
     }
 
@@ -199,7 +284,7 @@ class LearningAssessmentTest extends TestCase
         $program = Program::where('code', 'ssw-food')->firstOrFail();
         $this->chapter->update(['program_id' => $program->id]);
         $this->base = '/api/student/programs/'.$program->id.'/chapters/'.$this->chapter->id;
-        MiniCheckpointQuestion::create($this->question(['chapter_id' => $this->chapter->id]));
+        MiniCheckpointQuestion::create($this->question(['chapter_id' => $this->chapter->id, 'session' => 1, 'part' => 1, 'duration_minutes' => 5]));
         $this->getJson($this->base.'/progress')->assertForbidden();
         AccessGrant::create(['user_id' => $this->student->id, 'program_id' => $program->id, 'plan_code' => 'lms', 'status' => 'active', 'starts_at' => now()->subDay(), 'ends_at' => now()->addDay()]);
         $this->prerequisites();
@@ -278,7 +363,7 @@ class LearningAssessmentTest extends TestCase
         $this->getJson($this->base.'/progress')->assertJsonPath('data.mini_unlocked', true);
         $empty = ReadingPassage::create(['chapter_id' => $this->chapter->id, 'title' => 'Empty', 'body' => 'Body', 'status' => 'published']);
         $this->getJson($this->base.'/progress')->assertJsonPath('data.activities.reading.complete', false)->assertJsonPath('data.mini_unlocked', false);
-        $this->postJson($this->base.'/attempts', ['kind' => 'mini'])->assertForbidden();
+        $this->postJson($this->base.'/attempts', ['kind' => 'mini', 'session' => 1, 'part' => 1])->assertForbidden();
         $draft = ReadingQuestion::create($this->question(['reading_passage_id' => $empty->id, 'status' => 'draft']));
         $this->getJson($this->base.'/progress')->assertJsonPath('data.activities.reading.complete', false);
         $empty->update(['status' => 'draft']);
@@ -363,9 +448,9 @@ class LearningAssessmentTest extends TestCase
             $practice = $this->start($kind);
             $this->postJson($this->base.'/attempts/'.$practice['id'].'/submit', ['answers' => [$question->id => 'B'], 'revision' => 0])->assertOk();
         }
-        $correct = MiniCheckpointQuestion::create($this->question(['chapter_id' => $this->chapter->id]));
-        $wrong = MiniCheckpointQuestion::create($this->question(['chapter_id' => $this->chapter->id]));
-        $unanswered = MiniCheckpointQuestion::create($this->question(['chapter_id' => $this->chapter->id]));
+        $correct = MiniCheckpointQuestion::create($this->question(['chapter_id' => $this->chapter->id, 'session' => 1, 'part' => 1, 'duration_minutes' => 5]));
+        $wrong = MiniCheckpointQuestion::create($this->question(['chapter_id' => $this->chapter->id, 'session' => 1, 'part' => 1, 'duration_minutes' => 5]));
+        $unanswered = MiniCheckpointQuestion::create($this->question(['chapter_id' => $this->chapter->id, 'session' => 1, 'part' => 1, 'duration_minutes' => 5]));
         $attempt = $this->start('mini');
         foreach ($attempt['questions'] as $question) {
             $this->assertArrayNotHasKey('selected_answer', $question);

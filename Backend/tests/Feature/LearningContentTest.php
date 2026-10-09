@@ -100,7 +100,7 @@ class LearningContentTest extends TestCase
             'flashcards' => ['japanese' => '猫', 'reading' => 'ねこ', 'meaning' => 'Cat', 'example' => '猫です。'],
             'audio-questions' => ['title' => 'Fixture audio', 'audio_url' => 'https://media.example.test/audio.mp3', ...$question],
             'reading-passages' => ['title' => 'Fixture passage', 'body' => 'Fixture body'],
-            'mini-checkpoint-questions' => $question,
+            'mini-checkpoint-questions' => [...$question, 'session' => 1, 'part' => 1, 'duration_minutes' => 5],
         }];
     }
 
@@ -383,7 +383,7 @@ class LearningContentTest extends TestCase
         $this->assertSame([$second->id, $third->id, $first->id], array_column($data, 'id'));
         $this->assertSame(['locked', 'locked', 'preview'], array_column($data, 'access'));
         foreach ($data as $row) {
-            $this->assertKeys(['id', 'chapter_number', 'title', 'description', 'sort_order', 'access'], $row);
+            $this->assertKeys(['id', 'chapter_number', 'title', 'description', 'sort_order', 'access', 'mini_checkpoint'], $row);
         }
         $this->getJson($this->detailUrl($first))->assertOk()->assertJsonPath('data.access', 'preview');
         $this->getJson($this->detailUrl($second))->assertForbidden();
@@ -516,7 +516,7 @@ class LearningContentTest extends TestCase
         $data = $this->getJson($this->detailUrl($chapter))->assertOk()->json('data');
         $this->assertKeys([
             'id', 'chapter_number', 'title', 'description', 'sort_order', 'access',
-            'video_lessons', 'modules', 'flashcards', 'audio_questions', 'reading_passages', 'mini_checkpoint',
+            'video_lessons', 'modules', 'flashcards', 'audio_questions', 'reading_passages', 'mini_checkpoint', 'mini_checkpoints',
         ], $data);
         $this->assertSame(['exists' => true], $data['mini_checkpoint']);
         foreach ($fields as [$key, $publicFields]) {

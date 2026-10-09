@@ -2,8 +2,10 @@
 
 namespace App\Http\Resources;
 
+use App\Services\LearningAttemptService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
+use Illuminate\Validation\ValidationException;
 
 class StudentChapterResource extends JsonResource
 {
@@ -15,6 +17,18 @@ class StudentChapterResource extends JsonResource
         if (! $this->resource->relationLoaded('videoLessons')) {
             return $data;
         }
+        $data['mini_checkpoints'] = $this->resource->miniCheckpointQuestions
+            ->groupBy(fn ($question) => $question->session.':'.$question->part)
+            ->map(function ($questions) {
+                $first = $questions->first();
+                try {
+                    $configuration = app(LearningAttemptService::class)->miniConfiguration($questions->map(fn ($question) => $question->only(['session', 'part', 'duration_minutes']))->values()->all());
+                } catch (ValidationException) {
+                    $configuration = null;
+                }
+
+                return ['session' => $first->session, 'part' => $first->part, 'duration_minutes' => $configuration['duration_minutes'] ?? null, 'question_count' => $questions->count(), 'configuration_valid' => $configuration !== null];
+            })->sortBy(['session', 'part'])->values()->all();
         foreach ([
             'video_lessons' => ['videoLessons', ['id', 'title', 'video_url', 'description', 'sort_order']],
             'modules' => ['modules', ['id', 'title', 'module_type', 'file_url', 'description', 'sort_order']],
