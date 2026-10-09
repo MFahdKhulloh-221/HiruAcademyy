@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { dashboardFixture } from "./canonical-fixture";
 
 test.beforeEach(async ({ page }) => {
   await page.route(/\/(api\/|sanctum\/csrf-cookie)/, async route => {
@@ -7,9 +8,11 @@ test.beforeEach(async ({ page }) => {
     const membership = current.searchParams.get("membership") ?? "lms";
     const programs = ["dasar", "n5", "n4", "n3", "n2", "n1"].map((code, index) => ({ id: index + 1, code, name: code === "dasar" ? "Dasar Bahasa Jepang" : `JLPT ${code.toUpperCase()}`, family: "jlpt" }));
     const chapters = [1, 4].map(number => ({ id: number, chapter_number: number, title: `Chapter ${number}`, sort_order: number, access: "full", video_lessons: [], modules: [], flashcards: [], mini_checkpoint: { exists: false } }));
+    const access = { learning: Object.fromEntries(programs.map(item => [item.code, membership === "free" ? "preview" as const : "full" as const])), replay_levels: membership === "sensei" ? ["n5", "n4"] : [], source_grants: membership === "free" ? [] : [{ plan_code: membership, program_code: "n4" }] };
     const data = path === "/api/me" ? { id: 901, name: "Browser Student", email: "browser@example.test", whatsapp: "6281999000012", role: current.pathname.startsWith("/admin") ? "admin" : "student", account_status: "active" }
       : path === "/api/public/programs" ? programs
-      : path === "/api/student/access" ? { learning: Object.fromEntries(programs.map(item => [item.code, membership === "free" ? "preview" : "full"])), replay_levels: membership === "sensei" ? ["n5", "n4"] : [], source_grants: membership === "free" ? [] : [{ plan_code: membership, program_code: "n4" }] }
+      : path === "/api/student/access" ? access
+      : path === "/api/student/dashboard" ? dashboardFixture(programs, access, () => chapters, chapter_id => ({ chapter_id, activities: {}, mini_unlocked: false }))
       : path.endsWith("/chapters") ? chapters
       : /\/chapters\/\d+$/.test(path) ? chapters.find(item => path.endsWith(`/${item.id}`))
       : path.endsWith("/progress") ? { chapter_id: 1, activities: {}, mini_unlocked: false }

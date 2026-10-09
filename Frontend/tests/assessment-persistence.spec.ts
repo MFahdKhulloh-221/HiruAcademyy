@@ -34,6 +34,20 @@ test("failed stale save blocks grading submission", async () => {
   expect(requests).toBe(1);
 });
 
+test("Mini retry after failed submit and expired save adopts canonical saved answers", async () => {
+  let server: ServerAttempt = { ...attempt(), kind: "mini", session: 1, part: 2, duration_minutes: 2, started_at: "2026-10-08T00:00:00Z", expires_at: "2026-10-08T00:02:00Z", server_now: "2026-10-08T00:01:00Z", answers: { "1": "A" } };
+  let failed = false;
+  const request = (async (path: string, options?: RequestInit) => {
+    if (path.endsWith("/submit") && !failed) { failed = true; throw new Error("network"); }
+    if (options?.method) server = { ...server, status: "completed", result: { correct: 1, wrong: 0, unanswered: 0, passed: true } };
+    return { data: server };
+  }) as typeof apiRequest;
+  const store = new AttemptPersistence(server, "/attempts/1", "learning", request);
+  await expect(store.submit({ "1": "B" })).rejects.toThrow("network");
+  expect((await store.submit({ "1": "B" })).answers).toEqual({ "1": "A" });
+  expect((await store.save({ "1": "B" })).answers).toEqual({ "1": "A" });
+});
+
 test("tryout sends only current canonical session answers", () => {
   const state = { ...attempt(), current_session: 1, questions: [{ id: 1, session: "vocabulary_kanji", options: {} }, { id: 2, session: "grammar", options: {} }] };
   expect(currentAnswers(state, { "1": "A", "2": "B" })).toEqual({ "2": "B" });

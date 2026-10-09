@@ -23,6 +23,50 @@ function harness(cookie = "") {
   return { ...context.exports, calls, document };
 }
 
+function learningHarness(data) {
+  const calls = [];
+  const context = vm.createContext({ exports: {}, require: () => ({ apiRequest: async (path, options) => { calls.push({ path, options }); return { data }; } }) });
+  const learning = ts.transpileModule(readFileSync(new URL("../src/lib/learning-api.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  vm.runInContext(learning, context);
+  return { ...context.exports, calls };
+}
+
+test("dashboard aggregate preserves canonical order, next chapter, weighted progress and module total without fanout", async () => {
+  const programs = [{ id: 5, code: "n5", name: "JLPT N5", family: "jlpt" }, { id: 4, code: "n4", name: "JLPT N4", family: "jlpt" }];
+  const access = { learning: { n5: "full", n4: "preview" }, source_grants: [], replay_levels: [] };
+  const complete = { module: { total: 1, completed: 1, complete: true } };
+  const partial = { video: { total: 3, completed: 1, complete: false }, module: { total: 1, completed: 1, complete: true } };
+  const rows = [
+    { program_id: 5, chapter: { id: 9, access: "full" }, progress: { activities: complete } },
+    { program_id: 5, chapter: { id: 10, access: "full" }, progress: { activities: partial } },
+    { program_id: 4, chapter: { id: 11, access: "locked" } },
+    { program_id: 4, chapter: { id: 12, access: "preview" }, progress: { activities: { module: { total: 1, completed: 0, complete: false } } } },
+    { program_id: 4, chapter: { id: 13, access: "none" } },
+  ];
+  const api = learningHarness({ programs, access, chapters: rows });
+  const signal = new AbortController().signal;
+  const result = await api.learningDashboard(signal);
+  assert.equal(api.calls.length, 1);
+  assert.equal(api.calls[0].path, "/api/student/dashboard");
+  assert.equal(api.calls[0].options.signal, signal);
+  assert.deepEqual(Array.from(result.chapters, item => item.chapter.id), [9, 10, 12]);
+  const next = result.chapters.find(item => Object.values(item.progress.activities).some(activity => !activity.complete)) ?? result.chapters[0];
+  assert.equal(next.chapter.id, 10);
+  const activities = result.chapters.filter(item => item.program.id === next.program.id).flatMap(item => Object.values(item.progress.activities));
+  assert.equal(api.completionPercent(Object.fromEntries(activities.map((activity, index) => [index, activity]))), 60);
+  assert.equal(result.chapters.reduce((sum, item) => sum + (item.progress.activities.module?.completed ?? 0), 0), 2);
+  assert.equal(api.completionPercent({}), 0);
+});
+
+test("dashboard empty data remains empty; accessible progress must exist, locked progress never used", async () => {
+  const empty = learningHarness({ programs: [], access: {}, chapters: [] });
+  assert.equal((await empty.learningDashboard()).chapters.length, 0);
+  const missing = learningHarness({ programs: [{ id: 1 }], access: {}, chapters: [{ program_id: 1, chapter: { access: "preview" } }] });
+  await assert.rejects(missing.learningDashboard(), /Invalid dashboard chapter progress/);
+  const locked = learningHarness({ programs: [{ id: 1 }], access: {}, chapters: [{ program_id: 1, chapter: { access: "locked" }, progress: { activities: { module: { completed: 999 } } } }] });
+  assert.equal((await locked.learningDashboard()).chapters.length, 0);
+});
+
 const aborted = error => error.name === "AbortError";
 const status = expected => error => error.status === expected;
 

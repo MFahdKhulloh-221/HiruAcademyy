@@ -98,7 +98,10 @@ test("real Laravel navigation regression: repeated Free Dashboard Journey Librar
       if (path === "/journey") await expect(page.getByRole("region", { name: "Pilihan level" }).getByText("JLPT N5", { exact: true })).toBeVisible();
       if (path === "/library") await expect(page.getByRole("heading", { name: "Perpustakaan Materi", exact: true })).toBeVisible();
       await traffic.settled(`${round + 1}:${path}`, start);
-      if (path === "/dashboard") expect(traffic.requests.slice(start).some(endpoint => endpoint.endsWith("/progress")), "Dashboard finishes chapter/progress chain").toBe(true);
+      if (path === "/dashboard") {
+        expect(traffic.requests.slice(start).filter(endpoint => endpoint.endsWith("/student/dashboard")), "Dashboard uses one aggregate request").toHaveLength(1);
+        expect(traffic.requests.slice(start).filter(endpoint => /\/student\/programs\//.test(endpoint)), "Dashboard has no chapter/progress fanout").toEqual([]);
+      }
     }
   }
   await traffic.report();

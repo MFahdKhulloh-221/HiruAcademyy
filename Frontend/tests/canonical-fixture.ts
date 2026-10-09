@@ -1,4 +1,19 @@
 import { test as base, expect, type Page } from "@playwright/test";
+import type { CanonicalChapter, ChapterProgress, LearningAccess, LearningProgram, LeaderboardScope, StudentGamificationData, StudentLeaderboardData } from "../src/lib/learning-api";
+
+export function dashboardFixture(programs: LearningProgram[], access: LearningAccess, chapters: (programId: number) => CanonicalChapter[], progress: (chapterId: number) => ChapterProgress) {
+  return { programs, access, chapters: programs.flatMap(program => chapters(program.id).map(chapter => ({ program_id: program.id, chapter, ...(["locked", "none"].includes(chapter.access) ? {} : { progress: progress(chapter.id) }) }))) };
+}
+
+export function leaderboardFixture(scope: LeaderboardScope = "all"): StudentLeaderboardData {
+  return { scope, week_start: "2026-10-05T00:00:00+07:00", week_end: "2026-10-12T00:00:00+07:00", entries: [], self: null };
+}
+
+export const gamificationFixture: StudentGamificationData = {
+  streak_days: 0,
+  weekly_xp: 0,
+  challenge: { active_days: 0, target_days: 5, total_days: 7, starts_on: "2026-10-08", ends_on: "2026-10-14", status: "active", badge: null },
+};
 
 export const test = base.extend<{ canonicalApi: void }>({
   canonicalApi: [async ({ page }, use) => {
@@ -18,7 +33,16 @@ export const test = base.extend<{ canonicalApi: void }>({
       if (path === "/sanctum/csrf-cookie") { await route.fulfill({ status: 204, headers: { "set-cookie": "XSRF-TOKEN=testing; Path=/; SameSite=Lax" } }); return; }
       if (path === "/api/me") { await route.fulfill({ json: { data: { id: 901, name: "Browser Admin", email: "browser.admin@example.test", whatsapp: "6281999000011", role: new URL(page.url()).pathname.startsWith("/admin") ? "admin" : "student", account_status: "active" } } }); return; }
       if (/^\/api\/admin\/users\/\d+\/effective-access$/.test(path)) { await route.fulfill({ json: { data: { learning: {}, replay_levels: [], source_grants: [] } } }); return; }
-      if (path === "/api/student/access") { await route.fulfill({ json: { data: { learning: { n5: "full", n4: "full" }, replay_levels: ["n5", "n4"], source_grants: [{ plan_code: "sensei", program_code: "n4" }] } } }); return; }
+      if (path === "/api/student/leaderboard" && method === "GET") {
+        const scope = new URL(route.request().url()).searchParams.get("scope") ?? "all";
+        if (scope !== "all" && scope !== "lms" && scope !== "sensei") { await route.fulfill({ status: 422, json: { message: "Invalid leaderboard scope" } }); return; }
+        await route.fulfill({ json: { data: leaderboardFixture(scope) } }); return;
+      }
+      if (path === "/api/student/gamification" && method === "GET") { await route.fulfill({ json: { data: gamificationFixture } }); return; }
+      if (path === "/api/admin/users" && new URL(route.request().url()).searchParams.get("include") === "effective_access") { await route.fulfill({ json: { data: (collections.get(path) ?? []).map(row => ({ ...row, effective_access: { learning: {}, replay_levels: [], source_grants: [] } })) } }); return; }
+      const access: LearningAccess = { learning: { n5: "full", n4: "full" }, replay_levels: ["n5", "n4"], source_grants: [{ plan_code: "sensei", program_code: "n4" }] };
+      if (path === "/api/student/dashboard") { await route.fulfill({ json: { data: dashboardFixture(programs, access, () => [], chapter_id => ({ chapter_id, activities: {}, mini_unlocked: false })) } }); return; }
+      if (path === "/api/student/access") { await route.fulfill({ json: { data: access } }); return; }
       const offerMatch = path.match(/^\/api\/admin\/offers\/(\d+)$/);
       if (offerMatch && method === "PATCH") {
         const offer = offers.find(item => item.id === Number(offerMatch[1]));

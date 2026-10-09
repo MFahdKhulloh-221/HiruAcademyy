@@ -1,11 +1,16 @@
 import { expect, test } from "@playwright/test";
+import { dashboardFixture, gamificationFixture, leaderboardFixture } from "./canonical-fixture";
+import type { ChapterProgress } from "../src/lib/learning-api";
 
-async function mockLearning(page: import("@playwright/test").Page, failCompletion = false) {
+async function mockLearning(page: import("@playwright/test").Page, failCompletion = false, dashboardProgress: ChapterProgress = { chapter_id: 9, activities: { flashcard: { total: 1, completed: 0, complete: false } }, mini_unlocked: false }) {
   let completions = 0;
   await page.route(/\/(api\/|sanctum\/csrf-cookie)/, async route => {
     const path = new URL(route.request().url()).pathname;
     const data = path === "/api/me" ? { id: 71, name: "Real Student", email: "student@example.test", whatsapp: "081234567890", role: "student", account_status: "active" }
       : path === "/api/public/programs" ? [{ id: 5, code: "n5", name: "JLPT N5", family: "jlpt" }]
+      : path === "/api/student/dashboard" ? dashboardFixture([{ id: 5, code: "n5", name: "JLPT N5", family: "jlpt" }], { learning: { n5: "preview" }, source_grants: [], replay_levels: [] }, () => [{ id: 9, chapter_number: 1, title: "Canonical Chapter", sort_order: 0, access: "preview" }], () => dashboardProgress)
+      : path === "/api/student/leaderboard" ? leaderboardFixture()
+      : path === "/api/student/gamification" ? gamificationFixture
       : path === "/api/student/access" ? { learning: { n5: "preview" }, source_grants: [], replay_levels: [] }
       : path.endsWith("/chapters") ? [{ id: 9, chapter_number: 1, title: "Canonical Chapter", sort_order: 0, access: "preview" }]
       : path.endsWith("/chapters/9") ? { id: 9, chapter_number: 1, title: "Canonical Chapter", sort_order: 0, access: "preview", flashcards: [{ id: 1, japanese: "猫", reading: "ねこ", meaning: "Cat", example: "猫です。", sort_order: 0 }], video_lessons: [], modules: [], mini_checkpoint: { exists: true } }
@@ -82,7 +87,7 @@ test("classification advances locally and difficult retry contains only difficul
 test("free preview mini gate follows canonical progress, not membership query", async ({ page }) => {
   await mockLearning(page);
   await page.goto("/learn/n5/chapter-1?membership=sensei");
-  await expect(page.getByRole("heading", { name: "Canonical Chapter" })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" }).getByText("Canonical Chapter", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Mini Checkpoint Chapter 1" })).toBeVisible();
   await expect(page.getByRole("link", { name: "Mulai Mini Checkpoint" })).toHaveCount(0);
 });
@@ -95,22 +100,87 @@ test("journey uses approved descriptions and actual completion percentage", asyn
   await expect(page.getByText("Chapter 1 tersedia sebagai akses Free pada level ini.")).toBeVisible();
   await page.goto("/journey/n5");
   await expect(page.getByText("50%", { exact: true })).toBeVisible();
-  await page.goto("/learn/n5/chapter-1");
-  await expect(page.getByRole("progressbar", { name: "Progress chapter" })).toHaveAttribute("value", "50");
+  await expect(page.getByRole("progressbar", { name: "Progress Canonical Chapter", exact: true })).toHaveAttribute("value", "50");
 });
 
 test("dashboard primary percentage follows selected program real completion", async ({ page }) => {
-  await mockLearning(page);
-  await page.route("**/api/student/programs/5/chapters/9/progress", route => route.fulfill({ json: { data: { chapter_id: 9, activities: { flashcard: { total: 4, completed: 3, complete: false } }, mini_unlocked: false } } }));
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(error.message));
+  await mockLearning(page, false, { chapter_id: 9, activities: { flashcard: { total: 4, completed: 3, complete: false } }, mini_unlocked: false });
   await page.goto("/dashboard");
   await expect(page.getByText("75%", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Papan Peringkat", exact: true })).toBeVisible();
+  await expect(page.getByText("0 XP", { exact: true })).toBeVisible();
+  await expect(page.getByText("Belum ada data untuk ditampilkan.", { exact: true })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+
+test("dashboard navigation fetches one aggregate without chapter fanout", async ({ page }) => {
+  const requests: string[] = [];
+  page.on("request", request => { const path = new URL(request.url()).pathname; if (path.startsWith("/api/")) requests.push(path); });
+  await mockLearning(page);
+  await page.goto("/dashboard");
+  await expect(page.getByRole("heading", { name: /Halo, Real Student/ })).toBeVisible();
+  expect(requests.filter(path => path === "/api/student/dashboard")).toHaveLength(1);
+  expect(requests.filter(path => path === "/api/public/programs" || path === "/api/student/access" || path.startsWith("/api/student/programs/"))).toEqual([]);
+  const origin = await page.evaluate(() => performance.timeOrigin);
+  await page.locator('a[href="/learn/n5/chapter-1"]').first().click();
+  await expect(page.getByRole("navigation", { name: "Breadcrumb" })).toContainText("Canonical Chapter");
+  requests.length = 0;
+  await page.getByRole("link", { name: "Dashboard", exact: true }).first().click();
+  await expect(page.getByRole("heading", { name: /Halo, Real Student/ })).toBeVisible();
+  expect(await page.evaluate(() => performance.timeOrigin)).toBe(origin);
+  expect(requests.filter(path => path === "/api/student/dashboard")).toHaveLength(1);
+  expect(requests.filter(path => path.startsWith("/api/student/programs/"))).toEqual([]);
+});
+
+for (const status of [401, 403, 419]) test(`dashboard aggregate rejects unauthorized access ${status}`, async ({ page }) => {
+  await mockLearning(page);
+  await page.route("**/api/student/dashboard", route => route.fulfill({ status, json: {} }));
+  await page.goto("/dashboard?membership=sensei");
+  if (status === 403) await expect(page.getByRole("alert").filter({ hasText: "Permintaan belum berhasil." })).toContainText("Permintaan belum berhasil.");
+  else await expect(page).toHaveURL(/\/login$/);
+  await expect(page.getByRole("heading", { name: /Halo, Real Student/ })).toHaveCount(0);
+});
+
+test("dashboard account change discards pending previous account response", async ({ page }) => {
+  await mockLearning(page);
+  let account = 71;
+  let reads = 0;
+  let release!: () => void;
+  let started!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const pending = new Promise<void>(resolve => { started = resolve; });
+  const user = () => ({ id: account, name: `Account ${account}`, email: `account-${account}@example.test`, whatsapp: "081234567890", role: "student", account_status: "active" });
+  await page.route("**/api/me", route => route.fulfill({ json: { data: user() } }));
+  await page.route("**/api/auth/login", route => { account = 72; return route.fulfill({ json: { data: user() } }); });
+  await page.route("**/api/student/dashboard", async route => {
+    reads += 1;
+    const owner = account;
+    if (owner === 71) { started(); await gate; }
+    await route.fulfill({ json: { data: dashboardFixture([{ id: 5, code: "n5", name: "JLPT N5", family: "jlpt" }], { learning: { n5: "preview" }, replay_levels: [], source_grants: [] }, () => [{ id: 9, chapter_number: 1, title: `Private chapter ${owner}`, access: "preview", sort_order: 0 }], chapter_id => ({ chapter_id, activities: { module: { total: 4, completed: owner === 71 ? 3 : 1, complete: false } }, mini_unlocked: false })) } });
+  });
+  await page.goto("/dashboard");
+  await pending;
+  await page.evaluate(() => window.dispatchEvent(new Event("hiru:auth-expired")));
+  await expect(page).toHaveURL(/\/login$/);
+  await page.getByLabel("Email / WhatsApp").fill("account-72@example.test");
+  await page.getByLabel("Kata Sandi", { exact: true }).fill("password123");
+  await page.getByRole("button", { name: "Masuk", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /Halo, Account 72/ })).toBeVisible();
+  await expect(page.getByText("25%", { exact: true })).toBeVisible();
+  release();
+  await expect(page.getByText("Private chapter 71", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("75%", { exact: true })).toHaveCount(0);
+  expect(reads).toBe(2);
 });
 
 test("zero denominator stays zero and unavailable activities have no links", async ({ page }) => {
   await mockLearning(page);
   await page.route("**/api/student/programs/5/chapters/9/progress", route => route.fulfill({ json: { data: { chapter_id: 9, activities: {}, mini_unlocked: false } } }));
+  await page.goto("/journey/n5");
+  await expect(page.getByRole("progressbar", { name: "Progress Canonical Chapter", exact: true })).toHaveAttribute("value", "0");
   await page.goto("/learn/n5/chapter-1");
-  await expect(page.getByRole("progressbar", { name: "Progress chapter" })).toHaveAttribute("value", "0");
   await expect(page.locator('a[href$="/video"]')).toHaveCount(0);
   await expect(page.getByText("Tonton penjelasan utama chapter.")).toBeVisible();
 });

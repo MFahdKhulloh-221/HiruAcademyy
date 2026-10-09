@@ -111,7 +111,11 @@ test("Mini Checkpoint question workspace validates options, session, part, durat
   await page.route("**/api/admin/chapters", route => route.fulfill({ json: { data: [{ id: 7, program_id: 2, chapter_number: 1, title: "Chapter 1", sort_order: 0, status: "published" }] } }));
   const questions: Record<string, unknown>[] = [];
   await page.route("**/api/admin/mini-checkpoint-questions**", async route => {
-    if (route.request().method() === "POST") { const row = { ...route.request().postDataJSON(), id: 50 }; questions.push(row); await route.fulfill({ status: 201, json: { data: row } }); return; }
+    if (route.request().method() === "POST") {
+      const body = route.request().postDataJSON();
+      if (body.duration_minutes === 20) { await route.fulfill({ status: 422, json: { errors: { duration_minutes: ["Mini questions must share session, part and identical positive duration_minutes."] } } }); return; }
+      const row = { ...body, id: 50 }; questions.push(row); await route.fulfill({ status: 201, json: { data: row } }); return;
+    }
     await route.fulfill({ json: { data: questions } });
   });
   await page.goto("/admin/bank-soal/baru?type=mini");
@@ -120,6 +124,7 @@ test("Mini Checkpoint question workspace validates options, session, part, durat
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("combobox", { name: "Program", exact: true }).selectOption("2");
   await dialog.getByRole("combobox", { name: /^Chapter/ }).selectOption("7");
+  await expect(dialog.getByLabel("Durasi (menit)", { exact: true })).toHaveValue("");
   await dialog.getByLabel("Sesi", { exact: true }).fill("2");
   await dialog.getByLabel("Part", { exact: true }).fill("3");
   await dialog.getByLabel("Durasi (menit)", { exact: true }).fill("20");
@@ -127,10 +132,13 @@ test("Mini Checkpoint question workspace validates options, session, part, durat
   for (const letter of ["A", "B", "C", "D"]) await dialog.getByLabel(`Pilihan ${letter}`, { exact: true }).fill(`Pilihan ${letter}`);
   await dialog.getByRole("combobox", { name: /^Jawaban benar/ }).selectOption("B");
   await dialog.getByRole("button", { name: "Simpan Soal", exact: true }).click();
+  await expect(dialog.getByRole("alert")).toContainText("identical positive duration_minutes");
+  await dialog.getByLabel("Durasi (menit)", { exact: true }).fill("25");
+  await dialog.getByRole("button", { name: "Simpan Soal", exact: true }).click();
   await expect(dialog).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole("table").getByText("Mini admin prompt")).toBeVisible();
-  expect(questions[0]).toMatchObject({ session: 2, part: 3, duration_minutes: 20 });
+  expect(questions[0]).toMatchObject({ session: 2, part: 3, duration_minutes: 25 });
 });
 
 test("audio question builder saves and publishes persisted Admin fields", async ({ page }) => {

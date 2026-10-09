@@ -163,7 +163,9 @@ test("Scenario H — canonical affiliate percentage rate persists without rewrit
 
 test("Scenario I — query cannot override canonical server membership", async ({ page }) => {
   await page.route("**/api/public/programs", route => route.fulfill({ json: { data: [] } }));
-  await page.route("**/api/student/access", route => route.fulfill({ json: { data: { learning: {}, replay_levels: [], source_grants: [] } } }));
+  const access = { learning: {}, replay_levels: [], source_grants: [] };
+  await page.route("**/api/student/access", route => route.fulfill({ json: { data: access } }));
+  await page.route("**/api/student/dashboard", route => route.fulfill({ json: { data: { programs: [], access, chapters: [] } } }));
   for (const membership of ["free", "lms", "sensei"]) {
     await page.goto(`/dashboard?membership=${membership}`);
     await expect(page.locator(".dash-topbar").getByText("Free Member", { exact: true })).toBeVisible();

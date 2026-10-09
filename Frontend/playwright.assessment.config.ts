@@ -3,7 +3,7 @@ import base from "./playwright.config";
 
 export default defineConfig({
   ...base,
-  testMatch: ["assessment-persistence.spec.ts", "assessment-backend.spec.ts"],
+  testMatch: ["assessment-persistence.spec.ts", "assessment-backend.spec.ts", "mini-learning-regression.spec.ts"],
   use: { ...base.use, baseURL: "http://localhost:3017" },
   webServer: {
     command: "npm run dev -- --hostname localhost --port 3017",

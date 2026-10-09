@@ -1,10 +1,15 @@
 import { expect, test } from "@playwright/test";
+import { gamificationFixture, leaderboardFixture } from "./canonical-fixture";
 
 const student = { id: 901, name: "Sakura Tanaka", email: "sakura@example.test", whatsapp: "081234567890", role: "student" };
 
 test.beforeEach(async ({ page }) => {
   await page.route("**/api/public/programs", route => route.fulfill({ json: { data: [] } }));
-  await page.route("**/api/student/access", route => route.fulfill({ json: { data: { learning: { n5: "full" }, replay_levels: [], source_grants: [{ plan_code: "lms", program_code: "n5" }] } } }));
+  const access = { learning: { n5: "full" }, replay_levels: [], source_grants: [{ plan_code: "lms", program_code: "n5" }] };
+  await page.route("**/api/student/access", route => route.fulfill({ json: { data: access } }));
+  await page.route("**/api/student/dashboard", route => route.fulfill({ json: { data: { programs: [], access, chapters: [] } } }));
+  await page.route("**/api/student/leaderboard?scope=all", route => route.fulfill({ json: { data: leaderboardFixture() } }));
+  await page.route("**/api/student/gamification", route => route.fulfill({ json: { data: gamificationFixture } }));
 });
 
 test("current student identity uses canonical membership without fake expiry or certificates", async ({ page }) => {
