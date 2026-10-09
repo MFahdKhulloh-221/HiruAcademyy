@@ -1,5 +1,9 @@
 import Link from "next/link";
-import { useState } from "react";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
+import { useCallback, useState } from "react";
+import { useLearningRequest } from "@/components/learning-hooks";
+import { LeaderboardRows, LeaderboardRules } from "@/components/student-leaderboard-screen";
+import { studentGamification, studentLeaderboard } from "@/lib/learning-api";
 import {
   LuArrowRight,
   LuAward,
@@ -7,7 +11,6 @@ import {
   LuCircleCheck,
   LuClipboardCheck,
   LuDumbbell,
-  LuFlame,
   LuFlag,
   LuHandshake,
   LuLibrary,
@@ -20,6 +23,7 @@ import {
 import type { IconType } from "react-icons";
 import { useAuth } from "@/components/auth-provider";
 import { StudentNavigation } from "@/components/student-navigation";
+import { StudentAvatar } from "@/components/student-avatar";
 import { getStudentFeatureAccess, type DashboardData, type DashboardIcon } from "@/lib/dashboard-mock";
 
 const glyphs: Record<DashboardIcon | "bell", IconType> = {
@@ -55,8 +59,10 @@ export function StudentDashboard({
 }) {
   const { user: currentUser } = useAuth();
   const name = currentUser?.name ?? "";
-  const initials = name.trim().split(/\s+/).slice(0, 2).map((part) => Array.from(part)[0] ?? "").join("").toUpperCase();
   const config = data.config;
+  const loadLeaderboard = useCallback((signal: AbortSignal) => studentLeaderboard("all", signal), []);
+  const leaderboard = useLearningRequest(loadLeaderboard, "dashboard-leaderboard");
+  const gamification = useLearningRequest(studentGamification, "dashboard-gamification");
   const [lockedFeature, setLockedFeature] = useState<string | null>(null);
 
   return (
@@ -68,7 +74,7 @@ export function StudentDashboard({
             <button type="button" aria-label="Notifikasi">
               <Glyph name="bell" />
             </button>
-            <div className="dash-avatar">{initials}</div>
+            <StudentAvatar name={name} url={currentUser?.avatar_resolved_url} className="dash-avatar" />
             <div>
               <strong>{name}</strong>
               <span>{data.membershipLabel}</span>
@@ -150,27 +156,24 @@ export function StudentDashboard({
                   <strong>{config.continue.progress}</strong>
                 </div>
               </div>
+              {!gamification.data && !gamification.error && <LoadingSkeleton variant="stats" rows={1} label="Memuat progres…" />}
+              {gamification.error && <p role="alert">{gamification.error} <button type="button" className="button button-secondary" onClick={gamification.retry}>Coba Lagi</button></p>}
+              {gamification.data && <div className="gamification-metrics"><span><strong>{gamification.data.weekly_xp.toLocaleString("id-ID")} XP</strong>XP Mingguan</span><span><strong>{gamification.data.streak_days}</strong>Hari Streak</span></div>}
             </section>
 
             <section className="dash-leaderboard-section dashboard-bento-leaderboard">
               <div className="dash-leaderboard-head">
                 <div>
                   <p className="dash-kicker">KOMPETISI</p>
-                  <h2>Papan Peringkat</h2>
+                  <div className="leaderboard-title"><h2>Papan Peringkat</h2><LeaderboardRules /></div>
                 </div>
                 <Link className="dash-leaderboard-all" href={`/leaderboard?membership=${data.membership}`}>
                   Lihat Semua <LuArrowRight aria-hidden="true" />
                 </Link>
               </div>
-              <ul className="dash-leaderboard-list">
-                {config.leaderboard.map((user) => (
-                  <li key={user.rank} className={`dash-leaderboard-item${user.isCurrentUser ? " current-user" : ""}`}>
-                    <span className={`dash-rank-badge rank-${user.rank}`}>{user.rank}</span>
-                    <div className="dash-leaderboard-info"><strong>{user.isCurrentUser ? `${name} (Kamu)` : user.name}</strong><small>{user.rank === 1 ? "12.450 XP" : user.rank === 2 ? "10.820 XP" : user.rank === 3 ? "9.640 XP" : user.rank === 4 ? "8.930 XP" : "8.410 XP"}</small></div>
-                    {user.rank === 1 && <span className="dash-rank-fire" aria-hidden="true"><LuFlame /></span>}
-                  </li>
-                ))}
-              </ul>
+              {!leaderboard.data && !leaderboard.error && <LoadingSkeleton variant="ranking" rows={5} label="Memuat leaderboard…" />}
+              {leaderboard.error && <p role="alert">{leaderboard.error} <button type="button" className="button button-secondary" onClick={leaderboard.retry}>Coba Lagi</button></p>}
+              {leaderboard.data && <>{leaderboard.data.entries.length === 0 && <p role="status">Belum ada data untuk ditampilkan.</p>}<LeaderboardRows entries={leaderboard.data.entries.filter(row => row.rank <= 5)} /></>}
             </section>
           </div>
 

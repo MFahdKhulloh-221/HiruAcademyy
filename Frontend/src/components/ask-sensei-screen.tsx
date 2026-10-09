@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { useCallback, useState } from "react";
 import { LuArrowLeft } from "react-icons/lu";
 import { useLearningRequest } from "@/components/learning-hooks";
@@ -79,6 +80,8 @@ export function AskSenseiScreen() {
       setReplyBusy(false);
     }
   }
+
+  if (selectedThreadId && !singleReq.data) return singleReq.error ? <p role="alert">{singleReq.error} <button type="button" onClick={singleReq.retry}>Coba Lagi</button><button type="button" onClick={() => setSelectedThreadId(undefined)}>Kembali ke Riwayat</button></p> : <LoadingSkeleton variant="article" />;
 
   if (selectedThreadId && singleReq.data) {
     const thread = singleReq.data;
@@ -219,7 +222,9 @@ export function AskSenseiScreen() {
         </button>
       </div>
 
-      {tab === "Tanya Sensei" ? (
+      {tab === "Tanya Sensei" && !topicsReq.data ? (
+        topicsReq.error ? <p role="alert">{topicsReq.error} <button type="button" onClick={topicsReq.retry}>Coba Lagi</button></p> : <LoadingSkeleton variant="form" />
+      ) : tab === "Tanya Sensei" ? (
         <section className="ask-layout">
           <form onSubmit={handleSubmit}>
             <h2>Tulis pertanyaan untuk Sensei</h2>
@@ -281,8 +286,8 @@ export function AskSenseiScreen() {
         </section>
       ) : (
         <section className="ask-history-section" style={{ marginTop: "24px" }}>
-          {threadsReq.loading && <p role="status">Memuat riwayat…</p>}
-          {threadsReq.error && <p role="alert">{threadsReq.error}</p>}
+          {!threadsReq.data && !threadsReq.error && <LoadingSkeleton variant="list" label="Memuat riwayat…" />}
+          {threadsReq.error && <p role="alert">{threadsReq.error} <button type="button" onClick={threadsReq.retry}>Coba Lagi</button></p>}
           <div style={{ display: "grid", gap: "12px" }}>
             {(threadsReq.data ?? []).map(t => (
               <article
@@ -324,7 +329,7 @@ export function AskSenseiScreen() {
                 </div>
               </article>
             ))}
-            {!threadsReq.loading && (threadsReq.data ?? []).length === 0 && (
+            {threadsReq.data && !threadsReq.error && threadsReq.data.length === 0 && (
               <div className="library-empty">
                 <h2>Belum ada pertanyaan</h2>
                 <p>Kirim pertanyaan pertamamu ke Sensei pada tab Tanya Sensei.</p>

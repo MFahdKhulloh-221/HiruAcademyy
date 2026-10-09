@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LoadingSkeleton, type LoadingSkeletonProps } from "@/components/loading-skeleton";
 import { useSearchParams } from "next/navigation";
 import { useCallback, useState } from "react";
 import { LuArrowLeft, LuPlay, LuSearch } from "react-icons/lu";
@@ -12,8 +13,8 @@ const jakartaDate = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Jakarta",
 const scheduleDate = new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", weekday: "long", day: "numeric", month: "long", year: "numeric" });
 const scheduleTime = new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
 
-function RequestState({ loading, error, retry }: { loading: boolean; error?: string; retry: () => void }) {
-  return <section className="sensei-status-panel" aria-busy={loading}><p role={error ? "alert" : "status"}>{error || "Memuat…"}</p>{error && <button type="button" className="button button-primary" onClick={retry}>Coba Lagi</button>}</section>;
+function RequestState({ error, retry, variant = "cards" }: { error?: string; retry: () => void; variant?: LoadingSkeletonProps["variant"] }) {
+  return error ? <section className="sensei-status-panel"><p role="alert">{error}</p><button type="button" className="button button-primary" onClick={retry}>Coba Lagi</button></section> : <LoadingSkeleton variant={variant} label="Memuat…" />;
 }
 
 function sessionTime(item: ClassSchedule) {
@@ -51,7 +52,7 @@ export function ScheduleScreen() {
   const request = useLearningRequest(studentSchedules, "schedules");
   const [view, setView] = useState("calendar");
   const [month, setMonth] = useState("");
-  if (!request.data) return <RequestState {...request} />;
+  if (!request.data) return <RequestState {...request} variant="table" />;
   const activeMonth = month || jakartaDate.format(new Date()).slice(0, 7);
   const sessions = request.data.filter(item => jakartaDate.format(new Date(item.scheduled_at)).slice(0, 7) === activeMonth);
   const [year, monthNumber] = activeMonth.split("-").map(Number);
@@ -97,7 +98,7 @@ export function ClassDetailScreen({ scheduleId }: { scheduleId?: string } = {}) 
   const id = scheduleId || search.get("id") || "";
   const load = useCallback(async (signal: AbortSignal) => systemData<ClassSchedule>(`/api/student/class-schedules/${systemId(id)}`, signal), [id]);
   const request = useLearningRequest(load, `schedule:${id}`);
-  if (!request.data) return <RequestState {...request} />;
+  if (!request.data) return <RequestState {...request} variant="article" />;
   const item = request.data;
   return <div className="batch3-schedule">
     <Link className="sensei-back" href="/schedule"><LuArrowLeft aria-hidden="true" /> Kembali Jadwal</Link><PageHead eyebrow="DETAIL KELAS • BIMBINGAN SENSEI" title={item.title} description={item.description || ""} />
@@ -137,7 +138,7 @@ export function ReplayPlayerScreen({ playlistId }: { playlistId?: string; youtub
   const load = useCallback(async (signal: AbortSignal) => systemData<ReplayPlaylist>(`/api/student/replay-playlists/${systemId(id)}`, signal), [id]);
   const request = useLearningRequest(load, `replay:${id}`);
   const [videoId, setVideoId] = useState<number>();
-  if (!request.data) return <RequestState {...request} />;
+  if (!request.data) return <RequestState {...request} variant="learning" />;
   const item = request.data;
   const video = item.videos?.find(value => value.id === videoId) || item.videos?.[0];
   const mediaUrl = [video?.video_url_resolved_url, video?.video_url].find(url => safeSystemUrl(url));

@@ -6,7 +6,9 @@ import { type SVGProps, useState } from "react";
 import { LandingMotion } from "@/components/landing-motion";
 import { LearningPath } from "@/components/learning-path";
 import { PublicPage } from "@/components/public-shell";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { SenseiGrid } from "@/components/sensei-grid";
+import { StudentAvatar } from "@/components/student-avatar";
 import { usePublishedLanding } from "@/lib/website-store";
 import { contentMedia, offerPrice, useContent, type PublicOffer, type ShowcaseContent, type TestimonialContent } from "@/lib/public-content-api";
 
@@ -133,7 +135,7 @@ export default function Home() {
     return { ...offer, price: offer.id === "free" ? offer.price : pricing.loading ? "Memuat harga…" : pricing.error ? "Harga gagal dimuat" : offerPrice(available[0]).split("/")[0], period: offer.id === "free" ? offer.period : available[0] ? `/${available[0].duration_months} bulan` : "", buttonClass: clickedPlan === offer.id ? "button-primary" : "button-dark" };
   });
   const previews = showcase.data.map(item => ({ key: item.key, label: item.label, imageSrc: contentMedia(item.image_src) }));
-  const displayTestimonials = testimonialContent.data.map(t => ({ name: t.name, quote: t.quote, membership: t.context, avatarSrc: contentMedia(t.image), initials: t.name.slice(0, 2).toUpperCase() }));
+  const displayTestimonials = testimonialContent.data.map(t => ({ id: t.id, name: t.name, quote: t.quote, membership: t.context, avatarSrc: contentMedia(t.image, t.image_resolved_url) }));
 
   return (
     <PublicPage>
@@ -151,7 +153,7 @@ export default function Home() {
               <p>{landing.pricing?.support || "Pilih cara belajar yang sesuai dengan kebutuhanmu."}</p>
             </div>
             {pricing.error && <div role="alert">{pricing.error} <button type="button" onClick={pricing.reload}>Coba lagi</button></div>}
-            <div className="pricing-grid">
+            {pricing.loading ? <LoadingSkeleton variant="cards" label="Memuat harga…" /> : <div className="pricing-grid">
               {currentOffers.map((offer, index) => (
                 <article
                   className={`pricing-card reveal-item${offer.popular ? " pricing-card-popular" : ""}`}
@@ -193,17 +195,17 @@ export default function Home() {
                   </div>
                 </article>
               ))}
-            </div>
+            </div>}
           </div>
         </section>
 
         <LearningPath />
 
-        <section className="section lms-showcase" data-reveal><div className="container section-heading"><h2>Bukan Hanya Belajar Saat Zoom</h2><p>Lanjutkan belajar melalui materi, rekaman, latihan, dan evaluasi yang tersimpan di LMS Hiru Academy.</p></div>{showcase.loading ? <p role="status">Memuat showcase…</p> : showcase.error ? <div role="alert">{showcase.error} <button type="button" onClick={showcase.reload}>Coba lagi</button></div> : !previews.length && <p>Belum ada showcase.</p>}<div className="lms-showcase-viewport"><div className="lms-showcase-track"><div className="lms-showcase-group">{previews.map((preview) => <LmsPreview key={preview.key} preview={preview} />)}</div><div className="lms-showcase-group lms-showcase-copy" aria-hidden="true">{previews.map((preview) => <LmsPreview key={preview.key} preview={preview} />)}</div></div></div></section>
+        <section className="section lms-showcase" data-reveal><div className="container section-heading"><h2>Bukan Hanya Belajar Saat Zoom</h2><p>Lanjutkan belajar melalui materi, rekaman, latihan, dan evaluasi yang tersimpan di LMS Hiru Academy.</p></div>{showcase.loading ? <LoadingSkeleton variant="cards" label="Memuat showcase…" className="container" /> : showcase.error ? <div role="alert">{showcase.error} <button type="button" onClick={showcase.reload}>Coba lagi</button></div> : !previews.length && <p>Belum ada showcase.</p>}<div className="lms-showcase-viewport"><div className="lms-showcase-track"><div className="lms-showcase-group">{previews.map((preview) => <LmsPreview key={preview.key} preview={preview} />)}</div><div className="lms-showcase-group lms-showcase-copy" aria-hidden="true">{previews.map((preview) => <LmsPreview key={preview.key} preview={preview} />)}</div></div></div></section>
 
         <section className="section landing-sensei" data-reveal><div className="container"><div className="landing-sensei-heading"><h2>Belajar Bersama Sensei Berpengalaman</h2><p>Temukan mentor sesuai level, target, dan gaya belajarmu.</p></div><SenseiGrid carousel /><div className="landing-sensei-action"><Link className="button button-dark" href="/sensei">Lihat Semua Sensei</Link></div></div></section>
 
-        <section className="section landing-testimonials" data-reveal><div className="container"><div className="section-heading"><p className="kicker">CERITA PEMBELAJAR</p><h2>{landing.testimonial?.heading || "Cerita dari Pembelajar Hiru Academy"}</h2></div>{testimonialContent.loading ? <p role="status">Memuat testimoni…</p> : testimonialContent.error ? <div role="alert">{testimonialContent.error} <button type="button" onClick={testimonialContent.reload}>Coba lagi</button></div> : !displayTestimonials.length && <p>Belum ada testimoni.</p>}<div className="testimonial-grid">{displayTestimonials.map((testimonial, index) => <article className="testimonial-card reveal-item" key={testimonial.name} style={{ "--reveal-index": index } as React.CSSProperties}><div className="testimonial-avatar">{testimonial.avatarSrc ? <Image unoptimized alt={`Foto ${testimonial.name}`} fill sizes="64px" src={testimonial.avatarSrc} /> : <span aria-hidden="true">{testimonial.initials}</span>}</div><blockquote>{testimonial.quote}</blockquote><footer><strong>{testimonial.name}</strong><small>{testimonial.membership}</small></footer></article>)}</div><div className="landing-testimonials-action"><Link className="button button-primary" href="/testimoni">Lihat lebih banyak</Link></div></div></section>
+        <section className="section landing-testimonials" data-reveal><div className="container"><div className="section-heading"><p className="kicker">CERITA PEMBELAJAR</p><h2>{landing.testimonial?.heading || "Cerita dari Pembelajar Hiru Academy"}</h2></div>{testimonialContent.loading ? <LoadingSkeleton variant="cards" label="Memuat testimoni…" /> : testimonialContent.error ? <div role="alert">{testimonialContent.error} <button type="button" onClick={testimonialContent.reload}>Coba lagi</button></div> : !displayTestimonials.length && <p>Belum ada testimoni.</p>}<div className="testimonial-grid">{displayTestimonials.map((testimonial, index) => <article className="testimonial-card reveal-item" key={testimonial.id} style={{ "--reveal-index": index } as React.CSSProperties}><StudentAvatar name={testimonial.name} url={testimonial.avatarSrc} className="testimonial-avatar" /><blockquote>{testimonial.quote}</blockquote><footer><strong>{testimonial.name}</strong><small>{testimonial.membership}</small></footer></article>)}</div><div className="landing-testimonials-action"><Link className="button button-primary" href="/testimoni">Lihat lebih banyak</Link></div></div></section>
 
         <section className="final-cta" id="tentang" data-reveal><div className="container"><div className="cta-panel"><div className="cta-pattern" aria-hidden="true">あ <span>日</span> 語</div><h2>{landing.finalCta?.heading || "Belum tahu harus mulai dari level mana?"}</h2><p>{landing.finalCta?.support || "Belum yakin levelmu? Gunakan Placement Test. Sudah punya target? Coba Chapter 1 gratis pada level pilihanmu."}</p><ArrowLink href={landing.finalCta?.ctaPath || "/placement"}>{landing.finalCta?.ctaLabel || "Mulai Sekarang"}</ArrowLink></div></div></section>
       </main>

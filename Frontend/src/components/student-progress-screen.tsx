@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { useCallback } from "react";
 import {
   LuAward,
@@ -11,24 +12,18 @@ import {
   LuLayers3,
 } from "react-icons/lu";
 import { useLearningRequest } from "@/components/learning-hooks";
-import { studentOverallProgress, type OverallProgressData } from "@/lib/learning-api";
+import { studentGamification, studentOverallProgress, type OverallProgressData } from "@/lib/learning-api";
 import type { Membership } from "@/lib/dashboard-mock";
 
 export function StudentProgressScreen({ membership }: { membership: Membership }) {
   const query = `?membership=${membership}`;
   const load = useCallback((signal: AbortSignal) => studentOverallProgress(signal), []);
   const request = useLearningRequest(load, "student-progress");
+  const gamification = useLearningRequest(studentGamification, "progress-gamification");
 
-  const data: OverallProgressData = request.data ?? {
-    overall_percentage: 0,
-    streak_days: 0,
-    kanji_mastered: 0,
-    practice_completed: 0,
-    accuracy: 0,
-    active_program: { name: "JLPT N5", level: "N5", percentage: 0 },
-    programs: [],
-    chapters: [],
-  };
+  if (!request.data) return request.error ? <p role="alert">{request.error} <button type="button" onClick={request.retry}>Coba Lagi</button></p> : <LoadingSkeleton variant="stats" label="Memuat progres…" />;
+
+  const data: OverallProgressData = request.data;
 
   return (
     <>
@@ -45,7 +40,17 @@ export function StudentProgressScreen({ membership }: { membership: Membership }
           <button type="button" onClick={request.retry}>Coba Lagi</button>
         </p>
       )}
-      {request.loading && <p role="status">Memuat progres…</p>}
+      {!gamification.data && !gamification.error && <LoadingSkeleton variant="stats" rows={1} label="Memuat XP Mingguan…" />}
+      {gamification.error && <p role="alert">{gamification.error} <button type="button" className="button button-secondary" onClick={gamification.retry}>Coba Lagi</button></p>}
+      {gamification.data && <section className="dash-leaderboard-section gamification-challenge">
+        <div className="gamification-metrics"><span><strong>{gamification.data.weekly_xp.toLocaleString("id-ID")} XP</strong>XP Mingguan</span></div>
+        <h2>Tantangan 7 Hari Pertama</h2>
+        <p>{gamification.data.challenge.starts_on} – {gamification.data.challenge.ends_on}</p>
+        <p>{gamification.data.challenge.active_days}/{gamification.data.challenge.target_days} Hari · {gamification.data.challenge.total_days} Hari</p>
+        <progress aria-label="Tantangan 7 Hari Pertama" value={gamification.data.challenge.active_days} max={gamification.data.challenge.target_days} />
+        <p>{gamification.data.challenge.status === "achieved" ? "Selesai" : gamification.data.challenge.status === "expired" ? "Berakhir" : "Aktif"}</p>
+        {gamification.data.challenge.badge && <span className="progress-streak-badge"><LuAward aria-hidden="true" />{gamification.data.challenge.badge}</span>}
+      </section>}
 
       {/* 1. Progress Summary */}
       <section className="progress-summary">

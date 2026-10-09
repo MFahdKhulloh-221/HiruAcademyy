@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { PublicPage } from "@/components/public-shell";
 import { contentMedia, useContent, type ArticleContent } from "@/lib/public-content-api";
 import type { ArticleBlock } from "@/lib/admin-website-store";
@@ -71,7 +72,7 @@ export function ArticleReader({ requestedSlug }: { requestedSlug?: string }) {
   const content = useContent<ArticleContent>(`/api/blog/${/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) ? slug : "invalid-slug"}`, true);
   const found = content.data.find(item => item.slug === slug);
   const article = found ? { ...found, summary: found.excerpt ?? "", imageUrl: contentMedia(found.thumbnail), imageAlt: found.title, publishedAt: found.published_at, updatedAt: "", blocks: found.body.split(/\n\s*\n/).map((text, index) => ({ id: String(index), type: "paragraph" as const, text })) } : undefined;
-  if (content.loading || content.error) return <PublicPage active="Blog"><main className="public-main blog-detail-page">{content.loading ? <p role="status">Memuat artikel…</p> : <div role="alert">{content.error} <button type="button" onClick={content.reload}>Coba lagi</button></div>}</main></PublicPage>;
+  if (content.loading || content.error) return <PublicPage active="Blog"><main className="public-main blog-detail-page">{content.loading ? <LoadingSkeleton variant="article" label="Memuat artikel…" /> : <div role="alert">{content.error} <button type="button" onClick={content.reload}>Coba lagi</button></div>}</main></PublicPage>;
 
   if (!article) {
     return (
@@ -194,9 +195,7 @@ export default function BlogArticlePage() {
       fallback={
         <PublicPage active="Blog">
           <main className="public-main blog-detail-page">
-            <div className="blog-detail-layout">
-              <p>Memuat artikel...</p>
-            </div>
+            <LoadingSkeleton variant="article" label="Memuat artikel..." />
           </main>
         </PublicPage>
       }

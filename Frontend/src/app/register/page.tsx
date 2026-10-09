@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
 import { Suspense, useRef, useState } from "react";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { PublicPage } from "@/components/public-shell";
 import { useAuth, type RegisterPayload } from "@/components/auth-provider";
 import { ApiError } from "@/lib/api";
@@ -143,7 +144,7 @@ export default function RegisterPage() {
   return (
     <PublicPage active="Coba Gratis">
       <main className="public-main register-page-main">
-        <Suspense fallback={<div style={{ padding: "100px", textAlign: "center" }}>Memuat formulir...</div>}>
+        <Suspense fallback={<LoadingSkeleton variant="form" label="Memuat formulir..." />}>
           <RegisterForm />
         </Suspense>
       </main>

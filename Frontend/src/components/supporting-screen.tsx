@@ -1,7 +1,9 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
+import { useRef, useState, type ChangeEvent } from "react";
+import { StudentAvatar } from "@/components/student-avatar";
 import { LuArrowLeft, LuAward, LuBookOpen, LuCircleCheck, LuGraduationCap, LuReceipt, LuShieldCheck } from "react-icons/lu";
 import { useAuth } from "@/components/auth-provider";
 import { StudentBreadcrumb } from "@/components/student-breadcrumb";
@@ -9,11 +11,12 @@ import { StudentNavigation } from "@/components/student-navigation";
 import { StudentNotificationsScreen } from "@/components/student-notifications-screen";
 import { StudentCommunityScreen } from "@/components/student-community-screen";
 import { StudentProgressScreen } from "@/components/student-progress-screen";
+import { StudentLeaderboardScreen } from "@/components/student-leaderboard-screen";
 import { StudentCertificateCenter } from "@/components/certificate-detail-screen";
 import { LearningLibrary } from "@/components/learning-library";
 import { PracticeScreen } from "@/components/practice-screen";
 import { useCommercialAffiliate, useCommercialInvoice, useCommercialOrder } from "@/components/commercial-hooks";
-import { apiRequest } from "@/lib/api";
+import { ApiError, apiRequest } from "@/lib/api";
 import { commercialCode } from "@/lib/commercial-api";
 import type { LearningAccess, LearningProgram } from "@/lib/learning-api";
 import { supportingData, type SupportingKind } from "@/lib/supporting-mock";
@@ -26,9 +29,9 @@ const planLabel = (plan: Membership) => plan === "sensei" ? "Kelas bersama Sense
 export function SupportingScreen(props: Props) {
   const { kind, membership } = props;
   if (kind === "library") return <LearningLibrary />;
-  if (kind === "practice") return <PracticeScreen membership={membership} />;
+  if (kind === "practice") return <PracticeScreen membership={membership} resolvedCatalog={props} />;
   return <div className="supporting-shell student-shell"><StudentNavigation membership={membership} /><main className={`supporting-main ${kind === "renewal" ? "renewal" : kind}-page`}>
-    {kind === "notifications" ? <StudentNotificationsScreen /> : kind === "community" ? <StudentCommunityScreen membership={membership} /> : kind === "progress" ? <StudentProgressScreen membership={membership} /> : kind === "certificate" ? <StudentCertificateCenter /> : kind === "profile" ? <ProfileScreen membership={membership} access={props.access} /> : kind === "affiliate" ? <AffiliateScreen /> : kind === "renewal" ? <RenewalScreen {...props} /> : <EmptySupportingScreen kind={kind} />}
+    {kind === "notifications" ? <StudentNotificationsScreen /> : kind === "community" ? <StudentCommunityScreen membership={membership} /> : kind === "progress" ? <StudentProgressScreen membership={membership} /> : kind === "leaderboard" ? <StudentLeaderboardScreen /> : kind === "certificate" ? <StudentCertificateCenter /> : kind === "profile" ? <ProfileScreen membership={membership} access={props.access} /> : kind === "affiliate" ? <AffiliateScreen /> : kind === "renewal" ? <RenewalScreen {...props} /> : <EmptySupportingScreen kind={kind} />}
   </main></div>;
 }
 
@@ -39,7 +42,42 @@ function EmptySupportingScreen({ kind }: { kind: SupportingKind }) {
 
 function ProfileScreen({ membership, access }: { membership: Membership; access: LearningAccess }) {
   const { user, refreshUser } = useAuth();
-  const initials = (user?.name ?? "").trim().split(/\s+/).slice(0, 2).map(part => Array.from(part)[0] ?? "").join("").toUpperCase();
+  const photoInput = useRef<HTMLInputElement>(null);
+  const avatarPending = useRef(false);
+  const [avatarBusy, setAvatarBusy] = useState<"upload" | "delete" | null>(null);
+  const [avatarSuccess, setAvatarSuccess] = useState(false);
+  const [avatarError, setAvatarError] = useState("");
+  const hasAvatar = !!(user?.avatar || user?.avatar_resolved_url);
+
+  async function updateAvatar(file?: File) {
+    if (avatarPending.current) return;
+    setAvatarError("");
+    setAvatarSuccess(false);
+    if (file && !["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setAvatarError("Pilih foto dengan format JPEG, PNG, atau WebP.");
+      return;
+    }
+    avatarPending.current = true;
+    setAvatarBusy(file ? "upload" : "delete");
+    try {
+      const body = file ? new FormData() : undefined;
+      if (file) body!.append("file", file);
+      await apiRequest("/api/student/profile/avatar", { method: file ? "POST" : "DELETE", body });
+      if (!await refreshUser()) throw new ApiError(401);
+      setAvatarSuccess(true);
+    } catch (err) {
+      setAvatarError(err instanceof ApiError ? err.status === 413 ? "Foto terlalu besar. Pilih foto yang lebih kecil." : err.status === 422 ? "Foto belum dapat digunakan. Pilih foto JPEG, PNG, atau WebP lainnya." : err.message : "Foto profil belum berhasil diperbarui. Silakan coba lagi.");
+    } finally {
+      avatarPending.current = false;
+      setAvatarBusy(null);
+    }
+  }
+
+  function selectAvatar(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (file) void updateAvatar(file);
+  }
 
   const [name, setName] = useState(user?.name ?? "");
   const [whatsapp, setWhatsapp] = useState(user?.whatsapp ?? "");
@@ -75,7 +113,7 @@ function ProfileScreen({ membership, access }: { membership: Membership; access:
       await refreshUser();
       setProfileSuccess(true);
     } catch (err) {
-      setProfileError(err instanceof Error ? err.message : "Gagal memperbarui profil.");
+      setProfileError(err instanceof ApiError ? err.message : "Gagal memperbarui profil. Silakan coba lagi.");
     } finally {
       setProfileBusy(false);
     }
@@ -104,7 +142,7 @@ function ProfileScreen({ membership, access }: { membership: Membership; access:
       setConfirmPassword("");
       setPwSuccess(true);
     } catch (err) {
-      setPwError(err instanceof Error ? err.message : "Gagal memperbarui kata sandi.");
+      setPwError(err instanceof ApiError ? err.message : "Gagal memperbarui kata sandi. Silakan coba lagi.");
     } finally {
       setPwBusy(false);
     }
@@ -115,14 +153,18 @@ function ProfileScreen({ membership, access }: { membership: Membership; access:
       <header className="supporting-header">
         <p className="dash-kicker">AKUN &amp; MEMBERSHIP</p>
         <h1>Profil dan status belajarmu</h1>
-        <p>Kelola informasi akun, status belajar, sertifikat, dan preferensi.</p>
+        <p>Kelola informasi akun, preferensi belajar, dan keamanan akun.</p>
       </header>
 
       <section className="profile-identity">
-        <span>{initials}</span>
+        <StudentAvatar name={user?.name ?? ""} url={user?.avatar_resolved_url} className="profile-avatar" />
         <div>
           <h2>{user?.name ?? ""}</h2>
           <p>{user?.email ?? ""}</p>
+          <div className="profile-photo-actions">
+            <button type="button" className="button button-secondary" disabled={!!avatarBusy} onClick={() => photoInput.current?.click()}>{avatarBusy === "upload" ? "Mengunggah..." : "Ganti Foto"}</button>
+            {hasAvatar && <button type="button" className="button button-secondary" disabled={!!avatarBusy} onClick={() => { void updateAvatar(); }}>Hapus Foto</button>}
+          </div>
           <div className="profile-identity-tags">
             {access.source_grants.map((grant, index) => (
               <span className="profile-pill" key={`${grant.program_code}/${grant.plan_code}/${index}`}>
@@ -155,76 +197,56 @@ function ProfileScreen({ membership, access }: { membership: Membership; access:
         </div>
       </section>
 
-      <section className="profile-settings" id="pengaturan" style={{ background: "#fff", padding: "28px", borderRadius: "20px", border: "1px solid var(--line)", marginTop: "24px" }}>
-        <h2 style={{ fontSize: "20px", fontWeight: 800, marginBottom: "20px" }}>Pengaturan Akun</h2>
-
-        <form onSubmit={handleUpdateProfile} style={{ display: "grid", gap: "16px", maxWidth: "560px" }}>
-          <h3 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>Informasi Pribadi</h3>
-
-          {profileSuccess && <p role="status" style={{ color: "#2d7a38", fontWeight: 700, margin: 0 }}>Profil berhasil diperbarui!</p>}
-          {profileError && <p role="alert" style={{ color: "#c65b4b", margin: 0 }}>{profileError}</p>}
-
-          <label style={{ display: "grid", gap: "6px" }}>
-            <span style={{ fontSize: "13px", fontWeight: 700 }}>Nama Lengkap</span>
-            <input required value={name} onChange={e => setName(e.target.value)} style={{ padding: "10px 14px", borderRadius: "10px", border: "1px solid var(--line)" }} />
-          </label>
-
-          <label style={{ display: "grid", gap: "6px" }}>
-            <span style={{ fontSize: "13px", fontWeight: 700 }}>Nomor WhatsApp</span>
-            <input required value={whatsapp} onChange={e => setWhatsapp(e.target.value)} style={{ padding: "10px 14px", borderRadius: "10px", border: "1px solid var(--line)" }} />
-          </label>
-
-          <label style={{ display: "grid", gap: "6px" }}>
-            <span style={{ fontSize: "13px", fontWeight: 700 }}>Negara</span>
-            <input value={country} onChange={e => setCountry(e.target.value)} placeholder="Contoh: Indonesia, Jepang" style={{ padding: "10px 14px", borderRadius: "10px", border: "1px solid var(--line)" }} />
-          </label>
-
-          <label style={{ display: "grid", gap: "6px" }}>
-            <span style={{ fontSize: "13px", fontWeight: 700 }}>Target JLPT</span>
-            <select value={targetJlpt} onChange={e => setTargetJlpt(e.target.value)} style={{ padding: "10px 14px", borderRadius: "10px", border: "1px solid var(--line)", background: "#fff" }}>
-              <option value="N5">JLPT N5</option>
-              <option value="N4">JLPT N4</option>
-              <option value="N3">JLPT N3</option>
-              <option value="N2">JLPT N2</option>
-              <option value="N1">JLPT N1</option>
-            </select>
-          </label>
-
-          <div>
-            <button type="submit" disabled={profileBusy} className="button button-primary">
-              {profileBusy ? "Menyimpan…" : "Simpan Perubahan"}
-            </button>
+      <section className="profile-settings" id="pengaturan">
+        <h2>Pengaturan Akun</h2>
+        <section className="profile-settings-card" aria-labelledby="profile-photo-title" aria-busy={!!avatarBusy}>
+          <h3 id="profile-photo-title">Foto Profil</h3>
+          <StudentAvatar name={user?.name ?? ""} url={user?.avatar_resolved_url} className="profile-avatar" />
+          {!hasAvatar && <p className="profile-settings-helper">Tambahkan foto agar profilmu lebih mudah dikenali.</p>}
+          {avatarSuccess && <p role="status" className="profile-settings-success">Foto profil berhasil diperbarui.</p>}
+          {avatarError && <p role="alert" className="profile-settings-error">{avatarError}</p>}
+          <label className="profile-photo-label" htmlFor="profile-photo">Foto Profil</label>
+          <input ref={photoInput} id="profile-photo" className="profile-photo-input" type="file" accept="image/jpeg,image/png,image/webp" disabled={!!avatarBusy} onChange={selectAvatar} />
+          <div className="profile-photo-actions">
+            <button type="button" className="button button-primary" disabled={!!avatarBusy} onClick={() => photoInput.current?.click()}>{avatarBusy === "upload" ? "Mengunggah..." : "Pilih Foto"}</button>
+            {hasAvatar && <button type="button" className="button button-secondary" disabled={!!avatarBusy} onClick={() => { void updateAvatar(); }}>Hapus Foto</button>}
           </div>
+        </section>
+
+        <form onSubmit={handleUpdateProfile} className="profile-settings-form">
+          <section className="profile-settings-card" aria-labelledby="profile-personal-title">
+            <h3 id="profile-personal-title">Informasi Pribadi</h3>
+            <label><span>Nama Lengkap</span><input required autoComplete="name" placeholder="Contoh: Jonathan Bennett" value={name} onChange={e => setName(e.target.value)} /></label>
+            <label><span>Email</span><input type="email" autoComplete="email" value={user?.email ?? ""} readOnly /></label>
+            <label><span>Nomor WhatsApp</span><input required type="tel" autoComplete="tel" placeholder="Contoh: 081234567890" value={whatsapp} onChange={e => setWhatsapp(e.target.value)} /></label>
+            <label><span>Negara</span><input autoComplete="country-name" placeholder="Contoh: Indonesia" value={country} onChange={e => setCountry(e.target.value)} /></label>
+          </section>
+          <section className="profile-settings-card" aria-labelledby="profile-preferences-title">
+            <h3 id="profile-preferences-title">Preferensi Belajar</h3>
+            <label>
+              <span>Target JLPT</span>
+              <select value={targetJlpt} onChange={e => setTargetJlpt(e.target.value)}>
+                <option value="N5">JLPT N5</option>
+                <option value="N4">JLPT N4</option>
+                <option value="N3">JLPT N3</option>
+                <option value="N2">JLPT N2</option>
+                <option value="N1">JLPT N1</option>
+              </select>
+            </label>
+            {profileSuccess && <p role="status" className="profile-settings-success">Profil berhasil diperbarui!</p>}
+            {profileError && <p role="alert" className="profile-settings-error">{profileError}</p>}
+            <div><button type="submit" disabled={profileBusy} className="button button-primary">{profileBusy ? "Menyimpan…" : "Simpan Perubahan"}</button></div>
+          </section>
         </form>
 
-        <hr style={{ margin: "32px 0", borderColor: "var(--line)", borderStyle: "solid" }} />
-
-        <form onSubmit={handleUpdatePassword} style={{ display: "grid", gap: "16px", maxWidth: "560px" }}>
-          <h3 style={{ fontSize: "16px", fontWeight: 700, margin: 0 }}>Ganti Kata Sandi</h3>
-
-          {pwSuccess && <p role="status" style={{ color: "#2d7a38", fontWeight: 700, margin: 0 }}>Kata sandi berhasil diperbarui!</p>}
-          {pwError && <p role="alert" style={{ color: "#c65b4b", margin: 0 }}>{pwError}</p>}
-
-          <label style={{ display: "grid", gap: "6px" }}>
-            <span style={{ fontSize: "13px", fontWeight: 700 }}>Kata Sandi Saat Ini</span>
-            <input required type="password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} style={{ padding: "10px 14px", borderRadius: "10px", border: "1px solid var(--line)" }} />
-          </label>
-
-          <label style={{ display: "grid", gap: "6px" }}>
-            <span style={{ fontSize: "13px", fontWeight: 700 }}>Kata Sandi Baru (min. 8 karakter)</span>
-            <input required type="password" minLength={8} value={newPassword} onChange={e => setNewPassword(e.target.value)} style={{ padding: "10px 14px", borderRadius: "10px", border: "1px solid var(--line)" }} />
-          </label>
-
-          <label style={{ display: "grid", gap: "6px" }}>
-            <span style={{ fontSize: "13px", fontWeight: 700 }}>Konfirmasi Kata Sandi Baru</span>
-            <input required type="password" minLength={8} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} style={{ padding: "10px 14px", borderRadius: "10px", border: "1px solid var(--line)" }} />
-          </label>
-
-          <div>
-            <button type="submit" disabled={pwBusy || !currentPassword || !newPassword} className="button button-primary">
-              {pwBusy ? "Memproses…" : "Perbarui Kata Sandi"}
-            </button>
-          </div>
+        <form onSubmit={handleUpdatePassword} className="profile-settings-card" aria-labelledby="profile-security-title">
+          <h3 id="profile-security-title">Keamanan Akun</h3>
+          {pwSuccess && <p role="status" className="profile-settings-success">Kata sandi berhasil diperbarui!</p>}
+          {pwError && <p role="alert" className="profile-settings-error">{pwError}</p>}
+          <label><span>Kata Sandi Saat Ini</span><input required type="password" autoComplete="current-password" value={currentPassword} onChange={e => setCurrentPassword(e.target.value)} /></label>
+          <label><span>Kata Sandi Baru (min. 8 karakter)</span><input required type="password" autoComplete="new-password" minLength={8} value={newPassword} onChange={e => setNewPassword(e.target.value)} /></label>
+          <label><span>Konfirmasi Kata Sandi Baru</span><input required type="password" autoComplete="new-password" minLength={8} value={confirmPassword} onChange={e => setConfirmPassword(e.target.value)} /></label>
+          <div><button type="submit" disabled={pwBusy || !currentPassword || !newPassword} className="button button-primary">{pwBusy ? "Memproses…" : "Perbarui Kata Sandi"}</button></div>
         </form>
       </section>
     </>
@@ -234,7 +256,7 @@ function ProfileScreen({ membership, access }: { membership: Membership; access:
 function AffiliateScreen() {
   const { data, error } = useCommercialAffiliate();
   return <><header className="supporting-header"><p className="dash-kicker">PROGRAM AFILIASI &amp; REFERRAL</p><h1>Program Affiliate Hiru Academy</h1><p>Bagikan kode atau link affiliate. Teman mendapat diskon pendaftaran, dan kamu memperoleh komisi.</p></header>
-    {error && <p role="alert">{error}</p>}{!data && !error && <p role="status">Memuat…</p>}
+    {error && <p role="alert">{error}</p>}{!data && !error && <LoadingSkeleton variant="stats" label="Memuat…" />}
     {data && <><section className="affiliate-share-card"><div className="affiliate-code-box"><label>Kode Referral Unik</label><div className="affiliate-input-row"><code>{data.code ?? "—"}</code></div></div></section><section className="profile-stats">{([ ["pending", "Komisi Belum Dicairkan"], ["approved", "Komisi valid"], ["paid", "Komisi Sudah Dicairkan"] ] as const).map(([key, label]) => <div key={key}><strong>{money(data.totals[key])}</strong><span>{label}</span></div>)}</section>{!data.affiliate && <section className="library-empty"><p>Belum ada data affiliate.</p></section>}</>}
   </>;
 }
@@ -495,5 +517,5 @@ function RenewalInvoice({ id }: { id: string }) {
     catch (cause) { setRefreshError(cause instanceof Error ? cause.message : "Permintaan belum berhasil."); }
   }
   const labels: Record<string, string> = { draft: "Draft", awaiting_payment: "Menunggu Pembayaran", paid: "Sudah Bayar", verified: "Diverifikasi", active: "Aktif", cancelled: "Dibatalkan" };
-  return <section className="renewal-summary-card"><header className="renewal-summary-head"><h2>Invoice</h2></header>{(request.error || refreshError) && <p role="alert">{refreshError || request.error}</p>}{!invoice && !request.error && <p role="status">Memuat…</p>}{invoice && <><dl><div><dt>Invoice ID</dt><dd>{invoice.id}</dd></div><div><dt>Program</dt><dd>{commercialCode(invoice.program_code)}</dd></div><div><dt>Paket Belajar</dt><dd>{planLabel(invoice.plan_code)}</dd></div><div><dt>Harga</dt><dd>{money(invoice.base_price)}</dd></div><div><dt>Diskon</dt><dd>{money(invoice.discount_amount)}</dd></div><div><dt>Total</dt><dd>{money(invoice.total_price)}</dd></div><div><dt>Status</dt><dd>{labels[invoice.status] ?? invoice.status}</dd></div>{invoice.access_grant && <div><dt>Akses aktif</dt><dd>{new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta" }).format(new Date(invoice.access_grant.ends_at))}</dd></div>}</dl><div className="button-group">{invoice.status === "draft" && <button className="button button-primary" type="button" disabled={request.busy} onClick={() => void request.submit()}>Buat Invoice</button>}{invoice.status === "awaiting_payment" && <button className="button button-primary" type="button" disabled={request.busy} onClick={() => void request.markPaid()}>Sudah Bayar</button>}<button className="button button-secondary" type="button" disabled={request.busy} onClick={() => void refresh()}>Perbarui Status</button></div></>}</section>;
+  return <section className="renewal-summary-card"><header className="renewal-summary-head"><h2>Invoice</h2></header>{(request.error || refreshError) && <p role="alert">{refreshError || request.error}</p>}{!invoice && !request.error && <LoadingSkeleton variant="form" label="Memuat…" />}{invoice && <><dl><div><dt>Invoice ID</dt><dd>{invoice.id}</dd></div><div><dt>Program</dt><dd>{commercialCode(invoice.program_code)}</dd></div><div><dt>Paket Belajar</dt><dd>{planLabel(invoice.plan_code)}</dd></div><div><dt>Harga</dt><dd>{money(invoice.base_price)}</dd></div><div><dt>Diskon</dt><dd>{money(invoice.discount_amount)}</dd></div><div><dt>Total</dt><dd>{money(invoice.total_price)}</dd></div><div><dt>Status</dt><dd>{labels[invoice.status] ?? invoice.status}</dd></div>{invoice.access_grant && <div><dt>Akses aktif</dt><dd>{new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta" }).format(new Date(invoice.access_grant.ends_at))}</dd></div>}</dl><div className="button-group">{invoice.status === "draft" && <button className="button button-primary" type="button" disabled={request.busy} onClick={() => void request.submit()}>Buat Invoice</button>}{invoice.status === "awaiting_payment" && <button className="button button-primary" type="button" disabled={request.busy} onClick={() => void request.markPaid()}>Sudah Bayar</button>}<button className="button button-secondary" type="button" disabled={request.busy} onClick={() => void refresh()}>Perbarui Status</button></div></>}</section>;
 }

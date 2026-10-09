@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
+import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
 import { AdminConfirmDialog, AdminDataTable, AdminDialog, AdminFilterToolbar, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge } from "@/components/admin-primitives";
 import { commercialCode, commercialData, commercialId, commercialWrite, type EffectiveAccess, type Offer } from "@/lib/commercial-api";
 
@@ -17,24 +18,32 @@ export function AdminUsersPrototype() {
   const [pending, setPending] = useState<Grant | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [accessLoading, setAccessLoading] = useState(false);
+  const accessRequest = useRef(0);
   useEffect(() => {
     const controller = new AbortController();
     void Promise.resolve().then(async () => {
       controller.signal.throwIfAborted();
       const [nextOffers, nextUsers] = await Promise.all([commercialData<Offer[]>("/api/admin/offers", controller.signal), commercialData<typeof users>("/api/admin/users", controller.signal)]);
       if (!controller.signal.aborted) { setOffers(nextOffers); setUsers(nextUsers); }
-    }).catch(error => { if (!controller.signal.aborted) setMessage(error.message); });
+    }).catch(error => { if (!controller.signal.aborted) setMessage(error.message); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
   }, []);
   const closeDraft = useCallback(() => setDraft(null), []);
   const closeConfirm = useCallback(() => setPending(null), []);
   async function load(id: string) {
     const safe = commercialId(id);
-    const [sources, projection] = await Promise.all([commercialData<Grant[]>(`/api/admin/users/${safe}/access`), commercialData<EffectiveAccess>(`/api/admin/users/${safe}/effective-access`)]);
-    setGrants(sources); setEffective(projection); setLoadedId(safe);
+    const revision = ++accessRequest.current;
+    setAccessLoading(true);
+    if (safe !== loadedId) { setGrants([]); setEffective(null); setLoadedId(""); }
+    try {
+      const [sources, projection] = await Promise.all([commercialData<Grant[]>(`/api/admin/users/${safe}/access`), commercialData<EffectiveAccess>(`/api/admin/users/${safe}/effective-access`)]);
+      if (revision === accessRequest.current) { setGrants(sources); setEffective(projection); setLoadedId(safe); }
+    } finally { if (revision === accessRequest.current) setAccessLoading(false); }
   }
   async function lookup(event: FormEvent) {
-    event.preventDefault(); if (busy) return; setBusy(true); setGrants([]); setEffective(null); setLoadedId("");
+    event.preventDefault(); if (busy) return; setBusy(true);
     try { await load(userId); setMessage(""); }
     catch (error) { setMessage(error instanceof Error ? error.message : "Permintaan belum berhasil."); }
     finally { setBusy(false); }
@@ -58,7 +67,8 @@ export function AdminUsersPrototype() {
   const programs = [...new Map(offers.filter(offer => offer.program.code !== "n1").map(offer => [offer.program_id, offer])).values()];
   return <AdminShell current="/admin/pengguna-akses"><main className="admin-public-prototype">
     <AdminPageHeader title="Pengguna & Akses" description="" actions={<button className="button button-primary" disabled>Tambah Pengguna</button>} />
-    <p role="status">{message}</p><AdminSection title="Daftar Pengguna dan Status Hak Akses"><AdminFilterToolbar><form onSubmit={lookup} className="admin-prototype-search"><label>ID Pengguna<input aria-label="Cari pengguna" inputMode="numeric" value={userId} onChange={event => setUserId(event.target.value)} required /></label><button className="button" disabled={busy}>Detail</button></form></AdminFilterToolbar><AdminDataTable caption="Pengguna" rows={users} rowKey={row => String(row.id)} columns={[{ key: "name", header: "Nama Siswa", cell: row => row.name }, { key: "email", header: "Email", cell: row => row.email }, { key: "phone", header: "WhatsApp", cell: row => row.whatsapp }, { key: "status", header: "Status", cell: row => row.account_status === "active" ? "Aktif" : "Nonaktif" }]} actions={{ cell: row => <button type="button" className="button" disabled={busy} onClick={() => { setUserId(String(row.id)); void load(String(row.id)).catch(error => setMessage(error.message)); }}>Detail</button> }} /></AdminSection>
+    <p role="status">{message}</p><AdminSection title="Daftar Pengguna dan Status Hak Akses"><AdminFilterToolbar><form onSubmit={lookup} className="admin-prototype-search"><label>ID Pengguna<input aria-label="Cari pengguna" inputMode="numeric" value={userId} onChange={event => setUserId(event.target.value)} required /></label><button className="button" disabled={busy}>Detail</button></form></AdminFilterToolbar><AdminDataTable loading={loading} caption="Pengguna" rows={users} rowKey={row => String(row.id)} columns={[{ key: "name", header: "Nama Siswa", cell: row => row.name }, { key: "email", header: "Email", cell: row => row.email }, { key: "phone", header: "WhatsApp", cell: row => row.whatsapp }, { key: "status", header: "Status", cell: row => row.account_status === "active" ? "Aktif" : "Nonaktif" }]} actions={{ cell: row => <button type="button" className="button" disabled={busy} onClick={() => { setUserId(String(row.id)); void load(String(row.id)).catch(error => setMessage(error.message)); }}>Detail</button> }} /></AdminSection>
+    {accessLoading && !loadedId && <LoadingSkeleton variant="table" />}
     {loadedId && <><AdminSection title="Akses program" actions={<button className="button" disabled={busy || !programs.length} onClick={() => setDraft({ program_id: String(programs[0]?.program_id || ""), plan_code: "lms", starts_at: "", ends_at: "", status: "active" })}>Tambah Akses</button>}>
       <AdminDataTable caption="Riwayat akses program" rows={grants} rowKey={grant => String(grant.id)} columns={[
         { key: "program", header: "Level / Program", cell: grant => commercialCode(offers.find(offer => offer.program_id === grant.program_id)?.program.code || String(grant.program_id)) }, { key: "plan", header: "Membership", cell: grant => grant.plan_code === "lms" ? "Belajar Mandiri" : "Kelas bersama Sensei" }, { key: "start", header: "Tanggal mulai", cell: grant => grant.starts_at.slice(0, 10) }, { key: "end", header: "Aktif Sampai", cell: grant => grant.ends_at.slice(0, 10) }, { key: "status", header: "Status", cell: grant => <AdminStatusBadge status={grant.status === "active" ? "Aktif" : "Nonaktif"} /> }, { key: "invoice", header: "Invoice", cell: grant => grant.source_invoice_id || "Manual" },

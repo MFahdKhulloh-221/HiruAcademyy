@@ -19,11 +19,12 @@ export function AdminInvoicePrototype() {
   const [pending, setPending] = useState<CommercialInvoice | null>(null);
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const refresh = useCallback(async () => {
     const [rows, prices, students] = await Promise.all([commercialData<CommercialInvoice[]>("/api/admin/invoices"), commercialData<Offer[]>("/api/admin/offers"), commercialData<typeof users>("/api/admin/users")]);
     setInvoices(rows); setOffers(prices); setUsers(students);
   }, []);
-  useEffect(() => { let active = true; void Promise.resolve().then(() => { if (active) return refresh(); }).catch(error => { if (active) setMessage(error.message); }); return () => { active = false; }; }, [refresh]);
+  useEffect(() => { let active = true; void Promise.resolve().then(() => { if (active) return refresh(); }).catch(error => { if (active) setMessage(error.message); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, [refresh]);
   useEffect(() => { void commercialData<{ contact?: { whatsappNumber?: string } }>("/api/admin/settings").then(settings => setWhatsapp(settings.contact?.whatsappNumber ?? "")).catch(() => setWhatsapp("")); }, []);
   const closeDetail = useCallback(() => setSelected(null), []);
   const closeConfirm = useCallback(() => setPending(null), []);
@@ -45,7 +46,7 @@ export function AdminInvoicePrototype() {
   return <AdminShell current="/admin/invoice"><main className="admin-public-prototype">
     <AdminPageHeader title="Invoice" description="WhatsApp tidak mengaktifkan akses. Tidak ada payment gateway." actions={<button type="button" className="button button-primary" disabled={busy} onClick={() => setCreation({ user_id: String(users[0]?.id ?? ""), program_offer_id: String(offers[0]?.id ?? ""), referral_code: "" })}>Tambah Invoice</button>} />
     <p role="status">{message}</p><AdminSection title="Daftar Invoice"><AdminFilterToolbar><label className="admin-prototype-search"><input aria-label="Cari invoice" placeholder="Cari invoice, nama, atau program" value={search} onChange={event => setSearch(event.target.value)} /></label><label className="admin-field">Status<select value={filter} onChange={event => setFilter(event.target.value)}><option value="">Semua Status</option>{Object.entries(labels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label></AdminFilterToolbar>
-      <AdminDataTable caption="Invoice" rows={invoices.filter(invoice => `${invoice.id} ${invoice.user_id} ${program(invoice)}`.toLowerCase().includes(search.toLowerCase()) && (!filter || invoice.status === filter))} rowKey={invoice => String(invoice.id)} columns={[
+      <AdminDataTable loading={loading} caption="Invoice" rows={invoices.filter(invoice => `${invoice.id} ${invoice.user_id} ${program(invoice)}`.toLowerCase().includes(search.toLowerCase()) && (!filter || invoice.status === filter))} rowKey={invoice => String(invoice.id)} columns={[
         { key: "id", header: "Invoice ID", cell: invoice => invoice.id }, { key: "user", header: "Nama Siswa", cell: invoice => `ID ${invoice.user_id}` }, { key: "program", header: "Level / Program", cell: program }, { key: "plan", header: "Membership", cell: invoice => invoice.plan_code === "lms" ? "Belajar Mandiri" : "Kelas bersama Sensei" }, { key: "amount", header: "Total", cell: invoice => money(invoice.total_price) }, { key: "due", header: "Jatuh tempo", cell: invoice => invoice.due_date || "Belum diisi" }, { key: "status", header: "Status", cell: invoice => <AdminStatusBadge status={labels[invoice.status] || invoice.status} /> },
       ]} actions={{ cell: invoice => <div className="admin-page-actions"><button type="button" className="button" onClick={() => void detail(invoice)}>Detail</button>{next[invoice.status] && <button type="button" className="button" disabled={busy} onClick={() => setPending(invoice)}>{labels[next[invoice.status]]}</button>}</div> }} />
     </AdminSection>

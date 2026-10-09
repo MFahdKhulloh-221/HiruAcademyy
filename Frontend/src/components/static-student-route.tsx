@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import { useCallback } from "react";
+import { StudentLoading } from "@/components/loading-skeleton";
 import { ChapterAssessment } from "@/components/chapter-assessment";
 import { LearningDashboard } from "@/components/learning-dashboard";
 import { LearningJourney } from "@/components/learning-journey";
@@ -32,13 +33,13 @@ export function StaticStudentRoute({ kind, level, chapter }: { kind: RouteKind; 
 function AssessmentRoute({ kind, level, chapter }: { kind: "audio" | "reading" | "checkpoint"; level: string; chapter: string }) {
   const load = useCallback((signal: AbortSignal) => loadChapterContext(level, chapter, signal), [level, chapter]);
   const request = useLearningRequest(load, `${level}/${chapter}`);
-  if (!request.data) return <main className="learning-content"><p role={request.error ? "alert" : "status"}>{request.error ?? "Memuat…"}</p>{request.error && <button type="button" onClick={request.retry}>Coba Lagi</button>}</main>;
+  if (!request.data) return request.error ? <main className="learning-content"><p role="alert">{request.error}</p><button type="button" onClick={request.retry}>Coba Lagi</button></main> : <StudentLoading shell="learning" variant="assessment" label="Memuat…" />;
   return <LearningShell membership={learningMembership(request.data.access)} level={level} chapter={chapter} current={kind === "audio" ? "audio" : "reading"} breadcrumbLabel={kind === "checkpoint" ? "Mini Checkpoint" : kind === "audio" ? "Audio" : "Reading"}><ChapterAssessment context={request.data} level={level} chapterSlug={chapter} kind={kind === "checkpoint" ? "mini" : kind} /></LearningShell>;
 }
 
 function StudentServiceRoute({ kind }: { kind: RouteKind }) {
   const request = useLearningCatalog();
-  if (!request.data) return <main className="supporting-main"><p role={request.error ? "alert" : "status"}>{request.error ?? "Memuat…"}</p>{request.error && <button type="button" onClick={request.retry}>Coba Lagi</button>}</main>;
+  if (!request.data) return request.error ? <main className="supporting-main"><p role="alert">{request.error}</p><button type="button" onClick={request.retry}>Coba Lagi</button></main> : <StudentLoading shell={kind === "tryout" ? "supporting" : "sensei"} variant={kind === "ask" ? "form" : kind === "replay-player" ? "learning" : "cards"} label="Memuat…" />;
   const membership = learningMembership(request.data.access);
   if (kind === "tryout") return <div className="supporting-shell student-shell"><StudentNavigation membership={membership} /><main className="supporting-main"><SenseiTryoutScreen /></main></div>;
   const breadcrumbs = kind === "class-detail" ? [{ label: "Jadwal", href: `/schedule?membership=${membership}` }, { label: "Chapter 4" }] : kind === "replay-player" ? [{ label: "Replay", href: `/replay?membership=${membership}` }, { label: "Chapter 4" }] : undefined;
@@ -47,7 +48,7 @@ function StudentServiceRoute({ kind }: { kind: RouteKind }) {
     {kind === "class-detail" && <ClassDetailScreen />}
     {kind === "replay" && <ReplayScreen />}
     {kind === "replay-player" && <ReplayPlayerScreen />}
-    {kind === "mini" && <MiniCheckpointScreen membership={membership} />}
+    {kind === "mini" && <MiniCheckpointScreen membership={membership} resolvedCatalog={request.data} />}
     {kind === "ask" && <AskSenseiScreen />}
   </SenseiShell>;
 }

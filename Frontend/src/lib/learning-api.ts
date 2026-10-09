@@ -11,6 +11,7 @@ export type CanonicalChapter = LearningResource & {
   modules?: LearningModule[];
   flashcards?: { id: number; japanese: string; reading: string; meaning: string; example: string | null; sort_order: number }[];
   mini_checkpoint?: { exists: boolean };
+  mini_checkpoints?: { session: number; part: number; duration_minutes: number | null; question_count: number; configuration_valid: boolean }[];
 };
 export type ChapterProgress = { chapter_id: number; activities: Record<string, { total: number; completed: number; complete: boolean; completed_ids?: number[] }>; mini_unlocked: boolean };
 export type LibraryModule = {
@@ -107,6 +108,21 @@ export async function learningCatalog(signal?: AbortSignal) {
   ]);
   return { programs: programs.data, access: access.data };
 }
+export type LearningDashboardData = {
+  programs: LearningProgram[];
+  access: LearningAccess;
+  chapters: { program_id: number; chapter: CanonicalChapter; progress?: ChapterProgress }[];
+};
+export async function learningDashboard(signal?: AbortSignal) {
+  const { data } = await apiRequest<{ data: LearningDashboardData }>("/api/student/dashboard", { signal });
+  const chapters = data.chapters.flatMap(({ program_id, chapter, progress }) => {
+    if (["locked", "none"].includes(chapter.access)) return [];
+    const program = data.programs.find(item => item.id === program_id);
+    if (!program || !progress) throw new Error("Invalid dashboard chapter progress");
+    return [{ program, chapter, progress }];
+  });
+  return { catalog: { programs: data.programs, access: data.access }, chapters };
+}
 export async function learningChapters(programId: number, signal?: AbortSignal) {
   return (await apiRequest<{ data: CanonicalChapter[] }>(`/api/student/programs/${programId}/chapters`, { signal })).data;
 }
@@ -125,6 +141,29 @@ export async function learningLibrary(signal?: AbortSignal) {
 
 export async function studentFlashcards(signal?: AbortSignal) {
   return (await apiRequest<{ data: FlashcardCatalogData }>("/api/student/flashcards", { signal })).data;
+}
+
+export type LeaderboardScope = "all" | "lms" | "sensei";
+export type StudentLeaderboardEntry = {
+  user_id: number; rank: number; name: string; avatar_url: string | null;
+  category: "free" | "lms" | "sensei"; weekly_xp: number; streak_days: number; is_current_user: boolean;
+};
+export type StudentLeaderboardData = {
+  scope: LeaderboardScope; week_start: string; week_end: string;
+  entries: StudentLeaderboardEntry[]; self: StudentLeaderboardEntry | null;
+};
+export type StudentGamificationData = {
+  streak_days: number; weekly_xp: number;
+  challenge: {
+    active_days: number; target_days: 5; total_days: 7; starts_on: string; ends_on: string;
+    status: "active" | "achieved" | "expired"; badge: "Pemula Konsisten" | null;
+  };
+};
+export async function studentLeaderboard(scope: LeaderboardScope, signal?: AbortSignal) {
+  return (await apiRequest<{ data: StudentLeaderboardData }>(`/api/student/leaderboard?scope=${scope}`, { signal })).data;
+}
+export async function studentGamification(signal?: AbortSignal) {
+  return (await apiRequest<{ data: StudentGamificationData }>("/api/student/gamification", { signal })).data;
 }
 
 export async function studentOverallProgress(signal?: AbortSignal) {

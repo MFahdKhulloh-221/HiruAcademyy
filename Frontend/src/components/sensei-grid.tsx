@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { useState } from "react";
 import { contentMedia, useContent, type SenseiContent } from "@/lib/public-content-api";
 
@@ -34,7 +35,7 @@ export function SenseiGrid({ limit, reveal = false, carousel = false }: { limit?
     );
   });
 
-  if (content.loading) return <p role="status">Memuat profil Sensei…</p>;
+  if (content.loading) return <LoadingSkeleton variant="cards" rows={limit ?? 3} label="Memuat profil Sensei…" />;
   if (content.error) return <div role="alert">{content.error} <button type="button" onClick={content.reload}>Coba lagi</button></div>;
   if (!profiles.length) return <p className="sensei-empty">Belum ada profil Sensei aktif.</p>;
   if (!carousel) return <div className="sensei-grid">{cards}</div>;

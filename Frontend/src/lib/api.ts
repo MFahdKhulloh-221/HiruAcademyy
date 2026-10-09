@@ -69,6 +69,7 @@ async function request(path: string, options: RequestInit): Promise<Response> {
         for (const key of Object.keys(body.errors)) {
           const field = key === "email_normalized" ? "email" : key === "whatsapp_normalized" ? "whatsapp" : key === "identifier" ? "identity" : key;
           if (Object.hasOwn(fieldMessages, field)) errors[field] = [fieldMessages[field]];
+          else if (path.startsWith("/api/admin/mini-checkpoint-questions") && Array.isArray(body.errors[key])) errors[field] = body.errors[key].filter((message: unknown): message is string => typeof message === "string");
         }
       }
       if (path === "/api/auth/login" && !Object.keys(errors).length) errors.identity = [fieldMessages.identity];

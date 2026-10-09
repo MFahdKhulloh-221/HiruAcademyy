@@ -1,14 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAssessmentAttempt } from "@/components/assessment-hooks";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { assessmentSessions, assessmentSessionLabels, type AttemptDomain } from "@/lib/assessment-attempt";
 
-export function BackendAssessmentRunner({ path, domain = "learning", title, startBody = {}, className = "learning-question-page", onComplete }: { path: string; domain?: AttemptDomain; title: string; startBody?: object; className?: string; onComplete?: () => void }) {
-  const flow = useAssessmentAttempt(path, domain);
+export function BackendAssessmentRunner({ path, domain = "learning", title, startBody = {}, className = "learning-question-page", onComplete, scope }: { scope?: string; path: string; domain?: AttemptDomain; title: string; startBody?: object; className?: string; onComplete?: () => void }) {
+  const flow = useAssessmentAttempt(path, domain, scope);
   const [index, setIndex] = useState(0);
   const [reviewing, setReviewing] = useState(false);
   const [now, setNow] = useState(0);
+  const expiredSubmission = useRef<number | null>(null);
   const attempt = flow.attempt;
   const questions = attempt?.questions ?? [];
   const question = questions[Math.min(index, Math.max(questions.length - 1, 0))];
@@ -16,21 +18,28 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
   const sessionLabel = assessmentSessionLabels[sessionIndex];
   const sessionQuestions = domain === "tryout" ? questions.filter(item => item.session === question?.session) : questions;
   const result = attempt?.result;
+  const passed = domain === "learning" && "kind" in startBody && startBody.kind === "mini" ? result?.passed : result?.overall_pass;
   useEffect(() => {
     if (domain === "tryout" || !attempt?.expires_at || attempt.status === "completed") return;
-    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    const timer = window.setInterval(() => setNow(scope ? performance.now() : Date.now()), scope ? 250 : 1000);
     return () => window.clearInterval(timer);
-  }, [domain, attempt?.expires_at, attempt?.status]);
+  }, [domain, attempt?.expires_at, attempt?.status, scope]);
   useEffect(() => {
     if (attempt?.status === "completed") onComplete?.();
   }, [attempt?.id, attempt?.status, onComplete]);
-  const remaining = domain !== "tryout" && attempt?.expires_at && now ? Math.max(0, Math.ceil((Date.parse(attempt.expires_at) - now) / 1000)) : null;
+  const remaining = domain !== "tryout" && attempt?.expires_at ? scope && attempt.server_now && attempt.request_started_at !== undefined && attempt.received_at !== undefined ? Math.max(0, Math.ceil((Date.parse(attempt.expires_at) - Date.parse(attempt.server_now) - Math.max(0, Math.max(now, attempt.received_at) - attempt.request_started_at)) / 1000)) : !scope && now ? Math.max(0, Math.ceil((Date.parse(attempt.expires_at) - now) / 1000)) : null : null;
   useEffect(() => {
-    if (remaining === 0 && !flow.busy && !flow.error) void flow.submit();
-  }, [remaining, flow]);
+    if (attempt?.status !== "in_progress" || remaining !== 0 || flow.busy) return;
+    if (scope) {
+      if (expiredSubmission.current === attempt.id) return;
+      expiredSubmission.current = attempt.id;
+      void flow.submit();
+    } else if (!flow.error) void flow.submit();
+  }, [remaining, flow, attempt?.status, attempt?.id, scope]);
+  if (flow.loadingAttempt) return <section className={className}><LoadingSkeleton variant="assessment" label="Memuat…" /></section>;
   if (!attempt && domain === "tryout") return <section className="tryout-prestart"><div className="tryout-prestart-layout"><section className="tryout-prestart-info"><p className="dash-kicker">INFORMASI SIMULASI</p><h1>{title}</h1><div className="tryout-info-tiles"><div><strong>125 Menit</strong><span>Total Waktu</span></div><div><strong>4 Sesi</strong><span>Pembagian</span></div><div><strong>180 Poin</strong><span>Skor Maksimal</span></div><div><strong>Review Mode</strong><span>Tersedia</span></div></div>{flow.error && <p role="alert">{flow.error}</p>}<button className="button button-primary" type="button" disabled={flow.busy} onClick={() => void flow.start(startBody)}>Mulai Try Out</button></section><aside className="tryout-prestart-sidebar"><section className="tryout-sections"><h2>Materi Sesi</h2>{assessmentSessionLabels.map(label => <div key={label}><strong>{label}</strong></div>)}</section></aside></div></section>;
   if (!attempt) return <section className={className}><header className="learning-question-head"><h1>{title}</h1></header>{flow.error && <p role="alert">{flow.error}</p>}<button className="button button-primary" type="button" disabled={flow.busy || domain === "placement"} onClick={() => void flow.start(startBody)}>Mulai</button></section>;
-  if (attempt.status === "completed" && result && !reviewing) return <section className="checkpoint-result tryout-result-report"><h1>Hasil {title}</h1>{flow.error && <p role="alert">{flow.error}</p>}<div className="checkpoint-result-stats"><div><span>Skor</span><strong>{result.earned ?? result.percentage ?? "—"}{result.max !== undefined ? ` / ${result.max}` : ""}</strong></div><div><span>Jawaban benar</span><strong>{result.correct}</strong></div><div><span>Tidak Dijawab</span><strong>{result.unanswered}</strong></div></div>{result.sessions && <section className="tryout-section-scores">{result.sessions.map(section => <article key={section.code}><strong>{domain === "tryout" ? assessmentSessionLabels[assessmentSessions.findIndex(code => code === section.code)] ?? section.label : section.label}</strong><b>{section.earned} / {section.max}</b><small>Passing score: {section.passing_score}</small>{(domain !== "tryout" || result.total_passing_score != null) && <span>{section.pass ? "LULUS" : "TIDAK LULUS"}</span>}</article>)}</section>}{(domain !== "tryout" || result.total_passing_score != null) && <p>{result.overall_pass === true ? "LULUS" : result.overall_pass === false ? "TIDAK LULUS" : "—"}</p>}<section className="checkpoint-recommendation"><p className="dash-kicker">REKOMENDASI</p><p>{result.recommendation_level ?? "—"}</p></section>{domain !== "placement" && <button className="button button-secondary" type="button" disabled={flow.busy} onClick={async () => { if (await flow.review()) { setIndex(0); setReviewing(true); } }}>Lihat Jawaban</button>}<button className="button button-secondary" type="button" disabled={flow.busy} onClick={() => { setIndex(0); void flow.start(startBody); }}>Coba Lagi</button></section>;
+  if (attempt.status === "completed" && result && !reviewing) return <section className="checkpoint-result tryout-result-report"><h1>Hasil {title}</h1>{flow.error && <p role="alert">{flow.error}</p>}<div className="checkpoint-result-stats"><div><span>Skor</span><strong>{result.earned ?? result.percentage ?? "—"}{result.max !== undefined ? ` / ${result.max}` : ""}</strong></div><div><span>Jawaban benar</span><strong>{result.correct}</strong></div><div><span>Tidak Dijawab</span><strong>{result.unanswered}</strong></div></div>{result.sessions && <section className="tryout-section-scores">{result.sessions.map(section => <article key={section.code}><strong>{domain === "tryout" ? assessmentSessionLabels[assessmentSessions.findIndex(code => code === section.code)] ?? section.label : section.label}</strong><b>{section.earned} / {section.max}</b><small>Passing score: {section.passing_score}</small>{(domain !== "tryout" || result.total_passing_score != null) && <span>{section.pass ? "LULUS" : "TIDAK LULUS"}</span>}</article>)}</section>}{(domain !== "tryout" || result.total_passing_score != null) && <p>{passed === true ? "LULUS" : passed === false ? "TIDAK LULUS" : "—"}</p>}<section className="checkpoint-recommendation"><p className="dash-kicker">REKOMENDASI</p><p>{result.recommendation_level ?? "—"}</p></section>{domain !== "placement" && <button className="button button-secondary" type="button" disabled={flow.busy} onClick={async () => { if (await flow.review()) { setIndex(0); setReviewing(true); } }}>Lihat Jawaban</button>}<button className="button button-secondary" type="button" disabled={flow.busy} onClick={() => { setIndex(0); void flow.start(startBody); }}>Coba Lagi</button></section>;
   const isFirst = index === 0;
   const isLast = index >= questions.length - 1;
   const allAnswered = domain === "learning" && startBody && "kind" in startBody && startBody.kind !== "mini"
@@ -48,7 +57,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
           </div>
         )}
       </header>
-      {flow.error && <p role="alert">{flow.error}</p>}
+      {flow.error && <p role="alert">{flow.error}{scope && <button type="button" disabled={flow.busy} onClick={() => void flow.submit()}>Coba Lagi</button>}</p>}
       <div className="learning-question-layout">
         <main>
           {question && (
@@ -60,7 +69,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
                 <audio controls src={question.audio_url_resolved_url || question.audio_url || undefined} aria-label={question.title ?? "Audio"} />
               )}
               <h2>{question.question ?? question.prompt}</h2>
-              <fieldset disabled={reviewing || flow.submitting || (domain !== "tryout" && flow.busy) || attempt.status === "completed"}>
+              <fieldset disabled={Boolean(scope && remaining === 0) || reviewing || flow.submitting || (domain !== "tryout" && flow.busy) || attempt.status === "completed"}>
                 <legend className="sr-only">Pilihan jawaban</legend>
                 {(domain === "tryout" ? ["A", "B", "C", "D"].map(option => [option, question.options[option]]) : Object.entries(question.options)).map(([option, label]) => (
                   <label key={option} className={flow.answers[question.id] === option ? "selected" : ""}>

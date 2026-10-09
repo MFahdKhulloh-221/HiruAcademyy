@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { startAttempt } from "@/lib/assessment-attempt";
 import { PublicPage } from "@/components/public-shell";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { usePublishedPlacement } from "@/lib/placement-store";
 
 const outcomes = [
@@ -44,7 +45,7 @@ const reminders = [
 ];
 
 export default function PlacementPage() {
-  const { config: publishedConfig, error: loadError } = usePublishedPlacement();
+  const { config: publishedConfig, loading, error: loadError } = usePublishedPlacement();
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
@@ -60,6 +61,7 @@ export default function PlacementPage() {
   const questionCount = publishedConfig?.questions.length ?? "—";
   const durationMinutes = publishedConfig?.durationMinutes ?? "—";
 
+  if (loading) return <PublicPage active="Placement Test"><main className="public-main placement-page"><LoadingSkeleton variant="form" /></main></PublicPage>;
   return (
     <PublicPage active="Placement Test">
       <main className="public-main placement-page">

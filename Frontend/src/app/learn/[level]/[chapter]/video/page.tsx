@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Suspense } from "react";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { LearningVertical } from "@/components/learning-vertical";
 
 export const metadata: Metadata = { title: "Video Lesson", description: "Pelajaran video HIRU Academy.", robots: { index: false, follow: false } };
@@ -10,5 +11,5 @@ export function generateStaticParams() {
 
 export default async function VideoLessonPage({ params }: { params: Promise<{ level: string; chapter: string }> }) {
   const { level, chapter } = await params;
-  return <Suspense><LearningVertical kind="video" level={level} chapter={chapter} /></Suspense>;
+  return <Suspense fallback={<main className="public-main"><LoadingSkeleton variant="learning" /></main>}><LearningVertical kind="video" level={level} chapter={chapter} /></Suspense>;
 }

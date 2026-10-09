@@ -61,6 +61,7 @@ export function AdminLearningMediaWorkspace({ kind, initialRows }: { kind: "Vide
   const [rows, setRows] = useState<LearningMedia[]>([]);
   const [parents, setParents] = useState<Awaited<ReturnType<typeof adminLearningContext>> | null>(null);
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
   const loadRows = useCallback(async () => {
     const [context, media] = await Promise.all([adminLearningContext(), adminLearningList<AdminMedia>(resource)]);
     setParents(context);
@@ -79,7 +80,7 @@ export function AdminLearningMediaWorkspace({ kind, initialRows }: { kind: "Vide
   const [type, setType] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  useEffect(() => { let active = true; void Promise.resolve().then(() => { if (active) return loadRows(); }).catch(cause => { if (active) setError(cause instanceof Error ? cause.message : "Permintaan belum berhasil."); }); return () => { active = false; }; }, [loadRows]);
+  useEffect(() => { let active = true; void Promise.resolve().then(() => { if (active) return loadRows(); }).catch(cause => { if (active) setError(cause instanceof Error ? cause.message : "Permintaan belum berhasil."); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, [loadRows]);
   const closeEditor = useCallback(() => { setDraft(null); setError(""); }, []);
   const closeView = useCallback(() => setView(null), []);
   const closeDelete = useCallback(() => setDeleting(null), []);
@@ -117,7 +118,7 @@ export function AdminLearningMediaWorkspace({ kind, initialRows }: { kind: "Vide
       <label className="admin-field">Konteks<select value={context} onChange={(event) => setContext(event.target.value)}><option value="">Semua</option>{learningMediaContexts.map((value) => <option key={value}>{value}</option>)}</select></label>
       {!video && <label className="admin-field">Jenis<select value={type} onChange={(event) => setType(event.target.value)}><option value="">Semua</option>{["Tata Bahasa", "Huruf/Kanji", "Umum"].map((value) => <option key={value}>{value}</option>)}</select></label>}
       <label className="admin-field">Status<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Semua</option><option>Draft</option><option>Published</option></select></label>
-    </AdminFilterToolbar><AdminDataTable caption={kind} rows={visible} rowKey={(row) => row.id} columns={[
+    </AdminFilterToolbar><AdminDataTable loading={loading && !parents} caption={kind} rows={visible} rowKey={(row) => row.id} columns={[
       { key: "title", header: "Judul", cell: (row) => row.title },
       { key: "context", header: "Konteks", cell: (row) => `${row.context} • ${row.chapter}` },
       { key: "type", header: "Jenis", cell: (row) => row.type },
@@ -132,8 +133,8 @@ export function AdminLearningMediaWorkspace({ kind, initialRows }: { kind: "Vide
     </div> }} /></AdminSection>
     <AdminDialog open={Boolean(draft)} title={`${rows.some((row) => row.id === draft?.id) ? "Edit" : "Tambah"} ${kind}`} close={closeEditor}>
       {draft && <form className="admin-prototype-form" onSubmit={save} noValidate>
-        <label className="admin-field">Judul<input required value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
-        <label className="admin-field">Deskripsi<textarea value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
+        <label className="admin-field">Judul<input required placeholder={video ? "Contoh: Pola Kalimat Dasar Chapter 1" : "Contoh: Modul Tata Bahasa Chapter 1"} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
+        <label className="admin-field">Deskripsi<textarea placeholder={video ? "Contoh: Penjelasan pola kalimat dasar beserta contoh penggunaannya." : "Contoh: Ringkasan tata bahasa dan latihan untuk Chapter 1."} value={draft.description} onChange={(event) => setDraft({ ...draft, description: event.target.value })} /></label>
         <label className="admin-field">Program<select required value={draft.programId ?? ""} onChange={event => { const program = parents?.programs.find(item => item.id === Number(event.target.value)); setDraft({ ...draft, programId: program?.id, chapterId: undefined, chapter: "", context: program?.code.toUpperCase() ?? "" }); }}><option value="">Pilih program</option>{parents?.programs.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         <label className="admin-field">Chapter<select required value={draft.chapterId ?? ""} onChange={event => { const chapter = parents?.chapters.find(item => item.id === Number(event.target.value)); const existing = video && rows.find(item => item.chapterId === chapter?.id); setDraft(existing ? { ...existing } : { ...draft, chapterId: chapter?.id, chapter: chapter?.title ?? "" }); }}><option value="">Pilih chapter</option>{parents?.chapters.filter(item => item.program_id === draft.programId).map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>
         {!video && <label className="admin-field">Jenis<select value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value as LearningMedia["type"] })}><option>Tata Bahasa</option><option>Huruf/Kanji</option><option>Umum</option></select></label>}
@@ -144,9 +145,9 @@ export function AdminLearningMediaWorkspace({ kind, initialRows }: { kind: "Vide
           setError(""); setDraft({ ...draft, file, filename: file.name, url: "" });
         }} /></label>}
         {draft.file && <div className="admin-learning-media-file"><span>{draft.file.name} • {draft.file.size.toLocaleString("id-ID")} byte</span><button type="button" className="button" onClick={() => setDraft({ ...draft, file: null, filename: "" })}>Hapus file</button></div>}
-        {!video && <label className="admin-field">URL PDF<input value={draft.url} onChange={event => setDraft({ ...draft, url: event.target.value, file: null })} /></label>}
-        {video && <><label className="admin-field">URL video (opsional)<input value={draft.url} onChange={(event) => setDraft({ ...draft, url: event.target.value, resolvedUrl: undefined, file: null, filename: "" })} /></label><label className="admin-field">Durasi (menit, opsional)<input type="number" min="0" step="any" value={draft.duration} onChange={(event) => setDraft({ ...draft, duration: event.target.value })} /></label></>}
-        <label className="admin-field">Urutan<input type="number" min="1" step="1" required value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })} /></label>
+        {!video && <label className="admin-field">URL PDF<input placeholder="Contoh: https://example.com/modul/chapter-1.pdf" value={draft.url} onChange={event => setDraft({ ...draft, url: event.target.value, file: null })} /></label>}
+        {video && <><label className="admin-field">URL video (opsional)<input placeholder="Contoh: https://example.com/videos/chapter-1.mp4 atau media/video/chapter-1.mp4" value={draft.url} onChange={(event) => setDraft({ ...draft, url: event.target.value, resolvedUrl: undefined, file: null, filename: "" })} /></label><label className="admin-field">Durasi (menit, opsional)<input placeholder="Contoh: 15" type="number" min="0" step="any" value={draft.duration} onChange={(event) => setDraft({ ...draft, duration: event.target.value })} /></label></>}
+        <label className="admin-field">Urutan<input placeholder="Contoh: 1" type="number" min="1" step="1" required value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })} /></label>
         <label className="admin-field">Status<select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as LearningMedia["status"] })}><option>Draft</option><option>Published</option></select></label>
         <AdminLearningMediaPreview item={draft} />
         {error && <p role="alert">{error}</p>}

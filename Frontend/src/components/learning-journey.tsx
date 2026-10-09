@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { StudentLoading } from "@/components/loading-skeleton";
 import { useCallback } from "react";
 import { JourneyShell } from "@/components/journey-shell";
 import { ChapterJourney } from "@/components/chapter-journey";
@@ -25,7 +26,7 @@ export function LearningJourney({ level }: { level?: string }) {
     return { levels, chapters, membership: learningMembership(catalog.access) };
   }, [level]);
   const request = useLearningRequest(load, `journey/${level ?? ""}`);
-  if (!request.data) return <main className="journey-content"><p role={request.error ? "alert" : "status"}>{request.error ?? "Memuat materi..."}</p>{request.error && <button type="button" onClick={request.retry}>Coba Lagi</button>}</main>;
+  if (!request.data) return request.error ? <main className="journey-content"><p role="alert">{request.error}</p><button type="button" onClick={request.retry}>Coba Lagi</button></main> : <StudentLoading shell="journey" variant={level ? "list" : "cards"} label="Memuat materi..." />;
   const selected = request.data.levels.find(item => item.slug === level);
   return <JourneyShell membership={request.data.membership} breadcrumbs={selected ? [{ label: "Perjalanan Level", href: `/journey?membership=${request.data.membership}` }, { label: selected.code }] : undefined}>{selected ? <ChapterJourney membership={request.data.membership} level={selected} chapters={request.data.chapters} /> : <LevelSelection membership={request.data.membership} levels={request.data.levels} />}{level && !selected && <Link href="/journey">Kembali ke Level</Link>}</JourneyShell>;
 }

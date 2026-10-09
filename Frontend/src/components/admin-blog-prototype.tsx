@@ -70,9 +70,9 @@ export function AdminBlogPrototype() {
 
   return <AdminShell current="/admin/blog-seo"><main className="admin-public-prototype">
     <AdminPageHeader title="Blog" actions={<button type="button" className="button button-primary" onClick={() => { setError(""); setActiveTab(tabs[0]); setDraft({ ...emptyArticle, id: crypto.randomUUID() }); }}>Tambah Artikel</button>} />
-    {loading && <p role="status">Memuat artikel…</p>}{loadError && <div role="alert">{loadError} <button type="button" onClick={reload}>Coba lagi</button></div>}
+    {loadError && <div role="alert">{loadError} <button type="button" onClick={reload}>Coba lagi</button></div>}
     <p role="status">{message}</p>
-    <AdminSection title="Artikel"><AdminDataTable caption="Daftar Artikel Blog" rows={rows} rowKey={(row) => row.id} columns={[
+    <AdminSection title="Artikel"><AdminDataTable loading={loading && !rows.length} caption="Daftar Artikel Blog" rows={rows} rowKey={(row) => row.id} columns={[
       { key: "thumbnail", header: "Thumbnail", cell: (row) => <div className="admin-blog-table-thumb"><BlogThumbnail key={row.thumbnail} src={row.thumbnail} title={row.title} /></div> },
       { key: "title", header: "Judul", cell: (row) => row.title },
       { key: "slug", header: "Slug", cell: (row) => row.slug },
@@ -90,20 +90,20 @@ export function AdminBlogPrototype() {
       {draft && <form className="admin-prototype-form" onSubmit={save} noValidate>
         <AdminTabs label="Pengaturan Artikel" tabs={tabs} active={activeTab} onChange={setActiveTab}>
           {activeTab === tabs[0] && <div className="admin-blog-content-fields">
-            <label className="admin-field">Thumbnail (opsional)<input value={draft.thumbnail} onChange={event => setDraft({ ...draft, thumbnail: event.target.value })} /><small>URL HTTP/HTTPS atau referensi penyimpanan.</small></label><AdminMediaUpload kind="image" onUploaded={thumbnail => setDraft({ ...draft, thumbnail })} />
+            <label className="admin-field">Thumbnail (opsional)<input placeholder="Contoh: https://example.com/images/jlpt-n4.webp atau media/blog/jlpt-n4.webp" value={draft.thumbnail} onChange={event => setDraft({ ...draft, thumbnail: event.target.value })} /><small>URL HTTP/HTTPS atau referensi penyimpanan.</small></label><AdminMediaUpload kind="image" onUploaded={thumbnail => setDraft({ ...draft, thumbnail })} />
             <div className="blog-card-thumb admin-blog-upload-thumb"><BlogThumbnail key={draft.thumbnail} src={draft.thumbnail} title={draft.title} /></div>
             <label className="admin-field">Kategori<select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })}>{categories.map((category) => <option key={category}>{category}</option>)}</select></label>
-            <label className="admin-field">Judul Artikel<input value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} required /></label>
-            <label className="admin-field">Excerpt (opsional)<textarea rows={3} value={draft.excerpt} onChange={(event) => setDraft({ ...draft, excerpt: event.target.value })} /></label>
-            <label className="admin-field">Isi Artikel<textarea rows={10} value={draft.body} onChange={(event) => setDraft({ ...draft, body: event.target.value })} required /><small>Teks biasa; HTML tidak dijalankan.</small></label>
+            <label className="admin-field">Judul Artikel<input placeholder="Contoh: 7 Tips Belajar JLPT N4 Secara Efektif" value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} required /></label>
+            <label className="admin-field">Excerpt (opsional)<textarea rows={3} placeholder="Contoh ringkasan singkat artikel: Pelajari 7 tips belajar JLPT N4, mulai dari jadwal harian, latihan kosakata, hingga simulasi ujian." value={draft.excerpt} onChange={(event) => setDraft({ ...draft, excerpt: event.target.value })} /></label>
+            <label className="admin-field">Isi Artikel<textarea rows={10} placeholder="Contoh: Mulailah belajar JLPT N4 dengan menetapkan target harian yang realistis." value={draft.body} onChange={(event) => setDraft({ ...draft, body: event.target.value })} required /><small>Teks biasa; HTML tidak dijalankan.</small></label>
           </div>}
           {activeTab === tabs[1] && <div className="admin-blog-seo-layout">
             <div className="admin-blog-seo-fields">
-              <label className="admin-field">Slug<input value={draft.slug} onChange={(event) => setDraft({ ...draft, slug: event.target.value })} required /><small>Huruf kecil, angka, dan tanda hubung. Harus unik.</small></label>
+              <label className="admin-field">Slug<input placeholder="contoh: tips-belajar-jlpt-n4" value={draft.slug} onChange={(event) => setDraft({ ...draft, slug: event.target.value })} required /><small>Huruf kecil, angka, dan tanda hubung. Harus unik.</small></label>
               <button type="button" className="button" onClick={() => setDraft({ ...draft, slug: slugFromTitle(draft.title) })}>Buat Slug dari Judul</button>
               {rows.some((row) => row.id === draft.id && row.published && row.slug !== draft.slug.trim()) && <p role="status">Slug berubah untuk sesi ini; tautan publik tetap sama.</p>}
-              <label className="admin-field">SEO Title (opsional)<input value={draft.seoTitle} onChange={(event) => setDraft({ ...draft, seoTitle: event.target.value })} /></label>
-              <label className="admin-field">Meta Description (opsional)<textarea rows={3} value={draft.metaDescription} onChange={(event) => setDraft({ ...draft, metaDescription: event.target.value })} /></label>
+              <label className="admin-field">SEO Title (opsional)<input placeholder="Contoh: Tips Belajar JLPT N4 secara Efektif" value={draft.seoTitle} onChange={(event) => setDraft({ ...draft, seoTitle: event.target.value })} /></label>
+              <label className="admin-field">Meta Description (opsional)<textarea rows={3} placeholder="Contoh: Panduan belajar JLPT N4 dengan strategi yang praktis dan terstruktur." value={draft.metaDescription} onChange={(event) => setDraft({ ...draft, metaDescription: event.target.value })} /></label>
               <label className="admin-field">Featured<select value={draft.featured ? "yes" : "no"} onChange={(event) => setDraft({ ...draft, featured: event.target.value === "yes" })}><option value="no">Tidak</option><option value="yes">Ya</option></select></label>
             </div>
             <section className="admin-blog-live-preview" aria-label="Pratinjau Kartu Publik"><h3>Pratinjau Kartu Publik</h3><AdminBlogCardPreview article={draft} date={displayPublicationDate(draft.publishedAt)} open={() => setView({ ...draft })} /><button type="button" className="button" onClick={() => setView({ ...draft })}>Pratinjau Artikel</button></section>

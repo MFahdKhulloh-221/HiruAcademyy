@@ -1,6 +1,7 @@
 "use client";
 
 import { FormEvent, useEffect, useMemo, useState, useSyncExternalStore } from "react";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { commercialData, commercialWrite } from "@/lib/commercial-api";
 import { useSearchParams } from "next/navigation";
 import { useAuth } from "@/components/auth-provider";
@@ -57,11 +58,14 @@ function AdminSettingsForm({
   const [message, setMessage] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
+  const [loadRevision, setLoadRevision] = useState(0);
   useEffect(() => {
     let alive = true;
-    void commercialData<Partial<AdminSettings>>("/api/admin/settings").then(data => { if (alive) setDraft(current => ({ ...current, ...data })); }).catch(cause => { if (alive) setMessage(cause.message); });
+    void commercialData<Partial<AdminSettings>>("/api/admin/settings").then(data => { if (alive) setDraft(current => ({ ...current, ...data })); }).catch(cause => { if (alive) setLoadError(cause instanceof Error ? cause.message : "Permintaan belum berhasil."); }).finally(() => { if (alive) setLoading(false); });
     return () => { alive = false; };
-  }, []);
+  }, [loadRevision]);
 
   const dirty = useMemo(() => JSON.stringify(draft) !== JSON.stringify(savedSettings) || invoiceTemplate !== business.settings.invoiceWhatsAppTemplate || JSON.stringify(affiliate) !== JSON.stringify({ affiliateEnabled: business.settings.affiliateEnabled, commissionMode: business.settings.commissionMode, commissionValue: business.settings.commissionValue, validationPeriodDays: business.settings.validationPeriodDays }), [affiliate, business.settings, draft, invoiceTemplate, savedSettings]);
   const ga4Valid = /^G-[A-Z0-9]+$/i.test(draft.integrations.ga4MeasurementId.trim());
@@ -74,7 +78,7 @@ function AdminSettingsForm({
 
   async function save(event: FormEvent) {
     event.preventDefault();
-    if (active === "Profil Admin" || busy) return;
+    if (loading || loadError || active === "Profil Admin" || busy) return;
     const nextErrors: Record<string, string> = {};
     if (active === "Umum" && !draft.general.siteName.trim()) nextErrors.siteName = "Nama situs wajib diisi.";
     if (active === "Kontak") {
@@ -103,7 +107,7 @@ function AdminSettingsForm({
     <>
       <AdminPageHeader eyebrow="SISTEM" title="Pengaturan & Integrasi" description="Kelola identitas situs, kontak, integrasi, privasi, dan profil admin." actions={<span className={`settings-dirty ${dirty ? "is-dirty" : ""}`}>{dirty ? "Perubahan belum disimpan" : "Belum Terhubung"}</span>} />
       <AdminTabs tabs={tabs} active={active} onChange={(tab) => { setActive(tab as Tab); setErrors({}); setMessage(""); }} label="Bagian pengaturan">
-        <form className="settings-form" onSubmit={save}>
+        {loading ? <LoadingSkeleton variant="form" label="Memuat Pengaturan & Integrasi…" /> : loadError ? <div role="alert"><p>{loadError}</p><button type="button" className="button" onClick={() => { setLoadError(""); setLoading(true); setLoadRevision(value => value + 1); }}>Coba Lagi</button></div> : <form className="settings-form" onSubmit={save}>
           {active === "Umum" && <section className="settings-card"><header><div><h2>Pengaturan umum</h2><p>Identitas dan standar tetap situs.</p></div></header><div className="settings-grid">
             <Field label="Nama situs"><input value={draft.general.siteName} onChange={(e) => patch("general", { siteName: e.target.value })} aria-invalid={!!errors.siteName} />{errors.siteName && <em>{errors.siteName}</em>}</Field>
             <Field label="Locale" help="Standar bahasa situs ditetapkan untuk Indonesia."><input value="id-ID" disabled /></Field>
@@ -129,7 +133,7 @@ function AdminSettingsForm({
           {active === "Privasi" && <section className="settings-card"><header><div><h2>Privasi & persetujuan</h2><p>Tentukan jalur dokumen dan kewajiban persetujuan analitik. Pengaturan ini bukan mesin kebijakan otomatis.</p></div></header><div className="settings-grid"><Field label="Path kebijakan privasi"><input value={draft.privacy.privacyPolicyPath} onChange={(e) => patch("privacy", { privacyPolicyPath: e.target.value })} /></Field><Field label="Path syarat & ketentuan"><input value={draft.privacy.termsPath} onChange={(e) => patch("privacy", { termsPath: e.target.value })} /></Field></div><label className="settings-toggle"><input type="checkbox" checked={draft.privacy.analyticsConsentRequired} onChange={(e) => patch("privacy", { analyticsConsentRequired: e.target.checked })} /><span>Wajibkan persetujuan sebelum pelacakan analitik</span></label></section>}
           {active === "Profil Admin" && <section className="settings-card"><header><div><h2>Profil admin</h2><p>Informasi tampilan akun admin.</p></div></header><div className="settings-grid"><Field label="Nama tampilan"><input value={user?.name ?? ""} readOnly /></Field><Field label="Email"><input type="email" value={user?.email ?? ""} readOnly /></Field><Field label="URL avatar"><input type="url" value="" disabled placeholder="https://…" /></Field></div></section>}
           <footer className="settings-actions"><button className="button button-primary" type="submit" disabled={active === "Profil Admin" || !dirty}>Simpan {active}</button>{message && <p role="status">{message}</p>}</footer>
-        </form>
+        </form>}
       </AdminTabs>
     </>
   );
@@ -160,7 +164,7 @@ export function AdminSettingsWorkspace() {
         ) : (
           <>
             <AdminPageHeader eyebrow="SISTEM" title="Pengaturan & Integrasi" description="Kelola identitas situs, kontak, integrasi, privasi, dan profil admin." />
-            <div className="admin-loading">Memuat Pengaturan &amp; Integrasi…</div>
+            <LoadingSkeleton variant="form" label="Memuat Pengaturan &amp; Integrasi…" />
           </>
         )}
       </main>

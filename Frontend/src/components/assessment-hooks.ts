@@ -5,7 +5,7 @@ import { useAuth } from "@/components/auth-provider";
 import { ApiError } from "@/lib/api";
 import { AttemptPersistence, readAttempt, startAttempt, type AttemptDomain, type ServerAttempt } from "@/lib/assessment-attempt";
 
-export function useAssessmentAttempt(path: string, domain: AttemptDomain) {
+export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?: string) {
   const { user, loading } = useAuth();
   const identity = loading ? undefined : domain === "placement" ? `placement:${user?.id ?? "guest"}` : user?.id;
   const persistence = useRef<AttemptPersistence | null>(null);
@@ -13,8 +13,10 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain) {
   const pending = useRef(false);
   const latestAnswers = useRef<Record<string, string>>({});
   const saveVersion = useRef(0);
-  const [state, setState] = useState<{ identity: typeof identity; path: string; attempt?: ServerAttempt; answers: Record<string, string>; busy: boolean; error?: string }>({ identity: undefined, path: "", answers: {}, busy: false });
-  const current = state.identity === identity && state.path === path && (domain === "placement" || !loading) ? state : undefined;
+  const requestKey = JSON.stringify([identity, path, domain, scope]);
+  const [state, setState] = useState<{ requestKey: string; attempt?: ServerAttempt; answers: Record<string, string>; loadingAttempt: boolean; busy: boolean; error?: string }>({ requestKey: "", answers: {}, loadingAttempt: true, busy: false });
+  const current = state.requestKey === requestKey && !loading ? state : undefined;
+  const loadingAttempt = current?.loadingAttempt ?? true;
   useEffect(() => {
     const version = ++generation.current;
     persistence.current = null;
@@ -22,28 +24,39 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain) {
     latestAnswers.current = {};
     saveVersion.current++;
     const controller = new AbortController();
-    const id = new URLSearchParams(window.location.search).get("attempt");
+    if (scope) {
+      const url = new URL(window.location.href);
+      const parts = scope.split("/");
+      url.searchParams.set("mini_session", parts[4]);
+      url.searchParams.set("mini_part", parts[5]);
+      window.history.replaceState(null, "", url);
+    }
+    const params = new URLSearchParams(window.location.search);
+    const id = scope ? params.get(`mini_attempt_${scope}`) ?? (params.get("attempt_scope") === scope ? params.get("attempt") : null) : params.get("attempt");
     if (identity && id && /^[1-9]\d*$/.test(id)) {
-      if (domain === "tryout") setState({ identity, path, answers: {}, busy: true });
+      setState({ requestKey, answers: {}, loadingAttempt: true, busy: false });
       readAttempt(`${path}/${id}`, controller.signal).then(attempt => {
         if (version !== generation.current || controller.signal.aborted) return;
+        if (scope && `${identity}/${path.split("/")[4]}/${attempt.chapter_id}/mini/${attempt.session}/${attempt.part}` !== scope) throw new ApiError(404);
         persistence.current = new AttemptPersistence(attempt, `${path}/${attempt.id}`, domain);
         latestAnswers.current = attempt.answers;
-        setState({ identity, path, attempt, answers: attempt.answers, busy: false });
+        setState({ requestKey, attempt, answers: attempt.answers, loadingAttempt: false, busy: false });
       }).catch(error => {
-        if (!controller.signal.aborted) setState({ identity, path, answers: {}, busy: false, error: error instanceof Error ? error.message : new ApiError(0).message });
+        if (version === generation.current && !controller.signal.aborted) setState({ requestKey, answers: {}, loadingAttempt: false, busy: false, error: error instanceof Error ? error.message : new ApiError(0).message });
       });
+    } else {
+      setState({ requestKey, answers: {}, loadingAttempt: false, busy: false });
     }
     return () => { controller.abort(); if (generation.current === version) generation.current = version + 1; };
-  }, [path, domain, identity]);
+  }, [path, domain, identity, scope, requestKey]);
   async function run(action: () => Promise<ServerAttempt>, replaceAnswers = false) {
     const version = generation.current;
-    setState(previous => ({ ...previous, identity, path, busy: true, error: undefined }));
+    setState(previous => ({ ...previous, requestKey, busy: true, error: undefined }));
     try {
       const attempt = await action();
       if (version === generation.current) {
-        if (replaceAnswers) latestAnswers.current = attempt.answers;
-        setState(previous => ({ identity, path, attempt, answers: replaceAnswers ? attempt.answers : previous.answers, busy: false }));
+        if (replaceAnswers || attempt.status === "completed") latestAnswers.current = attempt.answers;
+        setState(previous => ({ requestKey, attempt, answers: replaceAnswers || attempt.status === "completed" ? attempt.answers : previous.answers, loadingAttempt: false, busy: false }));
       }
       return attempt;
     } catch (error) {
@@ -52,7 +65,7 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain) {
     }
   }
   async function start(body: object = {}) {
-    if (pending.current || !identity) return;
+    if (pending.current || loadingAttempt || !identity) return;
     pending.current = true;
     const version = generation.current;
     const attempt = await run(() => startAttempt(path, body), true);
@@ -60,9 +73,15 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain) {
       persistence.current = new AttemptPersistence(attempt, `${path}/${attempt.id}`, domain);
       const url = new URL(window.location.href);
       url.searchParams.set("attempt", String(attempt.id));
+      if (scope) {
+        url.searchParams.set("attempt_scope", scope);
+        url.searchParams.set(`mini_attempt_${scope}`, String(attempt.id));
+        url.searchParams.set("mini_session", String(attempt.session));
+        url.searchParams.set("mini_part", String(attempt.part));
+      }
       window.history.replaceState(null, "", url);
     }
-    pending.current = false;
+    if (version === generation.current) pending.current = false;
   }
   function answer(id: number, option: string) {
     if (!current?.attempt || current.attempt.status === "completed" || !persistence.current) return;
@@ -73,11 +92,12 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain) {
     const saved = ++saveVersion.current;
     setState(previous => ({ ...previous, answers, busy: domain === "tryout" ? true : previous.busy, error: undefined }));
     persistence.current.save(answers).then(attempt => {
-      if (domain === "tryout" && version === generation.current && saved === saveVersion.current && !pending.current) {
-        setState(previous => ({ ...previous, attempt, busy: false }));
+      if ((domain === "tryout" || scope) && version === generation.current && saved === saveVersion.current && !pending.current) {
+        if (attempt.status === "completed") latestAnswers.current = attempt.answers;
+        setState(previous => ({ ...previous, attempt, answers: attempt.status === "completed" ? attempt.answers : previous.answers, busy: false }));
       }
     }).catch(error => {
-      if (domain === "tryout" && version === generation.current && saved === saveVersion.current && !pending.current) {
+      if ((domain === "tryout" || scope) && version === generation.current && saved === saveVersion.current && !pending.current) {
         setState(previous => ({ ...previous, busy: false, error: error instanceof Error ? error.message : new ApiError(0).message }));
       }
     });
@@ -100,5 +120,5 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain) {
     if (current?.attempt?.status !== "completed") return;
     return run(() => readAttempt(`${path}/${current.attempt!.id}/review`));
   }
-  return { attempt: current?.attempt, answers: current?.answers ?? {}, busy: current?.busy ?? false, submitting: pending.current && Boolean(current?.busy), error: current?.error, start, answer, finishSession, submit, review };
+  return { attempt: current?.attempt, answers: current?.answers ?? {}, loadingAttempt, busy: current?.busy ?? false, submitting: pending.current && Boolean(current?.busy), error: current?.error, start, answer, finishSession, submit, review };
 }

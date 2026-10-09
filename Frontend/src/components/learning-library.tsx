@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { StudentLoading } from "@/components/loading-skeleton";
 import { useState } from "react";
 import {
   LuBookMarked,
@@ -29,14 +30,7 @@ export function LearningLibrary() {
   const [type, setType] = useState("Semua");
   const [locked, setLocked] = useState(false);
 
-  if (!request.data) {
-    return (
-      <main className="supporting-main">
-        <p role={request.error ? "alert" : "status"}>{request.error ?? "Memuat materi…"}</p>
-        {request.error && <button type="button" onClick={request.retry}>Coba Lagi</button>}
-      </main>
-    );
-  }
+  if (!request.data) return request.error ? <main className="supporting-main"><p role="alert">{request.error}</p><button type="button" onClick={request.retry}>Coba Lagi</button></main> : <StudentLoading shell="supporting" variant="cards" label="Memuat materi…" />;
 
   const membership = learningMembership(request.data.access);
   const query = `?membership=${membership}`;

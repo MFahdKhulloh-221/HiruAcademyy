@@ -2,26 +2,27 @@
 
 import { useState, useCallback } from "react";
 import Link from "next/link";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { StudentNavigation } from "@/components/student-navigation";
 import { ChapterAssessment } from "@/components/chapter-assessment";
-import { useLearningRequest } from "@/components/learning-hooks";
+import { useLearningRequest, type LearningCatalog } from "@/components/learning-hooks";
 import { learningCatalog, learningChapters, learningMembership, programSlug } from "@/lib/learning-api";
 import type { Membership } from "@/lib/dashboard-mock";
 
 const practiceCategories = ["Semua", "Kosakata", "Kanji", "Tata Bahasa", "Audio", "Reading"] as const;
 type PracticeCat = (typeof practiceCategories)[number];
 
-export function PracticeScreen({ membership }: { membership: Membership }) {
+export function PracticeScreen({ membership, resolvedCatalog }: { membership: Membership; resolvedCatalog?: LearningCatalog }) {
   const [selected, setSelected] = useState<{ level: string; chapterSlug: string; kind: "audio" | "reading" }>();
   const [category, setCategory] = useState<PracticeCat>("Semua");
   const [levelFilter, setLevelFilter] = useState<string>("all");
 
   const load = useCallback(async (signal: AbortSignal) => {
-    const catalog = await learningCatalog(signal);
+    const catalog = resolvedCatalog ?? await learningCatalog(signal);
     const programs = catalog.programs.filter(program => program.family === "jlpt");
     const chapters = await Promise.all(programs.map(async program => ({ program, chapters: await learningChapters(program.id, signal) })));
     return { membership: learningMembership(catalog.access), chapters };
-  }, []);
+  }, [resolvedCatalog]);
 
   const catalog = useLearningRequest(load, "practice-chapters");
 
@@ -64,7 +65,7 @@ export function PracticeScreen({ membership }: { membership: Membership }) {
             <button type="button" onClick={catalog.retry}>Coba Lagi</button>
           </p>
         )}
-        {catalog.loading && <p role="status">Memuat…</p>}
+        {!catalog.data && !catalog.error && <LoadingSkeleton variant="cards" label="Memuat…" />}
 
         {selected ? (
           <>

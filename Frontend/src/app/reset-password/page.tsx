@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { Suspense, useRef, useState } from "react";
 import { ApiError, apiRequest } from "@/lib/api";
 import { AuthShell } from "@/components/auth-shell";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { AuthStatus } from "@/components/auth-status";
 
 function ResetPasswordContent() {
@@ -49,5 +50,5 @@ function ResetPasswordContent() {
 }
 
 export default function ResetPasswordPage() {
-  return <AuthShell eyebrow="KEAMANAN AKUN" title="Buat kata sandi baru yang lebih kuat" description="Gunakan kombinasi yang unik dan tidak digunakan pada layanan lain."><div className="auth-card-inner"><Suspense fallback={<p>Memuat formulir...</p>}><ResetPasswordContent /></Suspense></div></AuthShell>;
+  return <AuthShell eyebrow="KEAMANAN AKUN" title="Buat kata sandi baru yang lebih kuat" description="Gunakan kombinasi yang unik dan tidak digunakan pada layanan lain."><div className="auth-card-inner"><Suspense fallback={<LoadingSkeleton variant="form" label="Memuat formulir..." />}><ResetPasswordContent /></Suspense></div></AuthShell>;
 }

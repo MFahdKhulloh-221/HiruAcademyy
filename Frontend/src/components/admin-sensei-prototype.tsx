@@ -67,9 +67,9 @@ export function AdminSenseiPrototype() {
 
   return <AdminShell current="/admin/sensei"><main className="admin-public-prototype">
     <AdminPageHeader title="Sensei" description="Profil Sensei." actions={<button type="button" className="button button-primary" onClick={() => { setError(""); setDraft({ id: crypto.randomUUID(), name: "", role: "", bio: "", photo: "", expertise: "", active: false, order: String(rows.length + 1), level: "" }); }}>Tambah Sensei</button>} />
-    {loading && <p role="status">Memuat Sensei…</p>}{loadError && <div role="alert">{loadError} <button type="button" onClick={reload}>Coba lagi</button></div>}
+    {loadError && <div role="alert">{loadError} <button type="button" onClick={reload}>Coba lagi</button></div>}
     <p role="status">{message}</p>
-    <AdminSection title="Profil Sensei"><label className="admin-search-box"><span aria-hidden="true"><LuSearch /></span><input type="search" aria-label="Cari Sensei" value={search} onChange={(event) => setSearch(event.target.value)} /></label><AdminDataTable caption="Daftar Sensei" rows={[...visibleRows].sort((a, b) => a.order - b.order)} rowKey={(row) => row.id} columns={[
+    <AdminSection title="Profil Sensei"><label className="admin-search-box"><span aria-hidden="true"><LuSearch /></span><input type="search" aria-label="Cari Sensei" value={search} onChange={(event) => setSearch(event.target.value)} /></label><AdminDataTable loading={loading && !rows.length} caption="Daftar Sensei" rows={[...visibleRows].sort((a, b) => a.order - b.order)} rowKey={(row) => row.id} columns={[
       { key: "photo", header: "Foto", cell: (row) => <Image src={contentMedia(row.photo)} alt={`Foto ${row.name}`} width={100} height={100} unoptimized /> },
       { key: "name", header: "Nama", cell: (row) => row.name },
       { key: "role", header: "Peran", cell: (row) => row.role },
@@ -86,14 +86,14 @@ export function AdminSenseiPrototype() {
     </div> }} /></AdminSection>
     <AdminDialog open={Boolean(draft)} title={rows.some((row) => row.id === draft?.id) ? "Edit Sensei" : "Tambah Sensei"} close={closeEditor}>
       {draft && <form className="admin-prototype-form" onSubmit={save} noValidate>
-        <label className="admin-field">Nama<input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} required /></label>
-        <label className="admin-field">Peran<input value={draft.role} onChange={(event) => setDraft({ ...draft, role: event.target.value })} required /></label>
-        <label className="admin-field">Bio singkat<textarea value={draft.bio} onChange={(event) => setDraft({ ...draft, bio: event.target.value })} required /></label>
-        <label className="admin-field">Keahlian<input value={draft.expertise} onChange={(event) => setDraft({ ...draft, expertise: event.target.value })} required /><small>Pisahkan beberapa label dengan koma.</small></label>
+        <label className="admin-field">Nama<input placeholder="Contoh: Hilmy Sensei" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} required /></label>
+        <label className="admin-field">Peran<input placeholder="Contoh: Pengajar Bahasa Jepang" value={draft.role} onChange={(event) => setDraft({ ...draft, role: event.target.value })} required /></label>
+        <label className="admin-field">Bio singkat<textarea placeholder="Contoh: Pengajar JLPT dengan pengalaman mengajar bahasa Jepang untuk pemula hingga tingkat lanjut." value={draft.bio} onChange={(event) => setDraft({ ...draft, bio: event.target.value })} required /></label>
+        <label className="admin-field">Keahlian<input placeholder="Contoh: JLPT N5, Kaiwa, Kanji" value={draft.expertise} onChange={(event) => setDraft({ ...draft, expertise: event.target.value })} required /><small>Pisahkan beberapa label dengan koma.</small></label>
         <AdminMediaUpload label="Foto" kind="image" onUploaded={(photo, url) => setDraft({ ...draft, photo, photo_resolved_url: url })} />
         <label className="admin-field">Level utama (opsional)<select value={draft.level} onChange={(event) => setDraft({ ...draft, level: event.target.value })}><option value="">Tidak ditentukan</option>{levels.map((level) => <option key={level}>{level}</option>)}</select></label>
         <label className="admin-field">Status<select value={draft.active ? "active" : "inactive"} onChange={(event) => setDraft({ ...draft, active: event.target.value === "active" })}><option value="active">Aktif</option><option value="inactive">Nonaktif</option></select></label>
-        <label className="admin-field">Urutan<input type="number" min="1" step="1" value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })} required /><small>Urutan tampil profil.</small></label>
+        <label className="admin-field">Urutan<input placeholder="Contoh: 1" type="number" min="1" step="1" value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })} required /><small>Urutan tampil profil.</small></label>
         <AdminSenseiPreview profile={{ ...draft, expertise: [...new Set(draft.expertise.split(",").map((label) => label.trim()).filter(Boolean))] }} onPhotoError={() => setError("Foto tidak dapat dibaca. Pilih foto lain sebelum menyimpan.")} />
         {error && <p role="alert">{error}</p>}
         <div className="admin-page-actions"><button type="button" className="button" onClick={closeEditor}>Batal</button><button type="submit" disabled={busy} className="button button-primary">Simpan Sensei</button></div>

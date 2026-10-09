@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { StudentLoading } from "@/components/loading-skeleton";
 import { useCallback, useRef, useState } from "react";
 import { LearningShell } from "@/components/learning-shell";
 import { FlashcardSession } from "@/components/flashcard-session";
@@ -12,7 +13,7 @@ import { learningCompletion, learningMembership, learningVideo, safeLearningUrl,
 export function LearningVertical({ kind, level, chapter }: { kind: "learning" | "video" | "grammar" | "kanji" | "flashcards"; level: string; chapter: string }) {
   const load = useCallback((signal: AbortSignal) => loadChapterContext(level, chapter, signal), [level, chapter]);
   const request = useLearningRequest(load, `${level}/${chapter}`);
-  if (!request.data) return <main className="learning-content"><p role={request.error ? "alert" : "status"}>{request.error ?? "Memuat materi..."}</p>{request.error && <button type="button" onClick={request.retry}>Coba Lagi</button>}</main>;
+  if (!request.data) return request.error ? <main className="learning-content"><p role="alert">{request.error}</p><button type="button" onClick={request.retry}>Coba Lagi</button></main> : <StudentLoading shell="learning" variant="learning" label="Memuat materi..." />;
   return <CanonicalLearning key={`${request.data.program.id}/${request.data.chapter.id}`} context={request.data} kind={kind} level={level} chapterSlug={chapter} />;
 }
 

@@ -9,7 +9,7 @@ import type { IconType } from "react-icons";
 import { BrandLogo } from "@/components/brand-logo";
 import type { Membership } from "@/lib/dashboard-mock";
 
-export type StudentNavKey = "dashboard" | "journey" | "practice" | "flashcards" | "library" | "tryout" | "schedule" | "replay" | "mini-checkpoint" | "community" | "ask-sensei" | "progress" | "leaderboard" | "certificate" | "notifications" | "profile" | "membership" | "affiliate";
+export type StudentNavKey = "dashboard" | "journey" | "practice" | "flashcards" | "library" | "tryout" | "schedule" | "replay" | "mini-checkpoint" | "community" | "ask-sensei" | "progress" | "leaderboard" | "certificate" | "notifications" | "profile" | "testimonial" | "membership" | "affiliate";
 type Entitlement = "available" | "limited" | "readOnly" | "locked";
 type Implementation = "implemented" | "notImplemented";
 type NavChild = { key: StudentNavKey; label: string; href: string; entitlement: Entitlement };
@@ -39,6 +39,7 @@ export function resolveStudentNavKey(pathname: string): StudentNavKey | null {
   if (pathname === "/leaderboard") return "leaderboard";
   if (matchesFamily(pathname, "/certificate")) return "certificate";
   if (pathname === "/notifications") return "notifications";
+  if (pathname === "/profile/testimoni") return "testimonial";
   if (pathname === "/profile") return "profile";
   if (matchesFamily(pathname, "/renewal") || pathname === "/membership") return "membership";
   if (pathname === "/affiliate") return "affiliate";
@@ -73,6 +74,7 @@ function itemsFor(membership: Membership, current: StudentNavKey | null): NavIte
     { key: "notifications", label: "Notifikasi", icon: LuBell, href: `/notifications${query}`, entitlement: "available", implementation: "implemented" },
     { label: "Profil", icon: LuUser, entitlement: "available", implementation: "implemented", children: [
       { key: "profile", label: "Profil Saya", href: `/profile${query}`, entitlement: "available" },
+      { key: "testimonial", label: "Testimoni Saya", href: `/profile/testimoni${query}`, entitlement: "available" },
       { key: "membership", label: "Membership", href: `/renewal${query}`, entitlement: "available" },
       { key: "affiliate", label: "Affiliate", href: `/affiliate${query}`, entitlement: "available" },
     ] },

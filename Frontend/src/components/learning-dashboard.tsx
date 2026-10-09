@@ -1,24 +1,16 @@
 "use client";
 
-import { useCallback } from "react";
+import { StudentLoading } from "@/components/loading-skeleton";
 import { StudentDashboard } from "@/components/student-dashboard";
 import { useAuth } from "@/components/auth-provider";
 import { useLearningRequest } from "@/components/learning-hooks";
 import { getDashboardData } from "@/lib/dashboard-mock";
-import { completionPercent, learningCatalog, learningChapters, learningMembership, learningProgress, programSlug } from "@/lib/learning-api";
+import { completionPercent, learningDashboard, learningMembership, programSlug } from "@/lib/learning-api";
 
 export function LearningDashboard() {
   const { user } = useAuth();
-  const load = useCallback(async (signal: AbortSignal) => {
-    const catalog = await learningCatalog(signal);
-    const programs = await Promise.all(catalog.programs.map(async program => {
-      const chapters = await learningChapters(program.id, signal);
-      return Promise.all(chapters.filter(chapter => !["locked", "none"].includes(chapter.access)).map(async chapter => ({ program, chapter, progress: await learningProgress(program.id, chapter.id, signal) })));
-    }));
-    return { catalog, chapters: programs.flat() };
-  }, []);
-  const request = useLearningRequest(load, "dashboard");
-  if (!request.data) return <main className="dash-content"><p role={request.error ? "alert" : "status"}>{request.error ?? "Memuat materi..."}</p>{request.error && <button type="button" onClick={request.retry}>Coba Lagi</button>}</main>;
+  const request = useLearningRequest(learningDashboard, "dashboard");
+  if (!request.data) return request.error ? <main className="dash-content"><p role="alert">{request.error}</p><button type="button" onClick={request.retry}>Coba Lagi</button></main> : <StudentLoading shell="dashboard" variant="dashboard" label="Memuat materi..." />;
   const data = getDashboardData(learningMembership(request.data.catalog.access));
   const chapters = request.data.chapters;
   const next = chapters.find(item => Object.values(item.progress.activities).some(activity => !activity.complete)) ?? chapters[0];

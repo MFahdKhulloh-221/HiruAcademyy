@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { useSearchParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import {
@@ -98,6 +99,8 @@ export function FlashcardCollection() {
     return true;
   });
 
+  if (!request.data) return <main className="supporting-main flashcard-collection">{request.error ? <p role="alert">{request.error} <button type="button" onClick={request.retry}>Coba Lagi</button></p> : <LoadingSkeleton variant="cards" label="Memuat flashcard…" />}</main>;
+
   return (
     <div className="supporting-shell student-shell">
       <StudentNavigation membership={membership} />
@@ -108,7 +111,6 @@ export function FlashcardCollection() {
             <button type="button" onClick={request.retry}>Coba Lagi</button>
           </p>
         )}
-        {request.loading && <p role="status">Memuat flashcard…</p>}
 
         {/* 1. Summary Statistics */}
         <section className="fc-summary-grid" aria-label="Ringkasan Flashcard">

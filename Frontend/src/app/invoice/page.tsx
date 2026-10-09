@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { PublicPage } from "@/components/public-shell";
 import { useBusinessStore, getInvoiceWhatsAppUrl } from "@/lib/business-store";
 import { useAdminSettings } from "@/lib/admin-settings-store";
@@ -95,7 +96,7 @@ export default function InvoicePage() {
   return (
     <PublicPage active="Program">
       <main className="public-main invoice-page">
-        <Suspense fallback={<p className="checkout-loading">Memuat invoice...</p>}>
+        <Suspense fallback={<LoadingSkeleton variant="article" label="Memuat invoice..." />}>
           <InvoiceContent />
         </Suspense>
       </main>

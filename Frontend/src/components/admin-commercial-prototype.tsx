@@ -25,6 +25,7 @@ export function AdminCommercialPrototype() {
   const [filter, setFilter] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [loading, setLoading] = useState(true);
   const closeEditor = useCallback(() => { setDraft(null); setError(""); }, []);
   const closeConfirmation = useCallback(() => setPending(null), []);
   const refresh = useCallback(async () => {
@@ -32,7 +33,7 @@ export function AdminCommercialPrototype() {
     setPriceRows(offers.map(offer => ({ id: String(offer.id), code: commercialCode(offer.program.code), program: offer.program.name, status: offer.status || "OPEN", mode: offer.plan_code === "lms" ? "Belajar Mandiri" : "Kelas bersama Sensei", months: offer.duration_months, price: offer.program.code === "n1" ? null : offer.base_price, effective: offer.effective_price, discount: offer.discount_amount, percentage: offer.discount_percent })));
     setPromos(promotions.map(promo => ({ id: String(promo.id), name: promo.name, priceId: String(promo.program_offer_id), percentage: Number(promo.discount_percent), status: promo.status === "active" ? "Aktif" : promo.status === "draft" ? "Draft" : "Nonaktif", start: promo.starts_at?.slice(0, 10) || "", end: promo.ends_at?.slice(0, 10) || "", note: promo.note || "" })));
   }, []);
-  useEffect(() => { let active = true; void Promise.resolve().then(() => { if (active) return refresh(); }).catch(error => { if (active) setMessage(error.message); }); return () => { active = false; }; }, [refresh]);
+  useEffect(() => { let active = true; void Promise.resolve().then(() => { if (active) return refresh(); }).catch(error => { if (active) setMessage(error.message); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, [refresh]);
   const selectedPrice = priceRows.find((row) => row.id === draft?.priceId);
   const percentage = Number(draft?.percentage);
   const validPercentage = Boolean(draft?.percentage.trim()) && Number.isFinite(percentage) && percentage >= 0 && percentage <= 100;
@@ -87,7 +88,7 @@ export function AdminCommercialPrototype() {
     <p role="status">{message}</p>
     <AdminSection title="Harga program" description="Mandiri: 6 bulan. Sensei: 1 bulan.">
       <AdminFilterToolbar><label className="admin-prototype-search"><LuSearch aria-hidden="true" /><input aria-label="Cari program" value={filter} onChange={(event) => setFilter(event.target.value)} placeholder="Cari program atau cara belajar" /></label></AdminFilterToolbar>
-      <AdminDataTable caption="Harga dan pratinjau promo" rows={priceRows.filter((row) => `${row.code} ${row.program} ${row.mode}`.toLowerCase().includes(filter.trim().toLowerCase()))} rowKey={(row) => row.id} columns={[
+      <AdminDataTable loading={loading} caption="Harga dan pratinjau promo" rows={priceRows.filter((row) => `${row.code} ${row.program} ${row.mode}`.toLowerCase().includes(filter.trim().toLowerCase()))} rowKey={(row) => row.id} columns={[
         { key: "code", header: "Kode", cell: (row) => row.code },
         { key: "program", header: "Program", cell: (row) => row.program },
         { key: "status", header: "Status program", cell: (row) => <AdminStatusBadge status={row.status} /> },
@@ -102,13 +103,13 @@ export function AdminCommercialPrototype() {
       {priceDraft && editingPrice && <form className="admin-prototype-form" onSubmit={savePrice} noValidate>
         <p>{editingPrice.code} — {editingPrice.program} — {editingPrice.status}</p>
         <p>{editingPrice.mode}: {editingPrice.months} bulan</p>
-        <label className="admin-field">Harga normal<input type="number" min="0" step="1" value={priceDraft.price} onChange={(event) => setPriceDraft({ ...priceDraft, price: event.target.value })} required /></label>
+        <label className="admin-field">Harga normal<input placeholder="Contoh: 250000" type="number" min="0" step="1" value={priceDraft.price} onChange={(event) => setPriceDraft({ ...priceDraft, price: event.target.value })} required /></label>
         {priceError && <p role="alert">{priceError}</p>}
         <div className="admin-page-actions"><button type="button" className="button" onClick={closePriceEditor}>Batal</button><button type="submit" className="button button-primary">Simpan harga</button></div>
       </form>}
     </AdminDialog>
     <AdminSection title="Promo" actions={<button type="button" className="button button-primary" onClick={() => edit()}>Tambah promo</button>}>
-      <AdminDataTable caption="Promo sesi ini" rows={promos} rowKey={(row) => row.id} empty="Belum ada promo. Tambahkan promo untuk mencoba pratinjau diskon." columns={[
+      <AdminDataTable loading={loading} caption="Promo sesi ini" rows={promos} rowKey={(row) => row.id} empty="Belum ada promo. Tambahkan promo untuk mencoba pratinjau diskon." columns={[
         { key: "name", header: "Nama promo", cell: (row) => row.name },
         { key: "program", header: "Program", cell: (row) => { const price = priceRows.find((item) => item.id === row.priceId); return `${price?.program} — ${price?.mode}`; } },
         { key: "percentage", header: "Diskon", cell: (row) => `${row.percentage}%` },
@@ -120,13 +121,13 @@ export function AdminCommercialPrototype() {
     </AdminSection>
     <AdminDialog open={Boolean(draft)} title={draft?.id ? "Edit promo" : "Tambah promo"} close={closeEditor}>
       {draft && <form className="admin-prototype-form" onSubmit={save} noValidate>
-        <label className="admin-field">Nama promo<input value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} required /></label>
+        <label className="admin-field">Nama promo<input placeholder="Contoh: Promo Semangat Belajar" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} required /></label>
         <label className="admin-field">Program dan cara belajar<select value={draft.priceId} onChange={(event) => setDraft({ ...draft, priceId: event.target.value })}>{priceRows.filter((row) => row.price !== null && Number.isFinite(row.price) && row.price >= 0).map((row) => <option key={row.id} value={row.id}>{row.program} — {row.mode} — {row.months} bulan</option>)}</select></label>
-        <label className="admin-field">Persentase diskon<input type="number" min="0" max="100" step="any" value={draft.percentage} onChange={(event) => setDraft({ ...draft, percentage: event.target.value })} required /></label>
+        <label className="admin-field">Persentase diskon<input placeholder="Contoh: 10" type="number" min="0" max="100" step="any" value={draft.percentage} onChange={(event) => setDraft({ ...draft, percentage: event.target.value })} required /></label>
         <label className="admin-field">Tanggal mulai<input type="date" value={draft.start} onChange={(event) => setDraft({ ...draft, start: event.target.value })} required /></label>
         <label className="admin-field">Tanggal akhir<input type="date" min={draft.start || undefined} value={draft.end} onChange={(event) => setDraft({ ...draft, end: event.target.value })} required /></label>
         <label className="admin-field">Status<select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as PromoStatus })}>{promoStatuses.map((status) => <option key={status} value={status}>{status}</option>)}</select></label>
-        <label className="admin-field">Catatan (opsional)<textarea value={draft.note} onChange={(event) => setDraft({ ...draft, note: event.target.value })} /></label>
+        <label className="admin-field">Catatan (opsional)<textarea placeholder="Contoh: Promo untuk pendaftaran program yang dipilih selama periode ini." value={draft.note} onChange={(event) => setDraft({ ...draft, note: event.target.value })} /></label>
         <AdminSection title="Pratinjau perhitungan"><p>Harga normal: {selectedPrice && selectedPrice.price !== null ? rupiah(selectedPrice.price) : "OPEN"}</p><p>Diskon: {selectedPrice && selectedPrice.price !== null && validPercentage ? rupiah(selectedPrice.price * percentage / 100) : "Isi persentase yang valid"}</p><p>Harga promosi: {selectedPrice && selectedPrice.price !== null && validPercentage ? rupiah(selectedPrice.price - selectedPrice.price * percentage / 100) : "Belum tersedia"}</p><p>Pratinjau perhitungan tidak mengaktifkan promo dan tidak mengubah harga dasar.</p></AdminSection>
         {error && <p role="alert">{error}</p>}
         <div className="admin-page-actions"><button type="button" className="button" onClick={closeEditor}>Batal</button><button type="submit" className="button button-primary">Simpan promo</button></div>

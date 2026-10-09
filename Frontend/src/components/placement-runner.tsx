@@ -8,6 +8,7 @@ import { LuArrowLeft, LuArrowRight, LuCheck, LuClock, LuVolume2 } from "react-ic
 import { useAssessmentAttempt } from "@/components/assessment-hooks";
 import { contentMedia, offerPrice, useContent, type PublicOffer } from "@/lib/public-content-api";
 import type { ServerAttempt } from "@/lib/assessment-attempt";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 
 type PlacementAttempt = ServerAttempt & { questions: (ServerAttempt["questions"][number] & { category: string; image_url_resolved_url?: string; audio_url_resolved_url?: string })[]; result: (NonNullable<ServerAttempt["result"]> & { areas?: { name: string; score: number; total: number }[] }) | null };
 const plans = [
@@ -20,10 +21,10 @@ function PlacementReport({ attempt }: { attempt: PlacementAttempt }) {
   const offers = useContent<PublicOffer>("/api/public/offers");
   const result = attempt.result!;
   const level = result.recommendation_level;
-  return <main className="public-main placement-result-page"><section className="placement-result-hero"><p className="placement-result-kicker">HASIL PLACEMENT TEST</p><h1>Hasil Evaluasi Level {level ?? "—"}</h1><p>Berikut evaluasi kemampuan bahasa Jepang dan pilihan program belajar yang sesuai dengan hasil tesmu.</p></section><section className="public-section placement-analysis"><div className="public-section-head"><h2>Analisis kemampuan</h2></div><div className="placement-score-grid">{result.areas?.map(area => <article key={area.name}><span>{area.name}</span><strong>{area.score} / 100</strong><i><b style={{ width: `${area.score}%` }} /></i></article>)}</div></section><section className="public-section placement-recommendations"><div className="public-section-head"><h2>Pilihan Belajar untuk Level {level ?? "—"}</h2><p>Pilih cara belajar berdasarkan kebutuhan bimbingan, waktu, dan ritme belajarmu.</p></div>{offers.loading && <p role="status">Memuat program…</p>}{offers.error && <div role="alert">{offers.error} <button type="button" onClick={offers.reload}>Coba lagi</button></div>}<div className="placement-recommendation-grid">{plans.map((plan, index) => {
+  return <main className="public-main placement-result-page"><section className="placement-result-hero"><p className="placement-result-kicker">HASIL PLACEMENT TEST</p><h1>Hasil Evaluasi Level {level ?? "—"}</h1><p>Berikut evaluasi kemampuan bahasa Jepang dan pilihan program belajar yang sesuai dengan hasil tesmu.</p></section><section className="public-section placement-analysis"><div className="public-section-head"><h2>Analisis kemampuan</h2></div><div className="placement-score-grid">{result.areas?.map(area => <article key={area.name}><span>{area.name}</span><strong>{area.score} / 100</strong><i><b style={{ width: `${area.score}%` }} /></i></article>)}</div></section><section className="public-section placement-recommendations"><div className="public-section-head"><h2>Pilihan Belajar untuk Level {level ?? "—"}</h2><p>Pilih cara belajar berdasarkan kebutuhan bimbingan, waktu, dan ritme belajarmu.</p></div>{offers.loading && <LoadingSkeleton variant="cards" label="Memuat program…" />}{offers.error && <div role="alert">{offers.error} <button type="button" onClick={offers.reload}>Coba lagi</button></div>}{!offers.loading && <div className="placement-recommendation-grid">{plans.map((plan, index) => {
     const offer = offers.data.find(item => item.program.code.toUpperCase() === level && item.plan_code === plan.id);
     return <article key={plan.id}><div className={`placement-tier-icon offer-icon-${index + 1}`}><svg aria-hidden="true" viewBox="0 0 24 24">{plan.id === "sensei" ? <><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75" /></> : plan.id === "lms" ? <><path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H11v16H6.5A2.5 2.5 0 0 0 4 21.5z" /><path d="M20 5.5A2.5 2.5 0 0 0 17.5 3H13v16h4.5a2.5 2.5 0 0 1 2.5 2.5z" /></> : <><circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="5" /><circle cx="12" cy="12" r="1" /></>}</svg></div><span>{plan.badge}</span><h3>{plan.id === "free" ? plan.title : `${level ?? "—"} ${plan.title}`}</h3><p>{plan.description}</p><ul className="offer-points">{plan.points.map(point => <li key={point}>{point}</li>)}</ul><strong className="program-price">{plan.id === "free" ? plan.badge : offerPrice(offer)}</strong><Link href={`/register?${level ? `placement=${encodeURIComponent(level)}&` : ""}plan=${plan.id}`}>{plan.action}</Link></article>;
-  })}</div></section></main>;
+  })}</div>}</section></main>;
 }
 
 export function PlacementRunner({ report = false }: { report?: boolean }) {
@@ -44,10 +45,10 @@ export function PlacementRunner({ report = false }: { report?: boolean }) {
   useEffect(() => {
     if (attempt?.status === "completed" && !report) router.replace(`/placement/result?attempt=${attempt.id}`);
   }, [attempt, report, router]);
-  if (!attempt) return <main className="placement-assessment"><p role={flow.error ? "alert" : "status"}>{flow.error || "Memuat soal placement..."}</p><Link href="/placement" className="button button-secondary">Placement Test</Link></main>;
+  if (!attempt) return <main className="placement-assessment">{flow.error ? <p role="alert">{flow.error}</p> : <LoadingSkeleton variant={report ? "article" : "assessment"} label="Memuat soal placement..." />}<Link href="/placement" className="button button-secondary">Placement Test</Link></main>;
   if (attempt.status === "completed" && attempt.result) return <PlacementReport attempt={attempt} />;
   const question = attempt.questions[index];
-  if (!question) return null;
+  if (!question) return <main className="placement-assessment"><p role="alert">{flow.error || "Soal placement tidak tersedia."}</p><Link href="/placement" className="button button-secondary">Placement Test</Link></main>;
   const formatted = remaining === null ? "—" : `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(remaining % 60).padStart(2, "0")}`;
   const image = contentMedia(question.image_url, question.image_url_resolved_url);
   const audio = contentMedia(question.audio_url, question.audio_url_resolved_url);

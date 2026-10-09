@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { LuArrowLeft, LuMessagesSquare, LuSearch } from "react-icons/lu";
 import { useAuth } from "@/components/auth-provider";
 import { useLearningRequest } from "@/components/learning-hooks";
@@ -96,6 +97,8 @@ export function StudentCommunityScreen({ membership }: { membership: Membership 
   }
 
   // 1. Thread Detail View
+  if (selectedThreadId && !singleReq.data) return singleReq.error ? <p role="alert">{singleReq.error} <button type="button" onClick={singleReq.retry}>Coba Lagi</button><button type="button" onClick={() => setSelectedThreadId(undefined)}>Kembali ke Diskusi</button></p> : <LoadingSkeleton variant="article" />;
+
   if (selectedThreadId && singleReq.data) {
     const thread = singleReq.data;
 
@@ -185,6 +188,8 @@ export function StudentCommunityScreen({ membership }: { membership: Membership 
   }
 
   // 2. Create Thread View
+  if (viewMode === "create" && !topicsReq.data) return topicsReq.error ? <p role="alert">{topicsReq.error} <button type="button" onClick={topicsReq.retry}>Coba Lagi</button><button type="button" onClick={() => setViewMode("list")}>Batal</button></p> : <LoadingSkeleton variant="form" />;
+
   if (viewMode === "create") {
     return (
       <div style={{ maxWidth: "760px", margin: "0 auto", padding: "16px 0" }}>
@@ -325,8 +330,8 @@ export function StudentCommunityScreen({ membership }: { membership: Membership 
         </label>
       </section>
 
-      {threadsReq.loading && <p role="status">Memuat diskusi…</p>}
-      {threadsReq.error && <p role="alert">{threadsReq.error}</p>}
+      {!threadsReq.data && !threadsReq.error && <LoadingSkeleton variant="list" label="Memuat diskusi…" />}
+      {threadsReq.error && <p role="alert">{threadsReq.error} <button type="button" onClick={threadsReq.retry}>Coba Lagi</button></p>}
 
       <section className="community-list" style={{ display: "grid", gap: "14px" }}>
         {(threadsReq.data ?? []).map(thread => (
@@ -380,7 +385,7 @@ export function StudentCommunityScreen({ membership }: { membership: Membership 
           </article>
         ))}
 
-        {!threadsReq.loading && (threadsReq.data ?? []).length === 0 && (
+        {threadsReq.data && !threadsReq.error && threadsReq.data.length === 0 && (
           <div className="library-empty">
             <h2>Belum ada diskusi</h2>
             <p>Jadilah yang pertama membuat postingan di komunitas.</p>

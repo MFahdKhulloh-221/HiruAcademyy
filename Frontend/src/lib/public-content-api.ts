@@ -11,26 +11,31 @@ export type PublicOffer = { program: { code: string; slug: string; name: string 
 export type PublicProgram = { code: string; slug: string; name: string; family: string };
 
 export function useContent<T>(path: string, single = false) {
-  const [state, setState] = useState<{ data: T[]; loading: boolean; error: string }>({ data: [], loading: true, error: "" });
+  const key = JSON.stringify([path, single]);
+  const [state, setState] = useState<{ key: string; data: T[]; loading: boolean; error: string }>({ key, data: [], loading: true, error: "" });
   const [version, setVersion] = useState(0);
-  const reload = useCallback(() => setVersion(value => value + 1), []);
+  const reload = useCallback(() => {
+    setState(current => current.key === key ? { ...current, loading: current.data.length === 0, error: "" } : { key, data: [], loading: true, error: "" });
+    setVersion(value => value + 1);
+  }, [key]);
+  const current = state.key === key ? state : { data: [], loading: true, error: "" };
   useEffect(() => {
     const controller = new AbortController();
     apiRequest<{ data: T[] }>(path, { signal: controller.signal }).then(result => {
       const data = single && result.data && typeof result.data === "object" && !Array.isArray(result.data) ? [result.data as unknown as T] : result.data;
       if (!Array.isArray(data)) throw new Error("Respons konten tidak valid.");
-      if (!controller.signal.aborted) setState({ data, loading: false, error: "" });
+      if (!controller.signal.aborted) setState({ key, data, loading: false, error: "" });
     }).catch(error => {
       if (controller.signal.aborted) return;
       if (error instanceof Error && (error.name === "AbortError" || error.message.toLowerCase().includes("abort"))) {
         reload();
         return;
       }
-      setState({ data: [], loading: false, error: error instanceof Error ? error.message : "Konten gagal dimuat." });
+      setState({ key, data: [], loading: false, error: error instanceof Error ? error.message : "Konten gagal dimuat." });
     });
     return () => controller.abort();
-  }, [path, version, single, reload]);
-  return { ...state, reload };
+  }, [path, version, single, reload, key]);
+  return { data: current.data, loading: current.loading, error: current.error, reload };
 }
 
 const aliases: Record<string, string> = { imageSrc: "image_src", order: "sort_order", videoUrl: "video_url", videoTitle: "video_title", seoTitle: "seo_title", metaDescription: "meta_description", publishedAt: "published_at" };

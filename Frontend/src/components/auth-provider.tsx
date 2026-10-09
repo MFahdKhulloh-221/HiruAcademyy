@@ -3,6 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { ApiError, apiRequest, AUTH_EXPIRED_EVENT, setApiAuthenticated } from "@/lib/api";
+import { StudentLoading, type LoadingSkeletonProps } from "@/components/loading-skeleton";
 
 export type AuthUser = {
   id: number | string;
@@ -10,6 +11,8 @@ export type AuthUser = {
   email: string;
   whatsapp: string;
   role: "student" | "admin";
+  avatar?: string | null;
+  avatar_resolved_url?: string | null;
   country?: string | null;
   target_jlpt?: string | null;
   account_status?: string;
@@ -45,7 +48,8 @@ export function authDestination(user: AuthUser): string {
 function readUser(response: { data: AuthUser }): AuthUser {
   const user = response?.data;
   if (!user || !["student", "admin"].includes(user.role) || !["number", "string"].includes(typeof user.id) || typeof user.name !== "string" || typeof user.email !== "string" || typeof user.whatsapp !== "string" || (user.account_status !== undefined && user.account_status !== "active")) throw new ApiError(403);
-  return { id: user.id, name: user.name, email: user.email, whatsapp: user.whatsapp, role: user.role, country: user.country, target_jlpt: user.target_jlpt, account_status: user.account_status };
+  if ([user.avatar, user.avatar_resolved_url].some(value => value !== undefined && value !== null && typeof value !== "string")) throw new ApiError(403);
+  return { id: user.id, name: user.name, email: user.email, whatsapp: user.whatsapp, role: user.role, avatar: user.avatar, avatar_resolved_url: user.avatar_resolved_url, country: user.country, target_jlpt: user.target_jlpt, account_status: user.account_status };
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -165,13 +169,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (destination) router.replace(destination);
   }, [destination, router]);
 
+  const segment = pathname.split("/")[1];
+  const variants: Record<string, LoadingSkeletonProps["variant"]> = { dashboard: "dashboard", journey: "cards", learn: "learning", practice: "assessment", flashcards: "cards", library: "list", tryout: "assessment", schedule: "list", replay: "learning", "mini-checkpoint": "assessment", "ask-sensei": "form", community: "list", progress: "stats", leaderboard: "ranking", certificate: "cards", notifications: "list", profile: "profile", affiliate: "stats", membership: "cards", renewal: "cards", checkout: "form", invoice: "article", admin: "table" };
   let content = children;
   if (role && (loading || destination || !user || user.role !== role || error)) {
     content = error && !loading ? (
       <main className="public-main">
         <div role="alert"><p>{error.message}</p><button type="button" className="button button-primary" onClick={() => { void refreshUser().catch(() => undefined); }}>Coba Lagi</button></div>
       </main>
-    ) : <main className="public-main" role="status" aria-live="polite">Memuat...</main>;
+    ) : <StudentLoading shell={role === "admin" ? "admin" : segment === "dashboard" ? "dashboard" : segment === "journey" ? "journey" : segment === "learn" ? "learning" : ["schedule", "replay", "mini-checkpoint", "ask-sensei"].includes(segment) ? "sensei" : "supporting"} variant={variants[segment] ?? "cards"} />;
   }
 
   return <AuthContext.Provider value={{ user, loading, authenticated: !!user && !loading && !error, refreshUser, login, register, logout }}>{content}</AuthContext.Provider>;

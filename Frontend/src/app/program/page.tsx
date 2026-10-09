@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { LuSparkles } from "react-icons/lu";
 import { PublicPage } from "@/components/public-shell";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { levelCatalog, plans } from "@/lib/public-mock";
 import { offerPrice, useContent, type PublicOffer, type PublicProgram } from "@/lib/public-content-api";
 
@@ -41,7 +42,7 @@ function ProgramContent() {
               <p>Sesuaikan dengan waktu dan kebutuhan bimbinganmu.</p>
             </div>
           </div>
-          <div className="pricing-grid">
+          {pricing.loading ? <LoadingSkeleton variant="cards" label="Memuat harga…" /> : <div className="pricing-grid">
             {currentPlans.map((plan) => {
               const isSelected = selectedPlan?.id === plan.id;
               const isPopular = plan.id === "sensei";
@@ -117,7 +118,7 @@ function ProgramContent() {
                 </article>
               );
             })}
-          </div>
+          </div>}
         </section>
 
         <section className="public-section level-section">
@@ -132,7 +133,7 @@ function ProgramContent() {
               </div>
             </div>
           </div>
-          {programs.loading && <p role="status">Memuat program…</p>}{programs.error && <div role="alert">{programs.error} <button type="button" onClick={programs.reload}>Coba lagi</button></div>}{!programs.loading && !programs.error && !programs.data.length && <p>Belum ada program tersedia.</p>}
+          {programs.loading && <LoadingSkeleton variant="cards" label="Memuat program…" />}{programs.error && <div role="alert">{programs.error} <button type="button" onClick={programs.reload}>Coba lagi</button></div>}{!programs.loading && !programs.error && !programs.data.length && <p>Belum ada program tersedia.</p>}
           <div className="public-levels">
             {levels.map((level) => (
               <button
@@ -157,7 +158,7 @@ function ProgramContent() {
           </div>
         </section>
 
-        <aside className="program-summary-card" aria-label="Ringkasan pilihan program dan level">
+        {pricing.loading ? <LoadingSkeleton variant="form" label="Memuat harga…" /> : <aside className="program-summary-card" aria-label="Ringkasan pilihan program dan level">
           <div className="summary-card-inner">
             <div className="summary-header">
               <div className="summary-icon-box" aria-hidden="true">
@@ -194,7 +195,7 @@ function ProgramContent() {
               {summaryPlan.available ? <Link className="button button-primary summary-cta" href={`/register?placement=${selectedLevel.code}&plan=${summaryPlan.id}`} style={{ margin: "0 auto" }}>Lanjutkan Pendaftaran</Link> : <button type="button" className="button button-secondary summary-cta" disabled>Belum tersedia</button>}
             </div>
           </div>
-        </aside>
+        </aside>}
       </main>
     </PublicPage>
   );
@@ -202,7 +203,7 @@ function ProgramContent() {
 
 export default function ProgramPage() {
   return (
-    <Suspense fallback={null}>
+    <Suspense fallback={<PublicPage active="Program"><main className="public-main program-page"><LoadingSkeleton variant="cards" /></main></PublicPage>}>
       <ProgramContent />
     </Suspense>
   );

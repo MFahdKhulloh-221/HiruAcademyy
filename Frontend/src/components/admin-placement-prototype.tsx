@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, useCallback, useState } from "react";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { AdminMediaUpload } from "@/components/admin-media-upload";
 import { AdminDataTable, AdminDialog, AdminEmptyState, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge, AdminTabs } from "@/components/admin-primitives";
 import { AdminPlacementPreview, PlacementMedia, type PlacementQuestion, type PlacementSettings } from "@/components/admin-placement-preview";
@@ -42,7 +43,7 @@ function settingsError(settings: PlacementSettings) {
 export function AdminPlacementPrototype() {
   const request = useLearningRequest(loadAdminPlacement, "admin-placement");
   if (request.error) return <AdminShell current="/admin/placement-hasil"><p role="alert">{request.error}</p><button type="button" onClick={request.retry}>Coba Lagi</button></AdminShell>;
-  if (!request.data) return <AdminShell current="/admin/placement-hasil"><p role="status">Memuat…</p></AdminShell>;
+  if (!request.data) return <AdminShell current="/admin/placement-hasil"><main className="admin-public-prototype placement-admin admin-placement-prototype"><LoadingSkeleton variant="form" /><LoadingSkeleton variant="list" /></main></AdminShell>;
   return <PlacementEditor initial={request.data} />;
 }
 
@@ -157,10 +158,10 @@ function PlacementEditor({ initial }: { initial: Awaited<ReturnType<typeof loadA
           <div className="placement-pub-actions"><button type="button" className="button button-secondary" onClick={() => setPreview(true)}>Pratinjau Tes</button><button type="button" className="button button-secondary" onClick={() => saveConfiguration(false)}>Simpan Draft</button><button type="button" className="button button-primary" onClick={() => saveConfiguration(true)}>Terbitkan</button></div>
         </div>
         <AdminSection title="Pengaturan Placement Test" className="placement-settings-box"><div className="placement-settings-grid admin-prototype-form">
-          <label className="admin-field placement-span-full">Judul Tes<input value={settings.title} onChange={(event) => updateSettings({ title: event.target.value })} required /></label>
-          <label className="admin-field placement-span-full">Intro Heading<input value={settings.introHeading} onChange={(event) => updateSettings({ introHeading: event.target.value })} required /></label>
-          <label className="admin-field">Durasi Pengerjaan (menit)<input type="number" min="1" step="1" value={settings.minutes} onChange={(event) => updateSettings({ minutes: event.target.value })} required /></label>
-          <label className="admin-field placement-span-full">Deskripsi Tes<textarea rows={2} value={settings.description} onChange={(event) => updateSettings({ description: event.target.value })} required /></label>
+          <label className="admin-field placement-span-full">Judul Tes<input placeholder="Contoh: Tes Penempatan Bahasa Jepang" value={settings.title} onChange={(event) => updateSettings({ title: event.target.value })} required /></label>
+          <label className="admin-field placement-span-full">Intro Heading<input placeholder="Contoh: Temukan Level Bahasa Jepangmu" value={settings.introHeading} onChange={(event) => updateSettings({ introHeading: event.target.value })} required /></label>
+          <label className="admin-field">Durasi Pengerjaan (menit)<input placeholder="Contoh: 30" type="number" min="1" step="1" value={settings.minutes} onChange={(event) => updateSettings({ minutes: event.target.value })} required /></label>
+          <label className="admin-field placement-span-full">Deskripsi Tes<textarea rows={2} placeholder="Contoh: Kenali kemampuan bahasa Jepangmu melalui tes ini." value={settings.description} onChange={(event) => updateSettings({ description: event.target.value })} required /></label>
         </div></AdminSection>
         <AdminSection title="Pertanyaan" className="placement-settings-box" actions={<button type="button" className="button button-primary" onClick={() => { setError(""); setDraft({ id: crypto.randomUUID(), prompt: "", answers: ["", "", "", ""], correct: "", category: categories[0], published: false, explanation: "", order: String(rows.length + 1) }); }}>Tambah Pertanyaan</button>}>
           {!rows.length ? <AdminEmptyState title="Belum ada pertanyaan dibuat." /> : <ol className="placement-outline-list admin-placement-question-list" aria-label="Daftar Pertanyaan Placement Test">{rows.map((row, index) => <li className="placement-outline-item admin-placement-question-card" key={row.id}>
@@ -199,8 +200,8 @@ function PlacementEditor({ initial }: { initial: Awaited<ReturnType<typeof loadA
       </AdminSection>}
 
       {activeTab === "Leads" && <AdminSection title="Hasil & Leads Peserta" description="Daftar peserta yang telah mengikuti Placement Test.">
-        {leadsLoading && <p role="status">Memuat data leads…</p>}
         <AdminDataTable
+          loading={leadsLoading && !leadsLoaded}
           caption="Data Leads Placement Test"
           rows={leads}
           rowKey={(lead) => String(lead.id)}
@@ -223,17 +224,17 @@ function PlacementEditor({ initial }: { initial: Awaited<ReturnType<typeof loadA
     <AdminDialog open={Boolean(draft)} title={rows.some((row) => row.id === draft?.id) ? "Edit Pertanyaan" : "Tambah Pertanyaan"} close={closeEditor}>
       {draft && <form className="admin-prototype-form placement-editor-panel" onSubmit={saveQuestion} noValidate>
         <div className="placement-field-grid">
-          <label className="admin-field placement-span-full">Pertanyaan<textarea rows={3} value={draft.prompt} onChange={(event) => setDraft({ ...draft, prompt: event.target.value })} required /></label>
+          <label className="admin-field placement-span-full">Pertanyaan<textarea rows={3} placeholder="Contoh: Apa arti kata 「学校」?" value={draft.prompt} onChange={(event) => setDraft({ ...draft, prompt: event.target.value })} required /></label>
           <label className="admin-field">Kategori<select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })} required>{categories.map((category) => <option key={category}>{category}</option>)}</select></label>
           <label className="admin-field">Status<select value={draft.published ? "published" : "draft"} onChange={(event) => setDraft({ ...draft, published: event.target.value === "published" })}><option value="draft">Draft</option><option value="published">Published</option></select></label>
-          <label className="admin-field placement-span-full">Gambar (Opsional)<input value={draft.imageUrl ?? ""} onChange={event => setDraft({ ...draft, imageUrl: event.target.value })} /></label><div className="placement-span-full"><AdminMediaUpload kind="image" onUploaded={imageUrl => setDraft({ ...draft, image: undefined, imageUrl })} /></div>
-          <label className="admin-field placement-span-full">Audio (Opsional)<input value={draft.audioUrl ?? ""} onChange={event => setDraft({ ...draft, audioUrl: event.target.value })} /></label><div className="placement-span-full"><AdminMediaUpload kind="audio" onUploaded={audioUrl => setDraft({ ...draft, audio: undefined, audioUrl })} /></div>
+          <label className="admin-field placement-span-full">Gambar (Opsional)<input placeholder="Contoh: https://example.com/images/sekolah.webp atau media/placement/sekolah.webp" value={draft.imageUrl ?? ""} onChange={event => setDraft({ ...draft, imageUrl: event.target.value })} /></label><div className="placement-span-full"><AdminMediaUpload kind="image" onUploaded={imageUrl => setDraft({ ...draft, image: undefined, imageUrl })} /></div>
+          <label className="admin-field placement-span-full">Audio (Opsional)<input placeholder="Contoh: https://example.com/audio/soal-1.mp3 atau media/placement/soal-1.mp3" value={draft.audioUrl ?? ""} onChange={event => setDraft({ ...draft, audioUrl: event.target.value })} /></label><div className="placement-span-full"><AdminMediaUpload kind="audio" onUploaded={audioUrl => setDraft({ ...draft, audio: undefined, audioUrl })} /></div>
           <div className="placement-span-full"><PlacementMedia image={draft.image} audio={draft.audio} /><div className="placement-editor-actions">{draft.image && <button type="button" className="button" onClick={() => setDraft({ ...draft, image: undefined })}>Hapus Gambar</button>}{draft.audio && <button type="button" className="button" onClick={() => setDraft({ ...draft, audio: undefined })}>Hapus Audio</button>}</div></div>
-          <label className="admin-field placement-span-full">Penjelasan / Pembahasan (Opsional)<textarea rows={2} value={draft.explanation} onChange={(event) => setDraft({ ...draft, explanation: event.target.value })} /></label>
+          <label className="admin-field placement-span-full">Penjelasan / Pembahasan (Opsional)<textarea rows={2} placeholder="Contoh: 「学校」 berarti sekolah." value={draft.explanation} onChange={(event) => setDraft({ ...draft, explanation: event.target.value })} /></label>
         </div>
-        <fieldset className="placement-options-fieldset"><legend>Pilihan Jawaban (Pilihan Tunggal)</legend><div className="placement-options-list">{letters.map((letter, index) => <label className="admin-field" key={letter}>Jawaban {letter}<input value={draft.answers[index]} onChange={(event) => setDraft({ ...draft, answers: draft.answers.map((answer, answerIndex) => answerIndex === index ? event.target.value : answer) })} required /></label>)}</div></fieldset>
+        <fieldset className="placement-options-fieldset"><legend>Pilihan Jawaban (Pilihan Tunggal)</legend><div className="placement-options-list">{letters.map((letter, index) => <label className="admin-field" key={letter}>Jawaban {letter}<input placeholder={`Contoh: ${["Sekolah", "Rumah", "Kantor", "Perpustakaan"][index]}`} value={draft.answers[index]} onChange={(event) => setDraft({ ...draft, answers: draft.answers.map((answer, answerIndex) => answerIndex === index ? event.target.value : answer) })} required /></label>)}</div></fieldset>
         <label className="admin-field">Jawaban Benar<select value={draft.correct} onChange={(event) => setDraft({ ...draft, correct: event.target.value })} required><option value="">Pilih jawaban benar</option>{letters.map((letter) => <option key={letter} value={letter}>{letter}</option>)}</select></label>
-        <label className="admin-field">Urutan<input type="number" min="1" max={rows.length + (rows.some((row) => row.id === draft.id) ? 0 : 1)} step="1" value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })} required /><small>Pertanyaan lain bergeser otomatis.</small></label>
+        <label className="admin-field">Urutan<input placeholder="Contoh: 1" type="number" min="1" max={rows.length + (rows.some((row) => row.id === draft.id) ? 0 : 1)} step="1" value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })} required /><small>Pertanyaan lain bergeser otomatis.</small></label>
         {error && <p className="placement-alert-error" role="alert">{error}</p>}
         <details className="admin-placement-editor-preview"><summary>Pratinjau Tes</summary><AdminPlacementPreview settings={settings} questions={[draft]} initialQuestionId={draft.id} /></details>
         <div className="admin-page-actions"><button type="button" className="button" onClick={closeEditor}>Batal</button><button type="submit" className="button button-primary">Simpan Pertanyaan</button></div>
@@ -254,11 +255,11 @@ function PlacementEditor({ initial }: { initial: Awaited<ReturnType<typeof loadA
         });
         closeRuleDraft();
       }}>
-        <label className="admin-field">Skor Minimal (%)<input required type="number" min="0" max="100" value={ruleDraft.minScore} onChange={(e) => setRuleDraft({ ...ruleDraft, minScore: Number(e.target.value) })} /></label>
-        <label className="admin-field">Skor Maksimal (%)<input required type="number" min="0" max="100" value={ruleDraft.maxScore} onChange={(e) => setRuleDraft({ ...ruleDraft, maxScore: Number(e.target.value) })} /></label>
+        <label className="admin-field">Skor Minimal (%)<input required placeholder="Contoh: 0" type="number" min="0" max="100" value={ruleDraft.minScore} onChange={(e) => setRuleDraft({ ...ruleDraft, minScore: Number(e.target.value) })} /></label>
+        <label className="admin-field">Skor Maksimal (%)<input required placeholder="Contoh: 40" type="number" min="0" max="100" value={ruleDraft.maxScore} onChange={(e) => setRuleDraft({ ...ruleDraft, maxScore: Number(e.target.value) })} /></label>
         <label className="admin-field">Rekomendasi Level<select value={ruleDraft.recommendedProgramCode} onChange={(e) => setRuleDraft({ ...ruleDraft, recommendedProgramCode: e.target.value })}>{jlptLevels.map((lvl) => <option key={lvl} value={lvl}>{lvl}</option>)}</select></label>
-        <label className="admin-field">Judul Rekomendasi<input required value={ruleDraft.resultTitle} onChange={(e) => setRuleDraft({ ...ruleDraft, resultTitle: e.target.value })} /></label>
-        <label className="admin-field">Deskripsi Rekomendasi<textarea required rows={3} value={ruleDraft.resultDescription} onChange={(e) => setRuleDraft({ ...ruleDraft, resultDescription: e.target.value })} /></label>
+        <label className="admin-field">Judul Rekomendasi<input required placeholder="Contoh: Mulai dari Level N5" value={ruleDraft.resultTitle} onChange={(e) => setRuleDraft({ ...ruleDraft, resultTitle: e.target.value })} /></label>
+        <label className="admin-field">Deskripsi Rekomendasi<textarea required rows={3} placeholder="Contoh: Perkuat dasar bahasa Jepang di level N5." value={ruleDraft.resultDescription} onChange={(e) => setRuleDraft({ ...ruleDraft, resultDescription: e.target.value })} /></label>
         {error && <p className="placement-alert-error" role="alert">{error}</p>}
         <div className="admin-page-actions"><button type="button" className="button" onClick={closeRuleDraft}>Batal</button><button type="submit" className="button button-primary">Simpan Aturan</button></div>
       </form>}

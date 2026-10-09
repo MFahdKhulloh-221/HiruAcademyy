@@ -1,14 +1,17 @@
 "use client";
 
-import Image from "next/image";
+import { StudentAvatar } from "@/components/student-avatar";
+import { useAuth } from "@/components/auth-provider";
 import Link from "next/link";
 import { contentMedia, testimonialVideo, useContent, type TestimonialContent } from "@/lib/public-content-api";
 import { PublicPage } from "@/components/public-shell";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 
 
 export default function TestimonialsPage() {
+  const { user, loading: authLoading } = useAuth();
   const content = useContent<TestimonialContent>("/api/testimonials");
-  const mergedTestimonials = content.data.map(item => ({ name: item.name, membership: item.context, quote: item.quote, avatarSrc: contentMedia(item.image, item.image_resolved_url), initials: item.name.slice(0, 2).toUpperCase() }));
+  const mergedTestimonials = content.data.map(item => ({ id: item.id, name: item.name, membership: item.context, quote: item.quote, avatarSrc: contentMedia(item.image, item.image_resolved_url) }));
   const testimonialVideos = content.data.flatMap(item => {
     const media = testimonialVideo(item.video_url, item.video_url_resolved_url);
     return media ? [{ id: item.id, name: item.name, membership: item.context, title: item.video_title || `Video testimoni ${item.name}`, media, posterSrc: contentMedia(item.image, item.image_resolved_url) }] : [];
@@ -39,17 +42,11 @@ export default function TestimonialsPage() {
           </article>
         </section>
         <section className="public-section testimonial-section">
-          {content.loading ? <p role="status">Memuat testimoni…</p> : content.error ? <div role="alert">{content.error} <button type="button" onClick={content.reload}>Coba lagi</button></div> : !content.data.length && <p>Belum ada testimoni.</p>}
+          {content.loading ? <LoadingSkeleton variant="cards" label="Memuat testimoni…" /> : content.error ? <div role="alert">{content.error} <button type="button" onClick={content.reload}>Coba lagi</button></div> : !content.data.length && <p>Belum ada testimoni.</p>}
           <div className="testimonial-grid">
             {mergedTestimonials.map((testimonial) => (
-              <article className="testimonial-card" key={testimonial.name}>
-                <div className="testimonial-avatar">
-                  {testimonial.avatarSrc ? (
-                    <Image unoptimized alt={`Foto ${testimonial.name}`} fill sizes="64px" src={testimonial.avatarSrc} />
-                  ) : (
-                    <span aria-hidden="true">{testimonial.initials || testimonial.name.slice(0, 2).toUpperCase()}</span>
-                  )}
-                </div>
+              <article className="testimonial-card" key={testimonial.id}>
+                <StudentAvatar name={testimonial.name} url={testimonial.avatarSrc} className="testimonial-avatar" />
                 <blockquote>{testimonial.quote}</blockquote>
                 <footer>
                   <strong>{testimonial.name}</strong>
@@ -77,6 +74,10 @@ export default function TestimonialsPage() {
               </article>
             ))}
           </div>
+        </section>
+        <section className="testimonial-cta">
+          <div><h2>Sudah belajar bersama Hiru Academy?</h2><p>Bagikan pengalaman belajarmu.</p></div>
+          <div>{!authLoading && <Link className="button button-primary" href={user?.role === "student" ? "/profile/testimoni" : "/login"}>Tulis Testimoni</Link>}</div>
         </section>
         <section className="testimonial-cta">
           <div>

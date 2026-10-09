@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { KeyboardEvent, ReactNode, RefObject, useEffect, useId, useRef } from "react";
 export { AdminShell } from "@/components/admin-shell";
 
@@ -31,7 +32,8 @@ export function AdminStatusBadge({ status }: { status: string }) { return <span 
 export function AdminEmptyState({ title = "Belum ada data", description, action }: { title?: string; description?: string; action?: ReactNode }) { return <div className="admin-empty-state"><h3>{title}</h3>{description && <p>{description}</p>}{action}</div>; }
 
 type Column<Row> = { key: string; header: ReactNode; cell: (row: Row) => ReactNode };
-export function AdminDataTable<Row>({ caption, columns, rows, rowKey, empty, actions }: { caption?: string; columns: readonly Column<Row>[]; rows: readonly Row[]; rowKey: (row: Row) => string; empty?: ReactNode; actions?: { header?: string; cell: (row: Row) => ReactNode } }) {
+export function AdminDataTable<Row>({ caption, columns, rows, rowKey, empty, actions, loading = false }: { caption?: string; columns: readonly Column<Row>[]; rows: readonly Row[]; rowKey: (row: Row) => string; empty?: ReactNode; actions?: { header?: string; cell: (row: Row) => ReactNode }; loading?: boolean }) {
+  if (loading) return <LoadingSkeleton variant="table" rows={5} />;
   if (!rows.length) return <AdminEmptyState title="Belum ada data" description={typeof empty === "string" ? empty : undefined} action={typeof empty === "string" ? undefined : empty}/>;
   return <div className="admin-data-table-wrap" tabIndex={0} role="region" aria-label={caption}><table className="admin-data-table">{caption && <caption>{caption}</caption>}<thead><tr>{columns.map((column) => <th key={column.key} scope="col">{column.header}</th>)}{actions && <th scope="col">{actions.header ?? "Tindakan"}</th>}</tr></thead><tbody>{rows.map((row) => <tr key={rowKey(row)}>{columns.map((column) => <td key={column.key}>{column.cell(row)}</td>)}{actions && <td>{actions.cell(row)}</td>}</tr>)}</tbody></table></div>;
 }

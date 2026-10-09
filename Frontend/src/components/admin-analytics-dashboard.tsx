@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { useCallback, useState } from "react";
 import { useLearningRequest } from "@/components/learning-hooks";
 import { loadCanonicalAnalytics } from "@/lib/canonical-analytics";
@@ -69,6 +70,6 @@ export function AdminAnalyticsDashboard() {
   const load = useCallback(() => loadCanonicalAnalytics(period), [period]);
   const request = useLearningRequest(load, `analytics-${period}`);
   const data = request.data;
-  if (!data) return <AdminShell current="/admin/analitik"><main className="admin-page admin-analytics"><p role={request.error ? "alert" : "status"}>{request.error ?? "Memuat…"}</p>{request.error && <button type="button" onClick={request.retry}>Coba Lagi</button>}</main></AdminShell>;
+  if (!data) return <AdminShell current="/admin/analitik"><main className="admin-page admin-analytics">{request.error ? <p role="alert">{request.error}</p> : <LoadingSkeleton variant="dashboard" rows={6} />}{request.error && <button type="button" onClick={request.retry}>Coba Lagi</button>}</main></AdminShell>;
   return <AdminShell current="/admin/analitik"><main className="admin-page admin-analytics"><AdminBreadcrumb items={[{ label: "Admin", href: "/admin" }, { label: "Analitik" }]}/><AdminPageHeader eyebrow="PANEL ADMIN • ANALITIK" title="Analitik" description="Ringkasan operasional dari data yang tersedia di panel admin." actions={<fieldset className="analytics-period"><legend>Periode</legend>{periods.map((item) => <button key={item.value} type="button" className={period === item.value ? "active" : ""} aria-pressed={period === item.value} onClick={() => setPeriod(item.value)}>{item.label}</button>)}</fieldset>}/><AdminTabs tabs={tabs} active={tab} onChange={(next) => setTab(next as (typeof tabs)[number])} label="Bagian analitik">{tab === "Ringkasan" && <Summary data={data}/>} {tab === "Akuisisi" && <Acquisition data={data}/>} {tab === "Pembelajaran" && <Learning data={data}/>} {tab === "Transaksi" && <Transactions data={data}/>}</AdminTabs></main></AdminShell>;
 }

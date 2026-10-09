@@ -17,7 +17,8 @@ export function useCommercialOrder(level: string, plan: "lms" | "sensei") {
   const [invoice, setInvoice] = useState<CommercialInvoice | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  useEffect(() => { let active = true; void commercialData<Offer[]>("/api/public/offers").then(rows => { if (active) setOffers(rows); }).catch(error => { if (active) setError(error.message); }); return () => { active = false; }; }, []);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => { let active = true; void commercialData<Offer[]>("/api/public/offers").then(rows => { if (active) setOffers(rows); }).catch(error => { if (active) setError(error.message); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, []);
   const offer = offers.find(row => row.program.code.toUpperCase() === level.toUpperCase() && row.plan_code === plan && row.base_price !== null && row.program.code !== "n1");
   async function create(referral?: string) {
     if (inFlight.current || !offer) return null;
@@ -26,7 +27,7 @@ export function useCommercialOrder(level: string, plan: "lms" | "sensei") {
     catch (error) { setError(error instanceof Error ? error.message : "Permintaan belum berhasil."); return null; }
     finally { inFlight.current = false; setBusy(false); }
   }
-  return { offer, offers, invoice, error, busy, create };
+  return { offer, offers, invoice, error, busy, loading, create };
 }
 export function useCommercialInvoice(id: string) {
   const version = useRef(0);
