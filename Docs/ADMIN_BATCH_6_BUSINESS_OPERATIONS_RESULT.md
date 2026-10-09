@@ -318,5 +318,4 @@ Covered critical student/public routes: Placement, Register, Program, Checkout, 
 - Production commission settlement/validation scheduler remains backend-owned.
 - Exact membership activation duration and financial commission policy require client/backend confirmation.
 - Student visuals continue using explicit query membership for demo QA; production session source remains OPEN.
-
 No commit. No push.
