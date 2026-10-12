@@ -23,7 +23,7 @@ import {
 import type { IconType } from "react-icons";
 import { useAuth } from "@/components/auth-provider";
 import { StudentNavigation } from "@/components/student-navigation";
-import { StudentAvatar } from "@/components/student-avatar";
+import { StudentHeaderActions } from "@/components/student-header-actions";
 import { getStudentFeatureAccess, type DashboardData, type DashboardIcon } from "@/lib/dashboard-mock";
 
 const glyphs: Record<DashboardIcon | "bell", IconType> = {
@@ -70,16 +70,7 @@ export function StudentDashboard({
       <StudentNavigation membership={data.membership} />
       <div className="dash-main">
         <header className="dash-topbar">
-          <div className="dash-top-actions">
-            <button type="button" aria-label="Notifikasi">
-              <Glyph name="bell" />
-            </button>
-            <StudentAvatar name={name} url={currentUser?.avatar_resolved_url} className="dash-avatar" />
-            <div>
-              <strong>{name}</strong>
-              <span>{data.membershipLabel}</span>
-            </div>
-          </div>
+          <StudentHeaderActions membership={data.membership} />
         </header>
 
         <main className="dash-content">

@@ -24,6 +24,7 @@ function RegisterForm() {
   const pending = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [whatsappError, setWhatsappError] = useState("");
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -45,12 +46,16 @@ function RegisterForm() {
     pending.current = true;
     setBusy(true);
     setError("");
+    setWhatsappError("");
     try {
       await register(payload);
       router.replace(destination);
     } catch (cause) {
       const failure = cause instanceof ApiError ? cause : new ApiError(0);
-      setError(Object.values(failure.errors).flat().join(" ") || failure.message);
+      const phoneError = failure.errors.whatsapp?.join(" ") || "";
+      setWhatsappError(phoneError);
+      const otherErrors = Object.entries(failure.errors).filter(([field]) => field !== "whatsapp").flatMap(([, messages]) => messages).join(" ");
+      setError(otherErrors || (phoneError ? "" : failure.message));
       pending.current = false;
       setBusy(false);
     }
@@ -98,7 +103,9 @@ function RegisterForm() {
           <div className="register-form-grid">
             <label>Nama Lengkap<input name="name" type="text" autoComplete="name" placeholder="Masukkan nama lengkap" required /></label>
             <label>Email<input name="email" type="email" autoComplete="email" placeholder="contoh@email.com" required /></label>
-            <label>Nomor WhatsApp<input name="whatsapp" type="tel" inputMode="tel" autoComplete="tel" placeholder="+62 8xx xxxx xxxx" required /></label>
+            <label>Nomor WhatsApp<input aria-label="Nomor WhatsApp" name="whatsapp" type="tel" inputMode="tel" autoComplete="tel" placeholder="+62 8xx xxxx xxxx" required aria-invalid={whatsappError ? true : undefined} aria-describedby={whatsappError ? "register-whatsapp-error" : undefined} onChange={() => setWhatsappError("")} />
+              {whatsappError && <span id="register-whatsapp-error" className="recovery-error" role="alert">{whatsappError}</span>}
+            </label>
 
             <div className="auth-field">
               <label htmlFor="password">Kata Sandi</label>

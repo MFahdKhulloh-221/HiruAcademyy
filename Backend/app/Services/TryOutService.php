@@ -44,6 +44,11 @@ class TryOutService
                 'title' => [$required, 'required', 'string', 'max:255'],
                 'status' => ['sometimes', 'required', Rule::in(['draft', 'published'])],
                 'total_passing_score' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:180'],
+                'duration_minutes' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:2147483647', function ($attribute, $value, $fail) {
+                    if (is_bool($value)) {
+                        $fail('Duration must be a positive integer.');
+                    }
+                }],
             ]);
             $model->fill($data);
             if ($model->exists && $model->isDirty('program_id') && DB::table('try_out_attempts')->where('try_out_id', $model->id)->exists()) {
@@ -52,6 +57,9 @@ class TryOutService
             $this->program($model->program_id);
             $model->save();
             if ($model->status === 'published') {
+                if ($model->questions()->where('status', '!=', 'published')->exists()) {
+                    throw ValidationException::withMessages(['status' => 'Publish requires all questions to be published.']);
+                }
                 $this->assertPublishable($model);
             }
 
@@ -128,6 +136,30 @@ class TryOutService
         }, 3);
     }
 
+    public function publishQuestions(TryOut $tryOut, array $input): array
+    {
+        $this->validateInput($input, []);
+
+        return app(MediaService::class)->locked(function () use ($tryOut) {
+            $parent = TryOut::whereKey($tryOut->id)->lockForUpdate()->firstOrFail();
+            $this->program($parent->program_id);
+            $questions = $parent->questions()->orderBy('id')->lockForUpdate()->get();
+            if ($questions->isEmpty()) {
+                throw ValidationException::withMessages(['questions' => 'At least one question required.']);
+            }
+            foreach ($questions as $question) {
+                $question->status = 'published';
+                $this->assertQuestion($question);
+            }
+            $published = $parent->questions()->where('status', 'draft')->update(['status' => 'published']);
+            if ($parent->status === 'published') {
+                $this->assertPublishable($parent);
+            }
+
+            return ['try_out_id' => $parent->id, 'published_count' => $published];
+        });
+    }
+
     public function assertPublishable(TryOut $tryOut): void
     {
         $this->program($tryOut->program_id);
@@ -161,7 +193,7 @@ class TryOutService
 
     public function payload(TryOut $tryOut): array
     {
-        return ['id' => $tryOut->id, 'program_id' => $tryOut->program_id, 'level' => strtoupper($tryOut->program->code), 'title' => $tryOut->title, 'status' => $tryOut->status, 'max_score' => 180, 'section_passing_score' => 19, 'total_passing_score' => $tryOut->total_passing_score, 'sessions' => self::SESSIONS];
+        return ['id' => $tryOut->id, 'program_id' => $tryOut->program_id, 'level' => strtoupper($tryOut->program->code), 'title' => $tryOut->title, 'status' => $tryOut->status, 'max_score' => 180, 'section_passing_score' => 19, 'total_passing_score' => $tryOut->total_passing_score, 'duration_minutes' => $tryOut->duration_minutes, 'sessions' => self::SESSIONS];
     }
 
     public function adminQuestion(TryOutQuestion $question): array

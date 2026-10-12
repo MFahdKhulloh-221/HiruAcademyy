@@ -9,7 +9,7 @@ class NotificationContent extends Model
 {
     protected $dateFormat = 'Y-m-d H:i:s.uP';
 
-    protected $fillable = ['type', 'title', 'body', 'cta_label', 'preset', 'path', 'audience', 'level', 'status', 'time'];
+    protected $fillable = ['type', 'title', 'body', 'cta_label', 'preset', 'path', 'audience', 'level', 'status', 'time', 'user_id', 'event_key'];
 
     protected $attributes = ['preset' => 'None', 'audience' => 'All', 'status' => 'draft'];
 

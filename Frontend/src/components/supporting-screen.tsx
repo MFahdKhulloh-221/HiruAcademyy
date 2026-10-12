@@ -4,6 +4,9 @@ import Link from "next/link";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { useRef, useState, type ChangeEvent } from "react";
 import { StudentAvatar } from "@/components/student-avatar";
+import { ProfileIdentity } from "@/components/profile-identity";
+import { useProfileAvatar } from "@/components/student-account-hooks";
+import { StudentHeaderActions } from "@/components/student-header-actions";
 import { LuArrowLeft, LuAward, LuBookOpen, LuCircleCheck, LuGraduationCap, LuReceipt, LuShieldCheck } from "react-icons/lu";
 import { useAuth } from "@/components/auth-provider";
 import { StudentBreadcrumb } from "@/components/student-breadcrumb";
@@ -18,6 +21,7 @@ import { PracticeScreen } from "@/components/practice-screen";
 import { useCommercialAffiliate, useCommercialInvoice, useCommercialOrder } from "@/components/commercial-hooks";
 import { ApiError, apiRequest } from "@/lib/api";
 import { commercialCode } from "@/lib/commercial-api";
+import { invoiceWhatsAppUrl } from "@/lib/admin-whatsapp";
 import type { LearningAccess, LearningProgram } from "@/lib/learning-api";
 import { supportingData, type SupportingKind } from "@/lib/supporting-mock";
 
@@ -31,6 +35,7 @@ export function SupportingScreen(props: Props) {
   if (kind === "library") return <LearningLibrary />;
   if (kind === "practice") return <PracticeScreen membership={membership} resolvedCatalog={props} />;
   return <div className="supporting-shell student-shell"><StudentNavigation membership={membership} /><main className={`supporting-main ${kind === "renewal" ? "renewal" : kind}-page`}>
+    <StudentHeaderActions membership={membership} />
     {kind === "notifications" ? <StudentNotificationsScreen /> : kind === "community" ? <StudentCommunityScreen membership={membership} /> : kind === "progress" ? <StudentProgressScreen membership={membership} /> : kind === "leaderboard" ? <StudentLeaderboardScreen /> : kind === "certificate" ? <StudentCertificateCenter /> : kind === "profile" ? <ProfileScreen membership={membership} access={props.access} /> : kind === "affiliate" ? <AffiliateScreen /> : kind === "renewal" ? <RenewalScreen {...props} /> : <EmptySupportingScreen kind={kind} />}
   </main></div>;
 }
@@ -43,35 +48,8 @@ function EmptySupportingScreen({ kind }: { kind: SupportingKind }) {
 function ProfileScreen({ membership, access }: { membership: Membership; access: LearningAccess }) {
   const { user, refreshUser } = useAuth();
   const photoInput = useRef<HTMLInputElement>(null);
-  const avatarPending = useRef(false);
-  const [avatarBusy, setAvatarBusy] = useState<"upload" | "delete" | null>(null);
-  const [avatarSuccess, setAvatarSuccess] = useState(false);
-  const [avatarError, setAvatarError] = useState("");
+  const { busy: avatarBusy, success: avatarSuccess, error: avatarError, update: updateAvatar } = useProfileAvatar();
   const hasAvatar = !!(user?.avatar || user?.avatar_resolved_url);
-
-  async function updateAvatar(file?: File) {
-    if (avatarPending.current) return;
-    setAvatarError("");
-    setAvatarSuccess(false);
-    if (file && !["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
-      setAvatarError("Pilih foto dengan format JPEG, PNG, atau WebP.");
-      return;
-    }
-    avatarPending.current = true;
-    setAvatarBusy(file ? "upload" : "delete");
-    try {
-      const body = file ? new FormData() : undefined;
-      if (file) body!.append("file", file);
-      await apiRequest("/api/student/profile/avatar", { method: file ? "POST" : "DELETE", body });
-      if (!await refreshUser()) throw new ApiError(401);
-      setAvatarSuccess(true);
-    } catch (err) {
-      setAvatarError(err instanceof ApiError ? err.status === 413 ? "Foto terlalu besar. Pilih foto yang lebih kecil." : err.status === 422 ? "Foto belum dapat digunakan. Pilih foto JPEG, PNG, atau WebP lainnya." : err.message : "Foto profil belum berhasil diperbarui. Silakan coba lagi.");
-    } finally {
-      avatarPending.current = false;
-      setAvatarBusy(null);
-    }
-  }
 
   function selectAvatar(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -110,7 +88,7 @@ function ProfileScreen({ membership, access }: { membership: Membership; access:
           target_jlpt: targetJlpt,
         }),
       });
-      await refreshUser();
+      if (!await refreshUser({ background: true })) throw new ApiError(401);
       setProfileSuccess(true);
     } catch (err) {
       setProfileError(err instanceof ApiError ? err.message : "Gagal memperbarui profil. Silakan coba lagi.");
@@ -156,11 +134,7 @@ function ProfileScreen({ membership, access }: { membership: Membership; access:
         <p>Kelola informasi akun, preferensi belajar, dan keamanan akun.</p>
       </header>
 
-      <section className="profile-identity">
-        <StudentAvatar name={user?.name ?? ""} url={user?.avatar_resolved_url} className="profile-avatar" />
-        <div>
-          <h2>{user?.name ?? ""}</h2>
-          <p>{user?.email ?? ""}</p>
+      <ProfileIdentity>
           <div className="profile-photo-actions">
             <button type="button" className="button button-secondary" disabled={!!avatarBusy} onClick={() => photoInput.current?.click()}>{avatarBusy === "upload" ? "Mengunggah..." : "Ganti Foto"}</button>
             {hasAvatar && <button type="button" className="button button-secondary" disabled={!!avatarBusy} onClick={() => { void updateAvatar(); }}>Hapus Foto</button>}
@@ -172,8 +146,7 @@ function ProfileScreen({ membership, access }: { membership: Membership; access:
               </span>
             ))}
           </div>
-        </div>
-      </section>
+      </ProfileIdentity>
 
       <section className="profile-membership">
         <div>
@@ -517,5 +490,5 @@ function RenewalInvoice({ id }: { id: string }) {
     catch (cause) { setRefreshError(cause instanceof Error ? cause.message : "Permintaan belum berhasil."); }
   }
   const labels: Record<string, string> = { draft: "Draft", awaiting_payment: "Menunggu Pembayaran", paid: "Sudah Bayar", verified: "Diverifikasi", active: "Aktif", cancelled: "Dibatalkan" };
-  return <section className="renewal-summary-card"><header className="renewal-summary-head"><h2>Invoice</h2></header>{(request.error || refreshError) && <p role="alert">{refreshError || request.error}</p>}{!invoice && !request.error && <LoadingSkeleton variant="form" label="Memuat…" />}{invoice && <><dl><div><dt>Invoice ID</dt><dd>{invoice.id}</dd></div><div><dt>Program</dt><dd>{commercialCode(invoice.program_code)}</dd></div><div><dt>Paket Belajar</dt><dd>{planLabel(invoice.plan_code)}</dd></div><div><dt>Harga</dt><dd>{money(invoice.base_price)}</dd></div><div><dt>Diskon</dt><dd>{money(invoice.discount_amount)}</dd></div><div><dt>Total</dt><dd>{money(invoice.total_price)}</dd></div><div><dt>Status</dt><dd>{labels[invoice.status] ?? invoice.status}</dd></div>{invoice.access_grant && <div><dt>Akses aktif</dt><dd>{new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta" }).format(new Date(invoice.access_grant.ends_at))}</dd></div>}</dl><div className="button-group">{invoice.status === "draft" && <button className="button button-primary" type="button" disabled={request.busy} onClick={() => void request.submit()}>Buat Invoice</button>}{invoice.status === "awaiting_payment" && <button className="button button-primary" type="button" disabled={request.busy} onClick={() => void request.markPaid()}>Sudah Bayar</button>}<button className="button button-secondary" type="button" disabled={request.busy} onClick={() => void refresh()}>Perbarui Status</button></div></>}</section>;
+  return <section className="renewal-summary-card"><header className="renewal-summary-head"><h2>Invoice</h2></header>{(request.error || refreshError) && <p role="alert">{refreshError || request.error}</p>}{!invoice && !request.error && <LoadingSkeleton variant="form" label="Memuat…" />}{invoice && <><dl><div><dt>Invoice ID</dt><dd>{invoice.id}</dd></div><div><dt>Program</dt><dd>{commercialCode(invoice.program_code)}</dd></div><div><dt>Paket Belajar</dt><dd>{planLabel(invoice.plan_code)}</dd></div><div><dt>Harga</dt><dd>{money(invoice.base_price)}</dd></div><div><dt>Diskon</dt><dd>{money(invoice.discount_amount)}</dd></div><div><dt>Total</dt><dd>{money(invoice.total_price)}</dd></div><div><dt>Status</dt><dd>{labels[invoice.status] ?? invoice.status}</dd></div>{invoice.access_grant && <div><dt>Akses aktif</dt><dd>{new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta" }).format(new Date(invoice.access_grant.ends_at))}</dd></div>}</dl><div className="button-group">{invoice.status === "draft" && <button className="button button-primary" type="button" disabled={request.busy} onClick={() => void request.submit()}>Buat Invoice</button>}{invoice.status === "awaiting_payment" && <button className="button button-primary" type="button" disabled={request.busy} onClick={() => void request.markPaid()}>Sudah Bayar</button>}<a className="button button-primary" href={invoiceWhatsAppUrl(invoice)} target="_blank" rel="noopener noreferrer">Hubungi Admin via WhatsApp</a><button className="button button-secondary" type="button" disabled={request.busy} onClick={() => void refresh()}>Perbarui Status</button></div></>}</section>;
 }

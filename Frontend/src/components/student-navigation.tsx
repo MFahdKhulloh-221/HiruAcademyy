@@ -38,7 +38,7 @@ export function resolveStudentNavKey(pathname: string): StudentNavKey | null {
   if (pathname === "/progress") return "progress";
   if (pathname === "/leaderboard") return "leaderboard";
   if (matchesFamily(pathname, "/certificate")) return "certificate";
-  if (pathname === "/notifications") return "notifications";
+  if (pathname === "/notifications" || pathname === "/notifikasi") return "notifications";
   if (pathname === "/profile/testimoni") return "testimonial";
   if (pathname === "/profile") return "profile";
   if (matchesFamily(pathname, "/renewal") || pathname === "/membership") return "membership";
@@ -71,7 +71,7 @@ function itemsFor(membership: Membership, current: StudentNavKey | null): NavIte
       { key: "leaderboard", label: "Leaderboard", href: `/leaderboard${query}`, entitlement: "available" },
       { key: "certificate", label: "Sertifikat", href: `/certificate${query}`, entitlement: free ? "locked" : "available" },
     ] },
-    { key: "notifications", label: "Notifikasi", icon: LuBell, href: `/notifications${query}`, entitlement: "available", implementation: "implemented" },
+    { key: "notifications", label: "Notifikasi", icon: LuBell, href: `/notifikasi${query}`, entitlement: "available", implementation: "implemented" },
     { label: "Profil", icon: LuUser, entitlement: "available", implementation: "implemented", children: [
       { key: "profile", label: "Profil Saya", href: `/profile${query}`, entitlement: "available" },
       { key: "testimonial", label: "Testimoni Saya", href: `/profile/testimoni${query}`, entitlement: "available" },

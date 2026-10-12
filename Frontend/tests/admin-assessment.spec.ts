@@ -34,6 +34,95 @@ test("hub uses canonical family tabs search publication and program filters", as
   await expect(row).toBeVisible();
 });
 
+test("draft Try Out reading and pending audio retain canonical preview sessions", async ({ page }) => {
+  const question = { id: 11, session: "reading", question: "Reading draft", options: { A: "First", B: "Second", C: "Third", D: "Fourth" }, correct_option: "A", explanation: "", reading_passage: "日本語の文章です。", audio_url: null, point_value: 1, sort_order: 0, status: "draft" };
+  const assessment = { id: 7, program_id: 2, title: "Draft preview", status: "draft", total_passing_score: null, questions: [question, { ...question, id: 12, session: "audio", question: "Audio draft", reading_passage: null }] };
+  await page.route("**/api/admin/try-outs", route => route.fulfill({ json: { data: [assessment] } }));
+  await page.route("**/api/admin/try-outs/7", route => route.fulfill({ json: { data: assessment } }));
+  await page.goto("/admin/try-out");
+  await page.getByRole("row").filter({ hasText: "Draft preview" }).getByRole("button", { name: "Lihat", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("button", { name: "Runner", exact: true }).click();
+  await dialog.getByRole("button", { name: "Reading / Dokkai • 1 soal", exact: true }).click();
+  await expect(dialog.getByText("日本語の文章です。", { exact: true })).toBeVisible();
+  await expect(dialog.getByRole("radio")).toHaveCount(4);
+  await dialog.getByRole("button", { name: "Audio / Choukai • 1 soal", exact: true }).click();
+  await expect(dialog.getByText("Belum ada audio.", { exact: true })).toBeVisible();
+});
+
+test("Try Out preview maps every real question ID with global numbers and responsive session grids", async ({ page }) => {
+  const codes = ["vocabulary_kanji", "grammar", "reading", "audio"];
+  const labels = ["Kosakata & Kanji", "Tata Bahasa", "Reading / Dokkai", "Audio / Choukai"];
+  const questions = codes.flatMap((session, section) => Array.from({ length: 25 }, (_, index) => ({ id: 1001 + section * 1000 + index * 7, session, question: `Persisted ${session} ${index + 1}`, options: { A: `Answer ${section}-${index}`, B: "Second", C: "Third", D: "Fourth" }, correct_option: "A", explanation: "", reading_passage: session === "reading" ? `Passage ${index + 1}` : null, audio_url: null, point_value: 1, sort_order: index + 1, status: "draft" })));
+  const assessment = { id: 7, program_id: 1, title: "Real data navigator", status: "draft", total_passing_score: null, questions: [...questions].reverse() };
+  await page.route("**/api/admin/try-outs", route => route.fulfill({ json: { data: [assessment] } }));
+  await page.route("**/api/admin/try-outs/7", route => route.fulfill({ json: { data: assessment } }));
+  const writes: string[] = [];
+  page.on("request", request => { if (new URL(request.url()).pathname.startsWith("/api/") && !["GET", "HEAD", "OPTIONS"].includes(request.method())) writes.push(request.method()); });
+  for (const width of [1440, 360]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.goto("/admin/try-out");
+    await page.getByRole("row").filter({ hasText: assessment.title }).getByRole("button", { name: "Lihat", exact: true }).click();
+    const preview = page.getByRole("region", { name: "Pratinjau Try Out" });
+    await preview.getByRole("button", { name: "Runner", exact: true }).click();
+    for (let section = 0; section < codes.length; section++) {
+      await preview.getByRole("button", { name: `${labels[section]} • 25 soal`, exact: true }).click();
+      const grid = preview.locator(".tryout-number-grid");
+      await expect(grid.getByRole("button")).toHaveText(Array.from({ length: 25 }, (_, index) => String(section * 25 + index + 1)));
+      expect(await grid.evaluate(element => getComputedStyle(element).gridTemplateColumns.split(" ").length)).toBe(5);
+      for (let index = 0; index < 25; index++) {
+        const number = section * 25 + index + 1;
+        const question = questions[number - 1];
+        const button = grid.getByRole("button", { name: `Soal ${number}`, exact: true });
+        await button.click();
+        await expect(preview.getByRole("heading", { name: `Soal ${number} dari 100`, exact: true })).toBeVisible();
+        await expect(preview.locator(".tryout-focus-question h2")).toHaveText(question.question);
+        await expect(preview.getByRole("radio").first()).toHaveAttribute("name", new RegExp(`-${question.id}$`));
+        await expect(button).toHaveAttribute("aria-current", "step");
+        await expect(button).not.toHaveClass(/answered/);
+        await preview.getByRole("radio").first().check();
+        await expect(button).toHaveClass(/answered/);
+        if (section === 2) await expect(preview.locator(".reading-passage p[lang='ja']")).toHaveText(question.reading_passage!);
+        if (section === 3) await expect(preview.getByText("Belum ada audio.", { exact: true })).toBeVisible();
+      }
+    }
+    await preview.getByRole("button", { name: `${labels[0]} • 25 soal`, exact: true }).click();
+    await expect(preview.getByRole("radio").first()).toBeChecked();
+    await expect(preview.locator(".tryout-focus-status")).toContainText("100/100");
+    const layout = await preview.evaluate(element => {
+      const grid = element.querySelector(".tryout-number-grid")!.getBoundingClientRect();
+      const sessions = [...element.querySelectorAll(".tryout-session-list button")].map(button => { const rect = button.getBoundingClientRect(); return { x: rect.x, y: rect.y, right: rect.right, bottom: rect.bottom }; });
+      return { gridBottom: grid.bottom, sessions, overflow: element.scrollWidth > element.clientWidth };
+    });
+    const [a, b, c, d] = layout.sessions;
+    expect(a.y).toBeGreaterThanOrEqual(layout.gridBottom);
+    expect(a.y).toBe(b.y); expect(c.y).toBe(d.y); expect(a.x).toBe(c.x); expect(b.x).toBe(d.x);
+    expect(c.y).toBeGreaterThanOrEqual(a.bottom);
+    expect(layout.overflow).toBe(false);
+    await expectNoHorizontalOverflow(page);
+    await page.keyboard.press("Escape");
+  }
+  expect(writes).toEqual([]);
+});
+
+test("Try Out preview uses unequal actual session counts without sample fallback", async ({ page }) => {
+  const questions = ["vocabulary_kanji", "vocabulary_kanji", "grammar", "audio"].map((session, index) => ({ id: 401 + index * 13, session, question: `Actual ${index}`, options: { A: "First", B: "Second", C: "Third", D: "Fourth" }, correct_option: "A", sort_order: index + 1, status: "draft" }));
+  const assessment = { id: 7, program_id: 1, title: "Unequal actual counts", status: "draft", total_passing_score: null, questions };
+  await page.route("**/api/admin/try-outs", route => route.fulfill({ json: { data: [assessment] } }));
+  await page.route("**/api/admin/try-outs/7", route => route.fulfill({ json: { data: assessment } }));
+  await page.goto("/admin/try-out");
+  await page.getByRole("row").filter({ hasText: assessment.title }).getByRole("button", { name: "Lihat", exact: true }).click();
+  const preview = page.getByRole("region", { name: "Pratinjau Try Out" });
+  await preview.getByRole("button", { name: "Runner", exact: true }).click();
+  await expect(preview.locator(".tryout-number-grid button")).toHaveText(["1", "2"]);
+  await preview.getByRole("button", { name: "Reading / Dokkai • 0 soal", exact: true }).click();
+  await expect(preview.locator(".tryout-number-grid button")).toHaveCount(0);
+  await expect(preview.getByText("Belum ada data", { exact: true })).toBeVisible();
+  await preview.getByRole("button", { name: "Audio / Choukai • 1 soal", exact: true }).click();
+  await expect(preview.locator(".tryout-number-grid button")).toHaveText(["4"]);
+  await expect(preview.locator(".tryout-focus-question h2")).toHaveText("Actual 3");
+});
+
 test("create and stored assessment hydrate without React or page errors", async ({ page }) => {
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));

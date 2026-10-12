@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { StudentAvatar } from "@/components/student-avatar";
+import { ProfileIdentity } from "@/components/profile-identity";
 import { StudentNavigation } from "@/components/student-navigation";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { useLearningCatalog } from "@/components/learning-hooks";
@@ -87,10 +87,11 @@ export default function StudentTestimonialPage() {
   }
 
   if (!catalog.data) return <main className="supporting-main">{catalog.error ? <p role="alert">{catalog.error}</p> : <LoadingSkeleton variant="profile" label="Memuat…" />}{catalog.error && <button type="button" onClick={catalog.retry}>Coba Lagi</button>}</main>;
+  const membership = learningMembership(catalog.data.access);
   const status = locked ? "Disetujui" : testimonial?.moderation_status === "pending" ? "Menunggu Review" : testimonial?.moderation_status === "rejected" ? "Perlu Perbaikan" : "";
-  return <div className="supporting-shell student-shell"><StudentNavigation membership={learningMembership(catalog.data.access)} /><main className="supporting-main profile-page student-testimonial-page">
+  return <div className="supporting-shell student-shell"><StudentNavigation membership={membership} /><main className="supporting-main profile-page student-testimonial-page">
     <header className="supporting-heading"><p className="dash-kicker">TESTIMONI SAYA</p><h1>Bagikan pengalamanmu belajar bersama Hiru Academy.</h1></header>
-    <section className="profile-identity"><StudentAvatar name={user?.name ?? ""} url={user?.avatar_resolved_url} className="profile-avatar" /><div><h2>{user?.name}</h2><p>{user?.email}</p><p>Foto ini mengikuti foto profil akunmu.</p><Link className="button button-secondary" href="/profile#pengaturan">Ubah Foto Profil</Link></div></section>
+    <ProfileIdentity note="Foto ini mengikuti foto profil akunmu."><Link className="button button-secondary" href={`/profile?membership=${membership}#pengaturan`}>Ubah Foto Profil</Link></ProfileIdentity>
     {loading ? <LoadingSkeleton variant="form" label="Memuat testimoni…" /> : loadError ? <div role="alert">{loadError} <button type="button" className="button" onClick={() => { setLoading(true); setVersion(value => value + 1); }}>Coba lagi</button></div> : <form className="profile-settings-card student-testimonial-form" onSubmit={save} aria-busy={busy}>
       {status && <div role="status"><strong>{status}</strong>{locked ? <p>{approvedMessage}</p> : testimonial?.moderation_status === "pending" ? <p>Testimonimu sedang diperiksa oleh tim Hiru Academy.</p> : testimonial?.moderation_note && <><h2>Catatan Admin</h2><p>{testimonial.moderation_note}</p></>}</div>}
       <label>Nama<input value={user?.name ?? ""} readOnly /></label>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { StudentNavigation } from "@/components/student-navigation";
@@ -8,12 +8,26 @@ import { ChapterAssessment } from "@/components/chapter-assessment";
 import { useLearningRequest, type LearningCatalog } from "@/components/learning-hooks";
 import { learningCatalog, learningChapters, learningMembership, programSlug } from "@/lib/learning-api";
 import type { Membership } from "@/lib/dashboard-mock";
+import { chapterAttemptPath, readAttempt } from "@/lib/assessment-attempt";
+import { ApiError } from "@/lib/api";
 
 const practiceCategories = ["Semua", "Kosakata", "Kanji", "Tata Bahasa", "Audio", "Reading"] as const;
 type PracticeCat = (typeof practiceCategories)[number];
 
 export function PracticeScreen({ membership, resolvedCatalog }: { membership: Membership; resolvedCatalog?: LearningCatalog }) {
   const [selected, setSelected] = useState<{ level: string; chapterSlug: string; kind: "audio" | "reading" }>();
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams(window.location.search);
+      const level = params.get("practice_level");
+      const chapterSlug = params.get("practice_chapter");
+      const kind = params.get("practice_kind");
+      if (level && chapterSlug && /^chapter-[1-9]\d*$/.test(chapterSlug) && (kind === "audio" || kind === "reading")) {
+        setSelected({ level, chapterSlug, kind });
+      }
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
   const [category, setCategory] = useState<PracticeCat>("Semua");
   const [levelFilter, setLevelFilter] = useState<string>("all");
 
@@ -21,10 +35,37 @@ export function PracticeScreen({ membership, resolvedCatalog }: { membership: Me
     const catalog = resolvedCatalog ?? await learningCatalog(signal);
     const programs = catalog.programs.filter(program => program.family === "jlpt");
     const chapters = await Promise.all(programs.map(async program => ({ program, chapters: await learningChapters(program.id, signal) })));
-    return { membership: learningMembership(catalog.access), chapters };
+    const params = new URLSearchParams(window.location.search);
+    const id = params.get("attempt");
+    let restored: { level: string; chapterSlug: string; kind: "audio" | "reading" } | undefined;
+    if (id && !params.has("practice_chapter")) {
+      if (!/^[1-9]\d*$/.test(id)) throw new ApiError(404);
+      for (const { program, chapters: items } of chapters) {
+        for (const chapter of items.filter(item => ["full", "preview"].includes(item.access))) {
+          try {
+            const attempt = await readAttempt(`${chapterAttemptPath(program.id, chapter.id)}/${id}`, signal);
+            if (String(attempt.id) !== id || attempt.chapter_id !== chapter.id || (attempt.kind !== "audio" && attempt.kind !== "reading")) throw new ApiError(404);
+            restored = { level: programSlug(program.code), chapterSlug: `chapter-${chapter.chapter_number}`, kind: attempt.kind };
+            break;
+          } catch (error) {
+            signal.throwIfAborted();
+            if (!(error instanceof ApiError) || error.status !== 404) throw error;
+          }
+        }
+        if (restored) break;
+      }
+      if (!restored) throw new ApiError(404);
+    }
+    return { membership: learningMembership(catalog.access), chapters, restored };
   }, [resolvedCatalog]);
 
   const catalog = useLearningRequest(load, "practice-chapters");
+  useEffect(() => {
+    if (!catalog.data?.restored) return;
+    const restored = catalog.data.restored;
+    const timer = window.setTimeout(() => setSelected(restored), 0);
+    return () => window.clearTimeout(timer);
+  }, [catalog.data]);
 
   const filteredChapters = (catalog.data?.chapters ?? [])
     .filter(({ program }) => levelFilter === "all" || program.code.toLowerCase() === levelFilter.toLowerCase())
@@ -69,10 +110,15 @@ export function PracticeScreen({ membership, resolvedCatalog }: { membership: Me
 
         {selected ? (
           <>
-            <button type="button" className="practice-back" onClick={() => setSelected(undefined)}>
+            <button type="button" className="practice-back" onClick={() => {
+              setSelected(undefined);
+              const url = new URL(window.location.href);
+              for (const key of ["practice_level", "practice_chapter", "practice_kind", "attempt", "start"]) url.searchParams.delete(key);
+              window.history.replaceState(null, "", url);
+            }}>
               Kembali ke Daftar Latihan
             </button>
-            <ChapterAssessment {...selected} />
+            <ChapterAssessment {...selected} autoStart />
           </>
         ) : (
           <>
@@ -125,13 +171,16 @@ export function PracticeScreen({ membership, resolvedCatalog }: { membership: Me
                       <button
                         type="button"
                         className="button button-primary"
-                        onClick={() =>
-                          setSelected({
-                            level: programSlug(program.code),
-                            chapterSlug: `chapter-${chapter.chapter_number}`,
-                            kind: assessmentKind,
-                          })
-                        }
+                        onClick={() => {
+                          const selection = { level: programSlug(program.code), chapterSlug: `chapter-${chapter.chapter_number}`, kind: assessmentKind };
+                          const url = new URL(window.location.href);
+                          url.searchParams.set("practice_level", selection.level);
+                          url.searchParams.set("practice_chapter", selection.chapterSlug);
+                          url.searchParams.set("practice_kind", selection.kind);
+                          url.searchParams.delete("attempt");
+                          window.history.replaceState(null, "", url);
+                          setSelected(selection);
+                        }}
                       >
                         Mulai Latihan
                       </button>

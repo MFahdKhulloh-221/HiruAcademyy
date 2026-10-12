@@ -21,6 +21,7 @@ export function useCommercialOrder(level: string, plan: "lms" | "sensei") {
   useEffect(() => { let active = true; void commercialData<Offer[]>("/api/public/offers").then(rows => { if (active) setOffers(rows); }).catch(error => { if (active) setError(error.message); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, []);
   const offer = offers.find(row => row.program.code.toUpperCase() === level.toUpperCase() && row.plan_code === plan && row.base_price !== null && row.program.code !== "n1");
   async function create(referral?: string) {
+    if (invoice) return invoice;
     if (inFlight.current || !offer) return null;
     inFlight.current = true; setBusy(true); setError("");
     try { const row = await createCommercialDraft({ level, plan, referral }); setInvoice(row); return row; }

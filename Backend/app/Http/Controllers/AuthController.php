@@ -5,14 +5,18 @@ namespace App\Http\Controllers;
 use App\Http\Requests\ProfileRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Services\NotificationService;
 use App\Support\Identity;
 use Illuminate\Auth\Events\PasswordReset;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password as PasswordRule;
+use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
@@ -21,7 +25,17 @@ class AuthController extends Controller
         $user = new User($request->safe()->only(['name', 'email', 'whatsapp', 'password', 'country', 'target_jlpt']));
         $user->role = 'student';
         $user->account_status = 'active';
-        $user->save();
+        try {
+            DB::transaction(function () use ($user) {
+                $user->save();
+                app(NotificationService::class)->welcome($user);
+            });
+        } catch (UniqueConstraintViolationException $exception) {
+            if (User::where('whatsapp_normalized', Identity::phone($user->whatsapp))->exists()) {
+                throw ValidationException::withMessages(['whatsapp' => 'Nomor WhatsApp sudah digunakan. Silakan gunakan nomor lain.']);
+            }
+            throw $exception;
+        }
         Auth::guard('web')->login($user);
         $request->session()->regenerate();
 
@@ -48,6 +62,7 @@ class AuthController extends Controller
             return response()->json(['message' => 'Email/WhatsApp atau kata sandi tidak sesuai.'], 422);
         }
 
+        app(NotificationService::class)->welcome($user);
         Auth::guard('web')->login($user);
         $request->session()->regenerate();
 

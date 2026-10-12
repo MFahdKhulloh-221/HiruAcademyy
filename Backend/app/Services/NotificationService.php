@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Invoice;
 use App\Models\NotificationContent;
 use App\Models\NotificationRead;
 use App\Models\User;
@@ -31,6 +32,43 @@ class NotificationService
     ];
 
     public function __construct(private EntitlementService $entitlements) {}
+
+    public function welcome(User $user): void
+    {
+        if ($user->role !== 'student') {
+            return;
+        }
+        $free = $this->entitlements->effectiveAccess($user)['source_grants'] === [];
+        $pending = Invoice::where('user_id', $user->id)
+            ->whereIn('status', ['draft', 'awaiting_payment', 'paid', 'verified'])
+            ->whereHas('program', fn ($query) => $query->whereIn('code', ['n5', 'n4', 'n3', 'n2', 'n1']))->exists();
+        $body = "Selamat datang, {$user->name}!\n\n";
+        if ($free) {
+            $body .= "Saat ini akun Anda memiliki akses Free Member.\n\n";
+        }
+        if ($free && $pending) {
+            $body .= "Apabila Anda telah melakukan pemesanan paket pembelajaran JLPT, silakan menghubungi Admin HiruAcademy melalui WhatsApp untuk melakukan konfirmasi pembayaran.\n\nSetelah pembayaran berhasil diverifikasi, akses pembelajaran Anda akan diperbarui sesuai level dan paket yang dipilih.\n\n";
+        }
+        $body .= 'Terima kasih telah bergabung dengan HiruAcademy. Selamat belajar!';
+        $this->personal($user, 'welcome', 'Selamat Datang di HiruAcademy!', $body);
+    }
+
+    public function invoiceReminder(User $user, Invoice $invoice): void
+    {
+        if (! in_array($invoice->program->code, ['n5', 'n4', 'n3', 'n2', 'n1'], true)) {
+            return;
+        }
+        $this->personal($user, 'invoice-confirmation:'.$invoice->id, 'Konfirmasi Pembayaran',
+            'Silakan menghubungi Admin HiruAcademy melalui WhatsApp untuk melakukan konfirmasi pembayaran.');
+    }
+
+    private function personal(User $user, string $event, string $title, string $body): void
+    {
+        NotificationContent::firstOrCreate(['user_id' => $user->id, 'event_key' => $event], [
+            'type' => 'Akun', 'title' => $title, 'body' => $body,
+            'status' => 'published', 'time' => now(),
+        ]);
+    }
 
     public function save(array $input, ?NotificationContent $content = null): NotificationContent
     {
@@ -105,20 +143,24 @@ class NotificationService
         ];
         $allLevels = array_values(array_intersect(self::LEVELS, array_column(array_merge(...array_values($plans)), 'program_code')));
 
-        return NotificationContent::query()->where('status', 'published')->where(function (Builder $query) use ($sources, $plans, $allLevels) {
-            $query->where(function (Builder $query) use ($allLevels) {
-                $query->where('audience', 'All')->where(fn (Builder $query) => $query->whereNull('level')->orWhereIn('level', $allLevels));
+        return NotificationContent::query()->where('status', 'published')->where(function (Builder $query) use ($user, $sources, $plans, $allLevels) {
+            $query->where('user_id', $user->id)->orWhere(function (Builder $query) use ($sources, $plans, $allLevels) {
+                $query->whereNull('user_id')->where(function (Builder $query) use ($sources, $plans, $allLevels) {
+                    $query->where(function (Builder $query) use ($allLevels) {
+                        $query->where('audience', 'All')->where(fn (Builder $query) => $query->whereNull('level')->orWhereIn('level', $allLevels));
+                    });
+                    if ($sources === []) {
+                        $query->orWhere(fn (Builder $query) => $query->where('audience', 'Free')->whereNull('level'));
+                    }
+                    foreach ($plans as $audience => $grants) {
+                        if ($grants !== []) {
+                            $levels = array_values(array_intersect(self::LEVELS, array_column($grants, 'program_code')));
+                            $query->orWhere(fn (Builder $query) => $query->where('audience', $audience)
+                                ->where(fn (Builder $query) => $query->whereNull('level')->orWhereIn('level', $levels)));
+                        }
+                    }
+                });
             });
-            if ($sources === []) {
-                $query->orWhere(fn (Builder $query) => $query->where('audience', 'Free')->whereNull('level'));
-            }
-            foreach ($plans as $audience => $grants) {
-                if ($grants !== []) {
-                    $levels = array_values(array_intersect(self::LEVELS, array_column($grants, 'program_code')));
-                    $query->orWhere(fn (Builder $query) => $query->where('audience', $audience)
-                        ->where(fn (Builder $query) => $query->whereNull('level')->orWhereIn('level', $levels)));
-                }
-            }
         });
     }
 

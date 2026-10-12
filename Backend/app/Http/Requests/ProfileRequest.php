@@ -26,6 +26,11 @@ class ProfileRequest extends FormRequest
         $this->merge($values);
     }
 
+    public function messages(): array
+    {
+        return ['whatsapp_normalized.unique' => 'Nomor WhatsApp sudah digunakan. Silakan gunakan nomor lain.'];
+    }
+
     public function rules(): array
     {
         $update = $this->isMethod('PATCH');

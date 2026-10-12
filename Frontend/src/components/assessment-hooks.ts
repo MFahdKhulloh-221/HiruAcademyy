@@ -58,7 +58,7 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
         if (replaceAnswers || attempt.status === "completed") latestAnswers.current = attempt.answers;
         setState(previous => ({ requestKey, attempt, answers: replaceAnswers || attempt.status === "completed" ? attempt.answers : previous.answers, loadingAttempt: false, busy: false }));
       }
-      return attempt;
+      return version === generation.current ? attempt : undefined;
     } catch (error) {
       if (version === generation.current) setState(previous => ({ ...previous, busy: false, error: error instanceof Error ? error.message : new ApiError(0).message }));
       return undefined;
@@ -73,6 +73,10 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
       persistence.current = new AttemptPersistence(attempt, `${path}/${attempt.id}`, domain);
       const url = new URL(window.location.href);
       url.searchParams.set("attempt", String(attempt.id));
+      if (domain === "tryout") {
+        url.searchParams.delete("tryout_stage");
+        url.searchParams.delete("tryout_question");
+      }
       if (scope) {
         url.searchParams.set("attempt_scope", scope);
         url.searchParams.set(`mini_attempt_${scope}`, String(attempt.id));
@@ -90,17 +94,28 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
     latestAnswers.current = answers;
     const version = generation.current;
     const saved = ++saveVersion.current;
-    setState(previous => ({ ...previous, answers, busy: domain === "tryout" ? true : previous.busy, error: undefined }));
+    setState(previous => ({ ...previous, answers, busy: true, error: undefined }));
     persistence.current.save(answers).then(attempt => {
-      if ((domain === "tryout" || scope) && version === generation.current && saved === saveVersion.current && !pending.current) {
+      if (version === generation.current && saved === saveVersion.current && !pending.current) {
         if (attempt.status === "completed") latestAnswers.current = attempt.answers;
         setState(previous => ({ ...previous, attempt, answers: attempt.status === "completed" ? attempt.answers : previous.answers, busy: false }));
       }
     }).catch(error => {
-      if ((domain === "tryout" || scope) && version === generation.current && saved === saveVersion.current && !pending.current) {
+      if (version === generation.current && saved === saveVersion.current && !pending.current) {
         setState(previous => ({ ...previous, busy: false, error: error instanceof Error ? error.message : new ApiError(0).message }));
       }
     });
+  }
+  async function retrySave() {
+    if (!persistence.current || !current || current.busy || pending.current) return;
+    return run(() => persistence.current!.save(latestAnswers.current));
+  }
+  async function synchronize() {
+    if (domain !== "tryout" || !persistence.current || !current || pending.current) return;
+    pending.current = true;
+    const result = await run(() => persistence.current!.save(latestAnswers.current));
+    pending.current = false;
+    return result;
   }
   async function finishSession() {
     if (!persistence.current || !current || current.busy || pending.current) return;
@@ -116,9 +131,16 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
     pending.current = false;
     return result;
   }
+  async function expire() {
+    if (domain !== "tryout" || !persistence.current || !current) return;
+    pending.current = true;
+    const result = await run(() => persistence.current!.expire());
+    pending.current = false;
+    return result;
+  }
   async function review() {
     if (current?.attempt?.status !== "completed") return;
     return run(() => readAttempt(`${path}/${current.attempt!.id}/review`));
   }
-  return { attempt: current?.attempt, answers: current?.answers ?? {}, loadingAttempt, busy: current?.busy ?? false, submitting: pending.current && Boolean(current?.busy), error: current?.error, start, answer, finishSession, submit, review };
+  return { attempt: current?.attempt, answers: current?.answers ?? {}, loadingAttempt, busy: current?.busy ?? false, submitting: pending.current && Boolean(current?.busy), error: current?.error, start, answer, retrySave, synchronize, finishSession, submit, expire, review };
 }

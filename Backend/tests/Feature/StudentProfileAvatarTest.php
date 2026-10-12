@@ -47,7 +47,7 @@ class StudentProfileAvatarTest extends TestCase
         $first = $this->upload()->assertOk();
         $old = $first->json('data.avatar');
         $this->assertTrue(app(MediaService::class)->managed($old, 'image'));
-        $this->getJson('/api/me')->assertOk()->assertJsonPath('data.avatar', $old)->assertJsonPath('data.avatar_resolved_url', $first->json('data.avatar_resolved_url'));
+        $this->actingAs($owner->refresh())->getJson('/api/me')->assertOk()->assertJsonPath('data.avatar', $old)->assertJsonPath('data.avatar_resolved_url', $first->json('data.avatar_resolved_url'));
         Storage::disk('public')->assertExists($old);
         $next = $this->upload()->assertOk()->json('data.avatar');
         $this->assertNotSame($old, $next);

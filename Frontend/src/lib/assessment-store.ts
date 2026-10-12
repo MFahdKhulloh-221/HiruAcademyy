@@ -4,6 +4,7 @@ import { apiRequest } from "@/lib/api";
 import { useLearningRequest } from "@/components/learning-hooks";
 import { loadAdminTryOuts } from "@/lib/admin-tryout-api";
 import { assessmentSessionLabels, assessmentSessions } from "@/lib/assessment-attempt";
+import { jlptTryoutSessions } from "@/lib/tryout-mock";
 import type { Assessment } from "@/lib/admin-assessment-store";
 
 export type PublishedAssessmentOption = { id: string; label: string };
@@ -18,5 +19,5 @@ export function readPublishedAssessments() { return empty; }
 export function usePublishedAssessments() { return useLearningRequest(load, "published-assessments").data ?? empty; }
 export async function loadCanonicalAssessments(signal?: AbortSignal): Promise<Assessment[]> {
   const items = await loadAdminTryOuts(signal);
-  return items.map(item => ({ id: item.id, type: "tryout", title: item.title, description: "", level: item.context, status: item.status, updatedAt: "", sections: assessmentSessions.map((id, index) => ({ id, name: assessmentSessionLabels[index], maxScore: 45 })), questions: item.questions.map(question => ({ id: question.id, prompt: question.prompt, explanation: question.explanation, imageUrl: "", audioUrl: question.audioUrl ?? "", sectionId: assessmentSessions[assessmentSessionLabels.indexOf(question.section as typeof assessmentSessionLabels[number])], options: question.answers.map((text, index) => ({ id: ["A", "B", "C", "D"][index], text, isCorrect: index === question.correctAnswer })) })) }));
+  return items.map(item => ({ id: item.id, type: "tryout", title: item.title, description: "", level: item.context, status: item.status, updatedAt: "", sections: assessmentSessions.map((id, index) => ({ id, name: assessmentSessionLabels[index], maxScore: 45 })), questions: item.questions.map(question => ({ id: question.id, prompt: question.prompt, explanation: question.explanation, imageUrl: "", audioUrl: question.audioUrl ?? "", sectionId: assessmentSessions[jlptTryoutSessions.indexOf(question.section as typeof jlptTryoutSessions[number])], options: question.answers.map((text, index) => ({ id: ["A", "B", "C", "D"][index], text, isCorrect: index === question.correctAnswer })) })) }));
 }

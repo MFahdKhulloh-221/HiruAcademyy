@@ -89,6 +89,10 @@ class AssessmentRaceTest extends TestCase
         $this->student->forceFill(['role' => 'student', 'account_status' => 'active'])->save();
         $options = ['A' => 'One', 'B' => 'Two', 'C' => 'Three', 'D' => 'Four'];
         if ($kind === 'try_out') {
+            $this->assertSame('hiru_backend_test_gamification_final_20261008', DB::selectOne('SELECT current_schema() AS name')->name);
+            if (! Schema::hasColumn('try_out_attempts', 'expires_at')) {
+                (require database_path('migrations/2026_10_11_000001_add_try_out_duration_and_attempt_deadline.php'))->up();
+            }
             $content = app(TryOutService::class);
             $this->tryOut = $content->save(['program_id' => $program->id, 'title' => 'Race '.bin2hex(random_bytes(8))]);
             foreach (array_keys(TryOutService::SESSIONS) as $session) {
@@ -148,7 +152,11 @@ try {
         $service = app(App\Services\TryOutAttemptService::class);
         $parent = App\Models\TryOut::findOrFail($f['parent']);
         $attempt = App\Models\TryOutAttempt::findOrFail($f['id']);
-        $result = $save ? $service->save($user, $parent, $attempt, [], $f['revision'] - 1, false) : $service->submit($user, $parent, $attempt, $f['revision']);
+        if (getenv('RACE_OPERATION') === 'refresh') {
+            $result = $service->refresh($user, $parent, $attempt);
+        } else {
+            $result = $save ? $service->save($user, $parent, $attempt, [array_key_first($f['answers']) => 'A'], $f['revision'] - 1, false) : $service->submit($user, $parent, $attempt, $f['revision']);
+        }
     } else {
         $service = app(App\Services\LearningAttemptService::class);
         $program = App\Models\Program::findOrFail($f['program']);
@@ -171,12 +179,17 @@ PHP;
     {
         $fixture = $this->fixture($kind, $crossDeadline ? false : $expired);
         if ($crossDeadline) {
-            DB::table('learning_attempts')->where('id', $fixture['id'])->update(['created_at' => now()->utc()->subSeconds(55)->format('Y-m-d H:i:sP')]);
-            $this->assertTrue(now()->utc()->lessThan(LearningAttempt::findOrFail($fixture['id'])->created_at->copy()->utc()->addMinute()));
+            if ($kind === 'try_out') {
+                $expiresAt = now()->utc()->addSeconds(3);
+                DB::table('try_out_attempts')->where('id', $fixture['id'])->update(['expires_at' => $expiresAt->format('Y-m-d H:i:sP')]);
+            } else {
+                DB::table('learning_attempts')->where('id', $fixture['id'])->update(['created_at' => now()->utc()->subSeconds(55)->format('Y-m-d H:i:sP')]);
+                $this->assertTrue(now()->utc()->lessThan(LearningAttempt::findOrFail($fixture['id'])->created_at->copy()->utc()->addMinute()));
+            }
             $fixture['expired'] = true;
         }
         $names = ['race_'.bin2hex(random_bytes(8)), 'race_'.bin2hex(random_bytes(8))];
-        $workers = [$this->worker($fixture, 'submit', $names[0]), $this->worker($fixture, $staleSave ? 'save' : 'submit', $names[1])];
+        $workers = [$this->worker($fixture, 'submit', $names[0]), $this->worker($fixture, $kind === 'try_out' && $crossDeadline && ! $staleSave ? 'refresh' : ($staleSave ? 'save' : 'submit'), $names[1])];
         DB::beginTransaction();
         DB::table($fixture['table'])->where('id', $fixture['id'])->lockForUpdate()->first();
         try {
@@ -197,7 +210,7 @@ PHP;
             } while (microtime(true) < $deadline);
             $this->assertCount(2, $blocked, 'Both separate PHP workers must block on the assessment row lock.');
             if ($crossDeadline) {
-                $expiresAt = LearningAttempt::findOrFail($fixture['id'])->created_at->copy()->utc()->addMinute();
+                $expiresAt = $kind === 'try_out' ? TryOutAttempt::findOrFail($fixture['id'])->expires_at : LearningAttempt::findOrFail($fixture['id'])->created_at->copy()->utc()->addMinute();
                 while (now()->utc()->lessThan($expiresAt)) {
                     usleep(20000);
                 }
@@ -214,7 +227,7 @@ PHP;
             if (! $staleSave || $kind === 'mini') {
                 $this->assertEquals($results[0], $results[1]);
             } else {
-                $this->assertContains($results[1]['http'], $kind === 'try_out' ? [409] : [200, 409]);
+                $this->assertContains($results[1]['http'], $kind === 'try_out' && ! $crossDeadline ? [409] : [200, 409]);
                 if ($results[1]['http'] === 200) {
                     $this->assertEquals($results[0], $results[1]);
                 }
@@ -261,6 +274,18 @@ PHP;
     public function test_mini_expired_double_submit(): void
     {
         $this->race('mini', false);
+    }
+
+    public function test_try_out_manual_submit_expiry_read_collision_after_lock_wait(): void
+    {
+        $this->race('try_out', false, true, true);
+        $this->assertSame(1, DB::table('gamification_rewards')->where('user_id', $this->student->id)->where('reward_key', 'like', 'tryout:%')->count());
+    }
+
+    public function test_try_out_late_autosave_submit_collision_after_lock_wait(): void
+    {
+        $this->race('try_out', true, true, true);
+        $this->assertSame(1, DB::table('gamification_rewards')->where('user_id', $this->student->id)->where('reward_key', 'like', 'tryout:%')->count());
     }
 
     public function test_try_out_double_submit_manual_automatic_collision(): void

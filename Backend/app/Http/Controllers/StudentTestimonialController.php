@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Testimonial;
 use App\Models\User;
 use App\Services\MediaService;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\ValidationException;
@@ -30,7 +31,9 @@ class StudentTestimonialController extends Controller
         $payload = app(MediaService::class)->locked(function () use ($request, $data) {
             $user = User::query()->lockForUpdate()->findOrFail($request->user()->id);
             $testimonial = $user->testimonial()->lockForUpdate()->first() ?? new Testimonial;
-            abort_if($testimonial->exists && $testimonial->moderation_status === 'approved', 409, 'Testimoni yang sudah disetujui tidak dapat diedit. Hubungi admin jika ingin melakukan perubahan.');
+            if ($testimonial->exists && $testimonial->moderation_status === 'approved') {
+                throw new HttpResponseException(response()->json(['message' => 'Testimoni yang sudah disetujui tidak dapat diedit. Hubungi admin jika ingin melakukan perubahan.'], 409));
+            }
             $testimonial->forceFill([
                 'user_id' => $user->id,
                 'source' => 'student',

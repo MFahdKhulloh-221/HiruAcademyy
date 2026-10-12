@@ -63,7 +63,7 @@ export default function TestimonialsPage() {
           </div>
           <div className="testimonial-video-grid">
             {testimonialVideos.map((testimonial) => (
-              <article key={testimonial.name}>
+              <article key={testimonial.id}>
                 <div className="testimonial-video-frame">
                   {testimonial.media.kind === "youtube" ? <iframe title={testimonial.title} src={testimonial.media.src} loading="lazy" referrerPolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation" allow="fullscreen; picture-in-picture" allowFullScreen style={{ width: "100%", height: "100%", border: 0 }} /> : <video controls preload="metadata" aria-label={testimonial.title} poster={testimonial.posterSrc || undefined} src={testimonial.media.src} />}
                 </div>

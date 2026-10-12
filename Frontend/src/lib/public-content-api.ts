@@ -92,7 +92,8 @@ export function testimonialVideo(value: string | null | undefined, resolved?: st
   const url = new URL(source);
   const youtube = ["youtube.com", "www.youtube.com", "m.youtube.com", "youtube-nocookie.com", "www.youtube-nocookie.com"].includes(url.hostname);
   if (youtube || url.hostname === "youtu.be") {
-    const id = url.hostname === "youtu.be" ? url.pathname.slice(1) : url.pathname === "/watch" ? url.searchParams.get("v") : /^\/(?:embed|shorts)\/([^/]+)$/.exec(url.pathname)?.[1];
+    const pathname = url.pathname.replace(/\/$/, "");
+    const id = url.hostname === "youtu.be" ? pathname.slice(1) : pathname === "/watch" ? url.searchParams.get("v") : /^\/(?:embed|shorts)\/([^/]+)$/.exec(pathname)?.[1];
     return id && /^[A-Za-z0-9_-]{11}$/.test(id) ? { kind: "youtube" as const, src: `https://www.youtube-nocookie.com/embed/${id}` } : null;
   }
   return { kind: "native" as const, src: source };

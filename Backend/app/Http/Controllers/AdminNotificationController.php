@@ -13,7 +13,7 @@ class AdminNotificationController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        return response()->json(['data' => NotificationContent::orderByDesc('id')->get()]);
+        return response()->json(['data' => NotificationContent::whereNull('user_id')->orderByDesc('id')->get()]);
     }
 
     public function store(Request $request): JsonResponse
@@ -23,12 +23,12 @@ class AdminNotificationController extends Controller
 
     public function show(Request $request): JsonResponse
     {
-        return response()->json(['data' => NotificationContent::findOrFail($this->notifications->id($request->route('notification')))]);
+        return response()->json(['data' => NotificationContent::whereNull('user_id')->findOrFail($this->notifications->id($request->route('notification')))]);
     }
 
     public function update(Request $request): JsonResponse
     {
-        $content = NotificationContent::findOrFail($this->notifications->id($request->route('notification')));
+        $content = NotificationContent::whereNull('user_id')->findOrFail($this->notifications->id($request->route('notification')));
 
         return response()->json(['data' => $this->notifications->save($this->input($request), $content)]);
     }
@@ -48,7 +48,7 @@ class AdminNotificationController extends Controller
 
     public function destroy(Request $request): JsonResponse
     {
-        NotificationContent::findOrFail($this->notifications->id($request->route('notification')))->delete();
+        NotificationContent::whereNull('user_id')->findOrFail($this->notifications->id($request->route('notification')))->delete();
 
         return response()->json(null, 204);
     }

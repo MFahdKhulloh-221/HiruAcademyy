@@ -41,15 +41,21 @@ class TryOutAttemptService
                 }
             }
 
-            return TryOutAttempt::create(['user_id' => $user->id, 'try_out_id' => $parent->id, 'status' => 'in_progress', 'content_snapshot' => $questions, 'grading_snapshot' => ['questions' => $grading, 'total_passing_score' => $parent->total_passing_score], 'answers' => [], 'completed_sessions' => [], 'current_session' => 0, 'revision' => 0, 'started_at' => now()])->fresh();
+            $startedAt = now();
+
+            return TryOutAttempt::create(['user_id' => $user->id, 'try_out_id' => $parent->id, 'status' => 'in_progress', 'content_snapshot' => $questions, 'grading_snapshot' => ['questions' => $grading, 'total_passing_score' => $parent->total_passing_score], 'answers' => [], 'completed_sessions' => [], 'current_session' => 0, 'revision' => 0, 'started_at' => $startedAt, 'expires_at' => $parent->duration_minutes === null ? null : $startedAt->copy()->addMinutes($parent->duration_minutes)])->fresh();
         }, 3);
     }
 
     public function save(User $user, TryOut $tryOut, TryOutAttempt $attempt, array $answers, int $revision, bool $finishSession = false): TryOutAttempt
     {
         return DB::transaction(function () use ($user, $tryOut, $attempt, $answers, $revision, $finishSession) {
+            app(GamificationService::class)->lock($user);
             $locked = TryOutAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
             $this->authorize($user, $tryOut, $locked);
+            if ($this->expired($locked)) {
+                return $this->finalize($user, $tryOut, $locked);
+            }
             abort_unless($locked->status === 'in_progress', 409, 'Try out attempt is already finished.');
             abort_unless($locked->revision === $revision, 409, 'Stale answer revision.');
             $allIds = array_map('strval', array_column($locked->content_snapshot, 'id'));
@@ -66,7 +72,7 @@ class TryOutAttemptService
                     $completed[] = $session;
                 }
             }
-            $locked->update(['answers' => $persisted, 'completed_sessions' => $completed, 'revision' => $locked->revision + 1]);
+            $locked->update(['answers' => $persisted, 'completed_sessions' => $completed, 'current_session' => count($completed), 'revision' => $locked->revision + 1]);
 
             return $locked;
         }, 3);
@@ -81,38 +87,60 @@ class TryOutAttemptService
             if ($locked->status === 'completed') {
                 return $locked;
             }
-            abort_unless($locked->revision === $revision, 409, 'Stale answer revision.');
-            $result = ['earned' => 0, 'max' => 180, 'correct' => 0, 'wrong' => 0, 'unanswered' => 0, 'sessions' => [], 'total_passing_score' => $locked->grading_snapshot['total_passing_score'], 'overall_pass' => null];
-            foreach (TryOutService::SESSIONS as $session => $label) {
-                $section = ['code' => $session, 'label' => $label, 'earned' => 0, 'max' => 0, 'correct' => 0, 'wrong' => 0, 'unanswered' => 0, 'passing_score' => 19, 'pass' => false];
-                foreach ($locked->content_snapshot as $question) {
-                    if ($question['session'] !== $session) {
-                        continue;
-                    }
-                    $grade = $locked->grading_snapshot['questions'][$question['id']];
-                    $answer = $locked->answers[$question['id']] ?? null;
-                    $outcome = $answer === null ? 'unanswered' : ($answer === $grade['correct_option'] ? 'correct' : 'wrong');
-                    $section[$outcome]++;
-                    $section['max'] += $grade['point_value'];
-                    $section['earned'] += $outcome === 'correct' ? $grade['point_value'] : 0;
-                }
-                $section['pass'] = $section['earned'] >= 19;
-                $result['sessions'][] = $section;
-                foreach (['earned', 'correct', 'wrong', 'unanswered'] as $key) {
-                    $result[$key] += $section[$key];
-                }
-            }
-            if ($result['total_passing_score'] !== null) {
-                $result['overall_pass'] = $result['earned'] >= $result['total_passing_score'] && ! in_array(false, array_column($result['sessions'], 'pass'), true);
-            }
-            $locked->update(['result_snapshot' => $result, 'status' => 'completed', 'completed_sessions' => array_keys(TryOutService::SESSIONS), 'current_session' => 4, 'completed_at' => now(), 'revision' => $locked->revision + 1]);
-
-            if (count($locked->answers ?? []) > 0) {
-                app(GamificationService::class)->award($user, 'tryout:'.$tryOut->id.':'.now('Asia/Jakarta')->toDateString(), 20);
+            if (! $this->expired($locked)) {
+                abort_unless($locked->revision === $revision, 409, 'Stale answer revision.');
             }
 
-            return $locked->fresh();
+            return $this->finalize($user, $tryOut, $locked);
         }, 3);
+    }
+
+    private function expired(TryOutAttempt $attempt): bool
+    {
+        return $attempt->status === 'in_progress' && $attempt->expires_at !== null && now()->greaterThanOrEqualTo($attempt->expires_at);
+    }
+
+    public function refresh(User $user, TryOut $tryOut, TryOutAttempt $attempt): TryOutAttempt
+    {
+        return DB::transaction(function () use ($user, $tryOut, $attempt) {
+            app(GamificationService::class)->lock($user);
+            $locked = TryOutAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+            $this->authorize($user, $tryOut, $locked);
+
+            return $this->expired($locked) ? $this->finalize($user, $tryOut, $locked) : $locked;
+        }, 3);
+    }
+
+    private function finalize(User $user, TryOut $tryOut, TryOutAttempt $locked): TryOutAttempt
+    {
+        $result = ['earned' => 0, 'max' => 180, 'correct' => 0, 'wrong' => 0, 'unanswered' => 0, 'sessions' => [], 'total_passing_score' => $locked->grading_snapshot['total_passing_score'], 'overall_pass' => null];
+        foreach (TryOutService::SESSIONS as $session => $label) {
+            $section = ['code' => $session, 'label' => $label, 'earned' => 0, 'max' => 0, 'correct' => 0, 'wrong' => 0, 'unanswered' => 0, 'passing_score' => 19, 'pass' => false];
+            foreach ($locked->content_snapshot as $question) {
+                if ($question['session'] !== $session) {
+                    continue;
+                }
+                $grade = $locked->grading_snapshot['questions'][$question['id']];
+                $answer = $locked->answers[$question['id']] ?? null;
+                $outcome = $answer === null ? 'unanswered' : ($answer === $grade['correct_option'] ? 'correct' : 'wrong');
+                $section[$outcome]++;
+                $section['max'] += $grade['point_value'];
+                $section['earned'] += $outcome === 'correct' ? $grade['point_value'] : 0;
+            }
+            $section['pass'] = $section['correct'] >= 19;
+            $result['sessions'][] = $section;
+            foreach (['earned', 'correct', 'wrong', 'unanswered'] as $key) {
+                $result[$key] += $section[$key];
+            }
+        }
+        $result['overall_pass'] = ! in_array(false, array_column($result['sessions'], 'pass'), true);
+        $locked->update(['result_snapshot' => $result, 'status' => 'completed', 'completed_sessions' => array_keys(TryOutService::SESSIONS), 'current_session' => 4, 'completed_at' => now(), 'revision' => $locked->revision + 1]);
+
+        if (count($locked->answers ?? []) > 0) {
+            app(GamificationService::class)->award($user, 'tryout:'.$tryOut->id.':'.now('Asia/Jakarta')->toDateString(), 20);
+        }
+
+        return $locked->fresh();
     }
 
     private function result(TryOutAttempt $attempt): ?array
@@ -143,7 +171,7 @@ class TryOutAttemptService
             $questions[] = app(MediaService::class)->payload($item);
         }
 
-        return ['id' => $attempt->id, 'try_out_id' => $attempt->try_out_id, 'status' => $attempt->status, 'revision' => $attempt->revision, 'current_session' => $attempt->current_session, 'completed_sessions' => $attempt->completed_sessions, 'questions' => $questions, 'answers' => $attempt->answers, 'result' => $this->result($attempt), 'started_at' => $attempt->started_at->toISOString(), 'completed_at' => $attempt->completed_at?->toISOString()];
+        return ['id' => $attempt->id, 'try_out_id' => $attempt->try_out_id, 'status' => $attempt->status, 'revision' => $attempt->revision, 'current_session' => $attempt->current_session, 'completed_sessions' => $attempt->completed_sessions, 'questions' => $questions, 'answers' => $attempt->answers, 'result' => $this->result($attempt), 'started_at' => $attempt->started_at->toISOString(), 'expires_at' => $attempt->expires_at?->toISOString(), 'server_now' => now()->toISOString(), 'completed_at' => $attempt->completed_at?->toISOString()];
     }
 
     public function history(User $user, TryOut $tryOut): array
@@ -153,11 +181,12 @@ class TryOutAttemptService
         $best = null;
         $history = [];
         foreach ($attempts as $attempt) {
+            $attempt = $this->refresh($user, $tryOut, $attempt);
             $result = $this->result($attempt);
             if ($result !== null) {
                 $best = $best === null ? $result['earned'] : max($best, $result['earned']);
             }
-            $history[] = ['id' => $attempt->id, 'status' => $attempt->status, 'started_at' => $attempt->started_at->toISOString(), 'completed_at' => $attempt->completed_at?->toISOString(), 'result' => $result];
+            $history[] = ['id' => $attempt->id, 'status' => $attempt->status, 'started_at' => $attempt->started_at->toISOString(), 'expires_at' => $attempt->expires_at?->toISOString(), 'server_now' => now()->toISOString(), 'completed_at' => $attempt->completed_at?->toISOString(), 'result' => $result];
         }
 
         return ['attempts' => $history, 'best_score' => $best];

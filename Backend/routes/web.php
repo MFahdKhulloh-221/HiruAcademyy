@@ -95,6 +95,7 @@ Route::prefix('api')->middleware('throttle:api')->group(function () {
             Route::patch('{tryOut}', [AdminTryOutController::class, 'update']);
             Route::delete('{tryOut}', [AdminTryOutController::class, 'destroy']);
             Route::post('{tryOut}/questions', [AdminTryOutController::class, 'storeQuestion']);
+            Route::post('{tryOut}/questions/publish', [AdminTryOutController::class, 'publishQuestions']);
             Route::patch('{tryOut}/questions/{question}', [AdminTryOutController::class, 'updateQuestion']);
             Route::delete('{tryOut}/questions/{question}', [AdminTryOutController::class, 'destroyQuestion']);
         });

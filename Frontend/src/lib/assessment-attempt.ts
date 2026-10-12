@@ -1,9 +1,9 @@
 import { apiRequest, ApiError } from "./api";
 
 export type AttemptQuestion = { id: number; question?: string; prompt?: string; session?: string | number; part?: number; duration_minutes?: number; title?: string; options: Record<string, string>; audio_url?: string | null; audio_url_resolved_url?: string | null; image_url?: string | null; reading_passage?: string | null; passage?: { title: string; body: string }; correct_option?: string; explanation?: string | null; selected_answer?: string | null; status?: string };
-export type AttemptResult = { correct: number; wrong: number; unanswered: number; total?: number; percentage?: number; earned?: number; max?: number; passed?: boolean; passing_score?: number; overall_pass?: boolean | null; total_passing_score?: number | null; recommendation_level?: string | null; sessions?: { code: string; label: string; earned: number; max: number; passing_score: number; pass: boolean }[] };
+export type AttemptResult = { correct: number; wrong: number; unanswered: number; total?: number; percentage?: number; earned?: number; max?: number; passed?: boolean; passing_score?: number; overall_pass?: boolean | null; total_passing_score?: number | null; recommendation_level?: string | null; sessions?: { code: string; label: string; earned: number; max: number; correct: number; wrong: number; unanswered: number; passing_score: number; pass: boolean }[] };
 export type MiniQuestion = AttemptQuestion & { session: number; part: number; duration_minutes: number };
-export type ServerAttempt = { request_started_at?: number; received_at?: number; session?: number; part?: number; duration_minutes?: number; server_now?: string; kind?: string; chapter_id?: number; id: number; status: "in_progress" | "completed"; revision?: number; current_session?: number; completed_sessions?: string[]; questions: AttemptQuestion[]; answers: Record<string, string>; result: AttemptResult | null; expires_at?: string; started_at?: string };
+export type ServerAttempt = { request_started_at?: number; received_at?: number; session?: number; part?: number; duration_minutes?: number; server_now?: string; kind?: string; chapter_id?: number; id: number; status: "in_progress" | "completed"; revision?: number; current_session?: number; completed_sessions?: string[]; questions: AttemptQuestion[]; answers: Record<string, string>; result: AttemptResult | null; expires_at?: string | null; started_at?: string; completed_at?: string | null };
 export const assessmentSessions = ["vocabulary_kanji", "grammar", "reading", "audio"] as const;
 export const assessmentSessionLabels = ["Kosakata & Kanji", "Tata Bahasa", "Reading (Dokkai)", "Audio (Choukai)"] as const;
 export type AttemptDomain = "learning" | "tryout" | "placement";
@@ -26,10 +26,32 @@ export function currentAnswers(attempt: ServerAttempt, answers: Record<string, s
   const ids = new Set(attempt.questions.filter(question => question.session === session).map(question => String(question.id)));
   return Object.fromEntries(Object.entries(answers).filter(([id]) => ids.has(id)));
 }
+export function tryOutRemaining(attempt: ServerAttempt, now: number) {
+  if (!attempt.expires_at || !attempt.server_now || attempt.request_started_at === undefined || attempt.received_at === undefined) return null;
+  return Math.max(0, Math.ceil((Date.parse(attempt.expires_at) - Date.parse(attempt.server_now) - Math.max(0, Math.max(now, attempt.received_at) - attempt.request_started_at)) / 1000));
+}
 export class AttemptPersistence {
   private queue: Promise<unknown> = Promise.resolve();
   private submitting: Promise<ServerAttempt> | null = null;
   private saveError: unknown;
+  private expiring = false;
+  private expired() { return this.domain === "tryout" && (this.expiring || tryOutRemaining(this.attempt, performance.now()) === 0); }
+  private async refresh() {
+    const request_started_at = performance.now();
+    const response = await this.request<{ data: ServerAttempt }>(this.path);
+    this.attempt = { ...response.data, request_started_at, received_at: performance.now() };
+    return this.attempt;
+  }
+  expire() {
+    this.expiring = true;
+    if (this.submitting) return this.submitting;
+    this.submitting = this.enqueue(async () => {
+      const attempt = await this.refresh();
+      if (attempt.status !== "completed" || !attempt.result) throw new ApiError(200, {}, "Try Out: backend belum mengonfirmasi hasil selesai. Coba kembali untuk memeriksa attempt yang sama.");
+      return attempt;
+    }).finally(() => { this.submitting = null; });
+    return this.submitting;
+  }
   constructor(public attempt: ServerAttempt, private path: string, private domain: AttemptDomain, private request: typeof apiRequest = apiRequest) {}
   private enqueue(action: () => Promise<ServerAttempt>) {
     const task = this.queue.then(action);
@@ -39,6 +61,7 @@ export class AttemptPersistence {
   private async write(suffix: string, body: object, method: string) {
     const request_started_at = performance.now();
     const response = await this.request<{ data: ServerAttempt }>(this.path + suffix, { method, body: JSON.stringify(body) });
+    if (this.domain === "tryout" && suffix === "/submit" && (response.data.status !== "completed" || !response.data.result)) throw new ApiError(200, {}, "Try Out: backend belum mengonfirmasi hasil selesai. Coba kembali untuk memeriksa attempt yang sama.");
     this.attempt = { ...response.data, request_started_at, received_at: performance.now() };
     return this.attempt;
   }
@@ -47,6 +70,7 @@ export class AttemptPersistence {
     const snapshot = { ...answers };
     return this.enqueue(async () => {
       if (this.attempt.status === "completed") return this.attempt;
+      if (this.expired()) return this.refresh();
       const body = this.domain === "placement" ? { answers: snapshot } : this.domain === "tryout" ? { answers: snapshot, revision: this.attempt.revision, finish_session: finishSession } : { answers: snapshot, revision: this.attempt.revision };
       try {
         const attempt = await this.write("/answers", body, "PUT");
@@ -60,9 +84,15 @@ export class AttemptPersistence {
     const snapshot = { ...answers };
     this.submitting = this.enqueue(async () => {
       if (this.attempt.status === "completed") return this.attempt;
+      if (this.expired()) {
+        const attempt = await this.refresh();
+        if (attempt.status !== "completed" || !attempt.result) throw new ApiError(200, {}, "Try Out: backend belum mengonfirmasi hasil selesai. Coba kembali untuk memeriksa attempt yang sama.");
+        return attempt;
+      }
       if (this.saveError && this.attempt.kind !== "mini") throw this.saveError;
-      if (this.domain === "tryout") {
-        await this.write("/answers", { answers: snapshot, revision: this.attempt.revision }, "PUT");
+      if (this.domain === "tryout" && (Object.keys(snapshot).length !== Object.keys(this.attempt.answers).length || Object.entries(snapshot).some(([id, answer]) => this.attempt.answers[id] !== answer))) {
+        const saved = await this.write("/answers", { answers: snapshot, revision: this.attempt.revision }, "PUT");
+        if (saved.status === "completed") return saved;
       }
       const body = this.domain === "placement" ? { answers: snapshot } : this.domain === "tryout" ? { revision: this.attempt.revision } : { answers: snapshot, revision: this.attempt.revision };
       return this.write("/submit", body, "POST");
@@ -72,7 +102,7 @@ export class AttemptPersistence {
         const request_started_at = performance.now();
         const response = await this.request<{ data: ServerAttempt }>(this.path);
         this.attempt = { ...response.data, request_started_at, received_at: performance.now() };
-        if (this.attempt.status === "completed") return this.attempt;
+        if (this.attempt.status === "completed" && (this.domain !== "tryout" || this.attempt.result)) return this.attempt;
       } catch {
         throw error;
       } finally {

@@ -42,7 +42,7 @@ class StudentTryOutController extends Controller
     {
         $attempts->authorize($request->user(), $tryOut, $attempt);
 
-        return response()->json(['data' => $attempts->payload($attempt)]);
+        return response()->json(['data' => $attempts->payload($attempts->refresh($request->user(), $tryOut, $attempt))]);
     }
 
     public function save(Request $request, TryOut $tryOut, TryOutAttempt $attempt, TryOutAttemptService $attempts, TryOutService $content)
@@ -65,7 +65,7 @@ class StudentTryOutController extends Controller
         $attempts->authorize($request->user(), $tryOut, $attempt);
         $content->validateInput($request->all(), ['incorrect_only' => ['sometimes', 'boolean']]);
 
-        return response()->json(['data' => $attempts->payload($attempt, true, $request->boolean('incorrect_only'))]);
+        return response()->json(['data' => $attempts->payload($attempts->refresh($request->user(), $tryOut, $attempt), true, $request->boolean('incorrect_only'))]);
     }
 
     public function history(Request $request, TryOut $tryOut, TryOutAttemptService $attempts)

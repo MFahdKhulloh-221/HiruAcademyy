@@ -10,7 +10,7 @@ import { MiniLockedDialog } from "@/components/mini-locked-dialog";
 import { learningCatalog, learningChapter, learningChapters, learningProgress, programCode } from "@/lib/learning-api";
 import { ApiError } from "@/lib/api";
 
-export function ChapterAssessment({ level, chapterSlug, kind, context, resolvedCatalog }: { level: string; chapterSlug: string; kind: "audio" | "reading" | "mini"; context?: ChapterContext; resolvedCatalog?: LearningCatalog }) {
+export function ChapterAssessment({ level, chapterSlug, kind, context, resolvedCatalog, autoStart = false }: { level: string; chapterSlug: string; kind: "audio" | "reading" | "mini"; context?: ChapterContext; resolvedCatalog?: LearningCatalog; autoStart?: boolean }) {
   const load = useCallback(async (signal: AbortSignal) => {
     if (context) return context;
     if (kind === "mini") {
@@ -32,7 +32,7 @@ export function ChapterAssessment({ level, chapterSlug, kind, context, resolvedC
   const { program, chapter, progress } = request.data;
   if (kind === "mini" && !progress?.mini_unlocked) return <section className="learning-question-page"><h1>Mini Checkpoint</h1><MiniLockedDialog access={chapter.access} progress={progress} chapterHref={`/learn/${level}/${chapterSlug}`} /></section>;
   if (kind === "mini") return <MiniChapterAssessment key={`${program.id}/${chapter.id}`} programId={program.id} chapter={chapter} />;
-  return <BackendAssessmentRunner key={`${program.id}/${chapter.id}/${kind}`} path={chapterAttemptPath(program.id, chapter.id)} title={kind === "audio" ? "Audio" : "Reading"} startBody={{ kind }} />;
+  return <BackendAssessmentRunner key={`${program.id}/${chapter.id}/${kind}`} path={chapterAttemptPath(program.id, chapter.id)} title={kind === "audio" ? "Audio" : "Reading"} startBody={{ kind }} autoStart={autoStart} />;
 }
 
 function MiniChapterAssessment({ programId, chapter }: { programId: number; chapter: ChapterContext["chapter"] }) {

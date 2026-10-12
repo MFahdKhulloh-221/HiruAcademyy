@@ -44,7 +44,7 @@ export function assessmentSections(item: Pick<AdminAssessment, "kind" | "context
 }
 export function orderedAssessmentQuestions(item: AdminAssessment) {
   const sections = assessmentSections(item);
-  const sorted = [...item.questions].sort((a, b) => Number(a.order) - Number(b.order) || a.id.localeCompare(b.id));
+  const sorted = [...item.questions].sort((a, b) => Number(a.order) - Number(b.order) || a.id.localeCompare(b.id, undefined, { numeric: true }));
   return sections.flatMap((section) => sorted.filter((question) => question.section === section)).concat(sorted.filter((question) => !sections.includes(question.section)));
 }
 export function copyAssessment(item: AdminAssessment): AdminAssessment {
@@ -68,7 +68,7 @@ export function assessmentQuestionError(question: AdminAssessmentQuestion, item:
   if (!["Multiple choice", "Audio", "Reading"].includes(question.type) || (["DASAR", "SSW"].includes(item.context) && question.type !== "Multiple choice")) return "DASAR dan SSW hanya memakai Multiple choice.";
   if (!question.prompt.trim() || question.answers.length !== 4 || question.answers.some((answer) => !answer.trim())) return "Isi pertanyaan dan pilihan A–D.";
   if (!Number.isInteger(question.correctAnswer) || question.correctAnswer < 0 || question.correctAnswer > 3) return "Pilih jawaban benar A–D.";
-  if (!positiveInteger(question.order)) return "Urutan harus berupa bilangan bulat positif.";
+  if (item.kind === "tryout" ? !/^\d+$/.test(question.order) || !Number.isSafeInteger(Number(question.order)) : !positiveInteger(question.order)) return item.kind === "tryout" ? "Urutan harus berupa bilangan bulat nonnegatif." : "Urutan harus berupa bilangan bulat positif.";
   if (!["Draft", "Published"].includes(question.status)) return "Pilih status yang valid.";
   if (!validAssessmentAudio(question.file)) return "Pilih file audio yang valid dan tidak kosong.";
   if (question.type !== "Audio" && question.file) return "File audio hanya untuk soal Audio.";

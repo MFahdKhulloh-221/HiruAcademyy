@@ -2,17 +2,18 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { AdminConfirmDialog, AdminDataTable, AdminDialog, AdminFilterToolbar, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge } from "@/components/admin-primitives";
-import { commercialCode, commercialData, commercialWrite, commercialWhatsApp, type CommercialInvoice, type Offer } from "@/lib/commercial-api";
+import { commercialCode, commercialData, commercialWrite, type CommercialInvoice, type Offer } from "@/lib/commercial-api";
+
+import { invoiceWhatsAppUrl } from "@/lib/admin-whatsapp";
 
 const labels: Record<string, string> = { draft: "Draft", awaiting_payment: "Menunggu Pembayaran", paid: "Sudah Bayar", verified: "Diverifikasi", active: "Aktif" };
 const next: Record<string, string> = { draft: "awaiting_payment", awaiting_payment: "paid", paid: "verified", verified: "active" };
 const money = (amount: number) => `Rp${amount.toLocaleString("id-ID")}`;
 export function AdminInvoicePrototype() {
   const [invoices, setInvoices] = useState<CommercialInvoice[]>([]);
-  const [users, setUsers] = useState<{ id: number; name: string; email: string }[]>([]);
+  const [users, setUsers] = useState<{ id: number; name: string; email: string; whatsapp?: string }[]>([]);
   const [creation, setCreation] = useState<{ user_id: string; program_offer_id: string; referral_code: string } | null>(null);
   const [offers, setOffers] = useState<Offer[]>([]);
-  const [whatsapp, setWhatsapp] = useState("");
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("");
   const [selected, setSelected] = useState<CommercialInvoice | null>(null);
@@ -25,7 +26,6 @@ export function AdminInvoicePrototype() {
     setInvoices(rows); setOffers(prices); setUsers(students);
   }, []);
   useEffect(() => { let active = true; void Promise.resolve().then(() => { if (active) return refresh(); }).catch(error => { if (active) setMessage(error.message); }).finally(() => { if (active) setLoading(false); }); return () => { active = false; }; }, [refresh]);
-  useEffect(() => { void commercialData<{ contact?: { whatsappNumber?: string } }>("/api/admin/settings").then(settings => setWhatsapp(settings.contact?.whatsappNumber ?? "")).catch(() => setWhatsapp("")); }, []);
   const closeDetail = useCallback(() => setSelected(null), []);
   const closeConfirm = useCallback(() => setPending(null), []);
   function program(invoice: CommercialInvoice) { return commercialCode(invoice.program_code || offers.find(offer => offer.program_id === invoice.program_id)?.program.code || ""); }
@@ -56,7 +56,12 @@ export function AdminInvoicePrototype() {
       catch (cause) { setMessage(cause instanceof Error ? cause.message : "Permintaan belum berhasil."); }
       finally { setBusy(false); }
     }}><label className="admin-field">Nama Siswa<select required value={creation.user_id} onChange={event => setCreation({ ...creation, user_id: event.target.value })}>{users.map(user => <option value={user.id} key={user.id}>{user.name} — {user.email}</option>)}</select></label><label className="admin-field">Level / Program<select required value={creation.program_offer_id} onChange={event => setCreation({ ...creation, program_offer_id: event.target.value })}>{offers.map(offer => <option value={offer.id} key={offer.id}>{offer.program.name} • {offer.plan_code === "lms" ? "Belajar Mandiri" : "Kelas bersama Sensei"}</option>)}</select></label><label className="admin-field">Kode Referral<input value={creation.referral_code} onChange={event => setCreation({ ...creation, referral_code: event.target.value })} /></label>{message && <p role="alert">{message}</p>}<button type="submit" className="button button-primary" disabled={busy}>Buat Invoice</button></form>}</AdminDialog>
-    <AdminDialog open={Boolean(selected)} title="Detail Invoice" close={closeDetail}>{selected && <><dl className="admin-user-detail">{[["Invoice ID", selected.id], ["Nama Siswa", `ID ${selected.user_id}`], ["Level / Program", program(selected)], ["Membership", selected.plan_code], ["Harga dasar", money(selected.base_price)], ["Diskon", money(selected.discount_amount)], ["Total", money(selected.total_price)], ["Status", labels[selected.status]], ["Tanggal mulai", selected.access_grant?.starts_at || "Belum diisi"], ["Tanggal akhir", selected.access_grant?.ends_at || "Belum diisi"], ["Catatan", selected.note || "—"]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl><AdminSection title="Riwayat status"><ol>{[["Draft", selected.created_at], ["Menunggu Pembayaran", selected.submitted_at], ["Sudah Bayar", selected.paid_at], ["Diverifikasi", selected.verified_at], ["Aktif", selected.activated_at]].filter(([, at]) => at).map(([label, at]) => <li key={label}>{label} — <time dateTime={at}>{at}</time></li>)}</ol></AdminSection>{commercialWhatsApp(whatsapp, `Invoice ${selected.id}`) ? <a className="button" href={commercialWhatsApp(whatsapp, `Invoice ${selected.id}`)!} target="_blank" rel="noopener noreferrer">Buka WhatsApp</a> : <button className="button" disabled title="OPEN: kontak produksi belum dikonfigurasi">WhatsApp Admin</button>}</>}</AdminDialog>
+    <AdminDialog open={Boolean(selected)} title="Detail Invoice" close={closeDetail} actions={<button type="button" className="button" onClick={closeDetail}>Tutup</button>}>{selected && <div className="admin-invoice-detail">
+      <div className="admin-invoice-summary"><strong>Invoice: {selected.id}</strong><AdminStatusBadge status={labels[selected.status] || selected.status} /></div>
+      <AdminSection title="Informasi Pembeli"><dl className="admin-user-detail">{[["Nama Siswa", users.find(user => user.id === selected.user_id)?.name || `ID ${selected.user_id}`], ["Email", users.find(user => user.id === selected.user_id)?.email || "—"], ["Nomor WA", users.find(user => user.id === selected.user_id)?.whatsapp || "—"]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></AdminSection>
+      <AdminSection title="Detail Pembelian"><dl className="admin-user-detail">{[["Level / Program", program(selected)], ["Membership", selected.plan_code], ["Harga dasar", money(selected.base_price)], ["Diskon", money(selected.discount_amount)], ["Total", money(selected.total_price)], ["Tanggal", selected.created_at], ["Tanggal mulai", selected.access_grant?.starts_at || "Belum diisi"], ["Tanggal akhir", selected.access_grant?.ends_at || "Belum diisi"], ["Catatan", selected.note || "—"]].map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></AdminSection>
+      <AdminSection title="Pembayaran / Aksi Admin"><AdminSection title="Riwayat status"><ol>{[["Draft", selected.created_at], ["Menunggu Pembayaran", selected.submitted_at], ["Sudah Bayar", selected.paid_at], ["Diverifikasi", selected.verified_at], ["Aktif", selected.activated_at]].filter(([, at]) => at).map(([label, at]) => <li key={label}>{label} — <time dateTime={at}>{at}</time></li>)}</ol></AdminSection><div className="admin-page-actions"><a className="button" href={invoiceWhatsAppUrl(selected)} target="_blank" rel="noopener noreferrer">Buka WhatsApp</a>{next[selected.status] && <button type="button" className="button button-primary" disabled={busy} onClick={() => setPending(selected)}>{labels[next[selected.status]]}</button>}</div></AdminSection>
+    </div>}</AdminDialog>
     <AdminConfirmDialog open={Boolean(pending)} title="Ubah Status Invoice?" close={closeConfirm} actions={<><button type="button" className="button" disabled={busy} onClick={closeConfirm}>Batal</button><button type="button" className="button button-primary" disabled={busy} onClick={() => void confirm()}>Konfirmasi</button></>}>{pending && <><p>{pending.id}: {labels[pending.status]} menjadi {labels[next[pending.status]]}.</p>{pending.status === "verified" && <p>Aktivasi membuat satu record akses berdasarkan Invoice ID. Konfirmasi berulang tidak menggandakan akses.</p>}</>}</AdminConfirmDialog>
   </main></AdminShell>;
 }

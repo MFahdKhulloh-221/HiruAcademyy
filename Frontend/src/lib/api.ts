@@ -1,8 +1,8 @@
 export const AUTH_EXPIRED_EVENT = "hiru:auth-expired";
 
 export class ApiError extends Error {
-  constructor(public status: number, public errors: Record<string, string[]> = {}) {
-    super(status === 422 ? "Periksa kembali data yang dimasukkan." : status === 401 || status === 419 ? "Sesi berakhir. Silakan masuk kembali." : status === 429 ? "Terlalu banyak percobaan. Silakan coba lagi nanti." : "Permintaan belum berhasil. Silakan coba lagi.");
+  constructor(public status: number, public errors: Record<string, string[]> = {}, message?: string) {
+    super(message ?? (status === 422 ? "Periksa kembali data yang dimasukkan." : status === 401 || status === 419 ? "Sesi berakhir. Silakan masuk kembali." : status === 429 ? "Terlalu banyak percobaan. Silakan coba lagi nanti." : "Permintaan belum berhasil. Silakan coba lagi."));
     this.name = "ApiError";
   }
 }
@@ -63,16 +63,24 @@ async function request(path: string, options: RequestInit): Promise<Response> {
       window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
     }
     const errors: Record<string, string[]> = {};
+    const studentTryOut = /^\/api\/student\/try-outs\/\d+\/attempts\/\d+(?:\/(?:answers|submit))?$/.test(path);
+    const body = response.status === 422 || studentTryOut ? await response.json().catch(() => null) : null;
     if (response.status === 422) {
-      const body = await response.json().catch(() => null);
       if (body?.errors && typeof body.errors === "object") {
         for (const key of Object.keys(body.errors)) {
           const field = key === "email_normalized" ? "email" : key === "whatsapp_normalized" ? "whatsapp" : key === "identifier" ? "identity" : key;
-          if (Object.hasOwn(fieldMessages, field)) errors[field] = [fieldMessages[field]];
-          else if (path.startsWith("/api/admin/mini-checkpoint-questions") && Array.isArray(body.errors[key])) errors[field] = body.errors[key].filter((message: unknown): message is string => typeof message === "string");
+          if (studentTryOut && Object.keys(errors).length < 10 && /^(?:answers(?:\.\d+)?|revision|finish_session)$/.test(field) && field.length <= 80 && Array.isArray(body.errors[key])) {
+            errors[field] = [field.startsWith("answers") ? "Periksa jawaban: ID soal dan pilihan A–D harus valid." : field === "revision" ? "Revisi jawaban tidak valid. Sinkronkan kembali sebelum mengumpulkan." : "Status penyelesaian sesi tidak valid."];
+          } else if (path === "/api/auth/register" && field === "whatsapp" && Array.isArray(body.errors[key]) && body.errors[key].includes("Nomor WhatsApp sudah digunakan. Silakan gunakan nomor lain.")) errors[field] = ["Nomor WhatsApp sudah digunakan. Silakan gunakan nomor lain."];
+          else if (Object.hasOwn(fieldMessages, field)) errors[field] = [fieldMessages[field]];
+          else if ((path.startsWith("/api/admin/mini-checkpoint-questions") || path.startsWith("/api/admin/try-outs")) && Array.isArray(body.errors[key])) errors[field] = body.errors[key].filter((message: unknown): message is string => typeof message === "string");
         }
       }
       if (path === "/api/auth/login" && !Object.keys(errors).length) errors.identity = [fieldMessages.identity];
+    }
+    if (studentTryOut) {
+      const statusMessage = response.status === 401 || response.status === 419 ? "Sesi berakhir. Silakan masuk kembali." : response.status === 403 ? "Akses Try Out ditolak. Periksa hak akses akun." : response.status === 409 ? body?.message === "Stale answer revision." ? "Revisi jawaban berubah. Muat ulang untuk mengambil revisi terbaru sebelum mengumpulkan." : "Status attempt berubah. Muat ulang untuk memeriksa jawaban atau hasil." : response.status === 422 ? "Data Try Out tidak valid." : response.status === 429 ? "Terlalu banyak permintaan. Tunggu sebelum mencoba kembali." : response.status >= 500 ? "Permintaan belum berhasil karena gangguan server. Status pengumpulan belum dapat dipastikan; coba kembali untuk memeriksa dan melanjutkan attempt yang sama." : "Permintaan Try Out belum berhasil. Periksa kembali attempt.";
+      throw new ApiError(response.status, errors, `Try Out (HTTP ${response.status}): ${statusMessage}${Object.values(errors).length ? ` ${Object.values(errors).flat().slice(0, 3).join(" ")}` : ""}`);
     }
     throw new ApiError(response.status, errors);
   }

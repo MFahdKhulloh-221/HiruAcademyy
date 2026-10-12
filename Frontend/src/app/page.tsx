@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { type SVGProps, useState } from "react";
+import { type SVGProps } from "react";
 import { LandingMotion } from "@/components/landing-motion";
 import { LearningPath } from "@/components/learning-path";
 import { PublicPage } from "@/components/public-shell";
@@ -10,7 +10,7 @@ import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { SenseiGrid } from "@/components/sensei-grid";
 import { StudentAvatar } from "@/components/student-avatar";
 import { usePublishedLanding } from "@/lib/website-store";
-import { contentMedia, offerPrice, useContent, type PublicOffer, type ShowcaseContent, type TestimonialContent } from "@/lib/public-content-api";
+import { contentMedia, offerPrice, testimonialVideo, useContent, type PublicOffer, type ShowcaseContent, type TestimonialContent } from "@/lib/public-content-api";
 
 type IconName = "arrow" | "book" | "check" | "compass" | "layers" | "play" | "sparkle" | "target" | "users";
 
@@ -47,7 +47,6 @@ const offers = [
     ],
     cta: "Pilih Coba Gratis",
     href: "/program",
-    buttonClass: "button-dark",
   },
   {
     id: "sensei",
@@ -65,7 +64,6 @@ const offers = [
     ],
     cta: "Pilih Bersama Sensei",
     href: "/program?plan=sensei",
-    buttonClass: "button-primary",
   },
   {
     id: "lms",
@@ -83,7 +81,6 @@ const offers = [
     ],
     cta: "Pilih Mandiri",
     href: "/program?plan=lms",
-    buttonClass: "button-dark",
   },
 ];
 
@@ -124,7 +121,6 @@ export default function Home() {
   const testimonialContent = useContent<TestimonialContent>("/api/testimonials?landing=true");
   const showcase = useContent<ShowcaseContent>("/api/showcase");
   const pricing = useContent<PublicOffer>("/api/public/offers");
-  const [clickedPlan, setClickedPlan] = useState<string | null>(null);
 
   const hero = landing.hero;
   const heroSupport =
@@ -132,10 +128,14 @@ export default function Home() {
     "Placement test, pembelajaran, flashcard, latihan, try out, komunitas, dan kelas bersama Sensei tersedia dalam satu pengalaman belajar yang konsisten.";
   const currentOffers = offers.map(offer => {
     const available = pricing.data.filter(item => item.program.code !== "N1" && item.plan_code === offer.id).sort((a, b) => a.effective_price - b.effective_price);
-    return { ...offer, price: offer.id === "free" ? offer.price : pricing.loading ? "Memuat harga…" : pricing.error ? "Harga gagal dimuat" : offerPrice(available[0]).split("/")[0], period: offer.id === "free" ? offer.period : available[0] ? `/${available[0].duration_months} bulan` : "", buttonClass: clickedPlan === offer.id ? "button-primary" : "button-dark" };
+    return { ...offer, price: offer.id === "free" ? offer.price : pricing.loading ? "Memuat harga…" : pricing.error ? "Harga gagal dimuat" : offerPrice(available[0]).split("/")[0], period: offer.id === "free" ? offer.period : available[0] ? `/${available[0].duration_months} bulan` : "" };
   });
   const previews = showcase.data.map(item => ({ key: item.key, label: item.label, imageSrc: contentMedia(item.image_src) }));
   const displayTestimonials = testimonialContent.data.map(t => ({ id: t.id, name: t.name, quote: t.quote, membership: t.context, avatarSrc: contentMedia(t.image, t.image_resolved_url) }));
+  const testimonialVideos = testimonialContent.data.flatMap(item => {
+    const media = testimonialVideo(item.video_url, item.video_url_resolved_url);
+    return media ? [{ id: item.id, name: item.name, membership: item.context, title: item.video_title || `Video testimoni ${item.name}`, media, posterSrc: contentMedia(item.image, item.image_resolved_url) }] : [];
+  });
 
   return (
     <PublicPage>
@@ -189,7 +189,7 @@ export default function Home() {
                   </ul>
 
                   <div className="pricing-card-footer">
-                    <Link className={`button ${offer.buttonClass} pricing-cta-btn`} href={offer.href} onClick={() => setClickedPlan(offer.id)}>
+                    <Link className="button button-primary pricing-cta-btn" href={offer.href}>
                       {offer.cta}
                     </Link>
                   </div>
@@ -205,7 +205,7 @@ export default function Home() {
 
         <section className="section landing-sensei" data-reveal><div className="container"><div className="landing-sensei-heading"><h2>Belajar Bersama Sensei Berpengalaman</h2><p>Temukan mentor sesuai level, target, dan gaya belajarmu.</p></div><SenseiGrid carousel /><div className="landing-sensei-action"><Link className="button button-dark" href="/sensei">Lihat Semua Sensei</Link></div></div></section>
 
-        <section className="section landing-testimonials" data-reveal><div className="container"><div className="section-heading"><p className="kicker">CERITA PEMBELAJAR</p><h2>{landing.testimonial?.heading || "Cerita dari Pembelajar Hiru Academy"}</h2></div>{testimonialContent.loading ? <LoadingSkeleton variant="cards" label="Memuat testimoni…" /> : testimonialContent.error ? <div role="alert">{testimonialContent.error} <button type="button" onClick={testimonialContent.reload}>Coba lagi</button></div> : !displayTestimonials.length && <p>Belum ada testimoni.</p>}<div className="testimonial-grid">{displayTestimonials.map((testimonial, index) => <article className="testimonial-card reveal-item" key={testimonial.id} style={{ "--reveal-index": index } as React.CSSProperties}><StudentAvatar name={testimonial.name} url={testimonial.avatarSrc} className="testimonial-avatar" /><blockquote>{testimonial.quote}</blockquote><footer><strong>{testimonial.name}</strong><small>{testimonial.membership}</small></footer></article>)}</div><div className="landing-testimonials-action"><Link className="button button-primary" href="/testimoni">Lihat lebih banyak</Link></div></div></section>
+        <section className="section landing-testimonials" data-reveal><div className="container"><div className="section-heading"><p className="kicker">CERITA PEMBELAJAR</p><h2>{landing.testimonial?.heading || "Cerita dari Pembelajar Hiru Academy"}</h2></div>{testimonialContent.loading ? <LoadingSkeleton variant="cards" label="Memuat testimoni…" /> : testimonialContent.error ? <div role="alert">{testimonialContent.error} <button type="button" onClick={testimonialContent.reload}>Coba lagi</button></div> : !displayTestimonials.length && <p>Belum ada testimoni.</p>}<div className="testimonial-grid">{displayTestimonials.map((testimonial, index) => <article className="testimonial-card reveal-item" key={testimonial.id} style={{ "--reveal-index": index } as React.CSSProperties}><StudentAvatar name={testimonial.name} url={testimonial.avatarSrc} className="testimonial-avatar" /><blockquote>{testimonial.quote}</blockquote><footer><strong>{testimonial.name}</strong><small>{testimonial.membership}</small></footer></article>)}</div>{testimonialVideos.length > 0 && <div className="testimonial-video-section"><div className="testimonial-video-grid">{testimonialVideos.map((testimonial) => <article key={testimonial.id}><div className="testimonial-video-frame">{testimonial.media.kind === "youtube" ? <iframe title={testimonial.title} src={testimonial.media.src} loading="lazy" referrerPolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation" allow="fullscreen; picture-in-picture" allowFullScreen style={{ width: "100%", height: "100%", border: 0 }} /> : <video controls preload="metadata" aria-label={testimonial.title} poster={testimonial.posterSrc || undefined} src={testimonial.media.src} />}</div><footer><strong>{testimonial.name}</strong><small>{testimonial.membership}</small></footer></article>)}</div></div>}<div className="landing-testimonials-action"><Link className="button button-primary" href="/testimoni">Lihat lebih banyak</Link></div></div></section>
 
         <section className="final-cta" id="tentang" data-reveal><div className="container"><div className="cta-panel"><div className="cta-pattern" aria-hidden="true">あ <span>日</span> 語</div><h2>{landing.finalCta?.heading || "Belum tahu harus mulai dari level mana?"}</h2><p>{landing.finalCta?.support || "Belum yakin levelmu? Gunakan Placement Test. Sudah punya target? Coba Chapter 1 gratis pada level pilihanmu."}</p><ArrowLink href={landing.finalCta?.ctaPath || "/placement"}>{landing.finalCta?.ctaLabel || "Mulai Sekarang"}</ArrowLink></div></div></section>
       </main>

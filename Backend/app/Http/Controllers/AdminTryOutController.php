@@ -57,6 +57,13 @@ class AdminTryOutController extends Controller
         return response()->json(['data' => $content->adminQuestion($content->saveQuestion($tryOut, $request->all()))], 201);
     }
 
+    public function publishQuestions(Request $request, TryOut $tryOut, TryOutService $content)
+    {
+        $this->authorizeAdmin($request);
+
+        return response()->json(['data' => $content->publishQuestions($tryOut, $request->all())]);
+    }
+
     public function updateQuestion(Request $request, TryOut $tryOut, TryOutQuestion $question, TryOutService $content)
     {
         $this->authorizeAdmin($request);

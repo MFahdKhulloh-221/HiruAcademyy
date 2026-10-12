@@ -38,6 +38,7 @@ class InvoiceWorkflowService
                 'due_date' => $metadata['due_date'] ?? null, 'note' => $metadata['note'] ?? null,
             ])->fresh();
             app(AffiliateService::class)->referral($invoice, $metadata['referral_code'] ?? null);
+            app(NotificationService::class)->invoiceReminder($student, $invoice);
 
             return $invoice;
         });

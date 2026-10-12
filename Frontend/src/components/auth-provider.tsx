@@ -32,14 +32,14 @@ type AuthContextValue = {
   user: AuthUser | null;
   loading: boolean;
   authenticated: boolean;
-  refreshUser: () => Promise<AuthUser | null>;
+  refreshUser: (options?: { background?: boolean }) => Promise<AuthUser | null>;
   login: (identity: string, password: string) => Promise<AuthUser>;
   register: (payload: RegisterPayload) => Promise<AuthUser>;
   logout: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-const studentPaths = ["dashboard", "journey", "learn", "practice", "flashcards", "library", "tryout", "schedule", "replay", "mini-checkpoint", "ask-sensei", "community", "progress", "leaderboard", "certificate", "notifications", "profile", "affiliate", "membership", "renewal", "checkout", "invoice"];
+const studentPaths = ["dashboard", "journey", "learn", "practice", "flashcards", "library", "tryout", "schedule", "replay", "mini-checkpoint", "ask-sensei", "community", "progress", "leaderboard", "certificate", "notifications", "notifikasi", "profile", "affiliate", "membership", "renewal", "checkout", "invoice"];
 
 export function authDestination(user: AuthUser): string {
   return user.role === "admin" ? "/admin" : "/dashboard?membership=free";
@@ -62,11 +62,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const pending = useRef<Promise<AuthUser | null> | null>(null);
   const mutating = useRef(false);
 
-  const refreshUser = useCallback((): Promise<AuthUser | null> => {
+  const refreshUser = useCallback((options?: { background?: boolean }): Promise<AuthUser | null> => {
     if (mutating.current) return Promise.resolve(null);
     if (pending.current) return pending.current;
     const current = ++version.current;
-    setLoading(true);
+    if (!options?.background) setLoading(true);
     setError(null);
     const task = apiRequest<{ data: AuthUser }>("/api/me").then(response => {
       if (version.current !== current) return null;
@@ -100,7 +100,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
     window.addEventListener(AUTH_EXPIRED_EVENT, expire);
-    void refreshUser().catch(() => undefined);
+    void Promise.resolve().then(() => refreshUser()).catch(() => undefined);
     return () => window.removeEventListener(AUTH_EXPIRED_EVENT, expire);
   }, [refreshUser]);
 

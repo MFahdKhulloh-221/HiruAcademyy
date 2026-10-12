@@ -1,6 +1,6 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { BrandLogo } from "@/components/brand-logo";
+import { StudentHeaderActions } from "@/components/student-header-actions";
 import { StudentBreadcrumb } from "@/components/student-breadcrumb";
 import { StudentNavigation } from "@/components/student-navigation";
 import type { Membership } from "@/lib/dashboard-mock";
@@ -19,7 +19,7 @@ export function LearningShell({ membership, level, chapter, current, breadcrumbL
   return (
     <div className="learning-shell student-shell">
       <StudentNavigation membership={membership} />
-      <div className="learning-main"><header className="learning-topbar"><Link href={journeyHref}>← Journey</Link><div><BrandLogo className="learning-mobile-brand" /><span className="journey-membership">{membership === "free" ? "Free" : membership === "lms" ? "LMS" : "Sensei"}</span></div></header><main className={current === "flashcards" ? "learning-content flashcard-page" : "learning-content"}><StudentBreadcrumb items={breadcrumbs} />{children}</main></div>
+      <div className="learning-main"><header className="learning-topbar"><Link href={journeyHref}>← Journey</Link><StudentHeaderActions membership={membership} /></header><main className={current === "flashcards" ? "learning-content flashcard-page" : "learning-content"}><StudentBreadcrumb items={breadcrumbs} />{children}</main></div>
     </div>
   );
 }

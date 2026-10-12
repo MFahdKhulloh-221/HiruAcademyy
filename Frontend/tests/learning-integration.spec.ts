@@ -36,9 +36,9 @@ test("flashcard classification stays local; canonical completion retries and rep
   const repeat = page.getByRole("button", { name: "Ulangi Kartu Sulit" });
   await expect(repeat).toBeVisible();
   await expect(repeat).toBeDisabled();
-  await expect(page.getByRole("button", { name: "Sulit", exact: true })).toBeDisabled();
+  await expect(page.getByRole("button", { name: "Sulit", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Mudah", exact: true })).toBeEnabled();
   await expect(page.locator(".flashcard-inner")).toHaveCSS("transition-duration", "0.6s");
-  await page.locator(".flashcard-surface").press("Enter");
   await page.getByRole("button", { name: "Sulit", exact: true }).click();
   await expect(page.getByRole("alert").first()).toBeVisible();
   await expect(page.getByText("FLASHCARD SELESAI")).toBeVisible();
@@ -47,7 +47,7 @@ test("flashcard classification stays local; canonical completion retries and rep
   await expect(page.getByText("FLASHCARD SELESAI")).toBeVisible();
   expect(count()).toBe(2);
   await repeat.click();
-  await page.locator(".flashcard-surface").press("Space");
+  await expect(page.locator(".flashcard-surface")).toHaveAttribute("aria-pressed", "false");
   await page.getByRole("button", { name: "Mudah", exact: true }).click();
   await expect(page.getByText("FLASHCARD SELESAI")).toBeVisible();
   await expect(repeat).toBeDisabled();
@@ -196,6 +196,84 @@ for (const media of [
   if (media.native) await expect(page.getByLabel("Actual video")).toHaveAttribute("src", media.resolved);
   else if (media.embed) await expect(page.locator("iframe")).toHaveAttribute("src", media.embed);
   else { await expect(page.locator("iframe, video")).toHaveCount(0); await expect(page.getByText("Belum tersedia", { exact: true })).toBeVisible(); }
+});
+
+test("chapter cards split module completion and start audio and reading directly", async ({ page }) => {
+  await mockLearning(page);
+  await page.route("**/api/student/programs/5/chapters/9", route => route.fulfill({ json: { data: {
+    id: 9, chapter_number: 1, title: "Canonical Chapter", sort_order: 0, access: "preview",
+    modules: [
+      { id: 21, title: "Grammar", module_type: "grammar", file_url: null, sort_order: 0 },
+      { id: 22, title: "Kanji", module_type: "kanji", file_url: null, sort_order: 1 },
+    ],
+  } } }));
+  await page.route("**/api/student/programs/5/chapters/9/progress", route => route.fulfill({ json: { data: {
+    chapter_id: 9, mini_unlocked: false, activities: {
+      module: { total: 2, completed: 1, complete: false, completed_ids: [21] },
+      audio: { total: 1, completed: 0, complete: false, completed_ids: [] },
+      reading: { total: 1, completed: 1, complete: true, completed_ids: [31] },
+    },
+  } } }));
+  await page.goto("/learn/n5/chapter-1");
+  const grammar = page.locator("article").filter({ has: page.getByRole("heading", { name: "Modul Tata Bahasa", exact: true }) });
+  const kanji = page.locator("article").filter({ has: page.getByRole("heading", { name: "Modul Huruf Jepang & Kanji", exact: true }) });
+  await expect(grammar.getByRole("status")).toHaveText("Selesai");
+  await expect(grammar).toHaveClass(/activity-completed/);
+  await expect(kanji.getByRole("status")).toHaveText("Belum Selesai");
+  await expect(kanji).toHaveClass(/activity-available/);
+  for (const [title, path, status] of [["Audio Question", "audio", "Belum Selesai"], ["Reading Question", "reading", "Selesai"]]) {
+    const activity = page.locator("article").filter({ has: page.getByRole("heading", { name: title, exact: true }) });
+    await expect(activity.getByRole("status")).toHaveText(status);
+    await expect(activity.getByRole("link", { name: "Mulai", exact: true })).toHaveAttribute("href", `/learn/n5/chapter-1/${path}?start=1`);
+  }
+  await page.goto("/learn/n5/chapter-1/grammar");
+  await expect(page.getByRole("button", { name: "Selesai", exact: true })).toBeDisabled();
+  await page.goto("/learn/n5/chapter-1/kanji");
+  await expect(page.getByRole("button", { name: "Tandai Selesai", exact: true })).toBeEnabled();
+});
+
+test("video completion retries failures, blocks duplicate clicks and survives reload", async ({ page }) => {
+  await mockLearning(page);
+  let completedIds: number[] = [];
+  let writes = 0;
+  const progress = () => ({ chapter_id: 9, activities: { video: { total: 2, completed: completedIds.length, complete: completedIds.length === 2, completed_ids: completedIds } }, mini_unlocked: false });
+  await page.route("**/api/student/programs/5/chapters/9", route => route.fulfill({ json: { data: {
+    id: 9, chapter_number: 1, title: "Canonical Chapter", sort_order: 0, access: "preview",
+    video_lessons: [{ id: 11, title: "First video", video_url: null, sort_order: 0 }, { id: 12, title: "Second video", video_url: null, sort_order: 1 }],
+  } } }));
+  await page.route("**/api/student/programs/5/chapters/9/progress", route => route.fulfill({ json: { data: progress() } }));
+  let release!: () => void;
+  let started!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const pending = new Promise<void>(resolve => { started = resolve; });
+  await page.route("**/api/student/programs/5/chapters/9/completions", async route => {
+    writes += 1;
+    expect(route.request().postDataJSON()).toEqual({ type: "video", resource_id: 11 });
+    if (writes === 1) { await route.fulfill({ status: 500, json: {} }); return; }
+    started();
+    await gate;
+    completedIds = [11];
+    await route.fulfill({ json: { data: progress() } });
+  });
+  await page.goto("/learn/n5/chapter-1/video");
+  const first = page.locator(".video-card").filter({ has: page.getByRole("heading", { name: "First video", exact: true }) });
+  const second = page.locator(".video-card").filter({ has: page.getByRole("heading", { name: "Second video", exact: true }) });
+  await first.getByRole("button", { name: "Tandai Selesai", exact: true }).click();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(first.getByRole("button", { name: "Tandai Selesai", exact: true })).toBeEnabled();
+  await first.getByRole("button", { name: "Tandai Selesai", exact: true }).click();
+  await pending;
+  await expect(first.getByRole("button")).toBeDisabled();
+  await expect(second.getByRole("button")).toBeDisabled();
+  release();
+  await expect(first.getByRole("button", { name: "Selesai", exact: true })).toBeDisabled();
+  await expect(first.getByRole("status").filter({ hasText: /^Selesai$/ })).toHaveText("Selesai");
+  await expect(second.getByRole("button", { name: "Tandai Selesai", exact: true })).toBeEnabled();
+  await expect(page.locator(".video-chapter-rail a").filter({ hasText: "Video Lesson" })).toHaveAttribute("href", "/learn/n5/chapter-1/video");
+  await page.reload();
+  await expect(first.getByRole("button", { name: "Selesai", exact: true })).toBeDisabled();
+  await expect(second.getByRole("button", { name: "Tandai Selesai", exact: true })).toBeEnabled();
+  expect(writes).toBe(2);
 });
 
 test("practice screen filters by category and level tabs", async ({ page }) => {

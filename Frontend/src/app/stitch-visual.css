@@ -390,7 +390,7 @@ rt { color: var(--secondary); }
 }
 .pricing-card .button-primary.pricing-cta-btn {
   background-color: rgb(244, 130, 32) !important;
-  color: #fff !important;
+  color: #5a2a00 !important;
   border: none !important;
 }
 .pricing-card .button-primary.pricing-cta-btn:hover {
