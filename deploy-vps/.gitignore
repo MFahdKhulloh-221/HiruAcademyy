@@ -1,0 +1,6 @@
+.env
+backend.env
+*.dump
+*.sql
+*.backup
+*.log

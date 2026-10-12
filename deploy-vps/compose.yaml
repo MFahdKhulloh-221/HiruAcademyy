@@ -1,0 +1,107 @@
+name: hiruacademy
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:?Set POSTGRES_DB in .env}
+      POSTGRES_USER: ${POSTGRES_USER:?Set POSTGRES_USER in .env}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    networks:
+      - private
+
+  backend:
+    build:
+      context: ../Backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - ./backend.env
+    environment:
+      APP_URL: https://${DOMAIN:?Set DOMAIN in .env}
+      FRONTEND_URL: https://${DOMAIN}
+      SANCTUM_STATEFUL_DOMAINS: ${DOMAIN}
+      CORS_ALLOWED_ORIGINS: https://${DOMAIN}
+      DB_CONNECTION: pgsql
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_DATABASE: ${POSTGRES_DB}
+      DB_USERNAME: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      DB_SSLMODE: disable
+      PORT: "10000"
+    command: ["sh", "-c", "php artisan storage:link && exec sh /var/www/html/render-start.sh"]
+    volumes:
+      - media_data:/var/www/html/storage/app/public
+      - private_uploads:/var/www/html/storage/app/private
+    expose:
+      - "10000"
+    depends_on:
+      db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "php", "-r", "exit(@file_get_contents('http://127.0.0.1:10000/up') === false ? 1 : 0);"]
+      interval: 15s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    networks:
+      - private
+
+  frontend:
+    build:
+      context: ../Frontend
+      dockerfile: ../deploy-vps/Dockerfile.frontend
+      args:
+        NEXT_PUBLIC_API_URL: https://${DOMAIN}
+    environment:
+      NODE_ENV: production
+      NEXT_PUBLIC_API_URL: https://${DOMAIN}
+      PORT: "3000"
+      HOSTNAME: "0.0.0.0"
+    restart: unless-stopped
+    expose:
+      - "3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+      - private
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+    networks:
+      - private
+
+networks:
+  private:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  media_data:
+  private_uploads:
+  caddy_data:
+  caddy_config:

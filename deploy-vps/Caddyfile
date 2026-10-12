@@ -1,0 +1,12 @@
+{$DOMAIN} {
+    encode zstd gzip
+
+    @laravel path /api /api/* /sanctum /sanctum/* /storage /storage/* /up
+    handle @laravel {
+        reverse_proxy backend:10000
+    }
+
+    handle {
+        reverse_proxy frontend:3000
+    }
+}
