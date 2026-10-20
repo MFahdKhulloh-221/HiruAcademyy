@@ -33,47 +33,57 @@ async function assertAvatar(page: Page, src: string) {
 test("focused testimonials: approved visible, pending hidden, uploaded video plays on both public pages", async ({ browser, page }) => {
   test.setTimeout(120000);
   await login(page, "student");
-  const pendingQuote = "Pending regression testimonial must remain private before approval.";
-  const pendingResponse = await page.request.put(`${api}/api/student/testimonial`, {
-    headers: await headers(page),
-    data: { context: "Focused pending fixture", quote: pendingQuote, consent_public: true },
-  });
-  expect(pendingResponse.status(), await pendingResponse.text()).toBe(200);
-  const pending = (await pendingResponse.json()).data;
-  expect(pending.moderation_status).toBe("pending");
-
   const adminContext = await browser.newContext();
+  let media: { path: string; url: string } | null = null;
+  let created: { id: number; moderation_status: string } | null = null;
+  let pending: { id: number; moderation_status: string } | null = null;
+  let admin: Page | null = null;
   try {
-    const admin = await adminContext.newPage();
+    admin = await adminContext.newPage();
     const authenticated = await admin.request.post(`${api}/api/auth/login`, {
       headers: await headers(admin),
       data: { identity: "browser.admin@example.test", password: "BrowserTesting123!" },
     });
     expect(authenticated.status(), await authenticated.text()).toBe(200);
+    const existing = await page.request.get(`${api}/api/student/testimonial?type=text`, { headers: { Accept: "application/json" } });
+    if (existing.status() === 200 && (await existing.json()).data) {
+      await admin.request.delete(`${api}/api/admin/testimonials/${(await existing.json()).data.id}`, { headers: await headers(admin) });
+    }
+
+    const pendingQuote = "Pending regression testimonial must remain private before approval.";
+    const pendingResponse = await page.request.put(`${api}/api/student/testimonial`, {
+      headers: await headers(page),
+      data: { type: "text", context: "Focused pending fixture", quote: pendingQuote, consent_public: true },
+    });
+    expect(pendingResponse.status(), await pendingResponse.text()).toBe(200);
+    pending = (await pendingResponse.json()).data;
+    expect(pending?.moderation_status).toBe("pending");
     const upload = await admin.request.post(`${api}/api/admin/media`, {
       headers: await headers(admin),
       multipart: { kind: "video", file: { name: "playable.mp4", mimeType: "video/mp4", buffer: await readFile(resolve("tests/fixtures/playable.mp4")) } },
     });
     expect(upload.status(), await upload.text()).toBe(201);
-    const media = (await upload.json()).data;
+    media = (await upload.json()).data;
     const approvedQuote = "Approved regression testimonial is publicly visible with native video.";
     const title = "Focused uploaded testimonial video";
-    const created = await admin.request.post(`${api}/api/admin/testimonials`, {
+    const createdResponse = await admin.request.post(`${api}/api/admin/testimonials`, {
       headers: await headers(admin),
-      data: { name: "Focused approved student", context: "Focused approved fixture", quote: approvedQuote, video_url: media.path, video_title: title, published: true, landing: true, sort_order: 1 },
+      data: { type: "video", title, name: "Focused approved student", context: "Focused approved fixture", quote: approvedQuote, video_url: media?.path, video_title: title, video_thumbnail: "https://testimonials.example.test/thumbnail.png", published: true, landing: true, show_on_testimonials: true, sort_order: 1 },
     });
-    expect(created.status(), await created.text()).toBe(201);
-    expect((await created.json()).data.moderation_status).toBe("approved");
-    const pendingUpdate = await admin.request.patch(`${api}/api/admin/testimonials/${pending.id}`, {
+    expect(createdResponse.status(), await createdResponse.text()).toBe(201);
+    created = (await createdResponse.json()).data;
+    expect(created?.moderation_status).toBe("approved");
+    const pendingUpdate = await admin.request.patch(`${api}/api/admin/testimonials/${pending?.id}`, {
       headers: await headers(admin),
       data: { moderation_status: "pending", published: true, landing: true },
     });
     expect(pendingUpdate.status(), await pendingUpdate.text()).toBe(200);
-    expect((await pendingUpdate.json()).data).toMatchObject({ moderation_status: "pending", published: false, landing: false });
+    expect((await pendingUpdate.json()).data).toMatchObject({ moderation_status: "pending", published: false, landing: true });
 
     const guestContext = await browser.newContext();
     try {
       const guest = await guestContext.newPage();
+      await guest.route("https://testimonials.example.test/**", route => route.fulfill({ path: resolve("tests/fixtures/sample.png"), contentType: "image/png" }));
       for (const path of ["/", "/testimoni"]) {
         const contentResponse = guest.waitForResponse(res => new URL(res.url()).pathname === "/api/testimonials");
         await guest.goto(path);
@@ -81,13 +91,15 @@ test("focused testimonials: approved visible, pending hidden, uploaded video pla
         expect(response.status()).toBe(200);
         const content = (await response.json()).data;
         expect(content.some((item: { quote: string }) => item.quote === approvedQuote)).toBe(true);
-        expect(content.some((item: { id: number }) => item.id === pending.id)).toBe(false);
+        expect(content.some((item: { id: number }) => item.id === pending?.id)).toBe(false);
         await expect(guest.getByText(approvedQuote, { exact: true })).toBeVisible();
         await expect(guest.getByText(pendingQuote, { exact: true })).toHaveCount(0);
-        const video = guest.locator("video").filter({ visible: true });
+        await expect(guest.locator("video")).toHaveCount(0);
+        await guest.getByRole("button", { name: `Putar ${title}`, exact: true }).click();
+        const video = guest.getByLabel(title, { exact: true }).and(guest.locator("video"));
         await expect(video).toHaveCount(1);
         await expect(video).toHaveAttribute("aria-label", title);
-        await expect(video).toHaveAttribute("src", media.url);
+        await expect(video).toHaveAttribute("src", media!.url);
         await video.scrollIntoViewIfNeeded();
         await video.evaluate(async (element: HTMLVideoElement) => {
           element.muted = true;
@@ -100,6 +112,11 @@ test("focused testimonials: approved visible, pending hidden, uploaded video pla
       await guestContext.close();
     }
   } finally {
+    if (admin) {
+      if (created?.id) await admin.request.delete(`${api}/api/admin/testimonials/${created.id}`, { headers: await headers(admin) });
+      if (pending?.id) await admin.request.delete(`${api}/api/admin/testimonials/${pending.id}`, { headers: await headers(admin) });
+      if (media?.path) await admin.request.delete(`${api}/api/admin/media`, { headers: await headers(admin), data: { path: media.path } });
+    }
     await adminContext.close();
   }
 });
@@ -109,7 +126,7 @@ test("focused avatar: local upload renders and persists through reload and logou
   await login(page, "student");
   await page.goto("/profile#pengaturan");
   const uploadResponse = page.waitForResponse(res => res.url().endsWith("/api/student/profile/avatar") && res.request().method() === "POST");
-  await page.locator('input[type="file"]').setInputFiles(resolve("tests/fixtures/sample.png"));
+  await page.getByRole("region", { name: "Foto Profil", exact: true }).getByLabel("Foto Profil", { exact: true }).setInputFiles(resolve("tests/fixtures/sample.png"));
   const response = await uploadResponse;
   expect(response.status(), await response.text()).toBe(200);
   const me = await page.request.get(`${api}/api/auth/me`, { headers: { Accept: "application/json" } });

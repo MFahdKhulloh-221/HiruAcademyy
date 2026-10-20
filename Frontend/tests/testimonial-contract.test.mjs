@@ -7,7 +7,9 @@ import ts from "typescript";
 const read = path => readFileSync(new URL(path, import.meta.url), "utf8");
 
 function videoHarness() {
-  const context = vm.createContext({ exports: {}, require: () => ({}), URL, process: { env: { NEXT_PUBLIC_API_URL: "http://localhost:8000" } } });
+  const provider = vm.createContext({ exports: {}, URL });
+  vm.runInContext(ts.transpileModule(read("../src/lib/testimonial-video.ts"), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, provider);
+  const context = vm.createContext({ exports: {}, require: name => name === "@/lib/testimonial-video" ? provider.exports : {}, URL, process: { env: { NEXT_PUBLIC_API_URL: "http://localhost:8000" } } });
   const source = ts.transpileModule(read("../src/lib/public-content-api.ts"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   vm.runInContext(source, context);
   return context.exports.testimonialVideo;
@@ -32,15 +34,19 @@ test("testimonial videos normalize YouTube trailing slashes without accepting ma
 test("landing and testimonial pages render validated videos with existing playback controls", () => {
   for (const path of ["../src/app/page.tsx", "../src/app/testimoni/page.tsx"]) {
     const source = read(path);
-    assert.match(source, /testimonialVideo\([^,]+\.video_url, [^)]+\.video_url_resolved_url\)/);
+    assert.match(source, /<TestimonialVideoCard/);
     assert.match(source, /className="testimonial-video-grid"/);
-    assert.match(source, /className="testimonial-video-frame"/);
-    assert.match(source, /<iframe title=\{testimonial\.title\} src=\{testimonial\.media\.src\}/);
-    assert.match(source, /sandbox="allow-scripts allow-same-origin allow-presentation"/);
-    assert.match(source, /<video controls preload="metadata"/);
-    assert.match(source, /src=\{testimonial\.media\.src\}/);
+    assert.match(source, /videoResolvedUrl=\{testimonial\.video_url_resolved_url\}/);
+    assert.match(source, /thumbnail=\{testimonial\.video_thumbnail\}/);
+    assert.match(source, /\.type === "text"/);
+    assert.match(source, /\.type === "video"/);
     assert.match(source, /key=\{testimonial\.id\}/);
   }
+  const player = read("../src/components/testimonial-video-card.tsx");
+  assert.match(player, /sandbox="allow-scripts allow-same-origin allow-presentation"/);
+  assert.match(player, /<video controls autoPlay preload="metadata"/);
+  assert.match(player, /onClick=\{\(\) => setPlaying\(true\)\}/);
+  assert.match(player, /rel="noopener noreferrer"/);
 });
 
 test("student admin PATCH is restricted, manual save excludes student metadata", () => {
@@ -56,8 +62,8 @@ test("student admin PATCH is restricted, manual save excludes student metadata",
     ts.forEachChild(node, visit);
   }
   visit(tree);
-  assert.deepEqual(patchFields, ["moderation_status", "moderation_note", "published", "landing", "sort_order"]);
-  assert.deepEqual(manualFields, ["id", "name", "context", "quote", "image", "videoUrl", "videoTitle", "published", "landing", "order"]);
+  assert.deepEqual(patchFields, ["moderation_status", "moderation_note", "published", "landing", "show_on_testimonials", "sort_order"]);
+  assert.deepEqual(manualFields, ["id", "type", "title", "videoThumbnail", "showOnTestimonials", "name", "context", "quote", "image", "videoUrl", "videoTitle", "published", "landing", "order"]);
   assert.match(patchBody, /row\.source !== "student"/);
   assert.match(patchBody, /body: JSON\.stringify\(patch\)/);
   assert.match(source, /patchStudent\(row, \{ moderation_status: "approved" \}\)/);
@@ -65,7 +71,15 @@ test("student admin PATCH is restricted, manual save excludes student metadata",
 
 test("student submission excludes identity and public landing keeps its filter", () => {
   const source = read("../src/app/profile/testimoni/page.tsx");
-  assert.match(source, /JSON\.stringify\(\{ context: context\.trim\(\), quote: quote\.trim\(\), consent_public: true \}\)/);
+  const tree = ts.createSourceFile("student.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let fields;
+  function visit(node) {
+    if (ts.isCallExpression(node) && node.expression.getText(tree) === "JSON.stringify" && ts.isObjectLiteralExpression(node.arguments[0])) fields = node.arguments[0].properties.filter(property => !ts.isSpreadAssignment(property)).map(property => property.name.getText(tree));
+    ts.forEachChild(node, visit);
+  }
+  visit(tree);
+  assert.deepEqual(fields, ["type", "context", "quote", "consent_public"]);
+  assert.match(source, /type === "video" \? \{ title: title\.trim\(\), video_url: videoUrl\.trim\(\), video_thumbnail: thumbnail\.trim\(\) \} : \{\}/);
   assert.match(source, /cause\.status === 409/);
   assert.match(source, /if \(submitting\.current \|\| locked\) return/);
   assert.match(read("../src/app/page.tsx"), /\/api\/testimonials\?landing=true/);
