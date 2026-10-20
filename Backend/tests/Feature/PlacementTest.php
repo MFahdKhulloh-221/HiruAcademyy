@@ -368,6 +368,23 @@ class PlacementTest extends TestCase
         $this->actingAs($this->admin)->postJson('/api/admin/placement-questions', $this->questionInput($config['id'], ['correct_option' => 'A']))->assertCreated();
         $this->actingAs($this->admin)->patchJson('/api/admin/placement-configs/'.$config['id'], ['status' => 'published'])->assertOk();
 
+        $loadedConfig = $this->actingAs($this->admin)->getJson('/api/admin/placement-configs')->assertOk()->json('data.0');
+        $this->assertNotEmpty($loadedConfig['recommendation_rules'][0]['id']);
+
+        // Update single rule without duplicating
+        $rulesToUpdate = $loadedConfig['recommendation_rules'];
+        $rulesToUpdate[0]['minScore'] = 0;
+        $rulesToUpdate[0]['maxScore'] = 45;
+        $rulesToUpdate[0]['resultTitle'] = 'N5 Updated';
+        $rulesToUpdate[1]['minScore'] = 46;
+        $rulesToUpdate[1]['maxScore'] = 100;
+        $updatedConfig = $this->actingAs($this->admin)->patchJson('/api/admin/placement-configs/'.$config['id'], [
+            'recommendation_rules' => $rulesToUpdate,
+        ])->assertOk()->json('data');
+        $this->assertCount(2, $updatedConfig['recommendation_rules']);
+        $this->assertSame('N5 Updated', $updatedConfig['recommendation_rules'][0]['resultTitle']);
+        $this->assertSame($rulesToUpdate[0]['id'], $updatedConfig['recommendation_rules'][0]['id']);
+
         $student = $this->user('student');
         $this->actingAs($student);
         $attempt = $this->start();

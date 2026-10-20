@@ -54,7 +54,7 @@ class PlacementService
         $text = [$required, 'required', 'string'];
         $status = ['sometimes', 'required', Rule::in(['draft', 'published'])];
         if ($resource === 'placement-configs') {
-            return ['title' => [...$text, 'max:255'], 'intro_heading' => [...$text, 'max:255'], 'duration_minutes' => [$required, 'required', 'integer', 'min:1', 'max:2147483647'], 'description' => $text, 'status' => $status, 'recommendation_rules' => ['sometimes', 'array'], 'recommendation_rules.*.minScore' => ['required', 'integer', 'between:0,100'], 'recommendation_rules.*.maxScore' => ['required', 'integer', 'between:0,100'], 'recommendation_rules.*.recommendedProgramCode' => ['required', Rule::in(['N5', 'N4', 'N3', 'N2', 'N1'])], 'recommendation_rules.*.resultTitle' => ['required', 'string', 'max:255'], 'recommendation_rules.*.resultDescription' => ['required', 'string', 'max:5000']];
+            return ['title' => [...$text, 'max:255'], 'intro_heading' => [...$text, 'max:255'], 'duration_minutes' => [$required, 'required', 'integer', 'min:1', 'max:2147483647'], 'description' => $text, 'status' => $status, 'recommendation_rules' => ['sometimes', 'array'], 'recommendation_rules.*.id' => ['sometimes', 'required', 'string', 'max:100', 'distinct:strict'], 'recommendation_rules.*.minScore' => ['required', 'integer', 'between:0,100'], 'recommendation_rules.*.maxScore' => ['required', 'integer', 'between:0,100'], 'recommendation_rules.*.recommendedProgramCode' => ['required', Rule::in(['N5', 'N4', 'N3', 'N2', 'N1'])], 'recommendation_rules.*.resultTitle' => ['required', 'string', 'max:255'], 'recommendation_rules.*.resultDescription' => ['required', 'string', 'max:5000']];
         }
         $media = ['bail', 'sometimes', 'nullable', 'string', function ($attribute, $value, $fail) {
             if (! $this->safeReference($value)) {
@@ -92,7 +92,7 @@ class PlacementService
         return DB::transaction(function () use ($class, $resource, $data, $model) {
             if ($resource === 'placement-configs') {
                 $locked = $model ? PlacementConfig::whereKey($model->id)->lockForUpdate()->firstOrFail() : new PlacementConfig;
-                $rules = $data['recommendation_rules'] ?? $locked->recommendation_rules ?? [];
+                $rules = $this->recommendationRules($data['recommendation_rules'] ?? $locked->recommendation_rules ?? [], $locked->id);
                 usort($rules, fn ($first, $second) => $first['minScore'] <=> $second['minScore']);
                 $previous = -1;
                 foreach ($rules as $rule) {
@@ -101,7 +101,7 @@ class PlacementService
                     }
                     $previous = $rule['maxScore'];
                 }
-                $locked->fill($data)->save();
+                $locked->fill([...$data, 'recommendation_rules' => $rules])->save();
                 $this->assertPublishable($locked);
             } else {
                 $parentId = $model?->placement_config_id ?? $data['placement_config_id'];
@@ -141,10 +141,19 @@ class PlacementService
         }, 3);
     }
 
+    private function recommendationRules(array $rules, ?int $configId): array
+    {
+        foreach ($rules as $index => &$rule) {
+            $rule['id'] ??= $configId ? "placement-{$configId}-rule-{$index}" : (string) \Illuminate\Support\Str::uuid();
+        }
+
+        return $rules;
+    }
+
     public function adminPayload(Model $model): array
     {
         return $model instanceof PlacementConfig
-            ? $model->only([...self::CONFIG_FIELDS, 'status', 'recommendation_rules'])
+            ? [...$model->only([...self::CONFIG_FIELDS, 'status']), 'recommendation_rules' => $this->recommendationRules($model->recommendation_rules ?? [], $model->id)]
             : $model->only([...self::QUESTION_FIELDS, 'placement_config_id', 'correct_option', 'explanation', 'status']);
     }
 

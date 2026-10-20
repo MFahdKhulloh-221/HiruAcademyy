@@ -2,6 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { FaInstagram, FaWhatsapp } from "react-icons/fa";
 import { BrandLogo } from "@/components/brand-logo";
+import { ADMIN_WHATSAPP_URL } from "@/lib/admin-whatsapp";
 
 export function PublicHeader({ active }: { active?: string }) {
   const links = [["Program", "/program"], ["Placement Test", "/placement"], ["Testimoni", "/testimoni"], ["Blog", "/blog"]];
@@ -9,7 +10,7 @@ export function PublicHeader({ active }: { active?: string }) {
 }
 
 export function PublicFooter() {
-  return <footer className="public-footer"><div className="public-wrap public-footer-grid"><div><Link href="/" aria-label="HIRU Academy, kembali ke beranda"><span className="official-brand-logo"><Image src="/brand/hiru-footer.png" alt="HIRU Academy" width={2212} height={356} /></span></Link><div className="public-social" aria-label="Media sosial"><a href="https://www.instagram.com/hiru_academy?utm_source=ig_web_button_share_sheet&exln=ZDNlZDc0MzIxNw==" target="_blank" rel="noopener noreferrer" aria-label="Instagram Hiru Academy" style={{ minWidth: 44, minHeight: 44, display: "inline-flex", alignItems: "center", justifyContent: "center" }}><FaInstagram size={20} aria-hidden="true" /></a><span aria-hidden="true"><FaWhatsapp size={20} /></span></div></div><nav aria-label="Navigasi footer"><Link href="/program">Program</Link><Link href="/placement">Placement Test</Link><Link href="/testimoni">Testimoni</Link><Link href="/blog">Blog</Link><Link href="/kebijakan-privasi">Kebijakan Privasi</Link></nav></div><div className="public-wrap"><div className="public-copyright">© 2026 Hiru Academy. Belajar Jepang dengan arah yang jelas.</div></div></footer>;
+  return <footer className="public-footer"><div className="public-wrap public-footer-grid"><div><Link href="/" aria-label="HIRU Academy, kembali ke beranda"><span className="official-brand-logo"><Image src="/brand/hiru-footer.png" alt="HIRU Academy" width={2212} height={356} /></span></Link><div className="public-social" aria-label="Media sosial"><a href="https://www.instagram.com/hiru_academy?utm_source=ig_web_button_share_sheet&exln=ZDNlZDc0MzIxNw==" target="_blank" rel="noopener noreferrer" aria-label="Instagram Hiru Academy" style={{ minWidth: 44, minHeight: 44, display: "inline-flex", alignItems: "center", justifyContent: "center" }}><FaInstagram size={20} aria-hidden="true" /></a><a href={ADMIN_WHATSAPP_URL} target="_blank" rel="noopener noreferrer" aria-label="Hubungi Hiru Academy melalui WhatsApp"><FaWhatsapp size={20} aria-hidden="true" /></a></div></div><nav aria-label="Navigasi footer"><Link href="/program">Program</Link><Link href="/placement">Placement Test</Link><Link href="/testimoni">Testimoni</Link><Link href="/blog">Blog</Link><Link href="/kebijakan-privasi">Kebijakan Privasi</Link></nav></div><div className="public-wrap"><div className="public-copyright">© 2026 Hiru Academy. Belajar Jepang dengan arah yang jelas.</div></div></footer>;
 }
 
 export function PublicPage({ children, active }: { children: React.ReactNode; active?: string }) { return <><PublicHeader active={active} />{children}<PublicFooter /></>; }

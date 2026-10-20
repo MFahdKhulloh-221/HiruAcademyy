@@ -31,6 +31,11 @@ class PublicContentService
         'lesson' => 'Materi / Video Lesson',
         'flashcard' => 'Flashcard',
         'evaluation' => 'Try Out / Evaluasi',
+        'module' => 'Modul',
+        'practice' => 'Latihan',
+        'checkpoint' => 'Checkpoint',
+        'replay' => 'Jadwal & Replay',
+        'community' => 'Komunitas',
     ];
 
     public const CATEGORIES = ['Tips Belajar', 'Grammar / Bunpou', 'Listening / Choukai', 'JLPT'];
@@ -54,6 +59,17 @@ class PublicContentService
             $model = $class::query()->lockForUpdate()->findOrFail($model->getKey());
         }
         $model ??= new $class;
+        if ($resource === 'testimonials' && $model->source !== 'student') {
+            if (array_key_exists('video_title', $input)) {
+                if (array_key_exists('title', $input) && $input['title'] !== $input['video_title']) {
+                    throw ValidationException::withMessages(['title' => 'Title aliases must match.']);
+                }
+                $input['title'] = $input['video_title'];
+            }
+            if (! array_key_exists('type', $input) && array_key_exists('video_url', $input)) {
+                $input['type'] = filled($input['video_url']) ? 'video' : 'text';
+            }
+        }
         $required = $model->exists ? 'sometimes' : 'required';
         $text = ['bail', $required, 'required', 'string'];
         $string = [...$text, 'max:255'];
@@ -87,7 +103,11 @@ class PublicContentService
                 'quote' => $text,
                 'image' => [...$optional, $media],
                 'video_url' => [...$optional, app(MediaService::class)->rule('video')],
-                'video_title' => $optional,
+                'video_title' => [...$optional, 'max:255'],
+                'title' => [...$optional, 'max:255'],
+                'type' => ['sometimes', 'required', Rule::in(['text', 'video'])],
+                'video_thumbnail' => [...$optional, app(MediaService::class)->rule('video_thumbnail')],
+                'show_on_testimonials' => $boolean,
                 'published' => $boolean,
                 'landing' => $boolean,
                 'sort_order' => $order,
@@ -127,6 +147,7 @@ class PublicContentService
             $rules = [
                 'moderation_status' => ['sometimes', 'required', Rule::in(['pending', 'approved', 'rejected'])],
                 'moderation_note' => $optional,
+                'show_on_testimonials' => $boolean,
                 'published' => $boolean,
                 'landing' => $boolean,
                 'sort_order' => $order,
@@ -149,16 +170,33 @@ class PublicContentService
             if (! $model->exists) {
                 $model->forceFill(['source' => 'admin', 'user_id' => null, 'moderation_status' => 'approved', 'consent_public' => true]);
             }
+            if ($model->isDirty('title')) {
+                $model->video_title = $model->title;
+            }
+            if ($model->source === 'student' && $model->moderation_status === 'approved' && $model->first_approved_at === null) {
+                if (! $model->consent_public) {
+                    throw ValidationException::withMessages(['moderation_status' => 'Student approval requires public consent.']);
+                }
+                $model->first_approved_at = now();
+                $model->published = true;
+                $model->landing = true;
+                $model->show_on_testimonials = true;
+            }
             if ($model->moderation_status !== 'approved') {
                 $model->published = false;
-                $model->landing = false;
             }
             if ($model->source === 'student' && $model->published && ! $model->consent_public) {
                 throw ValidationException::withMessages(['published' => 'Student publication requires approval and public consent.']);
             }
-            if (! $model->published) {
-                $model->landing = false;
+            if ($model->source === 'admin' && ! $model->exists && ! array_key_exists('show_on_testimonials', $data)) {
+                $model->show_on_testimonials = $model->published;
             }
+        }
+        if ($model instanceof Testimonial && $model->type === 'video' && (! $model->exists || $model->isDirty(['type', 'video_url', 'title', 'video_thumbnail'])) && (! filled($model->video_url) || ! filled($model->title))) {
+            throw ValidationException::withMessages(['video_url' => 'Video testimonials require a video URL and title.']);
+        }
+        if ($model instanceof Testimonial && $model->type === 'video' && (! $model->exists || $model->isDirty(['type', 'video_url', 'title', 'video_thumbnail'])) && ! filled($model->video_thumbnail)) {
+            throw ValidationException::withMessages(['video_thumbnail' => 'New or changed videos require a thumbnail.']);
         }
         if ($model instanceof Testimonial && (filled($model->video_url) !== filled($model->video_title))) {
             throw ValidationException::withMessages(['video_title' => 'Video URL and title must be provided or cleared together.']);
@@ -195,7 +233,7 @@ class PublicContentService
         $fields = match (true) {
             $model instanceof ShowcaseItem => ['key', 'label', 'image_src', 'alt'],
             $model instanceof SenseiProfile => ['name', 'role', 'bio', 'photo', 'expertise', 'level'],
-            $model instanceof Testimonial => ['name', 'context', 'quote', 'image', 'video_url', 'video_title'],
+            $model instanceof Testimonial => ['name', 'context', 'quote', 'image', 'type', 'title', 'video_url', 'video_title', 'video_thumbnail', 'landing', 'show_on_testimonials'],
             $model instanceof BlogArticle => ['title', 'slug', 'excerpt', 'body', 'thumbnail', 'category', 'seo_title', 'meta_description', 'featured', 'published_at', 'author'],
             $model instanceof CertificateTemplate => ['program', 'title', 'description', 'image'],
         };
@@ -218,15 +256,16 @@ class PublicContentService
                 $model->loadMissing('user:id,name,avatar');
                 $data['name'] = $model->user?->name ?? $model->name;
                 $data['image'] = $model->user?->avatar;
-                $data['video_url'] = null;
-                $data['video_title'] = null;
+                $data['video_title'] = $model->title;
                 try {
                     $data['image_resolved_url'] = app(MediaService::class)->url($data['image']);
                 } catch (\Throwable $exception) {
                     report($exception);
                     $data['image_resolved_url'] = null;
                 }
-                $data['video_url_resolved_url'] = null;
+                foreach (['video_url', 'video_thumbnail'] as $field) {
+                    $data[$field.'_resolved_url'] = filled($data[$field]) ? app(MediaService::class)->url($data[$field]) : null;
+                }
 
                 return $data;
             }

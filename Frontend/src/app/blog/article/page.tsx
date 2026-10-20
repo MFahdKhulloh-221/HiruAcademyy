@@ -1,18 +1,45 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense } from "react";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { PublicPage } from "@/components/public-shell";
-import { contentMedia, useContent, type ArticleContent } from "@/lib/public-content-api";
+import { useContent, type ArticleContent } from "@/lib/public-content-api";
+import { BlogThumbnail } from "@/components/blog-thumbnail";
+import { parseArticleBody } from "@/lib/blog-parser";
 import type { ArticleBlock } from "@/lib/admin-website-store";
+
+function renderInlineText(text: string) {
+  if (!text.includes("[") || !text.includes("](") || !text.includes(")")) {
+    return text;
+  }
+  const parts = text.split(/(\[[^\]]+\]\([^)]+\))/g);
+  return parts.map((part, index) => {
+    const match = part.match(/^\[(.*?)\]\((.*?)\)$/);
+    if (!match) return part;
+    const label = match[1];
+    const href = match[2];
+    const isInternal = href.startsWith("/");
+    if (isInternal) {
+      return (
+        <Link key={index} href={href} style={{ color: "var(--orange-dark)", textDecoration: "underline" }}>
+          {label}
+        </Link>
+      );
+    }
+    return (
+      <a key={index} href={href} rel="noopener noreferrer" target="_blank" style={{ color: "var(--orange-dark)", textDecoration: "underline" }}>
+        {label}
+      </a>
+    );
+  });
+}
 
 function renderBlock(block: ArticleBlock) {
   switch (block.type) {
     case "paragraph":
-      return <p key={block.id}>{block.text}</p>;
+      return <p key={block.id}>{renderInlineText(block.text || "")}</p>;
     case "h2":
       return <h2 key={block.id}>{block.text}</h2>;
     case "h3":
@@ -21,7 +48,7 @@ function renderBlock(block: ArticleBlock) {
       return (
         <ul key={block.id}>
           {block.items?.map((item, index) => (
-            <li key={index}>{item}</li>
+            <li key={index}>{renderInlineText(item)}</li>
           ))}
         </ul>
       );
@@ -29,7 +56,7 @@ function renderBlock(block: ArticleBlock) {
       return (
         <ol key={block.id}>
           {block.items?.map((item, index) => (
-            <li key={index}>{item}</li>
+            <li key={index}>{renderInlineText(item)}</li>
           ))}
         </ol>
       );
@@ -48,14 +75,20 @@ function renderBlock(block: ArticleBlock) {
       );
     case "image":
       return (
-        <figure key={block.id} style={{ margin: "24px 0" }}>
+        <figure key={block.id} className="blog-article-figure" style={{ margin: "28px 0" }}>
           {block.url ? (
-            <div style={{ position: "relative", width: "100%", height: "340px", borderRadius: "16px", overflow: "hidden" }}>
-              <Image alt={block.alt || "Gambar artikel"} fill src={block.url} style={{ objectFit: "cover" }} />
+            <div style={{ position: "relative", width: "100%", borderRadius: "16px", overflow: "hidden", background: "#f8f9fc", border: "1px solid #eef0f4" }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={block.url}
+                alt={block.alt || "Gambar artikel"}
+                style={{ width: "100%", height: "auto", display: "block", maxHeight: "540px", objectFit: "contain", margin: "0 auto" }}
+                loading="lazy"
+              />
             </div>
           ) : null}
           {block.caption && (
-            <figcaption style={{ marginTop: "8px", fontSize: "14px", color: "var(--muted)", textAlign: "center" }}>
+            <figcaption style={{ marginTop: "10px", fontSize: "14px", color: "var(--muted, #64748b)", textAlign: "center", fontStyle: "italic" }}>
               {block.caption}
             </figcaption>
           )}
@@ -71,7 +104,15 @@ export function ArticleReader({ requestedSlug }: { requestedSlug?: string }) {
   const slug = requestedSlug ?? searchParams.get("slug") ?? "";
   const content = useContent<ArticleContent>(`/api/blog/${/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug) ? slug : "invalid-slug"}`, true);
   const found = content.data.find(item => item.slug === slug);
-  const article = found ? { ...found, summary: found.excerpt ?? "", imageUrl: contentMedia(found.thumbnail), imageAlt: found.title, publishedAt: found.published_at, updatedAt: "", blocks: found.body.split(/\n\s*\n/).map((text, index) => ({ id: String(index), type: "paragraph" as const, text })) } : undefined;
+  const article = found
+    ? {
+        ...found,
+        summary: found.excerpt ?? "",
+        publishedAt: found.published_at,
+        updatedAt: "",
+        blocks: parseArticleBody(found.body),
+      }
+    : undefined;
   if (content.loading || content.error) return <PublicPage active="Blog"><main className="public-main blog-detail-page">{content.loading ? <LoadingSkeleton variant="article" label="Memuat artikel…" /> : <div role="alert">{content.error} <button type="button" onClick={content.reload}>Coba lagi</button></div>}</main></PublicPage>;
 
   if (!article) {
@@ -120,21 +161,9 @@ export function ArticleReader({ requestedSlug }: { requestedSlug?: string }) {
               {article.summary && <p>{article.summary}</p>}
             </header>
 
-            {article.imageUrl ? (
-              <div className="blog-detail-thumb" aria-label={`Thumbnail ${article.title}`}>
-                <Image
-                  alt={article.imageAlt || article.title}
-                  fill
-                  sizes="(max-width: 768px) 100vw, 840px"
-                  src={article.imageUrl}
-                  style={{ objectFit: "cover" }}
-                />
-              </div>
-            ) : (
-              <div className="blog-detail-thumb" aria-label="Thumbnail Artikel">
-                <span>No Image</span>
-              </div>
-            )}
+            <div className="blog-detail-thumb" aria-label={`Thumbnail ${article.title}`}>
+              <BlogThumbnail article={article} sizes="(max-width: 768px) 100vw, 840px" />
+            </div>
 
             <div className="blog-body">
               {article.blocks && article.blocks.length > 0 ? (

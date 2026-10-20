@@ -4,13 +4,14 @@ import Image from "next/image";
 import Link from "next/link";
 import { type SVGProps } from "react";
 import { LandingMotion } from "@/components/landing-motion";
+import { TestimonialVideoCard } from "@/components/testimonial-video-card";
 import { LearningPath } from "@/components/learning-path";
 import { PublicPage } from "@/components/public-shell";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { SenseiGrid } from "@/components/sensei-grid";
 import { StudentAvatar } from "@/components/student-avatar";
 import { usePublishedLanding } from "@/lib/website-store";
-import { contentMedia, offerPrice, testimonialVideo, useContent, type PublicOffer, type ShowcaseContent, type TestimonialContent } from "@/lib/public-content-api";
+import { contentMedia, offerPrice, useContent, type PublicOffer, type ShowcaseContent, type TestimonialContent } from "@/lib/public-content-api";
 
 type IconName = "arrow" | "book" | "check" | "compass" | "layers" | "play" | "sparkle" | "target" | "users";
 
@@ -131,11 +132,8 @@ export default function Home() {
     return { ...offer, price: offer.id === "free" ? offer.price : pricing.loading ? "Memuat harga…" : pricing.error ? "Harga gagal dimuat" : offerPrice(available[0]).split("/")[0], period: offer.id === "free" ? offer.period : available[0] ? `/${available[0].duration_months} bulan` : "" };
   });
   const previews = showcase.data.map(item => ({ key: item.key, label: item.label, imageSrc: contentMedia(item.image_src) }));
-  const displayTestimonials = testimonialContent.data.map(t => ({ id: t.id, name: t.name, quote: t.quote, membership: t.context, avatarSrc: contentMedia(t.image, t.image_resolved_url) }));
-  const testimonialVideos = testimonialContent.data.flatMap(item => {
-    const media = testimonialVideo(item.video_url, item.video_url_resolved_url);
-    return media ? [{ id: item.id, name: item.name, membership: item.context, title: item.video_title || `Video testimoni ${item.name}`, media, posterSrc: contentMedia(item.image, item.image_resolved_url) }] : [];
-  });
+  const displayTestimonials = testimonialContent.data.filter(t => t.type === "text" || (!t.type && !t.video_url)).map(t => ({ id: t.id, name: t.name, quote: t.quote, membership: t.context, avatarSrc: contentMedia(t.image, t.image_resolved_url) }));
+  const testimonialVideos = testimonialContent.data.filter(item => item.type === "video" || (!item.type && item.video_url));
 
   return (
     <PublicPage>
@@ -205,7 +203,7 @@ export default function Home() {
 
         <section className="section landing-sensei" data-reveal><div className="container"><div className="landing-sensei-heading"><h2>Belajar Bersama Sensei Berpengalaman</h2><p>Temukan mentor sesuai level, target, dan gaya belajarmu.</p></div><SenseiGrid carousel /><div className="landing-sensei-action"><Link className="button button-dark" href="/sensei">Lihat Semua Sensei</Link></div></div></section>
 
-        <section className="section landing-testimonials" data-reveal><div className="container"><div className="section-heading"><p className="kicker">CERITA PEMBELAJAR</p><h2>{landing.testimonial?.heading || "Cerita dari Pembelajar Hiru Academy"}</h2></div>{testimonialContent.loading ? <LoadingSkeleton variant="cards" label="Memuat testimoni…" /> : testimonialContent.error ? <div role="alert">{testimonialContent.error} <button type="button" onClick={testimonialContent.reload}>Coba lagi</button></div> : !displayTestimonials.length && <p>Belum ada testimoni.</p>}<div className="testimonial-grid">{displayTestimonials.map((testimonial, index) => <article className="testimonial-card reveal-item" key={testimonial.id} style={{ "--reveal-index": index } as React.CSSProperties}><StudentAvatar name={testimonial.name} url={testimonial.avatarSrc} className="testimonial-avatar" /><blockquote>{testimonial.quote}</blockquote><footer><strong>{testimonial.name}</strong><small>{testimonial.membership}</small></footer></article>)}</div>{testimonialVideos.length > 0 && <div className="testimonial-video-section"><div className="testimonial-video-grid">{testimonialVideos.map((testimonial) => <article key={testimonial.id}><div className="testimonial-video-frame">{testimonial.media.kind === "youtube" ? <iframe title={testimonial.title} src={testimonial.media.src} loading="lazy" referrerPolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation" allow="fullscreen; picture-in-picture" allowFullScreen style={{ width: "100%", height: "100%", border: 0 }} /> : <video controls preload="metadata" aria-label={testimonial.title} poster={testimonial.posterSrc || undefined} src={testimonial.media.src} />}</div><footer><strong>{testimonial.name}</strong><small>{testimonial.membership}</small></footer></article>)}</div></div>}<div className="landing-testimonials-action"><Link className="button button-primary" href="/testimoni">Lihat lebih banyak</Link></div></div></section>
+        <section className="section landing-testimonials" data-reveal><div className="container"><div className="section-heading"><p className="kicker">CERITA PEMBELAJAR</p><h2>{landing.testimonial?.heading || "Cerita dari Pembelajar Hiru Academy"}</h2></div>{testimonialContent.loading ? <LoadingSkeleton variant="cards" label="Memuat testimoni…" /> : testimonialContent.error ? <div role="alert">{testimonialContent.error} <button type="button" onClick={testimonialContent.reload}>Coba lagi</button></div> : !displayTestimonials.length && <p>Belum ada testimoni.</p>}<div className="testimonial-grid">{displayTestimonials.map((testimonial, index) => <article className="testimonial-card reveal-item" key={testimonial.id} style={{ "--reveal-index": index } as React.CSSProperties}><StudentAvatar name={testimonial.name} url={testimonial.avatarSrc} className="testimonial-avatar" /><blockquote>{testimonial.quote}</blockquote><footer><strong>{testimonial.name}</strong><small>{testimonial.membership}</small></footer></article>)}</div>{testimonialVideos.length > 0 && <div className="testimonial-video-section"><div className="testimonial-video-grid">{testimonialVideos.map((testimonial) => <TestimonialVideoCard key={testimonial.id} title={testimonial.title || testimonial.video_title || testimonial.name} name={testimonial.name} context={testimonial.context} description={testimonial.quote} videoUrl={testimonial.video_url || ""} videoResolvedUrl={testimonial.video_url_resolved_url} thumbnail={testimonial.video_thumbnail} thumbnailResolvedUrl={testimonial.video_thumbnail_resolved_url} />)}</div></div>}<div className="landing-testimonials-action"><Link className="button button-primary" href="/testimoni">Lihat lebih banyak</Link></div></div></section>
 
         <section className="final-cta" id="tentang" data-reveal><div className="container"><div className="cta-panel"><div className="cta-pattern" aria-hidden="true">あ <span>日</span> 語</div><h2>{landing.finalCta?.heading || "Belum tahu harus mulai dari level mana?"}</h2><p>{landing.finalCta?.support || "Belum yakin levelmu? Gunakan Placement Test. Sudah punya target? Coba Chapter 1 gratis pada level pilihanmu."}</p><ArrowLink href={landing.finalCta?.ctaPath || "/placement"}>{landing.finalCta?.ctaLabel || "Mulai Sekarang"}</ArrowLink></div></div></section>
       </main>

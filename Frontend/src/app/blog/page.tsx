@@ -1,11 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import Image from "next/image";
+import { BlogThumbnail } from "@/components/blog-thumbnail";
 import Link from "next/link";
 import { PublicPage } from "@/components/public-shell";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
-import { contentMedia, useContent, type ArticleContent } from "@/lib/public-content-api";
+import { useContent, type ArticleContent } from "@/lib/public-content-api";
 
 export default function BlogPage() {
   const [query, setQuery] = useState("");
@@ -14,7 +14,7 @@ export default function BlogPage() {
   const featured = content.data.find(article => article.featured);
   const categories = ["Semua", ...new Set(content.data.map(article => article.category))];
   const visible = content.data.filter(article => (category === "Semua" || article.category === category) && `${article.title} ${article.excerpt ?? ""} ${article.category}`.toLocaleLowerCase("id-ID").includes(query.trim().toLocaleLowerCase("id-ID")));
-  const thumbnail = (article: ArticleContent) => contentMedia(article.thumbnail) ? <Image unoptimized src={contentMedia(article.thumbnail)} alt={article.title} fill sizes="(max-width: 768px) 100vw, 50vw" style={{ objectFit: "cover" }} /> : <span>No Image</span>;
+  const thumbnail = (article: ArticleContent) => <BlogThumbnail article={article} />;
   const meta = (article: ArticleContent) => <div className="blog-meta"><span>{article.category}</span><small>{article.author}{article.published_at ? ` • ${new Date(article.published_at).toLocaleDateString("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "long", year: "numeric" })}` : ""}</small></div>;
   return <PublicPage active="Blog"><main className="public-main blog-page">
     <section className="blog-hero"><div><p className="kicker">HIRU INSIGHT</p><h1>Panduan Bahasa Jepang dan Persiapan JLPT</h1><p>Temukan penjelasan materi, strategi ujian, budaya Jepang, dan tips belajar praktis dari Hiru Academy.</p><label className="blog-search"><span aria-hidden="true">⌕</span><input aria-label="Cari materi, level, atau topik" placeholder="Cari materi, level, atau topik" value={query} onChange={event => setQuery(event.target.value)} /></label></div></section>

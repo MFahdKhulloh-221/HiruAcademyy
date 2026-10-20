@@ -28,8 +28,13 @@ class PublicContentController extends Controller
         $filters = $request->validate(['landing' => ['sometimes', 'required', Rule::in(['true', 'false', '1', '0'])]]);
         $query = $this->content->ordered('testimonials')->where('published', true)
             ->where('moderation_status', 'approved')->where('consent_public', true);
-        if (isset($filters['landing'])) {
-            $query->where('landing', $request->boolean('landing'));
+        if (isset($filters['landing']) && $request->boolean('landing')) {
+            $query->where('landing', true);
+        } else {
+            $query->where('show_on_testimonials', true);
+            if (isset($filters['landing'])) {
+                $query->where('landing', false);
+            }
         }
 
         return response()->json(['data' => $query->get()->map(fn ($model) => $this->content->payload($model, true))]);

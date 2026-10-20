@@ -182,11 +182,11 @@ function PlacementEditor({ initial }: { initial: Awaited<ReturnType<typeof loadA
         </AdminSection>
       </>}
 
-      {activeTab === "Aturan Hasil" && <AdminSection title="Aturan Rekomendasi Level" description="Tentukan level dan program yang direkomendasikan berdasarkan rentang skor persentase." actions={<div className="admin-page-actions"><button type="button" className="button button-primary" onClick={() => { setError(""); setRuleDraft({ minScore: 0, maxScore: 50, recommendedProgramCode: "N5", resultTitle: "Rekomendasi N5", resultDescription: "Disarankan memulai pembelajaran dari level N5." }); }}>Tambah Aturan</button><button type="button" className="button button-secondary" onClick={saveRules}>Simpan Aturan</button></div>}>
+      {activeTab === "Aturan Hasil" && <AdminSection title="Aturan Rekomendasi Level" description="Tentukan level dan program yang direkomendasikan berdasarkan rentang skor persentase." actions={<div className="admin-page-actions"><button type="button" className="button button-primary" onClick={() => { setError(""); setRuleDraft({ id: crypto.randomUUID(), minScore: 0, maxScore: 50, recommendedProgramCode: "N5", resultTitle: "Rekomendasi N5", resultDescription: "Disarankan memulai pembelajaran dari level N5." }); }}>Tambah Aturan</button><button type="button" className="button button-secondary" onClick={saveRules}>Simpan Aturan</button></div>}>
         <AdminDataTable
           caption="Aturan Rekomendasi"
           rows={rules}
-          rowKey={(r) => `${r.minScore}-${r.maxScore}-${r.recommendedProgramCode}`}
+          rowKey={(r) => r.id}
           columns={[
             { key: "range", header: "Rentang Skor", cell: (r) => `${r.minScore}% – ${r.maxScore}%` },
             { key: "level", header: "Rekomendasi Level", cell: (r) => <AdminStatusBadge status={r.recommendedProgramCode} /> },
@@ -194,7 +194,7 @@ function PlacementEditor({ initial }: { initial: Awaited<ReturnType<typeof loadA
             { key: "description", header: "Deskripsi", cell: (r) => r.resultDescription },
           ]}
           actions={{
-            cell: (r) => <div className="admin-page-actions"><button type="button" className="button" onClick={() => { setError(""); setRuleDraft({ ...r }); }}>Edit</button><button type="button" className="button" onClick={() => setRules((curr) => curr.filter((item) => item !== r))}>Hapus</button></div>
+            cell: (r) => <div className="admin-page-actions"><button type="button" className="button" onClick={() => { setError(""); setRuleDraft({ ...r }); }}>Edit</button><button type="button" className="button" onClick={() => setRules((curr) => curr.filter((item) => item.id !== r.id))}>Hapus</button></div>
           }}
         />
       </AdminSection>}
@@ -249,9 +249,9 @@ function PlacementEditor({ initial }: { initial: Awaited<ReturnType<typeof loadA
           return;
         }
         setRules((curr) => {
-          const filtered = curr.filter((r) => !(r.minScore === ruleDraft.minScore && r.maxScore === ruleDraft.maxScore));
-          const updated = [...filtered, ruleDraft].sort((a, b) => a.minScore - b.minScore);
-          return updated;
+          const exists = curr.some((r) => r.id === ruleDraft.id);
+          const next = exists ? curr.map((r) => (r.id === ruleDraft.id ? ruleDraft : r)) : [...curr, ruleDraft];
+          return [...next].sort((a, b) => a.minScore - b.minScore);
         });
         closeRuleDraft();
       }}>

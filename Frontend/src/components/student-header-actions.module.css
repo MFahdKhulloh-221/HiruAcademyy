@@ -1,4 +1,4 @@
-.actions{position:relative;display:flex;align-items:center;justify-content:flex-end;gap:14px;min-width:0}
+.actions{position:relative;display:flex;align-items:center;justify-content:flex-end;gap:14px;min-width:0;margin-left:auto}
 .actions button,.actions a{min-height:44px}
 .bell{position:relative;display:grid;place-items:center;width:44px;border:0;border-radius:12px;background:transparent;color:var(--ink);font-size:22px;cursor:pointer}
 .badge{position:absolute;top:0;right:-5px;min-width:20px;padding:2px 4px;border-radius:20px;background:#c62828;color:#fff;font-size:11px;font-weight:800;line-height:16px}
@@ -10,4 +10,4 @@
 .dropdown a:hover,.dropdown button:hover{background:#fff1e6}.dropdown article{margin:10px 0;padding:12px;border:1px solid #dee1ea;border-radius:10px;font-size:14px}.dropdown .unread{border-left:4px solid var(--orange);background:#fffaf5}
 .dropdown article>p{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-line}
 .file{display:none}
-@media(max-width:639px){.identity{display:none}.account{max-width:44px}.actions{gap:10px}}
+@media(max-width:639px){.identity{display:none}.account{max-width:44px;min-width:44px;justify-content:center}.actions{gap:10px}}

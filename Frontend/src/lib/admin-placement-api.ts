@@ -3,7 +3,7 @@ import { uploadAdminMedia } from "@/lib/admin-media";
 import type { PlacementSettings, PlacementQuestion } from "@/components/admin-placement-preview";
 
 export type RecommendationRule = {
-  id?: string;
+  id: string;
   minScore: number;
   maxScore: number;
   recommendedProgramCode: string;
