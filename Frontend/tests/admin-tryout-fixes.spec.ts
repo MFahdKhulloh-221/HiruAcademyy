@@ -34,7 +34,7 @@ test("duration edit validates, persists on refresh, and clears to null", async (
 const sessions = ["vocabulary_kanji", "grammar", "reading", "audio"];
 const labels = ["Kosakata & Kanji", "Tata Bahasa", "Reading / Dokkai", "Audio / Choukai"];
 function fixture(id = 7) {
-  return { id, program_id: 1, title: `Try Out ${id}`, status: "draft", total_passing_score: 1, questions: sessions.flatMap((session, section) => Array.from({ length: 25 }, (_, index) => ({ id: id * 1000 + section * 25 + index, session, question: `Question ${section}-${index}`, options: { A: "First", B: "Second", C: "Third", D: "Fourth" }, correct_option: "A", explanation: "", reading_passage: session === "reading" ? "Passage" : null, audio_url: session === "audio" ? "media/audio.mp3" : null, point_value: index < 20 ? 2 : 1, sort_order: index, status: "draft" }))) };
+  return { id, max_score: 180, sort_order: 1, session_passing_scores: null as Record<string, number> | null, program_id: 1, title: `Try Out ${id}`, status: "draft", total_passing_score: 1, questions: sessions.flatMap((session, section) => Array.from({ length: 25 }, (_, index) => ({ id: id * 1000 + section * 25 + index, session, question: `Question ${section}-${index}`, options: { A: "First", B: "Second", C: "Third", D: "Fourth" }, correct_option: "A", explanation: "", reading_passage: session === "reading" ? "Passage" : null, audio_url: session === "audio" ? "media/audio.mp3" : null, point_value: index < 20 ? 2 : 1, sort_order: index, status: "draft" }))) };
 }
 async function mock(page: Page, items = [fixture()]) {
   const writes: { path: string; method: string; body: unknown }[] = [];
@@ -180,4 +180,25 @@ test("preview grades correct counts across all four sessions independently of we
   await preview.getByRole("button", { name: "Runner", exact: true }).click();
   await expect(preview.getByRole("radio").first()).not.toBeChecked();
   expect(api.writes).toEqual([]);
+});
+
+test("configurable maximum and explicit session scores persist after refresh", async ({ page }) => {
+  const api = await mock(page);
+  await page.goto("/admin/try-out");
+  const row = page.getByRole("row").filter({ hasText: "Try Out 7" });
+  await row.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByLabel("Skor maksimal", { exact: true }).fill("40");
+  const scores = page.getByRole("group", { name: "Passing score per sesi" }).getByRole("spinbutton");
+  await scores.nth(0).fill("3");
+  await page.getByRole("button", { name: "Simpan Try Out", exact: true }).click();
+  await expect(page.getByRole("dialog").getByRole("alert")).toContainText("Passing score per sesi");
+  expect(api.writes).toHaveLength(0);
+  for (let index = 1; index < 4; index++) await scores.nth(index).fill("3");
+  await page.getByRole("button", { name: "Simpan Try Out", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  expect(api.writes[0].body).toMatchObject({ max_score: 40, session_passing_scores: Object.fromEntries(sessions.map(session => [session, 3])) });
+  await page.reload();
+  await row.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(page.getByLabel("Skor maksimal", { exact: true })).toHaveValue("40");
+  await expect(scores.nth(3)).toHaveValue("3");
 });

@@ -17,7 +17,7 @@ class StudentTryOutController extends Controller
         $items = TryOut::where('status', 'published')
             ->whereHas('program', fn ($query) => $query->where('status', 'active')->where('family', 'jlpt')->whereIn('code', ['n5', 'n4', 'n3', 'n2', 'n1']))
             ->with('program')
-            ->orderBy('id')->get()
+            ->orderBy('sort_order')->orderBy('id')->get()
             ->filter(fn ($tryOut) => $access->canAccessChapter($request->user(), $tryOut->program->code, 1))
             ->values();
 

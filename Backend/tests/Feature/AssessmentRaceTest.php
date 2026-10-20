@@ -109,17 +109,18 @@ class AssessmentRaceTest extends TestCase
         }
         $number = (int) Chapter::where('program_id', $program->id)->max('chapter_number') + 1;
         $this->chapter = Chapter::create(['program_id' => $program->id, 'chapter_number' => $number, 'title' => 'Race '.bin2hex(random_bytes(8)), 'status' => 'published']);
-        if (! DB::table('program_offers')->where('program_id', $program->id)->where('plan_code', 'lms')->exists()) {
-            $this->createdOfferId = DB::table('program_offers')->insertGetId(['program_id' => $program->id, 'plan_code' => 'lms', 'duration_months' => 6, 'status' => 'inactive', 'created_at' => now(), 'updated_at' => now()]);
+        $plan = $kind === 'mini' ? 'sensei' : 'lms';
+        if (! DB::table('program_offers')->where('program_id', $program->id)->where('plan_code', $plan)->exists()) {
+            $this->createdOfferId = DB::table('program_offers')->insertGetId(['program_id' => $program->id, 'plan_code' => $plan, 'duration_months' => 6, 'status' => 'inactive', 'created_at' => now(), 'updated_at' => now()]);
         }
-        DB::table('access_grants')->insert(['user_id' => $this->student->id, 'program_id' => $program->id, 'plan_code' => 'lms', 'status' => 'active', 'starts_at' => now()->subDay()->toDateString(), 'ends_at' => now()->addDay()->toDateString(), 'created_at' => now(), 'updated_at' => now()]);
+        DB::table('access_grants')->insert(['user_id' => $this->student->id, 'program_id' => $program->id, 'plan_code' => $plan, 'status' => 'active', 'starts_at' => now()->subDay()->toDateString(), 'ends_at' => now()->addDay()->toDateString(), 'created_at' => now(), 'updated_at' => now()]);
         $question = AudioQuestion::create(['chapter_id' => $this->chapter->id, 'question' => 'Race question', 'options' => $options, 'correct_option' => 'B', 'audio_url' => 'https://example.test/race.mp3', 'status' => 'published']);
         $service = app(LearningAttemptService::class);
         $attempt = $service->start($this->student, $program, $this->chapter, 'audio');
         $attempt = $service->save($this->student, $program, $this->chapter, $attempt, [$question->id => 'B'], 0);
         if ($kind === 'mini') {
             $service->submit($this->student, $program, $this->chapter, $attempt, $attempt->answers, $attempt->revision);
-            $question = MiniCheckpointQuestion::create(['chapter_id' => $this->chapter->id, 'question' => 'Mini race', 'options' => $options, 'correct_option' => 'B', 'status' => 'published', 'session' => 2, 'part' => 3, 'duration_minutes' => 1]);
+            $question = MiniCheckpointQuestion::create(['chapter_id' => $this->chapter->id, 'question' => 'Mini race', 'options' => $options, 'correct_option' => 'B', 'status' => 'published', 'session' => 2, 'part' => 3, 'duration_minutes' => 1, 'passing_score' => 70]);
             $attempt = $service->start($this->student, $program, $this->chapter, 'mini', 2, 3);
             $attempt = $service->save($this->student, $program, $this->chapter, $attempt, [$question->id => 'B'], 0);
             if ($expired) {

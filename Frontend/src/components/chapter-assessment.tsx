@@ -30,7 +30,7 @@ export function ChapterAssessment({ level, chapterSlug, kind, context, resolvedC
   if (request.error) return <section className="learning-question-page"><p role="alert">{request.error}</p><button type="button" onClick={request.retry}>Coba Lagi</button></section>;
   if (!request.data) return <LoadingSkeleton variant="assessment" label="Memuat…" />;
   const { program, chapter, progress } = request.data;
-  if (kind === "mini" && !progress?.mini_unlocked) return <section className="learning-question-page"><h1>Mini Checkpoint</h1><MiniLockedDialog access={chapter.access} progress={progress} chapterHref={`/learn/${level}/${chapterSlug}`} /></section>;
+  if (kind === "mini" && (!["n5", "n4", "n3", "n2"].includes(program.code) || progress?.mini_eligible === false || !progress?.mini_unlocked)) return <section className="learning-question-page"><h1>Mini Checkpoint</h1><MiniLockedDialog access={chapter.access} progress={progress} chapterHref={`/learn/${level}/${chapterSlug}`} /></section>;
   if (kind === "mini") return <MiniChapterAssessment key={`${program.id}/${chapter.id}`} programId={program.id} chapter={chapter} />;
   return <BackendAssessmentRunner key={`${program.id}/${chapter.id}/${kind}`} path={chapterAttemptPath(program.id, chapter.id)} title={kind === "audio" ? "Audio" : "Reading"} startBody={{ kind }} autoStart={autoStart} />;
 }

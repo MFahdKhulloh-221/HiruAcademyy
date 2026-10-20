@@ -4,7 +4,7 @@ import { assessmentSessions, assessmentSessionLabels, type ServerAttempt } from 
 async function mockTryOut(page: Page, answered = 0, duration: number | null = null) {
   const base = Date.parse("2026-10-11T00:00:00Z");
   let deadline = duration === null ? null : base + duration * 1000;
-  const questions = assessmentSessions.flatMap((session, section) => Array.from({ length: 25 }, (_, index) => ({ id: 9000 + section * 1000 + index * 7, session, question: `Question ${section * 25 + index + 1}`, options: { A: "First", B: "Second", C: "Third", D: "Fourth" } })));
+  const questions = assessmentSessions.flatMap((session, section) => Array.from({ length: 25 }, (_, index) => ({ id: 9000 + section * 1000 + index * 7, session, instruction: "Choose one answer", japanese: { text: "学校", reading: "がっこう" }, question: `Question ${section * 25 + index + 1}`, options: { A: "First", B: "Second", C: "Third", D: "Fourth" } })));
   let server: ServerAttempt = { id: 9, status: "in_progress", revision: 0, questions, answers: Object.fromEntries(questions.slice(0, answered).map(item => [item.id, "A"])), result: null };
   const calls = { starts: 0, submits: 0, saves: 0, failSubmit: false, failSave: false, failRead: false, incompleteExpiry: false, reads: 0, pauseSave: undefined as Promise<void> | undefined, pauseSubmit: undefined as Promise<void> | undefined };
   await page.route(/\/(api\/|sanctum\/csrf-cookie)/, async route => {
@@ -303,4 +303,27 @@ test("queue flush precedes confirmation; cancellation and failures retain check 
   releaseSubmit();
   await expect(page.getByRole("heading", { name: "Hasil Server Try Out", exact: true })).toBeVisible();
   expect(mock.calls.submits).toBe(2);
+});
+
+test("Try Out result distinguishes point thresholds from correct-answer thresholds", async ({ page }) => {
+  const mock = await mockTryOut(page);
+  Object.assign(mock.getServer(), { status: "completed", result: { earned: 75, max: 100, correct: 3, wrong: 1, unanswered: 0, overall_pass: false, sessions: [
+    { code: "grammar", label: "Tata Bahasa", earned: 25, max: 30, correct: 1, wrong: 0, unanswered: 0, passing_score: 20, passing_score_basis: "points", pass: true },
+    { code: "audio", label: "Audio", earned: 0, max: 30, correct: 0, wrong: 1, unanswered: 0, passing_score: 19, passing_score_basis: "correct_answers", pass: false },
+  ] } });
+  await page.goto("/tryout?tryout=2&attempt=9");
+  const sections = page.locator(".tryout-result-sessions article");
+  await expect(sections.nth(0)).toContainText("25 / 30");
+  await expect(sections.nth(0)).toContainText("Passing score: 20 • Skor");
+  await expect(sections.nth(1)).toContainText("Passing score: 19 • Jawaban benar");
+  await expect(page.locator(".tryout-result-total")).toContainText("75");
+  await expect(page.locator(".tryout-result-total")).toContainText("/ 100");
+});
+
+test("Try Out renders persisted instruction and semantic furigana", async ({ page }) => {
+  await mockTryOut(page);
+  await page.goto("/tryout?tryout=2&attempt=9");
+  await expect(page.getByText("Choose one answer", { exact: true })).toBeVisible();
+  await expect(page.locator("ruby")).toContainText("学校");
+  await expect(page.locator("ruby rt")).toHaveText("がっこう");
 });

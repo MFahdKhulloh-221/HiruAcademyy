@@ -8,11 +8,11 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TryOut extends Model
 {
-    protected $fillable = ['program_id', 'title', 'status', 'total_passing_score', 'duration_minutes'];
+    protected $fillable = ['program_id', 'title', 'status', 'total_passing_score', 'duration_minutes', 'max_score', 'sort_order', 'session_passing_scores'];
 
     protected function casts(): array
     {
-        return ['program_id' => 'integer', 'total_passing_score' => 'integer', 'duration_minutes' => 'integer'];
+        return ['program_id' => 'integer', 'total_passing_score' => 'integer', 'duration_minutes' => 'integer', 'max_score' => 'integer', 'sort_order' => 'integer', 'session_passing_scores' => 'array'];
     }
 
     public function program(): BelongsTo

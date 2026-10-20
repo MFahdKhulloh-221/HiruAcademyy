@@ -18,7 +18,7 @@ class AdminTryOutController extends Controller
     {
         $this->authorizeAdmin($request);
 
-        return response()->json(['data' => TryOut::orderBy('id')->get()->map(fn ($tryOut) => $content->payload($tryOut))]);
+        return response()->json(['data' => TryOut::orderBy('sort_order')->orderBy('id')->get()->map(fn ($tryOut) => $content->payload($tryOut))]);
     }
 
     public function store(Request $request, TryOutService $content)

@@ -36,14 +36,14 @@ class TryOutAttemptService
             $grading = [];
             foreach (array_keys(TryOutService::SESSIONS) as $session) {
                 foreach ($parent->questions()->where('status', 'published')->where('session', $session)->orderBy('sort_order')->orderBy('id')->get() as $question) {
-                    $questions[] = $question->only(['id', 'session', 'question', 'options', 'reading_passage', 'audio_url']);
+                    $questions[] = $question->only(['id', 'session', 'question', 'options', 'reading_passage', 'audio_url', 'instruction', 'japanese']);
                     $grading[$question->id] = $question->only(['correct_option', 'explanation', 'point_value']);
                 }
             }
 
             $startedAt = now();
 
-            return TryOutAttempt::create(['user_id' => $user->id, 'try_out_id' => $parent->id, 'status' => 'in_progress', 'content_snapshot' => $questions, 'grading_snapshot' => ['questions' => $grading, 'total_passing_score' => $parent->total_passing_score], 'answers' => [], 'completed_sessions' => [], 'current_session' => 0, 'revision' => 0, 'started_at' => $startedAt, 'expires_at' => $parent->duration_minutes === null ? null : $startedAt->copy()->addMinutes($parent->duration_minutes)])->fresh();
+            return TryOutAttempt::create(['user_id' => $user->id, 'try_out_id' => $parent->id, 'status' => 'in_progress', 'content_snapshot' => $questions, 'grading_snapshot' => ['questions' => $grading, 'total_passing_score' => $parent->total_passing_score, 'max_score' => $parent->max_score, 'session_passing_scores' => $parent->session_passing_scores], 'answers' => [], 'completed_sessions' => [], 'current_session' => 0, 'revision' => 0, 'started_at' => $startedAt, 'expires_at' => $parent->duration_minutes === null ? null : $startedAt->copy()->addMinutes($parent->duration_minutes)])->fresh();
         }, 3);
     }
 
@@ -113,7 +113,7 @@ class TryOutAttemptService
 
     private function finalize(User $user, TryOut $tryOut, TryOutAttempt $locked): TryOutAttempt
     {
-        $result = ['earned' => 0, 'max' => 180, 'correct' => 0, 'wrong' => 0, 'unanswered' => 0, 'sessions' => [], 'total_passing_score' => $locked->grading_snapshot['total_passing_score'], 'overall_pass' => null];
+        $result = ['earned' => 0, 'max' => $locked->grading_snapshot['max_score'] ?? 180, 'correct' => 0, 'wrong' => 0, 'unanswered' => 0, 'sessions' => [], 'total_passing_score' => $locked->grading_snapshot['total_passing_score'], 'overall_pass' => null];
         foreach (TryOutService::SESSIONS as $session => $label) {
             $section = ['code' => $session, 'label' => $label, 'earned' => 0, 'max' => 0, 'correct' => 0, 'wrong' => 0, 'unanswered' => 0, 'passing_score' => 19, 'pass' => false];
             foreach ($locked->content_snapshot as $question) {
@@ -127,13 +127,18 @@ class TryOutAttemptService
                 $section['max'] += $grade['point_value'];
                 $section['earned'] += $outcome === 'correct' ? $grade['point_value'] : 0;
             }
-            $section['pass'] = $section['correct'] >= 19;
+            // ponytail: null preserves legacy 19-correct-answer attempts; explicit admin thresholds use points.
+            $configured = $locked->grading_snapshot['session_passing_scores'][$session] ?? null;
+            $section['passing_score'] = $configured ?? 19;
+            $section['passing_score_basis'] = $configured === null ? 'correct_answers' : 'points';
+            $section['pass'] = ($configured === null ? $section['correct'] : $section['earned']) >= $section['passing_score'];
             $result['sessions'][] = $section;
             foreach (['earned', 'correct', 'wrong', 'unanswered'] as $key) {
                 $result[$key] += $section[$key];
             }
         }
-        $result['overall_pass'] = ! in_array(false, array_column($result['sessions'], 'pass'), true);
+        $result['overall_pass'] = ! in_array(false, array_column($result['sessions'], 'pass'), true)
+            && ($result['total_passing_score'] === null || $result['earned'] >= $result['total_passing_score']);
         $locked->update(['result_snapshot' => $result, 'status' => 'completed', 'completed_sessions' => array_keys(TryOutService::SESSIONS), 'current_session' => 4, 'completed_at' => now(), 'revision' => $locked->revision + 1]);
 
         if (count($locked->answers ?? []) > 0) {
@@ -149,7 +154,7 @@ class TryOutAttemptService
             return null;
         }
         $result = array_intersect_key($attempt->result_snapshot, array_flip(['earned', 'max', 'correct', 'wrong', 'unanswered', 'total_passing_score', 'overall_pass']));
-        $result['sessions'] = array_map(fn ($section) => array_intersect_key($section, array_flip(['code', 'label', 'earned', 'max', 'correct', 'wrong', 'unanswered', 'passing_score', 'pass'])), $attempt->result_snapshot['sessions']);
+        $result['sessions'] = array_map(fn ($section) => array_intersect_key($section, array_flip(['code', 'label', 'earned', 'max', 'correct', 'wrong', 'unanswered', 'passing_score', 'passing_score_basis', 'pass'])), $attempt->result_snapshot['sessions']);
 
         return $result;
     }
@@ -163,7 +168,7 @@ class TryOutAttemptService
             if ($review && $incorrectOnly && ($attempt->answers[$question['id']] ?? null) === $grade['correct_option']) {
                 continue;
             }
-            $item = array_intersect_key($question, array_flip(['id', 'session', 'question', 'reading_passage', 'audio_url']));
+            $item = array_intersect_key($question, array_flip(['id', 'session', 'question', 'reading_passage', 'audio_url', 'instruction', 'japanese']));
             $item['options'] = array_intersect_key($question['options'], array_flip(['A', 'B', 'C', 'D']));
             if ($review) {
                 $item += array_intersect_key($grade, array_flip(['correct_option', 'explanation', 'point_value']));

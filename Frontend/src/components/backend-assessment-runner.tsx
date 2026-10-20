@@ -131,13 +131,13 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
           <div className="tryout-result-sessions">{result.sessions?.map(section => (
             <article key={section.code}>
               <h3>{assessmentSessionLabels[assessmentSessions.findIndex(code => code === section.code)] ?? section.label}</h3>
-              <div><span>Nilai Section</span><strong>{section.correct} / {section.correct + section.wrong + section.unanswered}</strong></div>
-              <small>Passing score: {section.passing_score}</small>
+              <div><span>Nilai Section</span><strong>{section.passing_score_basis === "points" ? section.earned : section.correct} / {section.passing_score_basis === "points" ? section.max : section.correct + section.wrong + section.unanswered}</strong></div>
+              <small>Passing score: {section.passing_score} • {section.passing_score_basis === "points" ? "Skor" : "Jawaban benar"}</small>
               <span className="tryout-result-pass">{section.pass ? "LULUS" : "BELUM LULUS"}</span>
             </article>
           ))}</div>
         </div>
-        <div className="tryout-result-total"><h2>TOTAL SKOR</h2><strong>{result.correct}</strong><span>/ {result.correct + result.wrong + result.unanswered}</span><p>{passed === true ? "LULUS" : passed === false ? "BELUM LULUS" : "—"}</p></div>
+        <div className="tryout-result-total"><h2>TOTAL SKOR</h2><strong>{result.earned ?? result.correct}</strong><span>/ {result.max ?? result.correct + result.wrong + result.unanswered}</span><p>{passed === true ? "LULUS" : passed === false ? "BELUM LULUS" : "—"}</p></div>
       </section>
       <div className="tryout-result-info-grid">
         <section className="tryout-result-reference"><h2>REFERENCE INFORMATION</h2><dl><div><dt>Jawaban Benar</dt><dd>{result.correct}</dd></div><div><dt>Jawaban Salah</dt><dd>{result.wrong}</dd></div><div><dt>Tidak Dijawab</dt><dd>{result.unanswered}</dd></div></dl></section>
@@ -150,7 +150,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
       </div>
     </section>
   );
-  if (attempt.status === "completed" && result && !reviewing) return <section className="checkpoint-result tryout-result-report"><h1>Hasil {title}</h1>{flow.error && <p role="alert">{flow.error}</p>}<div className="checkpoint-result-stats"><div><span>Skor</span><strong>{result.earned ?? result.percentage ?? "—"}{result.max !== undefined ? ` / ${result.max}` : ""}</strong></div><div><span>Jawaban benar</span><strong>{result.correct}</strong></div><div><span>Tidak Dijawab</span><strong>{result.unanswered}</strong></div></div>{result.sessions && <section className="tryout-section-scores">{result.sessions.map(section => <article key={section.code}><strong>{domain === "tryout" ? assessmentSessionLabels[assessmentSessions.findIndex(code => code === section.code)] ?? section.label : section.label}</strong><b>{section.earned} / {section.max}</b><small>Passing score: {section.passing_score}</small>{(domain !== "tryout" || result.total_passing_score != null) && <span>{section.pass ? "LULUS" : "TIDAK LULUS"}</span>}</article>)}</section>}{(domain !== "tryout" || result.total_passing_score != null) && <p>{passed === true ? "LULUS" : passed === false ? "TIDAK LULUS" : "—"}</p>}<section className="checkpoint-recommendation"><p className="dash-kicker">REKOMENDASI</p><p>{result.recommendation_level ?? "—"}</p></section>{domain !== "placement" && <button className="button button-secondary" type="button" disabled={flow.busy} onClick={async () => { if (await flow.review()) { setIndex(0); setReviewing(true); } }}>Lihat Jawaban</button>}<button className="button button-secondary" type="button" disabled={flow.busy} onClick={() => { setIndex(0); void flow.start(startBody); }}>Coba Lagi</button></section>;
+  if (attempt.status === "completed" && result && !reviewing) return <section className="checkpoint-result tryout-result-report"><h1>Hasil {title}</h1>{flow.error && <p role="alert">{flow.error}</p>}<div className="checkpoint-result-stats"><div><span>Skor</span><strong>{result.earned ?? result.percentage ?? "—"}{result.max !== undefined ? ` / ${result.max}` : ""}</strong></div><div><span>Jawaban benar</span><strong>{result.correct}</strong></div><div><span>Tidak Dijawab</span><strong>{result.unanswered}</strong></div></div>{result.sessions && <section className="tryout-section-scores">{result.sessions.map(section => <article key={section.code}><strong>{domain === "tryout" ? assessmentSessionLabels[assessmentSessions.findIndex(code => code === section.code)] ?? section.label : section.label}</strong><b>{section.earned} / {section.max}</b><small>Passing score: {section.passing_score} • {section.passing_score_basis === "points" ? "Skor" : "Jawaban benar"}</small>{(domain !== "tryout" || result.total_passing_score != null) && <span>{section.pass ? "LULUS" : "TIDAK LULUS"}</span>}</article>)}</section>}{(domain !== "tryout" || result.total_passing_score != null) && <p>{passed === true ? "LULUS" : passed === false ? "TIDAK LULUS" : "—"}</p>}<section className="checkpoint-recommendation"><p className="dash-kicker">REKOMENDASI</p><p>{result.recommendation_level ?? "—"}</p></section>{domain !== "placement" && <button className="button button-secondary" type="button" disabled={flow.busy} onClick={async () => { if (await flow.review()) { setIndex(0); setReviewing(true); } }}>Lihat Jawaban</button>}<button className="button button-secondary" type="button" disabled={flow.busy} onClick={() => { setIndex(0); void flow.start(startBody); }}>Coba Lagi</button></section>;
   if (domain === "tryout" && attempt.status === "in_progress" && checking) {
     const answered = questions.filter(item => Boolean(flow.answers[item.id])).length;
     const unanswered = questions.length - answered;
@@ -205,7 +205,9 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
               {(question.audio_url_resolved_url || question.audio_url) && (
                 <audio controls src={question.audio_url_resolved_url || question.audio_url || undefined} aria-label={question.title ?? "Audio"} />
               )}
+              {question.instruction && <p>{question.instruction}</p>}
               <h2>{question.question ?? question.prompt}</h2>
+              {question.japanese?.text && <p lang="ja"><ruby>{question.japanese.text}{question.japanese.reading && <rt>{question.japanese.reading}</rt>}</ruby></p>}
               <fieldset disabled={Boolean((scope || domain === "tryout") && remaining === 0) || reviewing || flow.submitting || (domain !== "tryout" && flow.busy) || attempt.status === "completed"}>
                 <legend className="sr-only">Pilihan jawaban</legend>
                 {Object.entries(question.options).map(([option, label]) => (

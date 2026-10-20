@@ -101,7 +101,7 @@ export function MiniCheckpointScreen({ membership = "sensei", resolvedCatalog }:
 
       <section className="mini-vertical-cards-section" aria-label="Daftar Mini Checkpoint" style={{ display: "grid", gap: "16px" }}>
         {items.map(context => {
-          const unlocked = context.progress?.mini_unlocked ?? false;
+          const unlocked = context.progress?.mini_eligible !== false && (context.progress?.mini_unlocked ?? false);
           return (
             <article className="mini-checkpoint-card" key={`${context.program.id}/${context.chapter.id}`}>
               <div className="mini-checkpoint-card-left">
@@ -111,7 +111,7 @@ export function MiniCheckpointScreen({ membership = "sensei", resolvedCatalog }:
                 <div>
                   <h3>{context.program.name} • Mini Checkpoint Chapter {context.chapter.chapter_number}</h3>
                   <p>
-                    {context.chapter.title} • {unlocked ? "Seluruh aktivitas chapter telah selesai" : !["full", "preview"].includes(context.chapter.access) ? "Mini Checkpoint belum dapat dibuka karena chapter ini belum termasuk dalam akses belajarmu." : "Selesaikan seluruh aktivitas chapter untuk membuka"}
+                    {context.chapter.title} • {unlocked ? "Seluruh aktivitas chapter telah selesai" : context.progress?.mini_eligible === false ? "Khusus member Belajar dengan Sensei. Mini Checkpoint tersedia untuk N5, N4, N3, dan N2." : !["full", "preview"].includes(context.chapter.access) ? "Mini Checkpoint belum dapat dibuka karena chapter ini belum termasuk dalam akses belajarmu." : "Selesaikan seluruh aktivitas chapter untuk membuka"}
                   </p>
                 </div>
               </div>

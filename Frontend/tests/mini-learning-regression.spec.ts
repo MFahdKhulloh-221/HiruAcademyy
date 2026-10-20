@@ -6,7 +6,7 @@ import type { CanonicalChapter, ChapterProgress, LearningAccess, LearningProgram
 
 type MiniAttempt = Omit<ServerAttempt, "questions"> & { chapter_id: number; kind: "mini"; submitted_at: string | null; questions: (Omit<AttemptQuestion, "session"> & { session: number; part: number; duration_minutes: number })[] };
 
-async function mockMiniApi(page: Page, questionCount = 1, faults: { startDelay?: number; saveError?: boolean; submitErrors?: number } = {}) {
+async function mockMiniApi(page: Page, questionCount = 1, faults: { startDelay?: number; saveError?: boolean; submitErrors?: number; miniEligible?: boolean } = {}) {
   const users: Record<string, AuthUser> = {
     A: { id: 71, name: "Mini Account A", email: "mini-a@example.test", whatsapp: "081234567890", role: "student", account_status: "active" },
     B: { id: 72, name: "Mini Account B", email: "mini-b@example.test", whatsapp: "081234567891", role: "student", account_status: "active" },
@@ -28,12 +28,13 @@ async function mockMiniApi(page: Page, questionCount = 1, faults: { startDelay?:
     access: account === "B" && program === 4 ? "none" : "full",
     flashcards: [{ id: program * 10, japanese: program === 5 ? "猫" : "犬", reading: program === 5 ? "ねこ" : "いぬ", meaning: program === 5 ? "Cat" : "Dog", example: null, sort_order: 0 }],
     video_lessons: [], modules: [], mini_checkpoint: { exists: true },
-    mini_checkpoints: [1, 2].map(part => ({ session: 1, part, duration_minutes: 2, question_count: questionCount, configuration_valid: true })),
+    mini_checkpoints: [1, 2].map(part => ({ session: 1, part, duration_minutes: 2, passing_score: 70, question_count: questionCount, configuration_valid: true })),
   });
   const progress = (program: number): ChapterProgress => ({
     chapter_id: program === 5 ? 9 : 8,
     activities: { flashcard: { total: 1, completed: account === "A" ? 1 : 0, complete: account === "A" } },
-    mini_unlocked: account === "A",
+    mini_eligible: faults.miniEligible ?? account === "A",
+    mini_unlocked: (faults.miniEligible ?? true) && account === "A",
   });
   await page.context().route(/\/(api\/|sanctum\/csrf-cookie)/, async route => {
     const request = route.request();
@@ -41,13 +42,13 @@ async function mockMiniApi(page: Page, questionCount = 1, faults: { startDelay?:
     const path = url.pathname;
     const method = request.method();
     const headers = {
-      "access-control-allow-origin": "http://localhost:3017",
+      "access-control-allow-origin": new URL(page.url()).origin,
       "access-control-allow-credentials": "true",
       "access-control-allow-methods": "GET, POST, PUT, OPTIONS",
       "access-control-allow-headers": "accept, content-type, x-xsrf-token",
     };
     const reply = (data: unknown, status = 200) => route.fulfill({ status, headers, json: { data } });
-    const known = path === "/sanctum/csrf-cookie" || ["/api/me", "/api/auth/login", "/api/auth/logout", "/api/public/programs", "/api/student/access", "/api/student/dashboard", "/api/student/gamification", "/api/student/leaderboard"].includes(path)
+    const known = path === "/sanctum/csrf-cookie" || ["/api/me", "/api/auth/login", "/api/auth/logout", "/api/public/programs", "/api/student/access", "/api/student/dashboard", "/api/student/gamification", "/api/student/leaderboard", "/api/student/notifications"].includes(path)
       || /^\/api\/student\/programs\/(5|4)\/chapters(?:\/(9|8)(?:\/progress|\/attempts(?:\/\d+(?:\/answers|\/submit|\/review)?)?)?)?$/.test(path);
     if (url.origin !== "http://localhost:8000" || !known) {
       unknown.push(`${method} ${url.href}`);
@@ -73,6 +74,7 @@ async function mockMiniApi(page: Page, questionCount = 1, faults: { startDelay?:
     }
     if (path === "/api/public/programs" && method === "GET") { await reply(programs); return; }
     if (!account) { await reply(null, 401); return; }
+    if (path === "/api/student/notifications") { await reply([]); return; }
     if ((path === "/api/student/access" || path === "/api/student/dashboard") && method === "GET") {
       const access: LearningAccess = { learning: { n5: "full", n4: account === "A" ? "full" : "none" }, replay_levels: [], source_grants: [{ plan_code: account === "A" ? "sensei" : "lms", program_code: "n5" }] };
       await reply(path.endsWith("dashboard") ? dashboardFixture(programs, access, program => [chapter(program)], chapterId => progress(chapterId === 9 ? 5 : 4)) : access); return;
@@ -172,6 +174,17 @@ async function openMini(page: Page) {
 
 test.describe("Mini learning regression — mock API only, no backend or DB", () => {
   test.setTimeout(60000);
+  test("full learning access without Mini entitlement stays locked despite completed activities", async ({ page }) => {
+    const api = await mockMiniApi(page, 1, { miniEligible: false });
+    await page.goto("/login");
+    await loginMini(page, api.users.A.email);
+    await page.goto("/mini-checkpoint");
+    await expect(page.getByRole("button", { name: "Mulai Mini Checkpoint", exact: true })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Terkunci", exact: true }).first()).toBeVisible();
+    await page.getByRole("button", { name: "Terkunci", exact: true }).first().click();
+    await expect(page.getByRole("dialog")).toContainText("Khusus member Belajar dengan Sensei. Mini Checkpoint tersedia untuk N5, N4, N3, dan N2.");
+  });
+
   test("unlocked N5/N4 reuse catalog and preserve autosave, resume, submit and canonical result", async ({ page }) => {
     const api = await mockMiniApi(page);
     await page.goto("/login");

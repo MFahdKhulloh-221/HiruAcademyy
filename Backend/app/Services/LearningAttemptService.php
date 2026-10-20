@@ -29,7 +29,7 @@ class LearningAttemptService
                     throw ValidationException::withMessages(['session' => 'Mini requires positive integer session and part.']);
                 }
                 $questions = $chapter->miniCheckpointQuestions()->where('status', 'published')->where('session', $session)->where('part', $part)->get();
-                $this->miniConfiguration($questions->map(fn ($question) => $question->only(['session', 'part', 'duration_minutes']))->all());
+                $this->miniConfiguration($questions->map(fn ($question) => $question->only(['session', 'part', 'duration_minutes', 'passing_score']))->all());
             } else {
                 abort_unless(in_array($program->family, ['foundation', 'jlpt'], true), 404);
                 $questions = $this->progress->resources($chapter, $kind);
@@ -49,6 +49,7 @@ class LearningAttemptService
                     $item['session'] = $question->session;
                     $item['part'] = $question->part;
                     $item['duration_minutes'] = $question->duration_minutes;
+                    $item['passing_score'] = $question->passing_score;
                 }
                 $content[] = $item;
                 $grading[$question->id] = ['correct_option' => $question->correct_option, 'explanation' => $question->explanation];
@@ -63,6 +64,9 @@ class LearningAttemptService
     {
         abort_unless($attempt->user_id === $user->id && $attempt->chapter_id === $chapter->id, 404);
         $this->progress->authorize($user, $program, $chapter);
+        if ($attempt->kind === 'mini') {
+            abort_unless($this->progress->miniEligible($user, $program), 403);
+        }
     }
 
     private function validateAnswers(LearningAttempt $attempt, array $answers): void
@@ -155,7 +159,7 @@ class LearningAttemptService
         }
         $result = ['correct' => $correct, 'wrong' => count($answers) - $correct, 'unanswered' => $total - count($answers), 'total' => $total, 'percentage' => round($correct * 100 / $total, 2)];
         if ($locked->kind === 'mini') {
-            $passingScore = 70;
+            $passingScore = $this->miniConfiguration($locked->content_snapshot)['passing_score'];
             $result['passed'] = $result['percentage'] >= $passingScore;
             $result['passing_score'] = $passingScore;
         }
@@ -182,23 +186,30 @@ class LearningAttemptService
     public function miniConfiguration(array $questions): array
     {
         $first = $questions[0] ?? [];
-        foreach (['session', 'part', 'duration_minutes'] as $field) {
-            if (! isset($first[$field]) || ! is_int($first[$field]) || $first[$field] < 1) {
-                throw ValidationException::withMessages([$field => 'Mini configuration requires positive session, part and duration_minutes.']);
+        foreach (['session', 'part', 'duration_minutes', 'passing_score'] as $field) {
+            if (! isset($first[$field]) || ! is_int($first[$field]) || $first[$field] < ($field === 'passing_score' ? 0 : 1) || ($field === 'passing_score' && $first[$field] > 100)) {
+                throw ValidationException::withMessages([$field => 'Mini configuration requires positive session, part and duration_minutes, and passing_score between 0 and 100.']);
             }
             foreach ($questions as $question) {
                 if (($question[$field] ?? null) !== $first[$field]) {
-                    throw ValidationException::withMessages([$field => 'Mini questions must share session, part and identical positive duration_minutes.']);
+                    throw ValidationException::withMessages([$field => 'Mini questions must share session, part, duration_minutes and passing_score.']);
                 }
             }
         }
 
-        return array_intersect_key($first, array_flip(['session', 'part', 'duration_minutes']));
+        return array_intersect_key($first, array_flip(['session', 'part', 'duration_minutes', 'passing_score']));
     }
 
     private function miniTiming(LearningAttempt $attempt): array
     {
-        $configuration = $this->miniConfiguration($attempt->content_snapshot);
+        $questions = $attempt->content_snapshot;
+        if ($attempt->status === 'completed') {
+            foreach ($questions as &$question) {
+                $question['passing_score'] ??= $attempt->result_snapshot['passing_score'] ?? null;
+            }
+            unset($question);
+        }
+        $configuration = $this->miniConfiguration($questions);
         if ($attempt->created_at === null) {
             throw ValidationException::withMessages(['started_at' => 'Mini attempt has no valid start time.']);
         }

@@ -41,6 +41,9 @@ class TryOutAssessmentTest extends TestCase
         if (! Schema::hasColumn('try_out_attempts', 'expires_at')) {
             (require database_path('migrations/2026_10_11_000001_add_try_out_duration_and_attempt_deadline.php'))->up();
         }
+        if (! Schema::hasColumn('try_outs', 'max_score')) {
+            (require database_path('migrations/2026_10_20_000002_add_try_out_builder_configuration.php'))->up();
+        }
         $this->seed(ProgramSeeder::class);
         $this->student = $this->user('student');
         $this->admin = $this->user('admin');
@@ -96,6 +99,43 @@ class TryOutAssessmentTest extends TestCase
         }
 
         return $this->postJson($this->base.'/attempts/'.$attempt['id'].'/submit', ['revision' => $attempt['revision']])->assertOk()->json('data');
+    }
+
+    public function test_builder_configuration_round_trip_and_attempt_snapshot(): void
+    {
+        $this->actingAs($this->admin);
+        $scores = array_fill_keys(array_keys(TryOutService::SESSIONS), 10);
+        ksort($scores);
+        $this->patchJson($this->adminBase, ['max_score' => 100, 'sort_order' => 7, 'total_passing_score' => 80, 'session_passing_scores' => $scores])->assertOk()->assertJsonPath('data.sort_order', 7)->assertJsonPath('data.max_score', 100)->assertJsonPath('data.session_passing_scores', $scores);
+        foreach (array_keys(TryOutService::SESSIONS) as $session) {
+            $this->postJson($this->adminBase.'/questions', $this->question($session, 25, ['instruction' => 'Choose one', 'japanese' => ['text' => '学校', 'reading' => 'がっこう']]))->assertCreated()->assertJsonPath('data.japanese.text', '学校');
+        }
+        $this->patchJson($this->adminBase, ['status' => 'published'])->assertOk();
+        $this->actingAs($this->student);
+        $attempt = $this->start();
+        $this->assertSame('Choose one', $attempt['questions'][0]['instruction']);
+        $this->assertSame('がっこう', $attempt['questions'][0]['japanese']['reading']);
+        $this->assertArrayNotHasKey('correct_option', $attempt['questions'][0]);
+        $this->actingAs($this->admin)->patchJson($this->adminBase, ['total_passing_score' => 0, 'session_passing_scores' => array_fill_keys(array_keys(TryOutService::SESSIONS), 0)])->assertOk();
+        $this->actingAs($this->student);
+        $finished = $this->finish($attempt, ['B', 'B', 'B', 'A']);
+        $this->assertSame(100, $finished['result']['max']);
+        $this->assertSame(75, $finished['result']['earned']);
+        $this->assertFalse($finished['result']['overall_pass']);
+        $this->assertSame(80, $finished['result']['total_passing_score']);
+        $this->assertSame(10, $finished['result']['sessions'][0]['passing_score']);
+        $this->assertSame('points', $finished['result']['sessions'][0]['passing_score_basis']);
+        $this->assertTrue($finished['result']['sessions'][0]['pass']);
+    }
+
+    public function test_builder_rejects_unachievable_scores_and_malformed_japanese(): void
+    {
+        $this->actingAs($this->admin);
+        $this->patchJson($this->adminBase, ['max_score' => 50, 'total_passing_score' => 51])->assertUnprocessable();
+        $this->patchJson($this->adminBase, ['session_passing_scores' => ['grammar' => 1]])->assertUnprocessable();
+        $this->postJson($this->adminBase.'/questions', $this->question('grammar', 20, ['japanese' => ['reading' => 'only']]))->assertUnprocessable();
+        $this->publish();
+        $this->patchJson($this->adminBase, ['session_passing_scores' => array_fill_keys(array_keys(TryOutService::SESSIONS), 180)])->assertUnprocessable();
     }
 
     public function test_managed_audio_admin_validation_and_snapshot_resolution(): void
@@ -225,7 +265,7 @@ class TryOutAssessmentTest extends TestCase
         $this->postJson($this->adminBase.'/questions', $this->question('audio', 20, ['audio_url' => null]))->assertUnprocessable();
         $id = $this->postJson($this->adminBase.'/questions', $this->question('audio', 20, ['status' => 'draft', 'audio_url' => null]))->assertCreated()->json('data.id');
         $this->patchJson($this->adminBase.'/questions/'.$id, ['status' => 'published'])->assertUnprocessable();
-        foreach ([['section_passing_score' => 20], ['max_score' => 100], ['sessions' => []], ['total_passing_score' => -1], ['total_passing_score' => 181], ['total_passing_score' => 19.5]] as $extra) {
+        foreach ([['section_passing_score' => 20], ['max_score' => 0], ['sessions' => []], ['total_passing_score' => -1], ['total_passing_score' => 181], ['total_passing_score' => 19.5]] as $extra) {
             $this->patchJson($this->adminBase, $extra)->assertUnprocessable();
         }
     }
@@ -477,7 +517,7 @@ class TryOutAssessmentTest extends TestCase
             $path = $this->base.'/attempts/'.$attempt['id'];
             $completed = $this->postJson($path.'/submit', ['revision' => $attempt['revision']])->assertOk()->json('data');
             $this->assertSame($counts, array_column($completed['result']['sessions'], 'correct'));
-            $this->assertSame(min($counts) >= 19, $completed['result']['overall_pass']);
+            $this->assertSame(min($counts) >= 19 && ($completed['result']['total_passing_score'] === null || $completed['result']['earned'] >= $completed['result']['total_passing_score']), $completed['result']['overall_pass']);
             $this->assertSame(100, $completed['result']['correct'] + $completed['result']['wrong'] + $completed['result']['unanswered']);
             $this->assertSame(100 - array_sum($counts) - count(array_filter($counts, fn ($count) => $count < 25)), $completed['result']['wrong']);
             $this->assertSame(count(array_filter($counts, fn ($count) => $count < 25)), $completed['result']['unanswered']);
