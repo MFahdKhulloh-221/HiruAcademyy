@@ -80,7 +80,7 @@ class PublicContentService
         $rules = match ($resource) {
             'showcase-items' => [
                 'key' => [$required, 'required', Rule::in(array_keys(self::SHOWCASE_LABELS)), Rule::unique('showcase_items', 'key')->ignore($model)],
-                'label' => ['sometimes', 'required', 'string'],
+                'label' => [...$string, 'regex:/\S/u'],
                 'image_src' => [...$optional, $media],
                 'alt' => $text,
                 'sort_order' => $order,
@@ -159,13 +159,6 @@ class PublicContentService
         }
         $data = Validator::make($input, $rules)->validate();
         $model->fill($data);
-        if ($model instanceof ShowcaseItem) {
-            $label = self::SHOWCASE_LABELS[$model->key];
-            if (isset($data['label']) && $data['label'] !== $label) {
-                throw ValidationException::withMessages(['label' => 'Label is locked to showcase key.']);
-            }
-            $model->label = $label;
-        }
         if ($model instanceof Testimonial) {
             if (! $model->exists) {
                 $model->forceFill(['source' => 'admin', 'user_id' => null, 'moderation_status' => 'approved', 'consent_public' => true]);

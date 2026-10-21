@@ -55,27 +55,6 @@ export function encodeContent(item: Record<string, unknown>) {
   return result;
 }
 
-export function useAdminContent<T extends { id: string }>(resource: string) {
-  const remote = useContent<Record<string, unknown>>(`/api/admin/${resource}`);
-  const rows = remote.data.map(item => decodeContent<T>(item));
-  const [busy, setBusy] = useState(false);
-  const locked = useRef(false);
-  const mutate = async (item: T, remove = false) => {
-    if (locked.current) throw new Error("Permintaan sedang diproses.");
-    locked.current = true;
-    setBusy(true);
-    try {
-      const exists = /^\d+$/.test(item.id);
-      await apiRequest(`/api/admin/${resource}${exists ? `/${item.id}` : ""}`, { method: remove ? "DELETE" : exists ? "PATCH" : "POST", ...(!remove ? { body: JSON.stringify(encodeContent(item)) } : {}) });
-      remote.reload();
-    } finally {
-      locked.current = false;
-      setBusy(false);
-    }
-  };
-  return { rows, loading: remote.loading, loadError: remote.error, reload: remote.reload, busy, mutate };
-}
-
 export function contentMedia(value: string | null | undefined, resolved?: string | null): string {
   const source = resolved || value;
   if (!source) return "";

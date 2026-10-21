@@ -33,6 +33,35 @@ test("showcase capacity expanded to ten items with canonical labels", () => {
   }
 });
 
+test("builder hides identifier and automatically allocates slots six through ten", () => {
+  const source = read("../src/components/admin-showcase-prototype.tsx");
+  const builder = source.slice(source.indexOf('<form className="admin-prototype-form"'), source.indexOf('</form>'));
+  assert.ok(!builder.includes("Identifier (dikunci)"));
+  assert.ok(!builder.includes("draft.key"));
+  assert.match(source, /const item = approvedShowcase\.find\(item => !rows\.some\(row => row\.key === item\.key\)\)/);
+  const items = [...source.matchAll(/\{ key: "([a-z]+)", label: "([^"]+)" \}/g)].map(([, key, label]) => ({ key, label }));
+  const rows = items.slice(0, 5);
+  for (const key of ["module", "practice", "checkpoint", "replay", "community"]) {
+    const next = items.find(item => !rows.some(row => row.key === item.key));
+    assert.equal(next?.key, key);
+    rows.push(next);
+  }
+  assert.equal(items.find(item => !rows.some(row => row.key === item.key)), undefined);
+});
+
+test("showcase names are editable and backend preserves custom labels", () => {
+  const source = read("../src/components/admin-showcase-prototype.tsx");
+  const service = read("../../Backend/app/Services/PublicContentService.php");
+  const migration = read("../../Backend/database/migrations/2026_10_21_000002_allow_custom_showcase_labels.php");
+  assert.ok(!source.includes("Copy (dikunci)"));
+  assert.match(source, /Nama showcase<input required maxLength=\{255\} value=\{draft.label\} onChange=/);
+  assert.ok(!service.includes("Label is locked to showcase key."));
+  assert.ok(!service.includes("$model->label = $label"));
+  assert.ok(service.includes("'label' => [...$string, 'regex:/\\S/u']"));
+  assert.match(migration, /showcase_items_keys_check CHECK \(key IN/);
+  assert.ok(!migration.includes("AND label ="));
+});
+
 test("limit popup replaces inline status text and uses accessible AdminDialog", () => {
   const showcaseSource = read("../src/components/admin-showcase-prototype.tsx");
 

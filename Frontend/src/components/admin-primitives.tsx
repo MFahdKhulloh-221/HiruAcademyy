@@ -42,13 +42,15 @@ export function AdminConfirmDialog({ open, title, children, close, initialFocusR
   const titleId = useId();
   const panel = useRef<HTMLElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
+  const closeRef = useRef(close);
+  useEffect(() => { closeRef.current = close; }, [close]);
   useEffect(() => {
     if (!open) return;
     returnFocus.current = document.activeElement as HTMLElement;
     const focusable = () => [...(panel.current?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])') ?? [])];
     (initialFocusRef?.current ?? focusable()[0] ?? panel.current)?.focus();
     function keydown(event: globalThis.KeyboardEvent) {
-      if (event.key === "Escape") { event.preventDefault(); close(); return; }
+      if (event.key === "Escape") { event.preventDefault(); closeRef.current(); return; }
       if (event.key !== "Tab") return;
       const elements = focusable();
       if (!elements.length) { event.preventDefault(); panel.current?.focus(); return; }
@@ -58,7 +60,7 @@ export function AdminConfirmDialog({ open, title, children, close, initialFocusR
     }
     document.addEventListener("keydown", keydown);
     return () => { document.removeEventListener("keydown", keydown); returnFocus.current?.focus(); };
-  }, [close, initialFocusRef, open]);
+  }, [initialFocusRef, open]);
   if (!open) return null;
   return <div className="admin-dialog-layer"><div className="admin-dialog-backdrop" onMouseDown={closeOnBackdrop ? close : undefined} role="presentation" /><section ref={panel} className="admin-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}><header><h2 id={titleId}>{title}</h2><button type="button" onClick={close} aria-label="Tutup dialog">×</button></header><div className="admin-dialog-content">{children}</div>{actions && <footer>{actions}</footer>}</section></div>;
 }
