@@ -58,7 +58,7 @@ export function LevelSelection({ membership, levels }: { membership: Membership;
               {level.access === "freePreview" && <p>{membership === "free" ? "Chapter 1 tersedia sebagai akses Free pada level ini." : "Chapter 1 tersedia sebagai akses preview pada level ini."}</p>}
               {level.access === "notPurchased" ? (
                 <Link className="level-unavailable" href={`/renewal?membership=${membership}&target=${level.code.toLowerCase()}`}>
-                  {level.code === "SSW" || level.code === "INTERVIEW" ? level.actionLabel : `Upgrade ke JLPT ${level.code}`}
+                  {/^N[1-5]$/.test(level.code) ? `Upgrade ke JLPT ${level.code}` : level.actionLabel}
                   <LuArrowRight aria-hidden="true" style={{ display: "inline-block", marginLeft: "4px", verticalAlign: "middle" }} />
                 </Link>
               ) : (

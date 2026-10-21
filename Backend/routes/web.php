@@ -181,6 +181,9 @@ Route::prefix('api')->middleware('throttle:api')->group(function () {
     Route::get('public/offers', [ProgramOfferController::class, 'publicIndex']);
     Route::get('admin/offers', [ProgramOfferController::class, 'adminIndex'])
         ->middleware(['auth:sanctum', 'active', 'role:admin']);
+    Route::post('admin/programs', [ProgramController::class, 'store'])->middleware(['auth:sanctum', 'active', 'role:admin']);
+    Route::patch('admin/programs/{program}', [ProgramController::class, 'update'])->whereNumber('program')->middleware(['auth:sanctum', 'active', 'role:admin']);
+    Route::delete('admin/programs/{program}', [ProgramController::class, 'destroy'])->whereNumber('program')->middleware(['auth:sanctum', 'active', 'role:admin']);
     Route::get('public/programs', [ProgramController::class, 'publicIndex']);
     Route::get('admin/programs', [ProgramController::class, 'adminIndex'])
         ->middleware(['auth:sanctum', 'active', 'role:admin']);

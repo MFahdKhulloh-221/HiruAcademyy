@@ -50,7 +50,7 @@ class EntitlementService
                         $replay[$level] = true;
                     }
                 }
-            } elseif (in_array($code, ['ssw-food', 'interview'], true) && $grant->plan_code === 'lms') {
+            } elseif ($code !== 'dasar' && $rank === false && $grant->plan_code === 'lms') {
                 $learning[$code] = 'full';
             }
 

@@ -8,6 +8,7 @@ export const adminMenu: readonly MenuItem[] = [
   { label: "Testimoni", href: "/admin/testimoni", group: "LANDING & PUBLIC" },
   { label: "Placement Test", href: "/admin/placement-hasil", group: "LANDING & PUBLIC" },
   { label: "Blog", href: "/admin/blog-seo", group: "LANDING & PUBLIC" },
+  { label: "Journey / Program", href: "/admin/kurikulum-materi?tab=Program", group: "PEMBELAJARAN" },
   { label: "Video Lesson", href: "/admin/video-lesson", group: "PEMBELAJARAN" },
   { label: "Modul", href: "/admin/modul", group: "PEMBELAJARAN" },
   { label: "Flashcard", href: "/admin/flashcard", group: "PEMBELAJARAN" },

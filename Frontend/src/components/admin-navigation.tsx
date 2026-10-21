@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { BrandLogo } from "@/components/brand-logo";
 import { adminGroups } from "@/lib/admin-console";
 
-function isActive(pathname: string, href: string) { return href === "/admin" ? pathname === href : pathname === href || pathname.startsWith(`${href}/`); }
+function isActive(pathname: string, href: string) { const path = href.split("?")[0]; return path === "/admin" ? pathname === path : pathname === path || pathname.startsWith(`${path}/`); }
 
 export function AdminNavigation({ current }: { current: string }) {
   const pathname = usePathname() || current;

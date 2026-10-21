@@ -1,6 +1,6 @@
 import { apiRequest } from "@/lib/api";
 
-export type LearningProgram = { id: number; code: string; name: string; family: string };
+export type LearningProgram = { id: number; code: string; slug?: string; name: string; description?: string | null; family: string };
 export type LearningAccess = { learning: Record<string, "full" | "preview" | "none">; replay_levels: string[]; source_grants: { plan_code: string; program_code: string }[] };
 export type LearningResource = { id: number; title: string; description?: string | null; sort_order: number };
 export type LearningModule = LearningResource & { module_type: "grammar" | "kanji" | "general"; file_url: string | null; file_url_resolved_url?: string | null };

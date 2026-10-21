@@ -1,0 +1,75 @@
+"use client";
+
+import { useState, type FormEvent } from "react";
+import { AdminDataTable, AdminDialog, AdminStatusBadge } from "@/components/admin-primitives";
+import { useContent } from "@/lib/public-content-api";
+import { apiRequest } from "@/lib/api";
+
+type Program = { id: number; name: string; slug: string; description: string | null; family: string; sort_order: number; status: "draft" | "active" | "inactive" };
+type Draft = Omit<Program, "id" | "family"> & { id?: number };
+
+export function AdminPrograms() {
+  const { data: rows, loading, error, reload } = useContent<Program>("/api/admin/programs");
+  const [draft, setDraft] = useState<Draft | null>(null);
+  const [deleting, setDeleting] = useState<Program | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function mutate(path: string, method: string, body?: object) {
+    if (busy) return;
+    setBusy(true);
+    setMessage("");
+    try {
+      await apiRequest(path, { method, ...(body ? { body: JSON.stringify(body) } : {}) });
+      setDraft(null);
+      setDeleting(null);
+      reload();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Program gagal disimpan.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function save(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!draft) return;
+    const { name, description, sort_order, status, slug, id } = draft;
+    void mutate(`/api/admin/programs${id ? `/${id}` : ""}`, id ? "PATCH" : "POST", { name, description, sort_order, ...(id ? { status } : { slug }) });
+  }
+
+  return <section>
+    <div className="admin-page-actions"><button type="button" className="button button-primary" disabled={busy || loading || Boolean(error)} onClick={() => { setMessage(""); setDraft({ name: "", slug: "", description: "", status: "draft", sort_order: Math.min(32767, Math.max(0, ...rows.map(row => row.sort_order)) + 1) }); }}>Tambah Program</button></div>
+    {error && <p role="alert">{error} <button type="button" onClick={reload}>Coba lagi</button></p>}
+    {message && <p role="alert">{message}</p>}
+    <AdminDataTable caption="Daftar Program" loading={loading} rows={rows} rowKey={row => String(row.id)} columns={[
+      { key: "name", header: "Nama", cell: row => row.name },
+      { key: "slug", header: "Slug", cell: row => row.slug },
+      { key: "description", header: "Deskripsi", cell: row => row.description ?? "" },
+      { key: "order", header: "Urutan", cell: row => row.sort_order },
+      { key: "status", header: "Status", cell: row => <AdminStatusBadge status={row.status === "active" ? "Aktif" : row.status === "inactive" ? "Nonaktif" : "Draft"} /> },
+    ]} actions={{ cell: row => <div className="admin-page-actions">
+      <button type="button" className="button" disabled={busy} onClick={() => { setMessage(""); setDraft({ ...row }); }}>Edit / Atur Urutan</button>
+      <button type="button" className="button" disabled={busy} onClick={() => void mutate(`/api/admin/programs/${row.id}`, "PATCH", { status: row.status === "active" ? "inactive" : "active" })}>{row.status === "active" ? "Nonaktifkan" : "Aktifkan"}</button>
+      <button type="button" className="button" disabled={busy} onClick={() => { setMessage(""); setDeleting(row); }}>Hapus</button>
+    </div> }} />
+    <AdminDialog open={Boolean(draft)} title={draft?.id ? "Edit Program" : "Tambah Program"} close={() => { if (!busy) setDraft(null); }}>
+      {draft && <form className="admin-prototype-form" onSubmit={save}>
+        <label className="admin-field">Nama program<input required maxLength={255} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} /></label>
+        <label className="admin-field">Slug<input required readOnly={Boolean(draft.id)} maxLength={255} pattern="[a-z0-9]+(-[a-z0-9]+)*" value={draft.slug} onChange={event => setDraft({ ...draft, slug: event.target.value })} /><small>Slug tetap setelah disimpan agar URL lama tidak berubah.</small></label>
+        <label className="admin-field">Deskripsi / informasi program<textarea maxLength={10000} value={draft.description ?? ""} onChange={event => setDraft({ ...draft, description: event.target.value })} /></label>
+        <label className="admin-field">Urutan<input required type="number" min={0} max={32767} step={1} value={draft.sort_order} onChange={event => setDraft({ ...draft, sort_order: Number(event.target.value) })} /></label>
+        <label className="admin-field">Status<select disabled={!draft.id} value={draft.status} onChange={event => setDraft({ ...draft, status: event.target.value as Program["status"] })}><option value="draft">Draft</option><option value="active">Aktif</option><option value="inactive">Nonaktif</option></select></label>
+        <p>Program baru disimpan sebagai Draft. Aktivasi tidak memberikan akses berbayar.</p>
+        {message && <p role="alert">{message}</p>}
+        <button type="submit" className="button button-primary" disabled={busy}>Simpan</button>
+      </form>}
+    </AdminDialog>
+    <AdminDialog open={Boolean(deleting)} title="Hapus Program?" close={() => { if (!busy) setDeleting(null); }}>
+      <p>Hapus permanen {deleting?.name}? Program dengan relasi atau histori tidak dapat dihapus; gunakan Nonaktifkan.</p>
+      {message && <p role="alert">{message}</p>}
+      <button type="button" className="button" disabled={busy} onClick={() => setDeleting(null)}>Batal</button>
+      <button type="button" className="button" disabled={busy} onClick={() => deleting && void mutate(`/api/admin/programs/${deleting.id}`, "DELETE")}>Hapus Permanen</button>
+    </AdminDialog>
+  </section>;
+}

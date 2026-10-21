@@ -9,6 +9,6 @@ class LearningProgramResource extends JsonResource
 {
     public function toArray(Request $request): array
     {
-        return $this->resource->only(['id', 'code', 'slug', 'name', 'family']);
+        return $this->resource->only(['id', 'code', 'slug', 'name', 'description', 'family']);
     }
 }

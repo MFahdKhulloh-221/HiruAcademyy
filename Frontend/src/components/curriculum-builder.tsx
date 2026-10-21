@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { AdminPrograms } from "@/components/admin-programs";
 import { AdminCanonicalCurriculum } from "@/components/admin-canonical-curriculum";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
@@ -47,6 +48,7 @@ import {
 import { readAssessments } from "@/lib/admin-assessment-store";
 
 const mainTabs = [
+  "Program",
   "Kurikulum",
   "Flashcard",
   "Perpustakaan Materi",
@@ -77,8 +79,8 @@ export function CurriculumBuilder() {
         />
         <AdminPageHeader
           eyebrow="ADMIN • CONTENT STUDIO"
-          title="Kurikulum & Materi"
-          description="Pusat pengelolaan silabus chapter, dek flashcard interaktif, materi referensi, dan rekaman kelas bimbingan."
+          title={currentTab === "Program" ? "Journey / Program" : "Kurikulum & Materi"}
+          description={currentTab === "Program" ? "Kelola daftar program, urutan, dan status tampil di Journey siswa." : "Pusat pengelolaan silabus chapter, dek flashcard interaktif, materi referensi, dan rekaman kelas bimbingan."}
         />
 
         <AdminTabs
@@ -87,6 +89,7 @@ export function CurriculumBuilder() {
           onChange={setTab}
           label="Menu Kurikulum & Materi"
         >
+          {currentTab === "Program" && <AdminPrograms />}
           {currentTab === "Kurikulum" && <AdminCanonicalCurriculum nested />}
           {currentTab === "Flashcard" && <AdminCanonicalCurriculum flashcards nested />}
           {currentTab === "Perpustakaan Materi" && <div className="library-tab-content"><Link href="/admin/modul">Modul</Link><p>Perpustakaan Materi mengikuti modul published pada chapter.</p></div>}
