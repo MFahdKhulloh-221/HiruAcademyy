@@ -64,6 +64,7 @@ async function request(path: string, options: RequestInit): Promise<Response> {
     }
     const errors: Record<string, string[]> = {};
     const studentTryOut = /^\/api\/student\/try-outs\/\d+\/attempts\/\d+(?:\/(?:answers|submit))?$/.test(path);
+    const placement = /^\/api\/(?:admin\/placement-(?:configs|questions|previews)(?:\/.*)?|placement(?:\/.*)?)$/.test(path);
     const body = response.status === 422 || studentTryOut ? await response.json().catch(() => null) : null;
     if (response.status === 422) {
       if (body?.errors && typeof body.errors === "object") {
@@ -73,6 +74,7 @@ async function request(path: string, options: RequestInit): Promise<Response> {
             errors[field] = [field.startsWith("answers") ? "Periksa jawaban: ID soal dan pilihan A–D harus valid." : field === "revision" ? "Revisi jawaban tidak valid. Sinkronkan kembali sebelum mengumpulkan." : "Status penyelesaian sesi tidak valid."];
           } else if (path === "/api/auth/register" && field === "whatsapp" && Array.isArray(body.errors[key]) && body.errors[key].includes("Nomor WhatsApp sudah digunakan. Silakan gunakan nomor lain.")) errors[field] = ["Nomor WhatsApp sudah digunakan. Silakan gunakan nomor lain."];
           else if (Object.hasOwn(fieldMessages, field)) errors[field] = [fieldMessages[field]];
+          else if (placement && Object.keys(errors).length < 25 && Array.isArray(body.errors[key])) errors[field] = body.errors[key].filter((message: unknown): message is string => typeof message === "string").slice(0, 3);
           else if ((path.startsWith("/api/admin/mini-checkpoint-questions") || path.startsWith("/api/admin/try-outs")) && Array.isArray(body.errors[key])) errors[field] = body.errors[key].filter((message: unknown): message is string => typeof message === "string");
         }
       }
@@ -81,6 +83,10 @@ async function request(path: string, options: RequestInit): Promise<Response> {
     if (studentTryOut) {
       const statusMessage = response.status === 401 || response.status === 419 ? "Sesi berakhir. Silakan masuk kembali." : response.status === 403 ? "Akses Try Out ditolak. Periksa hak akses akun." : response.status === 409 ? body?.message === "Stale answer revision." ? "Revisi jawaban berubah. Muat ulang untuk mengambil revisi terbaru sebelum mengumpulkan." : "Status attempt berubah. Muat ulang untuk memeriksa jawaban atau hasil." : response.status === 422 ? "Data Try Out tidak valid." : response.status === 429 ? "Terlalu banyak permintaan. Tunggu sebelum mencoba kembali." : response.status >= 500 ? "Permintaan belum berhasil karena gangguan server. Status pengumpulan belum dapat dipastikan; coba kembali untuk memeriksa dan melanjutkan attempt yang sama." : "Permintaan Try Out belum berhasil. Periksa kembali attempt.";
       throw new ApiError(response.status, errors, `Try Out (HTTP ${response.status}): ${statusMessage}${Object.values(errors).length ? ` ${Object.values(errors).flat().slice(0, 3).join(" ")}` : ""}`);
+    }
+    if (placement) {
+      const detail = Object.values(errors).flat().slice(0, 5).join(" ");
+      throw new ApiError(response.status, errors, response.status === 403 && path === "/api/placement/attempts" && options.method === "POST" ? "Kamu sedang masuk sebagai Admin. Silakan keluar dari akun Admin terlebih dahulu untuk mengikuti Placement Test." : response.status === 409 ? "Jawaban atau sesi berubah. Muat ulang halaman untuk melanjutkan data yang tersimpan." : detail || undefined);
     }
     throw new ApiError(response.status, errors);
   }

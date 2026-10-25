@@ -7,6 +7,7 @@ use App\Models\PlacementConfig;
 use App\Models\PlacementQuestion;
 use App\Models\User;
 use App\Services\PlacementService;
+use App\Support\DatabaseSafety;
 use Carbon\CarbonImmutable;
 use Illuminate\Contracts\Cache\LockProvider;
 use Illuminate\Database\QueryException;
@@ -25,6 +26,7 @@ class PlacementTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+        DatabaseSafety::assertTarget(true);
         $this->withoutMiddleware(ThrottleRequests::class);
         $this->assertSame('pgsql', DB::connection()->getDriverName());
         $this->assertSame('hiru_academy_test', DB::connection()->getDatabaseName());
@@ -53,19 +55,63 @@ class PlacementTest extends TestCase
 
     private function questionInput(int $id, array $changes = []): array
     {
-        return array_replace(['placement_config_id' => $id, 'prompt' => 'Fixture prompt', 'options' => ['A' => 'First', 'B' => 'Second', 'C' => 'Third', 'D' => 'Fourth'], 'correct_option' => 'B', 'category' => 'Bunpou', 'status' => 'published', 'explanation' => 'Hidden explanation'], $changes);
+        return array_replace(['placement_config_id' => $id, 'prompt' => 'Fixture prompt', 'options' => ['A' => 'First', 'B' => 'Second', 'C' => 'Third', 'D' => 'Fourth'], 'correct_option' => 'B', 'category' => 'Bunpou', 'level' => 'N5', 'status' => 'published', 'explanation' => 'Hidden explanation'], $changes);
     }
 
-    private function published(int $count = 3): PlacementConfig
+    private function bank(PlacementConfig $config, ?int $existingId = null): void
+    {
+        $service = app(PlacementService::class);
+        foreach (PlacementService::LEVELS as $level) {
+            foreach (PlacementService::CATEGORIES as $category) {
+                for ($i = 0; $i < 3; $i++) {
+                    if ($existingId !== null && $level === 'N5' && $category === 'Bunpou' && $i === 0) {
+                        continue;
+                    }
+                    $service->save('placement-questions', $this->questionInput($config->id, ['level' => $level, 'category' => $category, 'passage' => 'Fixture passage', 'audio_url' => 'public/placement.mp3']));
+                }
+            }
+        }
+    }
+
+    private function published(): PlacementConfig
     {
         $service = app(PlacementService::class);
         $config = $service->save('placement-configs', $this->configInput());
-        for ($i = 0; $i < $count; $i++) {
-            $service->save('placement-questions', $this->questionInput($config->id, ['sort_order' => $i + 1, 'category' => PlacementService::CATEGORIES[$i % 4]]));
-        }
+        $this->bank($config);
         $service->save('placement-questions', $this->questionInput($config->id, ['status' => 'draft']));
 
         return $service->save('placement-configs', ['status' => 'published'], $config);
+    }
+
+    private function legacyAttempt(int $count = 1, ?PlacementConfig $config = null): array
+    {
+        $service = app(PlacementService::class);
+        $config ??= $service->save('placement-configs', $this->configInput());
+        $questions = [];
+        $grading = [];
+        for ($i = 0; $i < $count; $i++) {
+            $question = $service->save('placement-questions', $this->questionInput($config->id, ['category' => PlacementService::CATEGORIES[$i % 4], 'sort_order' => $i + 1]));
+            $questions[] = $question->only(['id', 'prompt', 'options', 'category', 'sort_order', 'image_url', 'audio_url']);
+            $grading[$question->id] = $question->correct_option;
+        }
+        $token = bin2hex(random_bytes(32));
+        $this->withSession(['placement_owner' => $token]);
+        $attempt = PlacementAttempt::create([
+            'placement_config_id' => $config->id,
+            'user_id' => auth()->id(),
+            'owner_hash' => auth()->id() === null ? hash('sha256', $token) : null,
+            'applicant_snapshot' => $this->applicant(),
+            'config_snapshot' => $config->only(['id', 'title', 'intro_heading', 'duration_minutes', 'description', 'recommendation_rules']),
+            'content_snapshot' => $questions,
+            'grading_snapshot' => $grading,
+            'answers' => [],
+            'status' => 'in_progress',
+            'started_at' => now(),
+            'expires_at' => now()->addMinutes($config->duration_minutes),
+        ]);
+        $data = $this->getJson('/api/placement/attempts/'.$attempt->id)->assertOk()->assertJsonPath('data.adaptive', false)->json('data');
+
+        return $data;
     }
 
     private function applicant(): array
@@ -96,7 +142,7 @@ class PlacementTest extends TestCase
         $lock = $store->lock('placement_test_'.bin2hex(random_bytes(16)), 10);
         $this->assertTrue($lock->get());
         $this->assertTrue($lock->release());
-        $this->published(1);
+        $this->published();
         $first = $this->start();
         $owner = session('placement_owner');
         $second = $this->start();
@@ -121,7 +167,9 @@ class PlacementTest extends TestCase
         $this->getJson($qbase)->assertOk()->assertJsonFragment(['id' => $question['id']]);
         $this->getJson($qbase.'/'.$question['id'])->assertOk()->assertJsonPath('data.explanation', 'Hidden explanation');
         $this->patchJson($qbase.'/'.$question['id'], ['options' => ['A' => 'Changed', 'B' => 'Second', 'C' => 'Third', 'D' => 'Fourth']])->assertOk()->assertJsonPath('data.options.A', 'Changed');
-        $this->patchJson($base.'/'.$config['id'], ['title' => 'Changed', 'status' => 'published'])->assertOk();
+        $this->patchJson($base.'/'.$config['id'], ['status' => 'published'])->assertUnprocessable()->assertJsonValidationErrors('availability');
+        $this->bank(PlacementConfig::findOrFail($config['id']), $question['id']);
+        $this->patchJson($base.'/'.$config['id'], ['title' => 'Changed', 'status' => 'published'])->assertOk()->assertJsonPath('data.availability.N5.Bunpou', ['valid' => 3, 'required' => 3]);
         $this->patchJson($qbase.'/'.$question['id'], ['status' => 'draft'])->assertUnprocessable();
         $this->deleteJson($qbase.'/'.$question['id'])->assertUnprocessable();
         $this->patchJson($base.'/'.$config['id'], ['status' => 'draft'])->assertOk();
@@ -173,12 +221,24 @@ class PlacementTest extends TestCase
         $config = $this->published();
         app(PlacementService::class)->save('placement-configs', $this->configInput());
         $response = $this->getJson('/api/placement')->assertOk()->assertJsonPath('data.id', $config->id);
-        $this->assertCount(3, $response->json('data.questions'));
-        $this->assertSame(['id', 'title', 'intro_heading', 'duration_minutes', 'description', 'questions'], array_keys($response->json('data')));
+        $this->assertSame([], $response->json('data.questions'));
+        $response->assertJsonPath('data.adaptive', true)->assertJsonPath('data.question_count', 12)->assertJsonPath('data.question_limit', 12)->assertJsonPath('data.is_ready', true);
+        $this->assertSame(['id', 'title', 'intro_heading', 'duration_minutes', 'description', 'question_count', 'adaptive', 'question_limit', 'is_ready', 'questions'], array_keys($response->json('data')));
         $this->assertNoSecrets($response->json());
         $question = $config->questions()->firstOrFail();
         $this->assertArrayNotHasKey('correct_option', $question->toArray());
         $this->assertArrayNotHasKey('explanation', $question->toArray());
+    }
+
+    public function test_public_reports_not_ready_when_published_bank_is_insufficient(): void
+    {
+        $service = app(PlacementService::class);
+        $config = $service->save('placement-configs', $this->configInput(['status' => 'draft']));
+        $service->save('placement-questions', $this->questionInput($config->id, ['level' => 'N5', 'category' => 'Bunpou', 'status' => 'published']));
+        $config->update(['status' => 'published']);
+
+        $response = $this->getJson('/api/placement')->assertOk();
+        $response->assertJsonPath('data.is_ready', false);
     }
 
     public function test_required_applicant_and_optional_whatsapp_consent_without_effects(): void
@@ -234,8 +294,8 @@ class PlacementTest extends TestCase
     public function test_snapshot_deadline_server_grade_late_submit_and_idempotency(): void
     {
         DB::statement("SET LOCAL TIME ZONE 'Asia/Jakarta'");
-        $config = $this->published();
-        $attempt = $this->start();
+        $attempt = $this->legacyAttempt(3);
+        $config = PlacementConfig::findOrFail($attempt['placement_config_id']);
         $url = '/api/placement/attempts/'.$attempt['id'];
         $ids = array_column($attempt['questions'], 'id');
         $this->assertSame('2026-10-04T12:00:00.000000Z', $attempt['started_at']);
@@ -271,8 +331,7 @@ class PlacementTest extends TestCase
 
     public function test_answer_save_is_refresh_safe_strict_and_deadline_bound(): void
     {
-        $this->published(1);
-        $attempt = $this->start();
+        $attempt = $this->legacyAttempt();
         $url = '/api/placement/attempts/'.$attempt['id'];
         $id = $attempt['questions'][0]['id'];
         foreach ([[], ['answers' => [$id => 'E']], ['answers' => [999999999 => 'A']], ['answers' => [$id => ['correct_option' => 'B']]], ['answers' => [], 'score' => 100], ['answers' => [], 'privacy' => true], ['answers' => [], 'correct_option' => 'B'], ['answers' => [], 'is_correct' => true]] as $input) {
@@ -293,8 +352,7 @@ class PlacementTest extends TestCase
 
     public function test_expired_unsaved_answers_cannot_earn_score(): void
     {
-        $this->published(1);
-        $attempt = $this->start();
+        $attempt = $this->legacyAttempt();
         $id = $attempt['questions'][0]['id'];
         $this->travelTo(CarbonImmutable::parse($attempt['expires_at']));
         $this->postJson('/api/placement/attempts/'.$attempt['id'].'/submit', ['answers' => [$id => 'B']])->assertOk()
@@ -305,8 +363,7 @@ class PlacementTest extends TestCase
 
     public function test_manual_submit_wins_and_stale_autosave_cannot_change_result(): void
     {
-        $this->published(1);
-        $attempt = $this->start();
+        $attempt = $this->legacyAttempt();
         $url = '/api/placement/attempts/'.$attempt['id'];
         $id = $attempt['questions'][0]['id'];
         $this->putJson($url.'/answers', ['answers' => [$id => 'A']])->assertOk();
@@ -320,8 +377,7 @@ class PlacementTest extends TestCase
 
     public function test_empty_answers_are_all_unanswered(): void
     {
-        $this->published(1);
-        $attempt = $this->start();
+        $attempt = $this->legacyAttempt();
         $this->postJson('/api/placement/attempts/'.$attempt['id'].'/submit', ['answers' => []])->assertOk()
             ->assertJsonPath('data.result.correct', 0)
             ->assertJsonPath('data.result.wrong', 0)
@@ -333,8 +389,7 @@ class PlacementTest extends TestCase
 
     public function test_model_and_database_snapshot_and_completion_guards(): void
     {
-        $this->published(1);
-        $data = $this->start();
+        $data = $this->legacyAttempt();
         $attempt = PlacementAttempt::findOrFail($data['id']);
         foreach (['content_snapshot' => [], 'grading_snapshot' => [], 'expires_at' => now()->addHour(), 'owner_hash' => str_repeat('a', 64)] as $field => $value) {
             try {
@@ -365,7 +420,8 @@ class PlacementTest extends TestCase
             ['minScore' => 51, 'maxScore' => 100, 'recommendedProgramCode' => 'N4', 'resultTitle' => 'N4 Intermediate', 'resultDescription' => 'Start at N4'],
         ];
         $config = $this->actingAs($this->admin)->postJson('/api/admin/placement-configs', [...$this->configInput(), 'recommendation_rules' => $rules])->assertCreated()->json('data');
-        $this->actingAs($this->admin)->postJson('/api/admin/placement-questions', $this->questionInput($config['id'], ['correct_option' => 'A']))->assertCreated();
+        $this->actingAs($this->admin)->postJson('/api/admin/placement-questions', $this->questionInput($config['id'], ['correct_option' => 'A', 'status' => 'draft']))->assertCreated();
+        $this->bank(PlacementConfig::findOrFail($config['id']));
         $this->actingAs($this->admin)->patchJson('/api/admin/placement-configs/'.$config['id'], ['status' => 'published'])->assertOk();
 
         $loadedConfig = $this->actingAs($this->admin)->getJson('/api/admin/placement-configs')->assertOk()->json('data.0');
@@ -387,19 +443,26 @@ class PlacementTest extends TestCase
 
         $student = $this->user('student');
         $this->actingAs($student);
+        $legacy = $this->legacyAttempt(1, PlacementConfig::findOrFail($config['id']));
+        $this->postJson('/api/placement/attempts/'.$legacy['id'].'/submit', ['answers' => [$legacy['questions'][0]['id'] => 'B']])->assertOk()
+            ->assertJsonPath('data.result.percentage', 100)->assertJsonPath('data.result.recommendation_level', 'N4');
         $attempt = $this->start();
-        $submit = $this->postJson('/api/placement/attempts/'.$attempt['id'].'/submit', [
-            'answers' => [$attempt['questions'][0]['id'] => 'A'],
-        ])->assertOk();
+        $url = '/api/placement/attempts/'.$attempt['id'];
+        $this->assertTrue($attempt['adaptive']);
+        $this->assertCount(1, $attempt['questions']);
+        for ($i = 0; $i < $attempt['question_limit']; $i++) {
+            $attempt = $this->putJson($url.'/answers', ['answers' => [$attempt['questions'][$i]['id'] => 'B'], 'revision' => $attempt['revision']])->assertOk()->json('data');
+        }
+        $submit = $this->postJson($url.'/submit', ['answers' => [], 'revision' => $attempt['revision']])->assertOk();
 
         $this->assertSame(100, $submit->json('data.result.percentage'));
-        $this->assertSame('N4', $submit->json('data.result.recommendation_level'));
+        $this->assertSame('N1', $submit->json('data.result.recommendation_level'));
 
         $leads = $this->actingAs($this->admin)->getJson('/api/admin/placement-leads')->assertOk();
         $lead = collect($leads->json('data'))->firstWhere('id', $attempt['id']);
         $this->assertNotNull($lead);
         $this->assertSame('new', $lead['status']);
-        $this->assertSame('N4', $lead['recommended_level']);
+        $this->assertSame('N1', $lead['recommended_level']);
         $this->assertSame(100, $lead['score']);
 
         $this->actingAs($this->admin)->patchJson('/api/admin/placement-leads/'.$attempt['id'], [
@@ -413,8 +476,8 @@ class PlacementTest extends TestCase
 
     public function test_recovered_rules_migration_preserves_custom_configs_and_attempts(): void
     {
-        $config = $this->published(4);
-        $attempt = $this->start();
+        $attempt = $this->legacyAttempt(4);
+        $config = PlacementConfig::findOrFail($attempt['placement_config_id']);
         $original = PlacementAttempt::findOrFail($attempt['id'])->getRawOriginal();
         $custom = app(PlacementService::class)->save('placement-configs', [...$this->configInput(), 'recommendation_rules' => [['minScore' => 0, 'maxScore' => 100, 'recommendedProgramCode' => 'N1', 'resultTitle' => 'Custom', 'resultDescription' => 'Custom']]]);
         $migration = require database_path('migrations/2026_10_07_000019_recover_empty_placement_recommendation_rules.php');
@@ -424,7 +487,7 @@ class PlacementTest extends TestCase
         $this->assertSame([[0, 39, 'N5'], [40, 59, 'N4'], [60, 74, 'N3'], [75, 100, 'N2']], array_map(fn ($rule) => [$rule['minScore'], $rule['maxScore'], $rule['recommendedProgramCode']], $rules));
         $this->assertSame('N1', $custom->fresh()->recommendation_rules[0]['recommendedProgramCode']);
         $this->assertSame($original, PlacementAttempt::findOrFail($attempt['id'])->getRawOriginal());
-        $fresh = $this->start();
+        $fresh = $this->legacyAttempt(4, $config->fresh());
         $answers = array_fill_keys(array_column($fresh['questions'], 'id'), 'B');
         $this->postJson('/api/placement/attempts/'.$fresh['id'].'/submit', ['answers' => $answers])->assertOk()->assertJsonPath('data.result.recommendation_level', 'N2');
         foreach ([0 => 'N5', 39 => 'N5', 40 => 'N4', 59 => 'N4', 60 => 'N3', 74 => 'N3', 75 => 'N2', 90 => 'N2', 100 => 'N2'] as $score => $level) {
@@ -434,8 +497,7 @@ class PlacementTest extends TestCase
 
     public function test_category_results_use_attempt_snapshot_and_missing_categories_are_zero(): void
     {
-        $this->published(3);
-        $attempt = $this->start();
+        $attempt = $this->legacyAttempt(3);
         $ids = array_column($attempt['questions'], 'id');
         app(PlacementService::class)->save('placement-questions', ['category' => 'Choukai', 'correct_option' => 'A'], PlacementQuestion::findOrFail($ids[0]));
         $response = $this->postJson('/api/placement/attempts/'.$attempt['id'].'/submit', ['answers' => [$ids[0] => 'B', $ids[1] => 'A']])->assertOk();

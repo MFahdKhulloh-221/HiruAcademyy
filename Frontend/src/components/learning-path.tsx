@@ -83,7 +83,7 @@ export function LearningPath() {
                   {/* Header Row: Circular Icon Badge & Step Label */}
                   <div className="flex items-center justify-between">
                     <div className="w-12 h-12 rounded-full bg-[#f48220] flex items-center justify-center text-white shadow-[0_6px_16px_rgba(244,130,32,0.35)] flex-shrink-0">
-                      <IconComponent className="w-6 h-6" strokeWidth={2.4} />
+                      <IconComponent className="w-6 h-6 text-white" strokeWidth={2.4} />
                     </div>
                     <div className="text-xs font-bold tracking-wide">
                       <span className="text-[#f48220]">{item.step}</span>{" "}

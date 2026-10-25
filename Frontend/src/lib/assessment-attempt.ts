@@ -3,7 +3,7 @@ import { apiRequest, ApiError } from "./api";
 export type AttemptQuestion = { id: number; instruction?: string | null; japanese?: { text: string; reading?: string | null } | null; question?: string; prompt?: string; session?: string | number; part?: number; duration_minutes?: number; title?: string; options: Record<string, string>; audio_url?: string | null; audio_url_resolved_url?: string | null; image_url?: string | null; reading_passage?: string | null; passage?: { title: string; body: string }; correct_option?: string; explanation?: string | null; selected_answer?: string | null; status?: string };
 export type AttemptResult = { correct: number; wrong: number; unanswered: number; total?: number; percentage?: number; earned?: number; max?: number; passed?: boolean; passing_score?: number; overall_pass?: boolean | null; total_passing_score?: number | null; recommendation_level?: string | null; sessions?: { code: string; label: string; earned: number; max: number; correct: number; wrong: number; unanswered: number; passing_score: number; passing_score_basis?: "points" | "correct_answers"; pass: boolean }[] };
 export type MiniQuestion = AttemptQuestion & { session: number; part: number; duration_minutes: number };
-export type ServerAttempt = { passing_score?: number; request_started_at?: number; received_at?: number; session?: number; part?: number; duration_minutes?: number; server_now?: string; kind?: string; chapter_id?: number; id: number; status: "in_progress" | "completed"; revision?: number; current_session?: number; completed_sessions?: string[]; questions: AttemptQuestion[]; answers: Record<string, string>; result: AttemptResult | null; expires_at?: string | null; started_at?: string; completed_at?: string | null };
+export type ServerAttempt = { adaptive?: boolean; question_limit?: number; passing_score?: number; request_started_at?: number; received_at?: number; session?: number; part?: number; duration_minutes?: number; server_now?: string; kind?: string; chapter_id?: number; id: number; status: "in_progress" | "completed"; revision?: number; scoring_version?: string; current_session?: number; completed_sessions?: string[]; questions: AttemptQuestion[]; answers: Record<string, string>; result: AttemptResult | null; expires_at?: string | null; started_at?: string; completed_at?: string | null };
 export const assessmentSessions = ["vocabulary_kanji", "grammar", "reading", "audio"] as const;
 export const assessmentSessionLabels = ["Kosakata & Kanji", "Tata Bahasa", "Reading (Dokkai)", "Audio (Choukai)"] as const;
 export type AttemptDomain = "learning" | "tryout" | "placement";
@@ -71,12 +71,24 @@ export class AttemptPersistence {
     return this.enqueue(async () => {
       if (this.attempt.status === "completed") return this.attempt;
       if (this.expired()) return this.refresh();
-      const body = this.domain === "placement" ? { answers: snapshot } : this.domain === "tryout" ? { answers: snapshot, revision: this.attempt.revision, finish_session: finishSession } : { answers: snapshot, revision: this.attempt.revision };
+      const body = this.domain === "placement" ? { answers: snapshot, ...((this.attempt.adaptive || this.attempt.scoring_version === "percentage-v1") ? { revision: this.attempt.revision } : {}) } : this.domain === "tryout" ? { answers: snapshot, revision: this.attempt.revision, finish_session: finishSession } : { answers: snapshot, revision: this.attempt.revision };
       try {
         const attempt = await this.write("/answers", body, "PUT");
         this.saveError = undefined;
         return attempt;
-      } catch (error) { this.saveError = error; throw error; }
+      } catch (error) {
+        if (this.domain === "placement" && (this.attempt.adaptive || this.attempt.scoring_version === "percentage-v1")) {
+          try {
+            const canonical = await this.refresh();
+            if (canonical.status === "completed" || Object.entries(snapshot).every(([id, answer]) => canonical.answers[id] === answer)) {
+              this.saveError = undefined;
+              return canonical;
+            }
+          } catch { /* Preserve original save error; never replay an unconfirmed answer. */ }
+        }
+        this.saveError = error;
+        throw error;
+      }
     });
   }
   submit(answers: Record<string, string>) {
@@ -94,7 +106,7 @@ export class AttemptPersistence {
         const saved = await this.write("/answers", { answers: snapshot, revision: this.attempt.revision }, "PUT");
         if (saved.status === "completed") return saved;
       }
-      const body = this.domain === "placement" ? { answers: snapshot } : this.domain === "tryout" ? { revision: this.attempt.revision } : { answers: snapshot, revision: this.attempt.revision };
+      const body = this.domain === "placement" ? { answers: snapshot, ...((this.attempt.adaptive || this.attempt.scoring_version === "percentage-v1") ? { revision: this.attempt.revision } : {}) } : this.domain === "tryout" ? { revision: this.attempt.revision } : { answers: snapshot, revision: this.attempt.revision };
       return this.write("/submit", body, "POST");
     }).catch(async error => {
       if (this.domain !== "tryout" && this.attempt.kind !== "mini") { this.submitting = null; throw error; }

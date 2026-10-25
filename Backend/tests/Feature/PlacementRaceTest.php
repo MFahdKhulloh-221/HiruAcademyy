@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\PlacementAttempt;
+use App\Services\PlacementService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Symfony\Component\Process\Process;
@@ -42,32 +43,43 @@ class PlacementRaceTest extends TestCase
         }
     }
 
-    private function fixture(bool $expired): array
+    private function fixture(bool $expired, bool $percentage = false): array
     {
         $this->table = 'placement_race_'.bin2hex(random_bytes(12));
         DB::statement('CREATE TABLE '.$this->table.' (LIKE placement_attempts INCLUDING ALL)');
         DB::statement('CREATE TRIGGER placement_race_immutable BEFORE UPDATE OR DELETE ON '.$this->table.' FOR EACH ROW EXECUTE FUNCTION guard_placement_attempt()');
         $owner = bin2hex(random_bytes(32));
         $now = CarbonImmutable::now('UTC');
+        $bank = [];
+        foreach (PlacementService::LEVELS as $level) {
+            foreach (PlacementService::CATEGORIES as $category) {
+                for ($i = 0; $i < 3; $i++) {
+                    $bank[] = ['id' => count($bank) + 1, 'prompt' => 'Race fixture', 'options' => ['A' => 'First', 'B' => 'Second', 'C' => 'Third', 'D' => 'Fourth'], 'level' => $level, 'category' => $category, 'passage' => 'Reading fixture', 'audio_url' => 'placement/listening.mp3'];
+                }
+            }
+        }
+        $first = collect($bank)->first(fn ($q) => $q['level'] === 'N3' && $q['category'] === 'Bunpou')['id'];
+        $second = collect($bank)->first(fn ($q) => $q['level'] === 'N2' && $q['category'] === 'Moji・Goi')['id'];
         $attempt = new PlacementAttempt;
         $attempt->setTable($this->table);
         $attempt->fill([
             'placement_config_id' => 1,
             'owner_hash' => hash('sha256', $owner),
             'applicant_snapshot' => ['privacy' => true],
-            'config_snapshot' => ['duration_minutes' => 7],
-            'content_snapshot' => [['id' => 1, 'prompt' => 'Race fixture', 'options' => ['A' => 'First', 'B' => 'Second', 'C' => 'Third', 'D' => 'Fourth'], 'category' => 'Bunpou']],
-            'grading_snapshot' => [1 => 'B'],
-            'answers' => [1 => 'B'],
+            'config_snapshot' => ['duration_minutes' => 7, 'question_count' => $percentage ? count($bank) : 12, 'scoring_version' => $percentage ? 'percentage-v1' : 'adaptive-v1'],
+            'content_snapshot' => $bank,
+            'grading_snapshot' => array_fill_keys(array_column($bank, 'id'), 'B'),
+            'adaptive_state' => $percentage ? ['revision' => 1] : ['issued_ids' => [$first, $second], 'revision' => 1],
+            'answers' => [$first => 'B'],
             'status' => 'in_progress',
             'started_at' => $now->subMinutes(8),
             'expires_at' => $expired ? $now->subMinute() : $now->addMinutes(7),
         ])->save();
 
-        return ['table' => $this->table, 'id' => $attempt->id, 'owner' => $owner];
+        return ['table' => $this->table, 'id' => $attempt->id, 'owner' => $owner, 'first' => $first, 'second' => $second];
     }
 
-    private function worker(array $fixture, string $operation, array $answers, string $name): Process
+    private function worker(array $fixture, string $operation, array $answers, string $name, int $revision = 1): Process
     {
         $code = <<<'PHP'
 require 'vendor/autoload.php';
@@ -86,7 +98,8 @@ $answers = json_decode(getenv('RACE_ANSWERS'), true, 512, JSON_THROW_ON_ERROR);
 $session = new Illuminate\Session\Store('placement_race', new Illuminate\Session\ArraySessionHandler(120));
 $session->start();
 $session->put('placement_owner', $f['owner']);
-$request = Illuminate\Http\Request::create('/', 'POST', ['answers' => $answers]);
+App\Support\DatabaseSafety::assertTarget(true);
+$request = Illuminate\Http\Request::create('/', 'POST', ['answers' => $answers, 'revision' => (int) getenv('RACE_REVISION')]);
 $request->setLaravelSession($session);
 $request->setUserResolver(fn () => null);
 $attempt = (new App\Models\PlacementAttempt)->setTable($f['table'])->newQuery()->findOrFail($f['id']);
@@ -101,14 +114,15 @@ PHP;
         $connection = config('database.connections.'.config('database.default'));
         $connection['url'] = null;
 
-        return new Process([PHP_BINARY, '-r', $code], base_path(), ['APP_ENV' => 'testing', 'APP_CONFIG_CACHE' => base_path('bootstrap/cache/race-nonexistent.php'), 'DB_URL' => '', 'RACE_CONNECTION' => json_encode($connection, JSON_THROW_ON_ERROR), 'RACE_FIXTURE' => json_encode($fixture, JSON_THROW_ON_ERROR), 'RACE_ANSWERS' => json_encode($answers, JSON_THROW_ON_ERROR), 'RACE_OPERATION' => $operation, 'RACE_NAME' => $name], null, 25);
+        return new Process([PHP_BINARY, '-r', $code], base_path(), ['APP_ENV' => 'testing', 'APP_CONFIG_CACHE' => base_path('bootstrap/cache/race-nonexistent.php'), 'DB_URL' => '', 'RACE_CONNECTION' => json_encode($connection, JSON_THROW_ON_ERROR), 'RACE_FIXTURE' => json_encode($fixture, JSON_THROW_ON_ERROR), 'RACE_ANSWERS' => json_encode($answers, JSON_THROW_ON_ERROR), 'RACE_OPERATION' => $operation, 'RACE_NAME' => $name, 'RACE_REVISION' => (string) $revision], null, 25);
     }
 
-    private function race(bool $save, bool $expired): void
+    private function race(bool $save, bool $expired, bool $percentage = false): void
     {
-        $fixture = $this->fixture($expired);
+        $fixture = $this->fixture($expired, $percentage);
         $names = ['placement_'.bin2hex(random_bytes(8)), 'placement_'.bin2hex(random_bytes(8))];
-        $workers = [$this->worker($fixture, 'submit', [1 => 'B'], $names[0]), $this->worker($fixture, $save ? 'save' : 'submit', $save ? [1 => 'A'] : ($expired ? [] : [1 => 'B']), $names[1])];
+        $submitted = $percentage ? [$fixture['first'] => 'B'] : [];
+        $workers = [$this->worker($fixture, 'submit', $submitted, $names[0]), $this->worker($fixture, $save ? 'save' : 'submit', $save ? [$fixture['second'] => 'B'] : $submitted, $names[1], $save ? 0 : 1)];
         DB::beginTransaction();
         DB::table($this->table)->where('id', $fixture['id'])->lockForUpdate()->first();
         try {
@@ -137,7 +151,7 @@ PHP;
             $this->assertSame(200, $results[0]['http']);
             $this->assertSame('completed', $results[0]['status']);
             if ($save) {
-                $this->assertContains($results[1]['http'], $expired ? [409] : [200, 409]);
+                $this->assertContains($results[1]['http'], $expired ? [200] : [200, 409]);
             } else {
                 $this->assertEquals($results[0], $results[1]);
             }
@@ -145,6 +159,14 @@ PHP;
             $this->assertEquals($results[0]['result'], $stored->result_snapshot);
             $this->assertEquals($results[0]['answers'], $stored->answers);
             $this->assertSame(1, $stored->result_snapshot['correct']);
+            $this->assertSame($percentage ? 59 : 11, $stored->result_snapshot['unanswered']);
+            $this->assertSame($percentage ? 60 : 12, $stored->result_snapshot['total']);
+            $this->assertSame('N5', $stored->result_snapshot['recommendation_level']);
+            $this->assertSame(1, $stored->adaptive_state['revision']);
+            if (! $percentage) {
+                $this->assertCount(2, $stored->adaptive_state['issued_ids']);
+            }
+            $this->assertSame([$fixture['first'] => 'B'], $stored->answers);
         } finally {
             while (DB::transactionLevel() > 0) {
                 DB::rollBack();
@@ -176,4 +198,24 @@ PHP;
     {
         $this->race(true, true);
     }
+    public function test_percentage_concurrent_double_submit(): void
+    {
+        $this->race(false, false, true);
+    }
+
+    public function test_percentage_concurrent_manual_auto_submit(): void
+    {
+        $this->race(false, true, true);
+    }
+
+    public function test_percentage_concurrent_stale_save_submit(): void
+    {
+        $this->race(true, false, true);
+    }
+
+    public function test_percentage_concurrent_late_save_submit(): void
+    {
+        $this->race(true, true, true);
+    }
+
 }

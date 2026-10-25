@@ -168,6 +168,9 @@
 .admin-shell .admin-data-table { min-width: 680px; }
 .admin-shell :is(.admin-data-table td, .admin-metric-card, .admin-empty-state, .settings-field, .admin-dialog-content p) { overflow-wrap: anywhere; }
 .admin-shell :is(button, a, input, select, textarea, summary, [tabindex]):focus-visible { outline: 3px solid var(--orange-dark); outline-offset: 3px; }
+.admin-shell .admin-nav-footer button.admin-nav-item { display: flex; align-items: center; gap: 10px; width: 100%; border: 0; background: transparent; color: var(--orange-dark); font: inherit; text-align: left; cursor: pointer; }
+.admin-shell .admin-nav-footer button.admin-nav-item:hover { background: var(--surface-highest); }
+.admin-shell .admin-nav-footer button.admin-nav-item:disabled { opacity: .6; cursor: wait; }
 .admin-shell .admin-dialog-layer { padding: 16px; align-items: center; }
 .admin-shell .admin-dialog { min-width: 0; max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px); }
 .admin-shell .admin-dialog > :is(header, footer) { flex-shrink: 0; }
@@ -228,4 +231,16 @@
 
 @media (prefers-reduced-motion: reduce) {
   .admin-shell .admin-sidebar { transition: none; }
+}
+
+/* Price editor: one scrolling body, fixed dialog header and footer. */
+.admin-shell .admin-dialog:has(.admin-price-editor) { width: min(760px, calc(100vw - 32px)); max-width: 760px; max-height: calc(100dvh - 32px); }
+.admin-shell .admin-dialog-content:has(> .admin-price-editor) { overflow-y: auto; display: block; }
+.admin-shell .admin-dialog:has(.admin-price-editor) > footer { justify-content: flex-end; border-top: 1px solid var(--line); }
+.admin-shell .admin-price-card-preview { width: 100%; max-width: 440px; margin: 24px auto 16px; }
+.admin-shell .admin-price-card-preview .landing-price-card { height: auto; min-width: 0; transform: none; }
+.admin-shell .admin-price-card-preview .pricing-cta-btn { min-height: 48px; font-size: 14px; border-radius: 12px; }
+@media (max-width: 639px) {
+  .admin-shell .admin-dialog:has(.admin-price-editor) { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
+  .admin-shell .admin-price-card-preview .landing-price-card { padding: 28px 20px; }
 }

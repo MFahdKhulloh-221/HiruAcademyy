@@ -70,6 +70,10 @@ Route::prefix('api')->middleware('throttle:api')->group(function () {
             Route::patch("$resource/{content}", [AdminPlacementController::class, 'update'])->whereNumber('content')->defaults('resource', $resource);
             Route::delete("$resource/{content}", [AdminPlacementController::class, 'destroy'])->whereNumber('content')->defaults('resource', $resource);
         }
+        Route::post('placement-configs/{config}/preview', [PublicPlacementController::class, 'preview'])->whereNumber('config');
+        Route::get('placement-previews/{attempt}', [PublicPlacementController::class, 'show'])->whereNumber('attempt');
+        Route::put('placement-previews/{attempt}/answers', [PublicPlacementController::class, 'save'])->whereNumber('attempt');
+        Route::post('placement-previews/{attempt}/submit', [PublicPlacementController::class, 'submit'])->whereNumber('attempt');
         Route::get('placement-leads', [AdminPlacementLeadController::class, 'index']);
         Route::patch('placement-leads/{attempt}', [AdminPlacementLeadController::class, 'update']);
         Route::patch('offers/{offer}', [ProgramOfferController::class, 'update']);

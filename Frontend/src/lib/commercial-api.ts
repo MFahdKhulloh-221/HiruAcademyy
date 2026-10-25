@@ -2,7 +2,7 @@
 
 import { apiRequest } from "@/lib/api";
 
-export type Offer = { id?: number; program_id?: number; program: { code: string; name: string; slug: string }; plan_code: "lms" | "sensei"; base_price: number | null; effective_price: number | null; discount_amount: number; discount_percent: number; duration_months: number; status?: string };
+export type Offer = { id?: number; program_id?: number; program: { code: string; name: string; slug: string }; plan_code: "lms" | "sensei"; base_price: number | null; effective_price: number | null; discount_amount: number; discount_percent: number; duration_months: number; status?: string; program_status?: string };
 export type CommercialInvoice = { id: number; user_id: number; program_id: number; program_code: string; plan_code: "lms" | "sensei"; base_price: number; discount_amount: number; total_price: number; status: string; created_at: string; due_date?: string; paid_at?: string; verified_at?: string; activated_at?: string; submitted_at?: string; note?: string; access_grant?: { starts_at: string; ends_at: string } };
 export type Identity = { id: number; name: string; email: string; whatsapp: string; role: "student" | "admin"; account_status: string; country?: string; target_jlpt?: string };
 export type EffectiveAccess = { learning: Record<string, "preview" | "full" | "none">; replay_levels: string[]; source_grants: { id: number; program_code: string; plan_code: "lms" | "sensei"; starts_at: string; ends_at: string }[] };

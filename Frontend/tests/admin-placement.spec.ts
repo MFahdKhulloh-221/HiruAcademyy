@@ -66,6 +66,29 @@ test("Scenario B — DRAFT: Modify Placement, Save Draft -> Public Placement sti
   await expect(page.getByRole("alert").first()).toBeVisible();
 });
 
+test("Scenario B2 — INSUFFICIENT BANK: Published config with insufficient bank -> Banner visible, start disabled", async ({
+  page,
+}) => {
+  await page.route("**/api/placement", route =>
+    route.fulfill({
+      json: {
+        data: {
+          id: 1,
+          title: "Published But Insufficient",
+          intro_heading: "Cek Level Bahasa Jepang",
+          duration_minutes: 5,
+          description: "Bank Belum Cukup",
+          is_ready: false,
+          questions: [],
+        },
+      },
+    })
+  );
+  await page.goto("/placement");
+  await expect(page.getByRole("alert").first()).toContainText("Placement Test sedang disiapkan");
+  await expect(page.getByRole("button", { name: "Mulai Placement Test Gratis", exact: true })).toBeDisabled();
+});
+
 test("Scenario C — PUBLISH: Create valid questions -> Publish -> Public Placement questions come from Admin config", async ({ page }) => {
   await page.goto("/admin/placement-hasil");
   await page.getByLabel("Judul Tes", { exact: true }).fill("Official Placement");

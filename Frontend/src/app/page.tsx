@@ -1,6 +1,8 @@
 "use client";
 
 import Image from "next/image";
+import { LandingPriceCard } from "@/components/landing-price-card";
+import { landingOffers as offers } from "@/lib/landing-offers";
 import Link from "next/link";
 import { type SVGProps } from "react";
 import { LandingMotion } from "@/components/landing-motion";
@@ -30,60 +32,6 @@ const icons: Record<IconName, React.ReactNode> = {
 function Icon({ name, ...props }: SVGProps<SVGSVGElement> & { name: IconName }) {
   return <svg aria-hidden="true" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24" {...props}>{icons[name]}</svg>;
 }
-
-const offers = [
-  {
-    id: "free",
-    badge: "",
-    title: "Coba Gratis",
-    subTitle: "",
-    description: "Cocok untuk kamu yang ingin mencoba sistem belajar Hiru sebelum berlangganan.",
-    price: "Rp 0",
-    period: "/selamanya",
-    popular: false,
-    points: [
-      "Akses 1 chapter lengkap setiap level",
-      "Progres belajar tersimpan otomatis",
-      "Akses membaca diskusi komunitas",
-    ],
-    cta: "Pilih Coba Gratis",
-    href: "/program",
-  },
-  {
-    id: "sensei",
-    badge: "",
-    title: "LMS プラス (Plus)",
-    subTitle: "Kelas bersama Sensei",
-    description: "Cocok untuk kamu yang membutuhkan jadwal rutin, bimbingan dan evaluasi langsung.",
-    price: "Mulai Rp 350k",
-    period: "/bulan",
-    popular: true,
-    points: [
-      "Semua fasilitas Belajar Mandiri",
-      "10x live Zoom ・ 90 menit/bulan",
-      "Rekaman kelas dan evaluasi hasil belajar",
-    ],
-    cta: "Pilih Bersama Sensei",
-    href: "/program?plan=sensei",
-  },
-  {
-    id: "lms",
-    badge: "BELAJAR FLEKSIBEL",
-    title: "LMS のみ (Only)",
-    subTitle: "Belajar Mandiri",
-    description: "Cocok untuk kamu yang ingin belajar menyesuaikan waktu dan kecepatan sendiri.",
-    price: "Mulai Rp 99k",
-    period: "/6 bulan",
-    popular: false,
-    points: [
-      "Alur belajar dan latihan lengkap",
-      "Try Out dan pembahasan jawaban",
-      "Akses komunitas serta sertifikat digital",
-    ],
-    cta: "Pilih Mandiri",
-    href: "/program?plan=lms",
-  },
-];
 
 const proofItems = [
   { icon: "users" as const, value: "2300+", label: "Alumni" },
@@ -129,7 +77,7 @@ export default function Home() {
     "Placement test, pembelajaran, flashcard, latihan, try out, komunitas, dan kelas bersama Sensei tersedia dalam satu pengalaman belajar yang konsisten.";
   const currentOffers = offers.map(offer => {
     const available = pricing.data.filter(item => item.program.code !== "N1" && item.plan_code === offer.id).sort((a, b) => a.effective_price - b.effective_price);
-    return { ...offer, price: offer.id === "free" ? offer.price : pricing.loading ? "Memuat harga…" : pricing.error ? "Harga gagal dimuat" : offerPrice(available[0]).split("/")[0], period: offer.id === "free" ? offer.period : available[0] ? `/${available[0].duration_months} bulan` : "" };
+    return { ...offer, pricing: available[0], price: offer.id === "free" ? offer.price : pricing.loading ? "Memuat harga…" : pricing.error ? "Harga gagal dimuat" : offerPrice(available[0]).split("/")[0], period: offer.id === "free" ? offer.period : available[0] ? `/${available[0].duration_months} bulan` : "" };
   });
   const previews = showcase.data.map(item => ({ key: item.key, label: item.label, imageSrc: contentMedia(item.image_src) }));
   const displayTestimonials = testimonialContent.data.filter(t => t.type === "text" || (!t.type && !t.video_url)).map(t => ({ id: t.id, name: t.name, quote: t.quote, membership: t.context, avatarSrc: contentMedia(t.image, t.image_resolved_url) }));
@@ -153,45 +101,7 @@ export default function Home() {
             {pricing.error && <div role="alert">{pricing.error} <button type="button" onClick={pricing.reload}>Coba lagi</button></div>}
             {pricing.loading ? <LoadingSkeleton variant="cards" label="Memuat harga…" /> : <div className="pricing-grid">
               {currentOffers.map((offer, index) => (
-                <article
-                  className={`pricing-card reveal-item${offer.popular ? " pricing-card-popular" : ""}`}
-                  key={offer.id}
-                  style={{ "--reveal-index": index } as React.CSSProperties}
-                >
-                  {offer.popular && (
-                    <div className="pricing-floating-badge" aria-label="Paket paling populer">
-                      Paling Populer
-                    </div>
-                  )}
-                  <div className="pricing-card-header">
-                    {offer.badge && <span className="pricing-badge-pill">{offer.badge}</span>}
-                    <h3 className="pricing-title">{offer.title}</h3>
-                    {offer.subTitle && <span className="pricing-subtitle">{offer.subTitle}</span>}
-                    <p className="pricing-desc">{offer.description}</p>
-                  </div>
-
-                  <div className="pricing-price-box">
-                    <span className="pricing-amount">{offer.price}</span>
-                    <span className="pricing-period">{offer.period}</span>
-                  </div>
-
-                  <ul className="pricing-features" aria-label={`Fitur paket ${offer.title}`}>
-                    {offer.points.map((point) => (
-                      <li key={point}>
-                        <span className="feature-check" aria-hidden="true">
-                          <Icon name="check" width="14" height="14" />
-                        </span>
-                        <span>{point}</span>
-                      </li>
-                    ))}
-                  </ul>
-
-                  <div className="pricing-card-footer">
-                    <Link className="button button-primary pricing-cta-btn" href={offer.href}>
-                      {offer.cta}
-                    </Link>
-                  </div>
-                </article>
+                <LandingPriceCard key={offer.id} offer={offer} price={offer.id === "free" ? 0 : offer.pricing?.effective_price ?? null} normalPrice={offer.pricing?.base_price} months={offer.pricing?.duration_months ?? ""} priceText={pricing.error ? "Harga gagal dimuat" : undefined} index={index} />
               ))}
             </div>}
           </div>
@@ -209,4 +119,4 @@ export default function Home() {
       </main>
     </PublicPage>
   );
-}
+}

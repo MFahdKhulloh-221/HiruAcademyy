@@ -10,7 +10,7 @@ class AdminPlacementLeadController extends Controller
 {
     public function index()
     {
-        return response()->json(['data' => PlacementAttempt::orderByDesc('id')->get()->map(fn ($attempt) => [
+        return response()->json(['data' => PlacementAttempt::whereRaw("COALESCE(config_snapshot->>'preview', 'false') <> 'true'")->orderByDesc('id')->get()->map(fn ($attempt) => [
             'id' => $attempt->id,
             'date' => $attempt->started_at->toISOString(),
             'name' => $attempt->applicant_snapshot['name'],
@@ -26,6 +26,7 @@ class AdminPlacementLeadController extends Controller
 
     public function update(Request $request, PlacementAttempt $attempt)
     {
+        abort_if($attempt->config_snapshot['preview'] ?? false, 404);
         $data = $request->validate(['status' => ['required', 'in:new,contacted']]);
         DB::table('placement_lead_contacts')->upsert([['placement_attempt_id' => $attempt->id, 'status' => $data['status'], 'created_at' => now(), 'updated_at' => now()]], ['placement_attempt_id'], ['status', 'updated_at']);
 

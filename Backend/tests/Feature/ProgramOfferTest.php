@@ -162,7 +162,7 @@ class ProgramOfferTest extends TestCase
         ProgramOffer::firstOrFail()->update(['program_id' => 0]);
     }
 
-    public function test_price_patch_authorization_validation_and_n1_guard(): void
+    public function test_price_patch_authorization_nullable_price_duration_and_offer_status(): void
     {
         $offer = ProgramOffer::where('plan_code', 'lms')->firstOrFail();
         $this->patchJson("/api/admin/offers/$offer->id", ['base_price' => 123000])->assertUnauthorized();
@@ -171,11 +171,28 @@ class ProgramOfferTest extends TestCase
         $student->role = 'admin';
         $student->save();
         $this->actingAs($student)->patchJson("/api/admin/offers/$offer->id", ['base_price' => -1])->assertUnprocessable();
-        $this->patchJson("/api/admin/offers/$offer->id", ['base_price' => 123000, 'duration_months' => 12])->assertUnprocessable();
+        $this->patchJson("/api/admin/offers/$offer->id", ['duration_months' => 0, 'status' => 'invalid'])->assertUnprocessable();
+        $this->patchJson("/api/admin/offers/$offer->id", ['program_id' => $offer->program_id])->assertUnprocessable();
+        $this->patchJson("/api/admin/offers/$offer->id", ['base_price' => null, 'duration_months' => 12, 'status' => 'inactive'])->assertOk()
+            ->assertJsonPath('data.base_price', null)->assertJsonPath('data.duration_months', 12)->assertJsonPath('data.status', 'inactive');
         $this->patchJson("/api/admin/offers/$offer->id", ['base_price' => 123000])->assertOk()->assertJsonPath('data.base_price', 123000);
-        $this->assertSame(6, $offer->fresh()->duration_months);
+        $this->assertSame(12, $offer->fresh()->duration_months);
+        $this->assertSame('active', $offer->program->fresh()->status);
+        $adminRow = collect($this->getJson('/api/admin/offers')->assertOk()->json('data'))->firstWhere('id', $offer->id);
+        $this->assertSame('active', $adminRow['program_status']);
+        $this->assertSame('inactive', $adminRow['status']);
         $n1 = ProgramOffer::whereHas('program', fn ($query) => $query->where('code', 'n1'))->firstOrFail();
-        $this->patchJson("/api/admin/offers/$n1->id", ['base_price' => 123000])->assertUnprocessable();
+        $this->patchJson("/api/admin/offers/$n1->id", ['base_price' => 123000])->assertOk()->assertJsonPath('data.base_price', 123000);
+        $this->assertSame(123000, $n1->fresh()->base_price);
+        $this->assertSame('inactive', $n1->fresh()->status);
+        $this->patchJson("/api/admin/offers/$offer->id", ['status' => 'active'])->assertOk();
+        $publicRow = collect($this->getJson('/api/public/offers')->assertOk()->json('data'))->firstWhere('id', $offer->id);
+        $this->assertNotNull($publicRow);
+        foreach ($offer->fresh()->pricing() as $key => $value) {
+            $this->assertSame($value, $publicRow[$key]);
+        }
+        $this->patchJson("/api/admin/offers/$offer->id", ['base_price' => null])->assertOk();
+        $this->assertNotContains($offer->id, array_column($this->getJson('/api/public/offers')->assertOk()->json('data'), 'id'));
         $student->account_status = 'inactive';
         $student->save();
         $this->patchJson("/api/admin/offers/$offer->id", ['base_price' => 123000])->assertUnauthorized();

@@ -13,7 +13,7 @@ export type CanonicalChapter = LearningResource & {
   mini_checkpoint?: { exists: boolean };
   mini_checkpoints?: { session: number; part: number; duration_minutes: number | null; question_count: number; configuration_valid: boolean }[];
 };
-export type ChapterProgress = { chapter_id: number; activities: Record<string, { total: number; completed: number; complete: boolean; completed_ids?: number[] }>; mini_unlocked: boolean };
+export type ChapterProgress = { chapter_id: number; activities: Record<string, { total: number; completed: number; complete: boolean; completed_ids?: number[] }>; mini_eligible?: boolean; mini_unlocked: boolean };
 export type LibraryModule = {
   id: string;
   resource_id: number;

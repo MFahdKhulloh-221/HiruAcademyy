@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ProgramPriceCardContent } from "@/components/program-price-card-content";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
 import { LuSparkles } from "react-icons/lu";
@@ -14,14 +15,15 @@ function ProgramContent() {
   const pricing = useContent<PublicOffer>("/api/public/offers");
   const planParam = useSearchParams().get("plan");
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(planParam === "sensei" || planParam === "lms" || planParam === "free" ? planParam : null);
-  const [selectedLevel, setSelectedLevel] = useState(levelCatalog[1]);
+  const levelParam = useSearchParams().get("level")?.toUpperCase();
+  const [selectedLevel, setSelectedLevel] = useState(levelCatalog.find(level => level.code === levelParam) ?? levelCatalog[1]);
   const [clickedPlanId, setClickedPlanId] = useState<string | null>(null);
 
   const currentPlans = ["free", "sensei", "lms"].map(id => plans.find(plan => plan.id === id)).filter((plan): plan is (typeof plans)[number] => Boolean(plan)).map(plan => {
-    const offer = selectedLevel.code === "N1" ? undefined : pricing.data.find(item => item.program.code.toLowerCase() === selectedLevel.code.toLowerCase() && item.plan_code === plan.id);
-    return { ...plan, price: plan.id === "free" ? plan.price : pricing.loading ? "Memuat harga…" : pricing.error ? "Harga gagal dimuat" : offerPrice(offer), period: plan.id === "free" ? plan.period : offer ? `${offer.duration_months} bulan` : "", available: plan.id === "free" ? selectedLevel.code !== "N1" : Boolean(offer) };
+    const offer = pricing.data.find(item => item.program.code.toLowerCase() === selectedLevel.code.toLowerCase() && item.plan_code === plan.id);
+    return { ...plan, offer, price: plan.id === "free" ? plan.price : pricing.loading ? "Memuat harga…" : pricing.error ? "Harga gagal dimuat" : offerPrice(offer), period: plan.id === "free" ? plan.period : offer ? `${offer.duration_months} bulan` : "", available: plan.id === "free" ? programs.data.some(program => program.code.toUpperCase() === selectedLevel.code) : Boolean(offer) };
   });
-  const levels = levelCatalog.filter(level => level.code === "N1" || programs.data.some(program => program.code.toLowerCase() === level.code.toLowerCase()));
+  const levels = levelCatalog.filter(level => programs.data.some(program => program.code.toLowerCase() === level.code.toLowerCase()));
 
   const selectedPlan = currentPlans.find((plan) => plan.id === selectedPlanId);
   const summaryPlan = selectedPlan ?? currentPlans[0];
@@ -36,6 +38,7 @@ function ProgramContent() {
     <PublicPage active="Program">
       <main className="public-main program-page">
         <section className="public-section program-pricing-section">
+          {levelParam && !programs.loading && !programs.error && !programs.data.some(program => program.code.toUpperCase() === selectedLevel.code) && <p role="status">Program {selectedLevel.code} belum tersedia atau sedang nonaktif. Pilih program aktif lainnya; hasil estimasi Placement Test kamu tetap tersimpan.</p>}
           <div className="public-section-head program-section-title">
             <div>
               <h2>Pilih metode belajar</h2>
@@ -46,10 +49,6 @@ function ProgramContent() {
             {currentPlans.map((plan) => {
               const isSelected = selectedPlan?.id === plan.id;
               const isPopular = plan.id === "sensei";
-              const displayPrice = plan.price.replace(/99\.000/g, "99k").replace(/350\.000/g, "350k");
-              const [amount, period] = displayPrice.includes("/")
-                ? displayPrice.split("/")
-                : [displayPrice, ""];
 
               return (
                 <article
@@ -74,17 +73,8 @@ function ProgramContent() {
                     </div>
                   )}
 
-                  <div className="pricing-card-header">
-                    {!isPopular && plan.id !== "free" && <span className="pricing-badge-pill">{plan.badge}</span>}
-                    {(isPopular || plan.id === "free") && <span className="pricing-badge-pill" style={{ visibility: "hidden" }}>&nbsp;</span>}
-                    <h3 className="pricing-title">{plan.title}</h3>
-                    <p className="pricing-desc">{plan.description}</p>
-                  </div>
-
-                  <div className="pricing-price-box">
-                    <span className="pricing-amount">{amount}</span>
-                    {period && <span className="pricing-period">/{period}</span>}
-                  </div>
+                  {!isPopular && plan.id !== "free" && <span className="pricing-badge-pill">{plan.badge}</span>}
+                  <ProgramPriceCardContent title={plan.title} description={plan.description} price={plan.id === "free" ? 0 : plan.offer?.effective_price ?? null} normalPrice={plan.offer?.base_price} months={plan.offer?.duration_months ?? ""} />
 
                   <ul className="pricing-features" aria-label={`Fitur paket ${plan.title}`}>
                     {plan.points.map((point) => (

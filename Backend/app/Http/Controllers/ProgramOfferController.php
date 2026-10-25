@@ -25,11 +25,12 @@ class ProgramOfferController extends Controller
         abort_unless($request->user(), 401);
         abort_unless($request->user()->account_status === 'active', 401);
         abort_unless($request->user()->role === 'admin', 403);
-        abort_if($offer->program->code === 'n1', 422, 'N1 commercial availability remains OPEN.');
         $data = $request->validate([
-            'base_price' => ['required', 'integer', 'min:0', 'max:2147483647'],
+            'base_price' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:2147483647'],
+            'duration_months' => ['sometimes', 'required', 'integer', 'min:1', 'max:32767'],
+            'status' => ['sometimes', 'required', 'in:active,inactive'],
             'program_id' => ['prohibited'], 'plan_code' => ['prohibited'],
-            'currency' => ['prohibited'], 'duration_months' => ['prohibited'], 'status' => ['prohibited'],
+            'currency' => ['prohibited'],
         ]);
         DB::transaction(function () use ($offer, $data) {
             ProgramOffer::whereKey($offer->id)->lockForUpdate()->firstOrFail()->update($data);
@@ -41,7 +42,7 @@ class ProgramOfferController extends Controller
     private function index(bool $public): JsonResponse
     {
         $offers = ProgramOffer::query()
-            ->with(['program:id,code,slug,name', 'promotions' => fn ($query) => $query->where('status', 'active')])
+            ->with(['program:id,code,slug,name,status', 'promotions' => fn ($query) => $query->where('status', 'active')])
             ->when($public, fn (Builder $query) => $query
                 ->where('status', 'active')->whereNotNull('base_price')
                 ->whereHas('program', fn (Builder $program) => $program->where('status', 'active')))
@@ -57,7 +58,7 @@ class ProgramOfferController extends Controller
                     ...$offer->pricing(),
                 ];
 
-                return $public ? $data : ['id' => $offer->id, 'program_id' => $offer->program_id, ...$data, 'status' => $offer->status];
+                return $public ? $data : ['id' => $offer->id, 'program_id' => $offer->program_id, ...$data, 'status' => $offer->status, 'program_status' => $offer->program->status];
             });
 
         return response()->json(['data' => $offers]);

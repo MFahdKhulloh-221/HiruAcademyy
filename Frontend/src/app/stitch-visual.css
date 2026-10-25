@@ -963,6 +963,13 @@ rt { color: var(--secondary); }
   color: var(--secondary);
 }
 .placement-question-prompt {
+  max-height: 32vh;
+  max-height: 32dvh;
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;
+  scrollbar-gutter: stable;
+  padding-right: 12px;
   margin: 0 0 24px;
   font-size: clamp(20px, 2.5vw, 26px);
   line-height: 1.4;
@@ -1066,6 +1073,7 @@ rt { color: var(--secondary); }
   padding-top: 16px;
   border-top: 1px solid var(--line);
 }
+.placement-assessment .placement-actions-custom .runner-next-btn { margin-left: auto; }
 .runner-prev-btn, .runner-next-btn {
   min-height: 48px;
   padding: 0 24px;
@@ -1119,9 +1127,9 @@ rt { color: var(--secondary); }
 .placement-hero-copy .public-pills span {
   padding: 8px 16px;
   border-radius: 999px;
-  background: #fff7ed;
-  color: var(--orange);
-  border: 1px solid #fed7aa;
+  background: var(--orange);
+  color: #ffffff;
+  border: 1px solid var(--orange);
   font-size: 12px;
   font-weight: 700;
   display: inline-flex;
@@ -1629,6 +1637,25 @@ rt { color: var(--secondary); }
   opacity: 0.5;
   box-shadow: none;
   transform: none;
+}
+/* Field validation errors */
+.placement-form-card .public-form input[aria-invalid="true"],
+.placement-form-card .public-form select[aria-invalid="true"] {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.12);
+}
+.placement-form-card .public-form em[role="alert"] {
+  display: block;
+  margin-top: 4px;
+  color: #dc2626;
+  font-size: 12.5px;
+  font-style: normal;
+  font-weight: 600;
+  line-height: 1.45;
+}
+.placement-form-card .consent em[role="alert"] {
+  grid-column: 1 / -1;
+  margin-top: 2px;
 }
 
 /* Blog Page - Simplified Minimalist Palette: Putih, Teks Hitam, Aksen/Label Oren */
@@ -6938,3 +6965,10 @@ video { height: auto; }
   .batch3-replay .replay-tabs-group { flex-wrap: nowrap; overflow-x: auto; max-width: 100%; padding-block: 4px; }
   .batch3-replay .replay-tabs-group > button { flex: 0 0 auto; }
 }
+
+/* Shared Landing price rows, including Admin preview. */
+.landing-price-card { border-color: var(--orange); }
+.pricing-price-box { flex-wrap: wrap; column-gap: 8px; row-gap: 12px; }
+.pricing-discount-row { flex: 0 0 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; color: var(--muted); font-size: 13px; }
+.pricing-discount-row > span { color: var(--orange-dark); font-weight: 700; }
+.pricing-price-box .pricing-amount { overflow-wrap: anywhere; line-height: 1.2; min-width: 0; }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\PlacementAttempt;
+use App\Models\PlacementConfig;
 use App\Services\MediaService;
 use App\Services\PlacementService;
 use Illuminate\Http\JsonResponse;
@@ -22,10 +23,14 @@ class PublicPlacementController extends Controller
         return response()->json(['data' => app(MediaService::class)->payload($this->placement->attemptPayload($this->placement->start($request)))], 201);
     }
 
+    public function preview(Request $request, PlacementConfig $config): JsonResponse
+    {
+        return response()->json(['data' => app(MediaService::class)->payload($this->placement->attemptPayload($this->placement->preview($request, $config)))], 201);
+    }
+
     public function show(Request $request): JsonResponse
     {
-        $attempt = $this->attempt($request);
-        $this->placement->authorize($request, $attempt);
+        $attempt = $this->placement->refreshAttempt($request, $this->attempt($request));
 
         return response()->json(['data' => app(MediaService::class)->payload($this->placement->attemptPayload($attempt))]);
     }

@@ -10,7 +10,7 @@ class PlacementAttempt extends Model
 
     protected $dateFormat = 'Y-m-d H:i:s.uP';
 
-    protected $hidden = ['user_id', 'owner_hash', 'applicant_snapshot', 'config_snapshot', 'content_snapshot', 'grading_snapshot', 'answers', 'result_snapshot'];
+    protected $hidden = ['user_id', 'owner_hash', 'applicant_snapshot', 'config_snapshot', 'content_snapshot', 'grading_snapshot', 'answers', 'result_snapshot', 'adaptive_state'];
 
     protected static function booted(): void
     {
@@ -24,6 +24,6 @@ class PlacementAttempt extends Model
 
     protected function casts(): array
     {
-        return ['placement_config_id' => 'integer', 'user_id' => 'integer', 'applicant_snapshot' => 'array', 'config_snapshot' => 'array', 'content_snapshot' => 'array', 'grading_snapshot' => 'array', 'answers' => 'array', 'result_snapshot' => 'array', 'started_at' => 'immutable_datetime', 'expires_at' => 'immutable_datetime', 'completed_at' => 'immutable_datetime'];
+        return ['placement_config_id' => 'integer', 'user_id' => 'integer', 'applicant_snapshot' => 'array', 'config_snapshot' => 'array', 'content_snapshot' => 'array', 'grading_snapshot' => 'array', 'adaptive_state' => 'array', 'answers' => 'array', 'result_snapshot' => 'array', 'started_at' => 'immutable_datetime', 'expires_at' => 'immutable_datetime', 'completed_at' => 'immutable_datetime'];
     }
 }
