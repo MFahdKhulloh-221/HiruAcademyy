@@ -44,13 +44,7 @@
 
 ## Figma role mapping
 
-- Page 08 = Free Member behavior and screens.
-- Page 09 = Belajar Mandiri / LMS behavior and screens.
-- Page 10 = Belajar dengan Sensei behavior and screens.
-- Page 11 = Admin behavior and screens.
-- Page 1 may be used only for visual/component/icon/layout reference where useful.
-- Backup/older Figma pages are not implementation sources.
-- Never take a feature from Page 1 or a backup page merely because it looks more complete.
+
 
 ## Agent execution workflow
 
@@ -86,12 +80,3 @@ Before any implementation work in this Frontend project:
    HIRU Academy product requirements.
 4. For Next.js implementation details, follow the version-matched Next.js
    documentation referenced by the generated rules below.
-
-## Figma copy fidelity
-
-- Product copy and visible UI text from Figma Pages 08–11 are client-approved requirements and must be reproduced verbatim.
-- Do not rewrite, paraphrase, improve, shorten, expand, or creatively replace Figma copy.
-- PRD and UI/UX Brief may be used as proxies for product behavior when Figma is inaccessible, but they are NOT authority for exact client-approved wording.
-- Page 1, ReferenceHTML, and DESIGN.md must never supply replacement marketing copy for Pages 08–11.
-- If exact Figma copy for a screen is unavailable, mark the copy as OPEN and report it instead of inventing text.
-- Client-facing labels, headings, descriptions, CTA text, badges, and navigation text must not be fabricated when they exist in Figma.
