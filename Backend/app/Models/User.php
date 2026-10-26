@@ -46,6 +46,11 @@ class User extends Authenticatable
         return $this->email_normalized;
     }
 
+    public function testimonials(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(Testimonial::class);
+    }
+
     public function testimonial(): HasOne
     {
         return $this->hasOne(Testimonial::class);

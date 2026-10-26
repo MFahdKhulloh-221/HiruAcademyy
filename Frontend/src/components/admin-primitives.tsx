@@ -38,7 +38,7 @@ export function AdminDataTable<Row>({ caption, columns, rows, rowKey, empty, act
   return <div className="admin-data-table-wrap" tabIndex={0} role="region" aria-label={caption}><table className="admin-data-table">{caption && <caption>{caption}</caption>}<thead><tr>{columns.map((column) => <th key={column.key} scope="col">{column.header}</th>)}{actions && <th scope="col">{actions.header ?? "Tindakan"}</th>}</tr></thead><tbody>{rows.map((row) => <tr key={rowKey(row)}>{columns.map((column) => <td key={column.key}>{column.cell(row)}</td>)}{actions && <td>{actions.cell(row)}</td>}</tr>)}</tbody></table></div>;
 }
 
-export function AdminConfirmDialog({ open, title, children, close, initialFocusRef, closeOnBackdrop = true, actions }: { open: boolean; title: string; children: ReactNode; close: () => void; initialFocusRef?: RefObject<HTMLElement | null>; closeOnBackdrop?: boolean; actions?: ReactNode }) {
+export function AdminConfirmDialog({ open, title, children, close, initialFocusRef, closeOnBackdrop = true, actions, className = "" }: { open: boolean; title: string; children: ReactNode; close: () => void; initialFocusRef?: RefObject<HTMLElement | null>; closeOnBackdrop?: boolean; actions?: ReactNode; className?: string }) {
   const titleId = useId();
   const panel = useRef<HTMLElement>(null);
   const returnFocus = useRef<HTMLElement | null>(null);
@@ -62,7 +62,7 @@ export function AdminConfirmDialog({ open, title, children, close, initialFocusR
     return () => { document.removeEventListener("keydown", keydown); returnFocus.current?.focus(); };
   }, [initialFocusRef, open]);
   if (!open) return null;
-  return <div className="admin-dialog-layer"><div className="admin-dialog-backdrop" onMouseDown={closeOnBackdrop ? close : undefined} role="presentation" /><section ref={panel} className="admin-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}><header><h2 id={titleId}>{title}</h2><button type="button" onClick={close} aria-label="Tutup dialog">×</button></header><div className="admin-dialog-content">{children}</div>{actions && <footer>{actions}</footer>}</section></div>;
+  return <div className="admin-dialog-layer"><div className="admin-dialog-backdrop" onMouseDown={closeOnBackdrop ? close : undefined} role="presentation" /><section ref={panel} className={`admin-dialog ${className}`} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}><header><h2 id={titleId}>{title}</h2><button type="button" onClick={close} aria-label="Tutup dialog">×</button></header><div className="admin-dialog-content">{children}</div>{actions && <footer>{actions}</footer>}</section></div>;
 }
 export const AdminDialog = AdminConfirmDialog;
 

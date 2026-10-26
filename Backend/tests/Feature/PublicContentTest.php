@@ -175,7 +175,7 @@ class PublicContentTest extends TestCase
 
     public function test_testimonial_publication_landing_and_video_pair_partial_updates(): void
     {
-        $this->create('testimonials', ['landing' => true]);
+        $this->create('testimonials', ['landing' => false]);
         $landing = $this->create('testimonials', ['published' => true, 'landing' => true]);
         $other = $this->create('testimonials', ['published' => true]);
         $url = '/api/admin/testimonials/'.$landing['id'];
@@ -201,18 +201,18 @@ class PublicContentTest extends TestCase
         foreach ([['name' => 'Spoof'], ['user_id' => $this->admin->id], ['published' => true], ['image' => 'public/file.png'], ['source' => 'admin']] as $unknown) {
             $this->putJson('/api/student/testimonial', array_replace($input, $unknown))->assertUnprocessable()->assertJsonValidationErrors(array_keys($unknown));
         }
-        foreach ([['context' => str_repeat('a', 256)], ['quote' => 'short'], ['quote' => str_repeat('a', 501)], ['consent_public' => false], ['consent_public' => null]] as $invalid) {
+        foreach ([['quote' => 'short'], ['quote' => str_repeat('a', 501)], ['consent_public' => false], ['consent_public' => null]] as $invalid) {
             $this->putJson('/api/student/testimonial', array_replace($input, $invalid))->assertUnprocessable();
         }
         $item = $this->putJson('/api/student/testimonial', $input)->assertOk()->assertJsonPath('data.name', $student->name)
-            ->assertJsonPath('data.moderation_status', 'pending')->assertJsonPath('data.published', false)->json('data');
+            ->assertJsonPath('data.moderation_status', 'approved')->assertJsonPath('data.published', true)->json('data');
         foreach (['id', 'name', 'context', 'quote', 'moderation_status', 'moderation_note', 'consent_public', 'published', 'created_at', 'updated_at'] as $field) {
             $this->assertArrayHasKey($field, $item);
         }
         $this->actingAs($this->user('student'))->getJson('/api/student/testimonial')->assertOk()->assertJsonPath('data', null);
         $this->actingAs($this->admin)->patchJson('/api/admin/testimonials/'.$item['id'], ['moderation_status' => 'rejected', 'moderation_note' => 'Revise'])->assertOk();
         $this->actingAs($student)->putJson('/api/student/testimonial', $input)->assertOk()->assertJsonPath('data.id', $item['id'])
-            ->assertJsonPath('data.moderation_status', 'pending')->assertJsonPath('data.moderation_note', null);
+            ->assertJsonPath('data.moderation_status', 'approved')->assertJsonPath('data.moderation_note', null);
         $this->assertSame(1, $student->testimonial()->count());
         $this->assertNull($student->testimonial()->first()->image);
         $this->actingAs($this->admin)->patchJson('/api/admin/testimonials/'.$item['id'], ['moderation_status' => 'approved'])->assertOk()->assertJsonPath('data.published', true);
@@ -241,10 +241,10 @@ class PublicContentTest extends TestCase
         $stale = Testimonial::findOrFail($item['id']);
         $url = '/api/admin/testimonials/'.$item['id'];
         $this->actingAs($this->admin);
-        foreach (['name', 'context', 'quote', 'image', 'video_url', 'video_title', 'source', 'user_id', 'consent_public'] as $field) {
+        foreach (['name', 'context', 'image', 'video_url', 'source', 'user_id', 'consent_public'] as $field) {
             $this->patchJson($url, [$field => 'Spoof'])->assertUnprocessable()->assertJsonValidationErrors($field);
         }
-        $this->patchJson($url, ['published' => true, 'landing' => true])->assertOk()->assertJsonPath('data.published', false)->assertJsonPath('data.landing', true);
+        $this->patchJson($url, ['published' => true, 'landing' => true])->assertOk()->assertJsonPath('data.published', true)->assertJsonPath('data.landing', true);
         $this->patchJson($url, ['moderation_status' => 'approved'])->assertOk()->assertJsonPath('data.published', true);
         $this->patchJson($url, ['published' => true, 'landing' => true])->assertOk()->assertJsonPath('data.image', $student->avatar);
         $student->update(['name' => 'Current name']);
@@ -254,11 +254,11 @@ class PublicContentTest extends TestCase
             $this->assertArrayNotHasKey($private, $row);
         }
         $this->assertNull($row['video_url']);
-        $this->patchJson($url, ['moderation_status' => 'rejected'])->assertOk()->assertJsonPath('data.published', false)->assertJsonPath('data.landing', true);
+        $this->patchJson($url, ['moderation_status' => 'rejected'])->assertOk()->assertJsonPath('data.published', false)->assertJsonPath('data.landing', false);
         $this->actingAs($student)->putJson('/api/student/testimonial', ['context' => 'Updated context', 'quote' => str_repeat('Updated ', 5), 'consent_public' => true])->assertOk();
         $saved = app(PublicContentService::class)->save('testimonials', ['sort_order' => 3], $stale);
-        $this->assertSame('Updated context', $saved->context);
-        $this->assertSame('pending', $saved->moderation_status);
+        $this->assertSame('Siswa Hiru Academy', $saved->context);
+        $this->assertSame('approved', $saved->moderation_status);
         $saved->forceFill(['moderation_status' => 'approved', 'consent_public' => false])->save();
         $this->actingAs($this->admin)->patchJson($url, ['published' => true])->assertUnprocessable()->assertJsonValidationErrors('published');
         $saved->forceFill(['published' => true])->save();

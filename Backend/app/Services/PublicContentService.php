@@ -107,9 +107,11 @@ class PublicContentService
                 'title' => [...$optional, 'max:255'],
                 'type' => ['sometimes', 'required', Rule::in(['text', 'video'])],
                 'video_thumbnail' => [...$optional, app(MediaService::class)->rule('video_thumbnail')],
+                'archived_at' => ['sometimes', 'nullable', 'date'],
                 'show_on_testimonials' => $boolean,
                 'published' => $boolean,
                 'landing' => $boolean,
+                'landing_position' => ['sometimes', 'required', 'integer', 'min:1', 'max:6'],
                 'sort_order' => $order,
             ],
             'blog-articles' => [
@@ -147,9 +149,16 @@ class PublicContentService
             $rules = [
                 'moderation_status' => ['sometimes', 'required', Rule::in(['pending', 'approved', 'rejected'])],
                 'moderation_note' => $optional,
+                'quote' => ['sometimes', 'required', 'string', 'max:500'],
+                'title' => [...$optional, 'max:255'],
+                'video_title' => [...$optional, 'max:255'],
+                'video_url' => [...$optional, app(MediaService::class)->rule('student_video')],
+                'video_thumbnail' => [...$optional, app(MediaService::class)->rule('video_thumbnail')],
+                'archived_at' => ['sometimes', 'nullable', 'date'],
                 'show_on_testimonials' => $boolean,
                 'published' => $boolean,
                 'landing' => $boolean,
+                'landing_position' => ['sometimes', 'required', 'integer', 'min:1', 'max:6'],
                 'sort_order' => $order,
             ];
         }
@@ -158,6 +167,9 @@ class PublicContentService
             throw ValidationException::withMessages(array_fill_keys($unknown, 'Field is prohibited.'));
         }
         $data = Validator::make($input, $rules)->validate();
+        $landingPosition = $data['landing_position'] ?? null;
+        unset($data['landing_position']);
+        $wasLanding = $model->exists && $model->landing;
         $model->fill($data);
         if ($model instanceof Testimonial) {
             if (! $model->exists) {
@@ -166,14 +178,19 @@ class PublicContentService
             if ($model->isDirty('title')) {
                 $model->video_title = $model->title;
             }
-            if ($model->source === 'student' && $model->moderation_status === 'approved' && $model->first_approved_at === null) {
+            if ($model->source === 'student' && $model->moderation_status === 'approved' && $model->first_approved_at === null && array_key_exists('moderation_status', $data)) {
                 if (! $model->consent_public) {
                     throw ValidationException::withMessages(['moderation_status' => 'Student approval requires public consent.']);
                 }
                 $model->first_approved_at = now();
                 $model->published = true;
-                $model->landing = true;
+                $model->landing = $data['landing'] ?? false;
                 $model->show_on_testimonials = true;
+            }
+            if ($model->archived_at !== null) {
+                $model->published = false;
+                $model->landing = false;
+                $model->show_on_testimonials = false;
             }
             if ($model->moderation_status !== 'approved') {
                 $model->published = false;
@@ -196,6 +213,32 @@ class PublicContentService
         }
         if ($model instanceof BlogArticle && isset($data['published_at'])) {
             $model->published_at = CarbonImmutable::parse($data['published_at'], 'UTC')->utc();
+        }
+        if ($model instanceof Testimonial && ! $model->published && ! ($data['landing'] ?? false)) {
+            $model->landing = false;
+        }
+        if ($model instanceof Testimonial && (($model->landing && ($model->isDirty(['landing', 'published', 'consent_public', 'moderation_status', 'archived_at', 'type', 'video_url', 'video_thumbnail', 'title']) || array_key_exists('landing', $data))) || $landingPosition !== null)) {
+            if (! $model->published || ! $model->consent_public || $model->moderation_status !== 'approved' || $model->archived_at !== null || ! $model->landing) {
+                throw ValidationException::withMessages(['landing' => 'Landing requires an active, approved testimonial with valid public consent.']);
+            }
+            if ($model->type !== 'text' || filled($model->video_url)) {
+                throw ValidationException::withMessages(['landing' => 'Landing hanya untuk testimoni teks. Video tersedia di halaman /testimoni.']);
+            }
+            $selected = Testimonial::query()->where('type', 'text')->whereNull('video_url')->where('landing', true)->where('published', true)->where('consent_public', true)
+                ->where('moderation_status', 'approved')->whereNull('archived_at')
+                ->when($model->exists, fn ($query) => $query->whereKeyNot($model->id))
+                ->orderBy('sort_order')->orderBy('id')->get();
+            if ($selected->count() >= 6) {
+                throw ValidationException::withMessages(['landing' => 'Maksimal 6 testimoni Landing. Hapus salah satu pilihan terlebih dahulu.']);
+            }
+            if ($landingPosition !== null || ! $wasLanding) {
+                $position = min($landingPosition ?? ($selected->count() + 1), $selected->count() + 1);
+                $selected->splice($position - 1, 0, [$model]);
+                foreach ($selected as $index => $item) {
+                    $item->sort_order = $index + 1;
+                    if ($item !== $model) $item->save();
+                }
+            }
         }
         $model->save();
 
@@ -240,6 +283,7 @@ class PublicContentService
         }
 
         if ($model instanceof Testimonial) {
+            $data['created_at'] = $model->created_at?->utc()->toISOString();
             if (! $public) {
                 foreach (['source', 'user_id', 'consent_public'] as $field) {
                     $data[$field] = $model->getAttribute($field);

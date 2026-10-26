@@ -1,155 +1,97 @@
 "use client";
 
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { AdminDialog, AdminPageHeader, AdminShell } from "@/components/admin-primitives";
 import { StudentAvatar } from "@/components/student-avatar";
 import { AdminMediaUpload } from "@/components/admin-media-upload";
-import { validVideoReference } from "@/lib/admin-media";
-import { LuSearch } from "react-icons/lu";
-import { type FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { AdminDataTable, AdminDialog, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge } from "@/components/admin-primitives";
-import { adminMediaUrl as contentMedia } from "@/lib/admin-media";
-import { useAdminContent } from "@/lib/admin-content-api";
-import { AdminTestimonialPreview } from "@/components/admin-profile-preview";
+import { TestimonialFields, TestimonialPreview } from "@/components/testimonial-builder";
 import { apiRequest } from "@/lib/api";
+import { contentMedia, useContent, type TestimonialContent } from "@/lib/public-content-api";
+import styles from "./admin-testimonial.module.css";
 
-type Testimonial = { created_at?: string; type: "text" | "video"; title: string; videoThumbnail: string; video_thumbnail_resolved_url?: string; showOnTestimonials: boolean; id: string; name: string; context: string; quote: string; image: string; image_resolved_url?: string; videoUrl: string; video_url_resolved_url?: string; videoTitle: string; published: boolean; landing: boolean; order: number; source?: "student" | "admin"; moderation_status?: "pending" | "approved" | "rejected"; moderation_note?: string; consent_public?: boolean; user_id?: number | null };
-type StudentPatch = { moderation_status?: "pending" | "approved" | "rejected"; moderation_note?: string | null; published?: boolean; landing?: boolean; show_on_testimonials?: boolean; sort_order?: number };
-const reviewLabels = { pending: "Menunggu Review", approved: "Disetujui", rejected: "Ditolak" };
-type Draft = Omit<Testimonial, "order"> & { order: string };
-function safeVideoUrl(value: string) { return validVideoReference(value); }
-
+type Item = TestimonialContent & { source?: string; user_id?: number | null; consent_public?: boolean; moderation_status?: string; archived_at?: string | null };
+const empty: Item = { id: 0, type: "text", name: "", context: "", quote: "", image: null, title: "", video_title: "", video_url: "", video_thumbnail: "", show_on_testimonials: false, published: false, landing: false, archived_at: null };
+function landingEligible(item: Item) { return item.type === "text" && !item.video_url; }
+function isPublic(item: Item) {
+  return item.consent_public === true && item.moderation_status === "approved" && !!item.published && !item.archived_at && !!(item.landing || item.show_on_testimonials);
+}
+function publicationLabel(item: Item) {
+  if (item.archived_at) return "Diarsipkan Admin";
+  if (item.consent_public !== true) return "Menunggu izin publikasi siswa";
+  if (isPublic(item)) return [item.show_on_testimonials && "/testimoni", item.landing && "Landing"].filter(Boolean).join(" / ");
+  return item.moderation_status !== "approved" ? "Belum disetujui / perlu perbaikan" : "Non-publik / draft";
+}
 export function AdminTestimonialPrototype() {
-  const { rows, loading, loadError, busy, mutate, reload } = useAdminContent<Testimonial>("testimonials");
-  const [draft, setDraft] = useState<Draft | null>(null);
-  const [view, setView] = useState<Testimonial | null>(null);
-  const [deleting, setDeleting] = useState<Testimonial | null>(null);
+  const content = useContent<Item>("/api/admin/testimonials");
+  const [draft, setDraft] = useState<Item | null>(null);
+  const [view, setView] = useState<Item | null>(null);
+  const [deleting, setDeleting] = useState<Item | null>(null);
+  const [filter, setFilter] = useState("publish");
+  const [kind, setKind] = useState("all");
+  const [landingOnly, setLandingOnly] = useState(false);
+  const list = useRef<HTMLDivElement>(null);
+  const [search, setSearch] = useState("");
+  useEffect(() => { list.current?.scrollTo({ top: 0 }); }, [filter, kind, landingOnly, search]);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [search, setSearch] = useState("");
-  const [type, setType] = useState<"text" | "video">("text");
-  const [status, setStatus] = useState("");
-  const [source, setSource] = useState("");
-  const [rejecting, setRejecting] = useState<Testimonial | null>(null);
-  const [rejectNote, setRejectNote] = useState("");
-  const [moderating, setModerating] = useState(false);
-  const moderationLock = useRef(false);
-  const closeReject = useCallback(() => { setRejecting(null); setError(""); }, []);
-  async function patchStudent(row: Pick<Testimonial, "id" | "source">, patch: StudentPatch) {
-    if (row.source !== "student" || moderationLock.current || busy) throw new Error("Permintaan sedang diproses.");
-    moderationLock.current = true;
-    setModerating(true);
+  const lock = useRef(false);
+  const selected = content.data.filter(item => isPublic(item) && item.landing && landingEligible(item)).sort((a, b) => (a.sort_order ?? 1) - (b.sort_order ?? 1) || a.id - b.id);
+  const overLimit = selected.length > 6;
+  const rows = content.data.filter(item => {
+    return (filter === "publish" ? isPublic(item) : !isPublic(item)) && (kind === "all" || (item.type || (item.video_url ? "video" : "text")) === kind) && (!landingOnly || (isPublic(item) && item.landing)) && `${item.name} ${item.quote} ${item.title || ""}`.toLocaleLowerCase("id").includes(search.trim().toLocaleLowerCase("id"));
+  });
+  async function mutate(item: Item, body?: object, remove = false) {
+    if (lock.current) return;
+    lock.current = true; setBusy(true); setError("");
     try {
-      await apiRequest(`/api/admin/testimonials/${row.id}`, { method: "PATCH", body: JSON.stringify(patch) });
-      reload();
-      setMessage("Testimoni disimpan.");
-    } finally { moderationLock.current = false; setModerating(false); }
+      await apiRequest(`/api/admin/testimonials${item.id ? `/${item.id}` : ""}`, { method: remove ? "DELETE" : item.id ? "PATCH" : "POST", ...(body ? { body: JSON.stringify(body) } : {}) });
+      content.reload(); setDraft(null); setDeleting(null); setMessage(remove ? "Testimoni dihapus." : "Testimoni disimpan.");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Permintaan gagal."); }
+    finally { lock.current = false; setBusy(false); }
   }
-  const query = search.trim().toLowerCase();
-  const visibleRows = rows.filter((row) => (row.type || "text") === type && (!status || (status === "published" ? row.published : status === "inactive" ? !row.published : (row.moderation_status || "approved") === status)) && (!source || (row.source || "admin") === source) && [row.name, row.context, row.quote, row.title, row.videoTitle].some((value) => (value || "").toLowerCase().includes(query)));
-  const temporaryUrls = useRef(new Set<string>());
-  useEffect(() => {
-    const urls = temporaryUrls.current;
-    return () => { urls.forEach((url) => URL.revokeObjectURL(url)); urls.clear(); };
-  }, []);
-  const release = useCallback((url: string) => { if (temporaryUrls.current.delete(url)) URL.revokeObjectURL(url); }, []);
-  const editorState = useRef({ draft, rows });
-  useEffect(() => { editorState.current = { draft, rows }; }, [draft, rows]);
-  const closeEditor = useCallback(() => {
-    const { draft, rows } = editorState.current;
-    if (draft && !rows.some((row) => row.image === draft.image)) release(draft.image);
-    setDraft(null); setError("");
-  }, [release]);
-  const closeView = useCallback(() => setView(null), []);
-  const closeDelete = useCallback(() => setDeleting(null), []);
-
-  function changeImage(image: string) {
-    if (!draft) return;
-    if (!rows.some((row) => row.image === draft.image)) release(draft.image);
-    setDraft({ ...draft, image, image_resolved_url: undefined }); setError("");
+  function toggleLanding(item: Item, checked: boolean) {
+    if (checked && !landingEligible(item)) { setError("Landing hanya untuk testimoni teks."); return; }
+    if (checked && selected.length >= 6) { setError("Maksimal 6 testimoni Landing. Hapus salah satu pilihan terlebih dahulu."); return; }
+    void mutate(item, { landing: checked });
   }
-  async function save(event: FormEvent<HTMLFormElement>) {
+  function save(event: FormEvent) {
     event.preventDefault();
     if (!draft) return;
-    if (draft.source === "student") {
-      const order = Number(draft.order);
-      if (!/^\d+$/.test(draft.order) || !Number.isSafeInteger(order) || order < 1 || order > 2147483647) { setError("Urutan harus berupa angka bulat dari 1 hingga 2147483647."); return; }
-      try {
-        await patchStudent(draft, { moderation_note: draft.moderation_note || null, published: draft.published, landing: draft.landing, show_on_testimonials: draft.showOnTestimonials, sort_order: order });
-        setDraft(null); setError("");
-      } catch (cause) { setError(cause instanceof Error ? cause.message : "Testimoni gagal disimpan."); }
-      return;
-    }
-    const videoUrl = draft.videoUrl.trim();
-    const videoTitle = draft.type === "video" ? draft.title.trim() : "";
-    const order = Number(draft.order);
-    if (!draft.name.trim()) { setError("Nama pemberi testimoni wajib diisi."); return; }
-    if (!draft.context.trim()) { setError("Konteks testimoni wajib diisi."); return; }
-    if (draft.type !== "video" && !draft.quote.trim()) { setError("Kutipan testimoni wajib diisi."); return; }
-    const original = rows.find(row => row.id === draft.id);
-    const unchangedLegacyVideo = original?.type === "video" && !original.videoThumbnail && !draft.videoThumbnail && original.videoUrl === videoUrl && (original.title || original.videoTitle) === draft.title.trim();
-    if (draft.type === "video" && (!draft.title.trim() || (!unchangedLegacyVideo && !contentMedia(draft.videoThumbnail, draft.video_thumbnail_resolved_url)) || !videoUrl)) { setError("Judul video, thumbnail, dan URL video wajib diisi."); return; }
-    if (videoUrl && !safeVideoUrl(videoUrl)) { setError("URL video harus berupa URL lengkap dengan skema http:// atau https:// tanpa nama pengguna dan kata sandi."); return; }
-    if (videoUrl && !videoTitle) { setError("Judul video wajib diisi jika URL video tersedia."); return; }
-    if (!videoUrl && videoTitle) { setError("Isi URL video atau kosongkan judul video."); return; }
-    if (!/^\d+$/.test(draft.order) || !Number.isSafeInteger(order) || order < 1 || order > 2147483647) { setError("Urutan harus berupa angka bulat dari 1 hingga 2147483647."); return; }
-    const next: Testimonial = { id: draft.id, type: draft.type, title: draft.type === "video" ? draft.title.trim() : "", videoThumbnail: draft.type === "video" ? draft.videoThumbnail : "", showOnTestimonials: draft.showOnTestimonials, name: draft.name.trim(), context: draft.context.trim(), quote: draft.quote.trim(), image: draft.image, videoUrl: draft.type === "video" ? videoUrl : "", videoTitle, published: draft.published, landing: draft.landing, order };
-    const old = rows.find((row) => row.id === draft.id);
-    try { await mutate(next); } catch (error) { setError(error instanceof Error ? error.message : "Testimoni gagal disimpan."); return; }
-    if (old && old.image !== next.image && !rows.some((row) => row.id !== old.id && row.image === old.image)) release(old.image);
-    setDraft(null); setError(""); setMessage("Testimoni disimpan.");
+    const media = draft.type === "video" ? { title: draft.title, video_url: draft.video_url, video_thumbnail: draft.video_thumbnail } : {};
+    const body = { quote: draft.quote, ...media, archived_at: draft.archived_at || null, published: !!draft.published, landing: !!draft.landing, show_on_testimonials: draft.show_on_testimonials };
+    void mutate(draft, draft.source === "student" ? { ...body, ...(draft.consent_public === true && draft.published ? { moderation_status: "approved" } : {}) } : { ...body, type: draft.type, name: draft.name, context: draft.context, image: draft.image || null, ...(draft.type === "text" ? { title: null, video_title: null, video_url: null, video_thumbnail: null } : {}) });
   }
-  async function remove() {
-    if (!deleting) return;
-    try { await mutate(deleting, true); } catch (error) { setMessage(error instanceof Error ? error.message : "Testimoni gagal dihapus."); return; }
-    if (!rows.some((row) => row.id !== deleting.id && row.image === deleting.image)) release(deleting.image);
-    setDeleting(null); setMessage("Testimoni dihapus.");
-  }
+  function edit(item: Item) { setError(""); setDraft({ ...item }); }
+  return <AdminShell current="/admin/testimoni"><main className={styles.page}>
+    <AdminPageHeader title="Kelola Testimoni" description={`${content.data.length} testimoni tersimpan`} actions={<button className="button button-primary" onClick={() => edit(empty)}>Tambah Testimoni</button>} />
+    <section className={styles.landing} aria-label="Testimoni Pilihan Landing Page"><h2>Testimoni Pilihan Landing Page</h2><p>Maksimal 6 testimoni teks. Video hanya tampil di halaman /testimoni.</p>{overLimit ? <p role="alert">Perlu penyesuaian: {selected.length} dipilih, maksimal 6. Lepas pilihan sampai tersisa maksimal enam. Penambahan dan pengurutan dinonaktifkan sementara.</p> : <p>{selected.length} dari 6 testimoni dipilih</p>}
+      {!selected.length && <p>Belum ada pilihan Landing.</p>}
+      <ol className={overLimit ? styles.reconcile : undefined} tabIndex={overLimit ? 0 : undefined} aria-label={overLimit ? "Penyesuaian pilihan Landing" : undefined}>{selected.map((item, index) => <li key={item.id} className={styles.landingItem}>
+        <span aria-label={`Urutan ${index + 1}`}>{index + 1}</span><div className={styles.owner}><StudentAvatar name={item.name} url={contentMedia(item.image, item.image_resolved_url)} className={styles.avatar} /><div><strong>{item.name}</strong><p>{item.context}</p></div></div><p className={styles.quote}>{item.title || item.quote}</p>
+        <div className={styles.actions}><button className="button" aria-label={`Naik ${item.name}`} disabled={busy || overLimit || index === 0} onClick={() => void mutate(item, { landing_position: index })}>Naik</button><button className="button" aria-label={`Turun ${item.name}`} disabled={busy || overLimit || index === selected.length - 1} onClick={() => void mutate(item, { landing_position: index + 2 })}>Turun</button><button className="button" disabled={busy} onClick={() => toggleLanding(item, false)}>Hapus dari Landing</button></div>
+      </li>)}</ol>
+    </section>
+    <div className={styles.toolbar}><div role="group" aria-label="Status testimoni">{[["publish", "Publish"], ["archive", "Arsip"]].map(([key, label]) => <button className="button" key={key} aria-pressed={key === filter} onClick={() => setFilter(key)}>{label}</button>)}</div><div className={styles.kindFilter}><label htmlFor="admin-testimonial-kind">Jenis testimoni</label><select id="admin-testimonial-kind" value={kind} onChange={event => setKind(event.target.value)}><option value="all">Semua Jenis</option><option value="text">Testimoni Teks</option><option value="video">Testimoni Video</option></select></div><label className={styles.landingToggle}><input type="checkbox" checked={landingOnly} onChange={event => setLandingOnly(event.target.checked)} />Hanya Pilihan Landing</label><label>Cari testimoni<input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Nama atau isi testimoni" /></label></div>
+    {content.error && <p role="alert">{content.error} <button onClick={content.reload}>Coba lagi</button></p>}{message && <p role="status">{message}</p>}{error && !draft && !deleting && <p role="alert">{error}</p>}
+    {content.loading && <p role="status">Memuat testimoni…</p>}
+    <p role="status">{rows.length} hasil filter</p>
+    <div ref={list} className={styles.list} role="region" aria-label="Daftar testimoni" tabIndex={0}>{rows.map(item => <article className={styles.item} key={item.id}>
+      <div className={styles.owner}><StudentAvatar name={item.name} url={contentMedia(item.image, item.image_resolved_url)} className={styles.avatar} /><div><h2>{item.name}</h2><p>{item.context}</p><small>{item.type === "video" ? "Video" : "Teks"}</small></div></div>
+      <div className={styles.summary}><p className={styles.quote}>{item.title || item.quote}</p><p className={styles.status}>{item.type === "video" ? "Video" : "Teks"} / {publicationLabel(item)}</p>{item.archived_at && item.consent_public !== true && <p>Menunggu izin publikasi siswa</p>}</div>
+      <div className={styles.actions}><label className={styles.landingToggle}><input type="checkbox" checked={!!item.landing && isPublic(item) && landingEligible(item)} disabled={busy || !isPublic(item) || !landingEligible(item) || (!item.landing && selected.length >= 6)} onChange={event => toggleLanding(item, event.target.checked)} />Tampilkan di Landing</label><button className="button" popoverTarget={`testimonial-actions-${item.id}`} aria-label={`Tindakan ${item.name}`} onClick={event => { const box = event.currentTarget.getBoundingClientRect(); const menu = document.getElementById(`testimonial-actions-${item.id}`); menu?.style.setProperty("top", `${Math.min(box.bottom + 4, window.innerHeight - 220)}px`); menu?.style.setProperty("left", `${Math.max(8, Math.min(box.right - 180, window.innerWidth - 188))}px`); }}>{"\u2022\u2022\u2022"}</button><div id={`testimonial-actions-${item.id}`} popover="auto" className={styles.actionMenu} onClick={event => { if ((event.target as HTMLElement).closest("button")) event.currentTarget.hidePopover(); }}><button className="button" onClick={() => setView(item)}>Lihat</button><button className="button" disabled={busy} onClick={() => edit(item)}>Edit</button>{isPublic(item) ? <button className="button" disabled={busy} onClick={() => void mutate(item, { archived_at: new Date().toISOString() })}>Arsipkan</button> : <button className="button" disabled={busy || item.consent_public !== true} title={item.consent_public !== true ? "Menunggu izin publikasi siswa" : undefined} onClick={() => edit({ ...item, archived_at: null, published: false, landing: false, show_on_testimonials: false })}>{item.archived_at ? "Pulihkan" : "Publish"}</button>}<button className="button" disabled={busy} onClick={() => { setError(""); setDeleting(item); }}>Hapus</button></div></div>
+    </article>)}</div>{!content.loading && !rows.length && <p>Belum ada testimoni sesuai filter.</p>}
+    <AdminDialog className={styles.builderDialog} open={!!draft} title={draft?.id ? "Edit Testimoni" : "Tambah Testimoni"} close={() => { if (!busy) setDraft(null); }}>{draft && <div className={styles.builder}><form onSubmit={save} className={styles.form}>
+      <p>{draft.source === "student" ? "Identitas dan kepemilikan siswa tetap. Perubahan isi dilakukan oleh Admin." : "Konten kurasi Admin. Isi atribusi pemilik sebenarnya; jangan mengatasnamakan siswa tanpa dasar."}</p>
+      <label>Nama / atribusi pemilik<input required value={draft.name} readOnly={draft.source === "student"} onChange={event => setDraft({ ...draft, name: event.target.value })} /></label><label>Program / konteks<input required value={draft.context} readOnly={draft.source === "student"} onChange={event => setDraft({ ...draft, context: event.target.value })} /></label>
+      <TestimonialFields value={draft} lockType={!!draft.id} disabled={busy} thumbnailInput={<AdminMediaUpload kind="image" label="Thumbnail video" onUploaded={(video_thumbnail, url) => setDraft(previous => previous && ({ ...previous, video_thumbnail, video_thumbnail_resolved_url: url }))} />} onChange={patch => setDraft({ ...draft, ...patch })} />
 
-  return <AdminShell current="/admin/testimoni"><main className="admin-public-prototype admin-testimonial-prototype">
-    <AdminPageHeader title="Testimoni" description="Konten testimoni." actions={<button type="button" className="button button-primary" onClick={() => { setError(""); setDraft({ type, title: "", videoThumbnail: "", showOnTestimonials: true, id: crypto.randomUUID(), name: "", context: "", quote: "", image: "", videoUrl: "", videoTitle: "", published: false, landing: false, order: String(rows.length + 1) }); }}>Tambah Testimoni</button>} />
-    <p>Draft tidak ditampilkan pada halaman publik.</p>
-    {loadError && <div role="alert">{loadError} <button type="button" onClick={reload}>Coba lagi</button></div>}
-    <p role="status">{message}</p>
-    <AdminSection title="Konten Testimoni"><div className="admin-page-actions" role="tablist" aria-label="Jenis testimoni" onKeyDown={event => { if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return; event.preventDefault(); const next = event.key === "Home" ? "text" : event.key === "End" ? "video" : type === "text" ? "video" : "text"; document.getElementById(`admin-testimonial-tab-${next}`)?.click(); document.getElementById(`admin-testimonial-tab-${next}`)?.focus(); }}>{(["text", "video"] as const).map(value => <button type="button" key={value} className={`button${type === value ? " button-primary" : ""}`} role="tab" id={`admin-testimonial-tab-${value}`} aria-controls="admin-testimonial-panel" aria-selected={type === value} tabIndex={type === value ? 0 : -1} onClick={() => setType(value)}>{value === "text" ? "Testimoni Biasa" : "Testimoni Video"}</button>)}</div><div role="tabpanel" id="admin-testimonial-panel" aria-labelledby={`admin-testimonial-tab-${type}`}><div className="admin-page-actions"><label className="admin-field">Status<select value={status} onChange={event => setStatus(event.target.value)}><option value="">Semua</option>{Object.entries(reviewLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}<option value="published">Published</option><option value="inactive">Nonaktif</option></select></label><label className="admin-field">Sumber<select value={source} onChange={event => setSource(event.target.value)}><option value="">Semua</option><option value="student">Siswa</option><option value="admin">Admin</option></select></label></div><label className="admin-search-box"><span aria-hidden="true"><LuSearch /></span><input type="search" aria-label="Cari testimoni" value={search} onChange={(event) => setSearch(event.target.value)} /></label><AdminDataTable loading={loading && !rows.length} caption="Daftar Testimoni" rows={[...visibleRows].sort((a, b) => a.order - b.order)} rowKey={(row) => row.id} columns={[
-      { key: "image", header: "Preview", cell: (row) => <StudentAvatar name={row.name} url={contentMedia(type === "video" ? row.videoThumbnail : row.image, type === "video" ? row.video_thumbnail_resolved_url : row.image_resolved_url)} className="testimonial-avatar" /> },
-      { key: "name", header: "Nama / Judul", cell: (row) => <div className="admin-testimonial-name"><strong title={row.name}>{row.name}</strong>{row.type === "video" && <span title={row.title || row.videoTitle}>{row.title || row.videoTitle}</span>}</div> },
-      { key: "type", header: "Jenis", cell: (row) => row.type === "video" ? "Video" : "Testimoni Biasa" },
-      { key: "source", header: "Sumber", cell: (row) => <AdminStatusBadge status={row.source === "student" ? "Siswa" : "Admin"} /> },
-      { key: "review", header: "Review", cell: (row) => <AdminStatusBadge status={reviewLabels[row.moderation_status ?? "approved"]} /> },
-      { key: "status", header: "Publik", cell: (row) => <AdminStatusBadge status={row.published ? "Published" : "Draft"} /> },
-      { key: "landing", header: "Landing", cell: (row) => row.landing ? "Ya" : "Tidak" },
-      { key: "testimonials", header: "Halaman Testimoni", cell: (row) => row.showOnTestimonials ? "Ya" : "Tidak" },
-
-    ]} actions={{ cell: (row) => <div className="admin-page-actions">
-      <button type="button" className="button" aria-label={`Lihat testimoni ${row.name}`} onClick={() => setView(row)}>Lihat</button>
-      {(row.source !== "student" || row.moderation_status !== "pending") && <button type="button" className="button" aria-label={`Edit testimoni ${row.name}`} disabled={busy || moderating} onClick={() => { setError(""); setDraft({ ...row, type: row.type || "text", title: row.title || row.videoTitle || "", videoThumbnail: row.videoThumbnail || "", order: String(row.order) }); }}>Edit</button>}
-      {row.source === "student" && row.moderation_status === "pending" && <><button type="button" className="button" disabled={busy || moderating} onClick={async () => { try { await patchStudent(row, { moderation_status: "approved" }); } catch (cause) { setMessage(cause instanceof Error ? cause.message : "Testimoni gagal disimpan."); } }}>Setujui</button><button type="button" className="button" disabled={busy || moderating} onClick={() => { setError(""); setRejectNote(""); setRejecting(row); }}>Tolak</button></>}
-      {(row.source !== "student" || row.moderation_status === "approved") && <button type="button" className="button" aria-label={`${row.published ? "Jadikan Draft" : "Publikasikan"} testimoni ${row.name}`} disabled={busy || moderating || (row.source === "student" && !row.consent_public)} onClick={async () => { try { if (row.source === "student") await patchStudent(row, { published: !row.published }); else await mutate({ id: row.id, type: row.type, title: row.title, videoThumbnail: row.videoThumbnail, showOnTestimonials: row.showOnTestimonials, name: row.name, context: row.context, quote: row.quote, image: row.image, videoUrl: row.videoUrl, videoTitle: row.videoTitle, order: row.order, published: !row.published, landing: row.landing }); setMessage("Status publikasi disimpan."); } catch (error) { setMessage(error instanceof Error ? error.message : "Status gagal disimpan."); } }}>{row.published ? "Jadikan Draft" : "Publikasikan"}</button>}
-      <button type="button" className="button" aria-label={`Hapus testimoni ${row.name} (${row.type === "video" ? "Video" : "Teks"})`} disabled={busy || moderating} onClick={() => setDeleting(row)}>Hapus</button>
-    </div> }} /></div></AdminSection>
-    <AdminDialog open={Boolean(draft)} title={rows.some((row) => row.id === draft?.id) ? "Edit Testimoni" : "Tambah Testimoni"} close={closeEditor}>
-      {draft && <form className="admin-prototype-form" onSubmit={save} noValidate>
-        {draft.source === "student" ? <><StudentAvatar name={draft.name} url={contentMedia(draft.image, draft.image_resolved_url)} className="testimonial-avatar" /><label className="admin-field">Nama<input value={draft.name} readOnly /></label><label className="admin-field">Sumber<input value="Siswa" readOnly /></label><label className="admin-field">Konteks<input value={draft.context} readOnly /></label>{draft.type === "video" && <><label className="admin-field">Judul video<input value={draft.title} readOnly /></label><label className="admin-field">URL video<input value={draft.videoUrl} readOnly /></label><label className="admin-field">Thumbnail<input value={draft.videoThumbnail} readOnly /></label></>}<label className="admin-field">Kutipan<textarea value={draft.quote} readOnly /></label><label className="admin-field">Izin publikasi<input value={draft.consent_public ? "Ya" : "Tidak"} readOnly /></label><label className="admin-field">Review<input value={reviewLabels[draft.moderation_status ?? "pending"]} readOnly /></label><label className="admin-field">Catatan untuk siswa<textarea value={draft.moderation_note ?? ""} onChange={event => setDraft({ ...draft, moderation_note: event.target.value })} /></label></> : <>
-        <label className="admin-field">Nama<input placeholder="Contoh: Andi Pratama" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} required /></label>
-        <label className="admin-field">Konteks<input placeholder="Contoh: Peserta JLPT N4" value={draft.context} onChange={(event) => setDraft({ ...draft, context: event.target.value })} required /></label>
-        <label className="admin-field">{draft.type === "video" ? "Deskripsi pengalaman (opsional)" : "Kutipan"}<textarea placeholder="Contoh: Materinya mudah dipahami dan latihan soal sangat membantu." value={draft.quote} onChange={(event) => setDraft({ ...draft, quote: event.target.value })} required={draft.type !== "video"} /></label>
-        {draft.type !== "video" && <><label className="admin-field">Gambar (opsional)<input placeholder="Contoh: https://example.com/images/peserta.webp atau media/testimoni/peserta.webp" value={draft.image} onChange={event => changeImage(event.target.value)} /><small>URL HTTP/HTTPS atau referensi penyimpanan.</small></label>
-        <AdminMediaUpload kind="image" onUploaded={(image, url) => setDraft({ ...draft, image, image_resolved_url: url })} /></>}
-        {draft.type === "video" && <><label className="admin-field">Thumbnail<input value={draft.videoThumbnail} onChange={event => setDraft({ ...draft, videoThumbnail: event.target.value, video_thumbnail_resolved_url: undefined })} required /></label><AdminMediaUpload kind="image" onUploaded={(videoThumbnail, url) => setDraft({ ...draft, videoThumbnail, video_thumbnail_resolved_url: url })} />
-        <AdminMediaUpload kind="video" onUploaded={(videoUrl, url) => setDraft({ ...draft, videoUrl, video_url_resolved_url: url })} />
-        <label className="admin-field">URL video<input placeholder="Contoh: https://example.com/videos/testimoni.mp4 atau media/testimoni/video.mp4" value={draft.videoUrl} onChange={(event) => setDraft({ ...draft, videoUrl: event.target.value, video_url_resolved_url: undefined })} /><small>YouTube, Instagram, Google Drive, MP4, atau WebM.</small></label>
-        <label className="admin-field">Judul video<input placeholder="Contoh: Pengalaman Belajar JLPT N4" value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} required /></label></>}
-        </>}
-        <label className="admin-field">Status<select disabled={draft.source === "student" && (draft.moderation_status !== "approved" || !draft.consent_public)} value={draft.published ? "published" : "draft"} onChange={(event) => setDraft({ ...draft, published: event.target.value === "published", landing: draft.landing })}><option value="draft">Draft</option><option value="published">Published</option></select></label>
-        <label className="admin-field">Landing<select disabled={draft.source === "student" && (draft.moderation_status !== "approved" || !draft.consent_public)} value={draft.landing ? "yes" : "no"} onChange={(event) => setDraft({ ...draft, landing: event.target.value === "yes" })}><option value="no">Tidak</option><option value="yes">Ya</option></select><small>Hanya testimoni Published yang tampil di Landing.</small></label>
-        <label className="admin-field">Halaman Testimoni<select disabled={draft.source === "student" && (draft.moderation_status !== "approved" || !draft.consent_public)} value={draft.showOnTestimonials ? "yes" : "no"} onChange={event => setDraft({ ...draft, showOnTestimonials: event.target.value === "yes" })}><option value="no">Tidak</option><option value="yes">Ya</option></select></label>
-        <label className="admin-field">Urutan<input placeholder="Contoh: 1" type="number" min="1" step="1" value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })} required /><small>Urutan tampil testimoni.</small></label>
-        {draft.source !== "student" && <AdminTestimonialPreview testimonial={{ ...draft, videoUrl: safeVideoUrl(draft.videoUrl.trim()) ? draft.videoUrl.trim() : "" }} onImageError={() => setError("Gambar tidak dapat dibaca. Pilih gambar lain atau simpan tanpa gambar.")} />}
-        {error && <p role="alert">{error}</p>}
-        <div className="admin-page-actions"><button type="button" className="button" onClick={closeEditor}>Batal</button><button type="submit" disabled={busy || moderating} className="button button-primary">Simpan Testimoni</button></div>
-      </form>}
-    </AdminDialog>
-    <AdminDialog open={Boolean(view)} title="Detail Testimoni" close={closeView}>{view && <><AdminTestimonialPreview testimonial={{ ...view, videoUrl: safeVideoUrl(view.videoUrl) ? view.videoUrl : "" }} /><dl className="admin-testimonial-detail"><dt>Konteks</dt><dd>{view.context || "—"}</dd><dt>Kutipan</dt><dd>{view.quote || "—"}</dd><dt>Tanggal</dt><dd>{view.created_at && Number.isFinite(Date.parse(view.created_at)) ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeZone: "Asia/Jakarta" }).format(new Date(view.created_at)) : "—"}</dd><dt>URL video</dt><dd>{view.videoUrl && safeVideoUrl(view.videoUrl) ? <a href={contentMedia(view.videoUrl, view.video_url_resolved_url)} target="_blank" rel="noopener noreferrer">{view.videoUrl}</a> : "—"}</dd><dt>Urutan</dt><dd>{view.order}</dd></dl>{view.source === "student" && <dl><dt>Sumber</dt><dd>Siswa</dd><dt>Review</dt><dd>{reviewLabels[view.moderation_status ?? "pending"]}</dd><dt>Izin publikasi</dt><dd>{view.consent_public ? "Ya" : "Tidak"}</dd><dt>Catatan Admin</dt><dd>{view.moderation_note || "—"}</dd></dl>}</>}</AdminDialog>
-    <AdminDialog open={Boolean(rejecting)} title="Tolak Testimoni?" close={closeReject}><form className="admin-prototype-form" onSubmit={async event => { event.preventDefault(); if (!rejecting) return; try { await patchStudent(rejecting, { moderation_status: "rejected", moderation_note: rejectNote.trim() || null }); closeReject(); } catch (cause) { setError(cause instanceof Error ? cause.message : "Testimoni gagal disimpan."); } }}><label className="admin-field">Catatan untuk siswa<textarea placeholder="Contoh: Mohon jelaskan pengalaman belajarnya sedikit lebih spesifik." value={rejectNote} onChange={event => setRejectNote(event.target.value)} /></label>{error && <p role="alert">{error}</p>}<div className="admin-page-actions"><button type="button" className="button" onClick={closeReject}>Batal</button><button type="submit" className="button button-primary" disabled={busy || moderating}>Tolak Testimoni</button></div></form></AdminDialog>
-    <AdminDialog open={Boolean(deleting)} title="Hapus Testimoni?" close={closeDelete} actions={<><button type="button" className="button" onClick={closeDelete}>Batal</button><button type="button" className="button button-primary" disabled={busy || moderating} onClick={remove}>Hapus Testimoni</button></>}><p>Hapus testimoni {deleting?.name} ({deleting?.type === "video" ? "Video" : "Teks"})? Testimoni tidak lagi tampil pada halaman publik.</p></AdminDialog>
+      {!!draft.id && draft.consent_public !== true && <p>Menunggu izin publikasi siswa</p>}
+      {draft.archived_at && <p>Arsip mengalahkan seluruh pilihan penayangan.</p>}
+      <fieldset disabled={busy || !!draft.archived_at || (!!draft.id && draft.consent_public !== true)}><legend>Penayangan</legend>{([['published', 'Aktifkan publikasi'], ['show_on_testimonials', 'Tampilkan di halaman /testimoni'], ['landing', 'Tampilkan di Landing Page (maksimal 6 testimoni teks)']] as const).map(([key, label]) => <label className={styles.check} key={key}><input type="checkbox" checked={!!draft[key]} disabled={key === "landing" && (!landingEligible(draft) || (!draft.landing && selected.length >= 6))} onChange={event => setDraft({ ...draft, [key]: event.target.checked })} />{label}</label>)}</fieldset>
+      {error && <p role="alert">{error}</p>}<div className={styles.actions}><button className="button" type="button" disabled={busy} onClick={() => setDraft(null)}>Batal</button><button className="button button-primary" disabled={busy} type="submit">Simpan Testimoni</button></div>
+    </form><TestimonialPreview value={draft} /></div>}</AdminDialog>
+    <AdminDialog open={!!view} title="Detail Testimoni" close={() => setView(null)}>{view && <><p>{view.source === "student" ? "Kiriman siswa" : "Konten Admin"} · {publicationLabel(view)}</p><TestimonialPreview value={view} /></>}</AdminDialog>
+    <AdminDialog open={!!deleting} title="Hapus Testimoni?" close={() => { if (!busy) setDeleting(null); }}><p>Hapus testimoni {deleting?.name}? Penghapusan record bersifat permanen. Media tidak dihapus. Gunakan Arsip jika ingin menyimpan record.</p>{error && <p role="alert">{error}</p>}<button className="button" disabled={busy} onClick={() => setDeleting(null)}>Batal</button><button className="button button-primary" disabled={busy} onClick={() => deleting && void mutate(deleting, undefined, true)}>Hapus Testimoni</button></AdminDialog>
   </main></AdminShell>;
 }

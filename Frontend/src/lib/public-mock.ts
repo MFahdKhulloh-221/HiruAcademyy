@@ -23,12 +23,6 @@ export const programComparison = [
   { badge: "LMS", title: "Belajar Mandiri", description: "Journey penuh, try out, review, dan sertifikat." },
   { badge: "LMS + Zoom", title: "Belajar dengan Sensei", description: "Semua LMS ditambah cohort, kelas langsung, Sensei, dan replay." },
 ];
-export const testimonials = [
-  { initials: "RI", avatarSrc: "/testimonials/remaja3.png", videoSrc: "", quote: "Journey membantu saya tahu apa yang harus dipelajari setelah menyelesaikan satu materi.", name: "Rina", membership: "Free Member" },
-  { initials: "BT", avatarSrc: "/testimonials/remaja1.png", videoSrc: "", quote: "Materi SSW sangat relevan dengan kebutuhan kerja di Jepang. Simulasi interviewnya membuat saya jauh lebih percaya diri saat wawancara dengan perusahaan Jepang.", name: "Budi T.", membership: "Program SSW" },
-  { initials: "AY", avatarSrc: "/testimonials/remaja2.png", videoSrc: "", quote: "Jadwal, replay, dan learning journey terasa menyatu dalam satu alur belajar.", name: "Ayu", membership: "Belajar dengan Sensei" },
-];
-export const testimonialVideos = testimonials.slice(0, 2).map(({ name, membership, videoSrc }) => ({ name, membership, videoSrc, posterSrc: "" }));
 export const supportingValues = [
   { glyph: "進", title: "Progress terlihat", description: "Pengguna memahami langkah yang sudah dan belum selesai." },
   { glyph: "続", title: "Belajar konsisten", description: "Aktivitas disusun agar mudah diteruskan." },

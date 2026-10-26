@@ -29,7 +29,21 @@ Illuminate\Support\Facades\DB::select("SELECT set_config('application_name', ?, 
 if (getenv('RACE_OP') === 'submit') {
     $request = Illuminate\Http\Request::create('/api/student/testimonial', 'PUT', ['context' => 'Race', 'quote' => str_repeat('Race fixture ', 3), 'consent_public' => true]);
     $request->setUserResolver(fn () => App\Models\User::findOrFail(getenv('RACE_USER')));
-    app(App\Http\Controllers\StudentTestimonialController::class)->update($request);
+    try {
+        app(App\Http\Controllers\StudentTestimonialController::class)->update($request);
+        echo 'submitted';
+    } catch (Illuminate\Http\Exceptions\HttpResponseException $exception) {
+        if ($exception->getResponse()->getStatusCode() !== 409) throw $exception;
+        echo 'conflict';
+    }
+} elseif (getenv('RACE_OP') === 'landing') {
+    try {
+        app(App\Services\PublicContentService::class)->save('testimonials', ['landing' => true], App\Models\Testimonial::findOrFail(getenv('RACE_ROW')));
+        echo 'selected';
+    } catch (Illuminate\Validation\ValidationException $exception) {
+        if (! isset($exception->errors()['landing'])) throw $exception;
+        echo 'limit';
+    }
 } else {
     $stale = App\Models\Testimonial::findOrFail(getenv('RACE_ROW'));
     app(App\Services\PublicContentService::class)->save('testimonials', ['moderation_status' => 'approved'], $stale);
@@ -37,7 +51,13 @@ if (getenv('RACE_OP') === 'submit') {
 PHP;
         $workers = [];
         try {
-            foreach (['submit', 'approve'] as $operation) {
+            foreach (['submit', 'approve', 'landing'] as $operation) {
+                $landingRows = [];
+                if ($operation === 'landing') {
+                    for ($j = 0; $j < 7; $j++) {
+                        $landingRows[] = Testimonial::create(['name' => 'Race landing', 'context' => 'Fixture', 'quote' => 'Race fixture', 'published' => true, 'consent_public' => true, 'moderation_status' => 'approved', 'landing' => $j < 5]);
+                    }
+                }
                 DB::beginTransaction();
                 DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', ['managed-media-references']);
                 $row = Testimonial::where('user_id', $student->id)->first();
@@ -46,7 +66,7 @@ PHP;
                 for ($i = 0; $i < 2; $i++) {
                     $name = 'testimonial_'.bin2hex(random_bytes(8));
                     $names[] = $name;
-                    $worker = new Process([PHP_BINARY, '-r', $code], base_path(), ['APP_ENV' => 'testing', 'APP_CONFIG_CACHE' => base_path('bootstrap/cache/race-nonexistent.php'), 'DB_URL' => '', 'RACE_CONNECTION' => json_encode($connection), 'RACE_NAME' => $name, 'RACE_USER' => (string) $student->id, 'RACE_ROW' => (string) $row?->id, 'RACE_OP' => $operation], null, 25);
+                    $worker = new Process([PHP_BINARY, '-r', $code], base_path(), ['APP_ENV' => 'testing', 'APP_CONFIG_CACHE' => base_path('bootstrap/cache/race-nonexistent.php'), 'DB_URL' => '', 'RACE_CONNECTION' => json_encode($connection), 'RACE_NAME' => $name, 'RACE_USER' => (string) $student->id, 'RACE_ROW' => (string) ($operation === 'landing' ? $landingRows[5 + $i]->id : $row?->id), 'RACE_OP' => $operation], null, 25);
                     $worker->start();
                     $workers[] = $worker;
                 }
@@ -66,6 +86,18 @@ PHP;
                 DB::commit();
                 foreach ($workers as $worker) {
                     $this->assertSame(0, $worker->wait(), $worker->getErrorOutput());
+                }
+                if ($operation === 'submit') {
+                    $outcomes = array_map(fn ($worker) => $worker->getOutput(), $workers);
+                    sort($outcomes);
+                    $this->assertSame(['conflict', 'submitted'], $outcomes);
+                }
+                if ($operation === 'landing') {
+                    $outcomes = array_map(fn ($worker) => $worker->getOutput(), $workers);
+                    sort($outcomes);
+                    $this->assertSame(['limit', 'selected'], $outcomes);
+                    $this->assertSame(6, Testimonial::whereIn('id', array_map(fn ($item) => $item->id, $landingRows))->where('landing', true)->count());
+                    continue;
                 }
                 $this->assertSame(1, $student->testimonials()->count());
                 $row = $student->testimonials()->firstOrFail();
@@ -88,6 +120,7 @@ PHP;
                     $worker->stop();
                 }
             }
+            if (! empty($landingRows)) Testimonial::whereIn('id', array_map(fn ($item) => $item->id, $landingRows))->delete();
             $student->testimonials()->delete();
             $student->delete();
         }

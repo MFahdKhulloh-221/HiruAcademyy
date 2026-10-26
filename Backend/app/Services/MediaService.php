@@ -48,8 +48,30 @@ class MediaService
         } elseif (str_starts_with($decoded, '/') || isset($parts['host']) || str_contains($decoded, ':') || isset($parts['query']) || isset($parts['fragment'])) {
             return false;
         }
+        if ($kind === 'video_thumbnail') {
+            return $remote ? $this->valid($value, 'https_image') : (str_starts_with($value, 'media/') && $this->valid($value, 'image'));
+        }
+        if (in_array($kind, ['student_video', 'https_image'], true)) {
+            if (! $remote || strtolower($parts['scheme']) !== 'https' || isset($parts['port'])) {
+                return false;
+            }
+            if ($kind === 'https_image') {
+                return in_array(strtolower(pathinfo($parts['path'] ?? '', PATHINFO_EXTENSION)), ['jpg', 'jpeg', 'png', 'webp'], true);
+            }
+            $host = strtolower($parts['host']);
+            $path = $parts['path'] ?? '';
+            parse_str($parts['query'] ?? '', $query);
+
+            return $this->youtube($parts)
+                || (in_array($host, ['instagram.com', 'www.instagram.com'], true) && (bool) preg_match('~^/(?:p|reel|tv)/[A-Za-z0-9_-]+/?$~D', $path))
+                || ($host === 'drive.google.com' && ((bool) preg_match('~^/file/d/[A-Za-z0-9_-]+/(?:view|preview)/?$~D', $path) || ($path === '/open' && is_string($query['id'] ?? null) && (bool) preg_match('/^[A-Za-z0-9_-]+$/D', $query['id']))));
+        }
         if ($kind === 'reference') {
             return ! str_starts_with($value, 'media/') || ($this->managed($value) && Storage::disk(config('media.disk'))->exists($value));
+        }
+        if ($kind === 'video' && $remote && strtolower($parts['scheme']) !== 'https'
+            && ! in_array(strtolower($parts['host']), ['localhost', '127.0.0.1', '[::1]'], true)) {
+            return false;
         }
         if ($kind === 'video' && $remote && $this->youtube($parts)) {
             return true;
@@ -184,7 +206,7 @@ class MediaService
         foreach ([
             'users' => ['avatar'],
             'sensei_profiles' => ['photo'], 'showcase_items' => ['image_src'],
-            'testimonials' => ['image', 'video_url'], 'blog_articles' => ['thumbnail'],
+            'testimonials' => ['image', 'video_url', 'video_thumbnail'], 'blog_articles' => ['thumbnail'],
             'certificate_templates' => ['image'], 'video_lessons' => ['video_url'],
             'audio_questions' => ['audio_url'], 'learning_modules' => ['file_url'],
             'replay_videos' => ['video_url'], 'placement_questions' => ['audio_url'],

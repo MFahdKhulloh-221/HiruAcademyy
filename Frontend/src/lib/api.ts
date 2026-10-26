@@ -74,6 +74,7 @@ async function request(path: string, options: RequestInit): Promise<Response> {
             errors[field] = [field.startsWith("answers") ? "Periksa jawaban: ID soal dan pilihan A–D harus valid." : field === "revision" ? "Revisi jawaban tidak valid. Sinkronkan kembali sebelum mengumpulkan." : "Status penyelesaian sesi tidak valid."];
           } else if (path === "/api/auth/register" && field === "whatsapp" && Array.isArray(body.errors[key]) && body.errors[key].includes("Nomor WhatsApp sudah digunakan. Silakan gunakan nomor lain.")) errors[field] = ["Nomor WhatsApp sudah digunakan. Silakan gunakan nomor lain."];
           else if (Object.hasOwn(fieldMessages, field)) errors[field] = [fieldMessages[field]];
+          else if (path === "/api/student/testimonial" && ["type", "title", "video_title", "video_url", "video_thumbnail", "quote", "consent_public", "file"].includes(key) && Array.isArray(body.errors[key])) errors[key] = body.errors[key].filter((message: unknown): message is string => typeof message === "string").slice(0, 3);
           else if (placement && Object.keys(errors).length < 25 && Array.isArray(body.errors[key])) errors[field] = body.errors[key].filter((message: unknown): message is string => typeof message === "string").slice(0, 3);
           else if ((path.startsWith("/api/admin/mini-checkpoint-questions") || path.startsWith("/api/admin/try-outs")) && Array.isArray(body.errors[key])) errors[field] = body.errors[key].filter((message: unknown): message is string => typeof message === "string");
         }

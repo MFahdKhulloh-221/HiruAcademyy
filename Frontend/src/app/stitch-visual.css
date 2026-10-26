@@ -2109,36 +2109,33 @@ rt { color: var(--secondary); }
   color: #ffffff;
 }
 
-.testimonial-card {
-  display: grid;
-  grid-template-columns: 64px minmax(0, 1fr);
-  column-gap: 16px;
-  align-items: start;
-  padding: 28px;
+/* Public testimonial grids share breakpoints; player layout stays independent. */
+.landing-testimonials .testimonial-grid,
+.testimonials-page .testimonial-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
 }
-.testimonial-card .testimonial-avatar {
-  grid-column: 1;
-  grid-row: 1;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
+.landing-testimonials .testimonial-grid > .testimonial-video-card { min-width: 0; overflow: hidden; border: 1px solid #e8e8e8; border-radius: 24px; background: #fff; }
+.landing-testimonials .testimonial-grid > .testimonial-video-card footer { padding: 18px 20px; }
+.testimonial-video-frame { position: relative; overflow: hidden; }
+.testimonial-video-frame button { position: relative; }
+.testimonial-video-card footer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  overflow-wrap: anywhere;
 }
-.testimonial-card footer {
-  grid-column: 2;
-  grid-row: 1;
-  display: grid;
-  gap: 4px;
-  align-self: center;
-  margin: -20px 0 0;
+.testimonial-video-card footer p { margin: 8px 0 0; white-space: pre-wrap; line-height: 1.75; }
+.testimonial-video-card footer a { display: inline-flex; align-items: center; min-height: 44px; }
+.testimonial-video-card footer a:focus-visible { outline: 2px solid currentColor; outline-offset: 4px; }
+@media (max-width: 1023px) {
+  .landing-testimonials .testimonial-grid,
+  .testimonials-page .testimonial-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-.testimonial-card blockquote {
-  grid-column: 1 / -1;
-  margin: 28px 0 0;
-  line-height: 1.75;
-}
-.testimonial-card:nth-child(1) footer,
-.testimonial-card:nth-child(3) footer {
-  margin-top: -50px;
+@media (max-width: 639px) {
+  .landing-testimonials .testimonial-grid,
+  .testimonials-page .testimonial-grid { grid-template-columns: minmax(0, 1fr); }
 }
 .placement-assessment .placement-topbar-right {
   display: none;
@@ -6967,7 +6964,9 @@ video { height: auto; }
 }
 
 /* Shared Landing price rows, including Admin preview. */
-.landing-price-card { border-color: var(--orange); }
+.landing-price-card:hover,
+.landing-price-card:focus-within,
+.landing-price-card:active { border-color: var(--orange); }
 .pricing-price-box { flex-wrap: wrap; column-gap: 8px; row-gap: 12px; }
 .pricing-discount-row { flex: 0 0 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; color: var(--muted); font-size: 13px; }
 .pricing-discount-row > span { color: var(--orange-dark); font-weight: 700; }

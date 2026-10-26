@@ -43,7 +43,7 @@ class TestimonialRedesignTest extends TestCase
         $url = '/api/admin/testimonials/'.$b['id'];
         $stale = Testimonial::findOrFail($b['id']);
         $this->actingAs($admin)->patchJson($url, ['moderation_status' => 'rejected'])->assertOk();
-        $this->patchJson($url, ['moderation_status' => 'approved'])->assertOk()->assertJsonPath('data.published', true)->assertJsonPath('data.landing', true)->assertJsonPath('data.show_on_testimonials', true);
+        $this->patchJson($url, ['moderation_status' => 'approved'])->assertOk()->assertJsonPath('data.published', false)->assertJsonPath('data.landing', false)->assertJsonPath('data.show_on_testimonials', true);
         $this->patchJson($url, ['published' => false, 'landing' => false, 'show_on_testimonials' => false])->assertOk();
         $saved = app(PublicContentService::class)->save('testimonials', ['moderation_status' => 'approved'], $stale);
         $this->assertFalse($saved->published);
@@ -59,11 +59,11 @@ class TestimonialRedesignTest extends TestCase
         $this->getJson('/api/testimonials?landing=true')->assertJsonMissing(['id' => $b['id']]);
         $this->patchJson($url, ['published' => false])->assertOk()->assertJsonPath('data.show_on_testimonials', true);
         $this->getJson('/api/testimonials')->assertJsonMissing(['id' => $b['id']]);
-        foreach (['type', 'title', 'video_thumbnail', 'quote', 'consent_public', 'user_id', 'name'] as $field) {
+        foreach (['type', 'video_thumbnail', 'consent_public', 'user_id', 'name'] as $field) {
             $this->patchJson($url, [$field => 'spoof'])->assertUnprocessable();
         }
         $this->actingAs($student)->putJson('/api/student/testimonial', $this->video())->assertConflict();
-        $this->putJson('/api/student/testimonial', $text)->assertOk();
+        $this->putJson('/api/student/testimonial', $text)->assertConflict();
     }
 
     public function test_video_validation_aliases_and_no_privileged_fields(): void
@@ -76,11 +76,15 @@ class TestimonialRedesignTest extends TestCase
         unset($alias['title']);
         $alias['video_title'] = 'Alias';
         $a = $this->putJson('/api/student/testimonial', $alias)->assertOk()->assertJsonPath('data.title', 'Alias')->json('data');
-        $this->putJson('/api/student/testimonial', $alias)->assertJsonPath('data.id', $a['id']);
+        $this->putJson('/api/student/testimonial', $alias)->assertConflict();
+        $this->getJson('/api/student/testimonial?type=video')->assertJsonPath('data.id', $a['id']);
+        Testimonial::findOrFail($a['id'])->forceFill(['moderation_status' => 'rejected'])->save();
         $this->putJson('/api/student/testimonial', array_replace($alias, ['quote' => 'Short description']))->assertJsonPath('data.quote', 'Short description');
+        Testimonial::findOrFail($a['id'])->forceFill(['moderation_status' => 'rejected'])->save();
         $this->putJson('/api/student/testimonial', array_replace($alias, ['quote' => null]))->assertJsonPath('data.quote', '');
         $this->getJson('/api/student/testimonial?type=invalid')->assertUnprocessable();
         foreach (['https://www.instagram.com/reel/Ab_123/', 'https://drive.google.com/file/d/abcdefghij/view', 'https://drive.google.com/open?id=abcdefghij'] as $url) {
+            Testimonial::findOrFail($a['id'])->forceFill(['moderation_status' => 'rejected'])->save();
             $this->putJson('/api/student/testimonial', array_replace($this->video(), ['video_url' => $url]))->assertOk();
         }
     }
@@ -141,7 +145,7 @@ class TestimonialRedesignTest extends TestCase
         $this->assertDatabaseHas('testimonials', ['id' => $id, 'type' => 'video', 'quote' => 'Keep legacy quote', 'title' => 'Legacy title', 'show_on_testimonials' => true, 'video_thumbnail' => null]);
         $this->assertDatabaseHas('testimonials', ['id' => $text, 'type' => 'text', 'show_on_testimonials' => false]);
         $legacy = Testimonial::findOrFail($id);
-        $saved = app(PublicContentService::class)->save('testimonials', ['published' => false, 'landing' => true], $legacy);
+        $saved = app(PublicContentService::class)->save('testimonials', ['published' => false, 'landing' => false], $legacy);
         $this->assertSame('Keep legacy quote', $saved->quote);
         $this->assertNull($saved->video_thumbnail);
         $this->assertSame('https://example.test/a.mp4', $saved->video_url);
