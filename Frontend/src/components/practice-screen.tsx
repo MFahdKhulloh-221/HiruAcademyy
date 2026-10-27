@@ -164,7 +164,7 @@ export function PracticeScreen({ membership, resolvedCatalog }: { membership: Me
                   <div className="practice-journey-number">{String(chapter.chapter_number).padStart(2, "0")}</div>
                   <div className="practice-journey-copy">
                     <h2>{program.name} | {chapter.title} | {kind}</h2>
-                    <p>Latihan interaktif harian untuk kategori {kind}.</p>
+                    <p>{assessmentKind ? `Uji pemahamanmu melalui latihan soal ${kind}.` : kind === "Kosakata" ? "Hafalkan dan ulangi kosakata melalui kartu belajar." : `Pelajari materi ${kind} dari chapter ini.`}</p>
                   </div>
                   <div className="practice-journey-action">
                     {assessmentKind ? (
@@ -182,7 +182,7 @@ export function PracticeScreen({ membership, resolvedCatalog }: { membership: Me
                           setSelected(selection);
                         }}
                       >
-                        Mulai Latihan
+                        Kerjakan Latihan
                       </button>
                     ) : (
                       <Link
@@ -191,7 +191,7 @@ export function PracticeScreen({ membership, resolvedCatalog }: { membership: Me
                         }`}
                         className="button button-primary"
                       >
-                        Mulai Latihan
+                        {kind === "Kosakata" ? "Belajar Flashcard" : "Pelajari Materi"}
                       </Link>
                     )}
                   </div>

@@ -112,6 +112,8 @@ export function FlashcardCollection() {
           </p>
         )}
 
+        <header className="supporting-header max-lg:pt-16"><h1>Flashcard Kosakata</h1><p>Hafalkan dan ulangi kosakata melalui kartu belajar. Balik kartu untuk melihat arti dan contoh kalimat.</p></header>
+
         {/* 1. Summary Statistics */}
         <section className="fc-summary-grid" aria-label="Ringkasan Flashcard">
           {summaryMetrics.map((item) => {

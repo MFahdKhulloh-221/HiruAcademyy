@@ -143,7 +143,7 @@ for (const kind of ["audio", "reading"] as const) {
     await page.getByRole("button", { name: "Kembali ke Daftar Latihan" }).click();
     server = { ...server, status: "in_progress", answers: {}, result: null };
     await page.getByRole("tab", { name: kind === "audio" ? "Audio" : "Reading", exact: true }).click();
-    await page.getByRole("article").filter({ has: page.getByRole("heading", { name: `JLPT N5 | Practice chapter | ${kind === "audio" ? "Audio" : "Reading"}`, exact: true }) }).getByRole("button", { name: "Mulai Latihan", exact: true }).click();
+    await page.getByRole("article").filter({ has: page.getByRole("heading", { name: `JLPT N5 | Practice chapter | ${kind === "audio" ? "Audio" : "Reading"}`, exact: true }) }).getByRole("button", { name: "Kerjakan Latihan", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Practice server question" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Mulai", exact: true })).toHaveCount(0);
     await expect(page).toHaveURL(/attempt=4/);
