@@ -12,7 +12,7 @@ import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { SenseiGrid } from "@/components/sensei-grid";
 import { TestimonialCard } from "@/components/testimonial-card";
 import { usePublishedLanding } from "@/lib/website-store";
-import { contentMedia, offerPrice, useContent, type PublicOffer, type ShowcaseContent, type TestimonialContent } from "@/lib/public-content-api";
+import { contentMedia, offerPrice, useContent, type PublicOffer, type PublicProgram, type ShowcaseContent, type TestimonialContent } from "@/lib/public-content-api";
 
 type IconName = "arrow" | "book" | "check" | "compass" | "layers" | "play" | "sparkle" | "target" | "users";
 
@@ -70,12 +70,14 @@ export default function Home() {
   const showcase = useContent<ShowcaseContent>("/api/showcase");
   const pricing = useContent<PublicOffer>("/api/public/offers");
 
+  const programs = useContent<PublicProgram>("/api/public/programs");
+
   const hero = landing.hero;
   const heroSupport =
     (hero.support ? hero.support.replace(/learning journey/gi, "pembelajaran") : "") ||
     "Placement test, pembelajaran, flashcard, latihan, try out, komunitas, dan kelas bersama Sensei tersedia dalam satu pengalaman belajar yang konsisten.";
   const currentOffers = offers.map(offer => {
-    const available = pricing.data.filter(item => item.program.code !== "N1" && item.plan_code === offer.id).sort((a, b) => a.effective_price - b.effective_price);
+    const available = pricing.data.filter(item => item.plan_code === offer.id && programs.data.some(program => program.family === "jlpt" && program.code.toLowerCase() === item.program.code.toLowerCase())).sort((a, b) => a.effective_price - b.effective_price);
     return { ...offer, pricing: available[0], price: offer.id === "free" ? offer.price : pricing.loading ? "Memuat harga…" : pricing.error ? "Harga gagal dimuat" : offerPrice(available[0]).split("/")[0], period: offer.id === "free" ? offer.period : available[0] ? `/${available[0].duration_months} bulan` : "" };
   });
   const previews = showcase.data.map(item => ({ key: item.key, label: item.label, imageSrc: contentMedia(item.image_src) }));
@@ -96,9 +98,9 @@ export default function Home() {
               <p>{landing.pricing?.support || "Pilih cara belajar yang sesuai dengan kebutuhanmu."}</p>
             </div>
             {pricing.error && <div role="alert">{pricing.error} <button type="button" onClick={pricing.reload}>Coba lagi</button></div>}
-            {pricing.loading ? <LoadingSkeleton variant="cards" label="Memuat harga…" /> : <div className="pricing-grid">
+            {pricing.loading || programs.loading ? <LoadingSkeleton variant="cards" label="Memuat harga…" /> : <div className="pricing-grid">
               {currentOffers.map((offer, index) => (
-                <LandingPriceCard key={offer.id} offer={offer} price={offer.id === "free" ? 0 : offer.pricing?.effective_price ?? null} normalPrice={offer.pricing?.base_price} months={offer.pricing?.duration_months ?? ""} priceText={pricing.error ? "Harga gagal dimuat" : undefined} index={index} />
+                <LandingPriceCard key={offer.id} offer={offer} price={offer.id === "free" ? 0 : offer.pricing?.effective_price ?? null} normalPrice={offer.pricing?.base_price} discountPercent={offer.pricing?.discount_percent} months={offer.pricing?.duration_months ?? ""} priceText={pricing.error || programs.error ? "Harga gagal dimuat" : undefined} index={index} />
               ))}
             </div>}
           </div>

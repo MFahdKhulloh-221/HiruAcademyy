@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { ProgramPriceDisplay } from "@/components/program-price-display";
 import { ProgramPriceCardContent } from "@/components/program-price-card-content";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useState } from "react";
@@ -74,7 +75,7 @@ function ProgramContent() {
                   )}
 
                   {!isPopular && plan.id !== "free" && <span className="pricing-badge-pill">{plan.badge}</span>}
-                  <ProgramPriceCardContent title={plan.title} description={plan.description} price={plan.id === "free" ? 0 : plan.offer?.effective_price ?? null} normalPrice={plan.offer?.base_price} months={plan.offer?.duration_months ?? ""} />
+                  <ProgramPriceCardContent title={plan.title} description={plan.description} price={plan.id === "free" ? 0 : plan.offer?.effective_price ?? null} normalPrice={plan.offer?.base_price} discountPercent={plan.offer?.discount_percent} months={plan.offer?.duration_months ?? ""} />
 
                   <ul className="pricing-features" aria-label={`Fitur paket ${plan.title}`}>
                     {plan.points.map((point) => (
@@ -164,7 +165,7 @@ function ProgramContent() {
             <div className="summary-meta-grid">
               <div className="summary-meta-card price-highlight">
                 <span className="meta-label">BIAYA INVESTASI</span>
-                <strong className="meta-value">{summaryPlan.price.replace(/99\.000/g, "99k").replace(/350\.000/g, "350k")}</strong>
+                <ProgramPriceDisplay price={summaryPlan.id === "free" ? 0 : summaryPlan.offer?.effective_price ?? null} normalPrice={summaryPlan.offer?.base_price} discountPercent={summaryPlan.offer?.discount_percent} months={summaryPlan.offer?.duration_months ?? ""} />
                 <small className="meta-note">{summaryPlan.id === "free" ? "Akses Chapter 1 Gratis" : "Investasi pendidikan terarah"}</small>
               </div>
               {summaryPlan.period && (

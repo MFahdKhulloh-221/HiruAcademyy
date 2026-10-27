@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState } from "react";
-import { LuArrowRight, LuKey, LuLock, LuStar } from "react-icons/lu";
+import { LuArrowRight, LuCheck, LuKey, LuLock, LuStar } from "react-icons/lu";
 import type { JourneyChapter, JourneyLevel } from "@/lib/journey-mock";
 import type { Membership } from "@/lib/dashboard-mock";
 
@@ -141,7 +141,7 @@ export function ChapterJourney({ membership, level, chapters }: { membership: Me
         <section className="chapter-list sensei-chapter-list" aria-label={"Chapter " + level.title}>
           {chapters.map((chapter) => (
             <article className={"chapter-card chapter-" + chapter.state} key={chapter.key}>
-              <span className="chapter-number">{chapter.orderLabel}</span>
+              <span className="chapter-number">{chapter.state === "completed" ? <LuCheck aria-label="Selesai" /> : chapter.state === "entitlementLocked" || chapter.state === "progressionLocked" ? <LuLock aria-label="Terkunci" /> : chapter.orderLabel}</span>
               <div className="chapter-copy">
                 <h2>{chapter.title}</h2>
                 <p>{chapter.description}</p>
@@ -186,7 +186,7 @@ export function ChapterJourney({ membership, level, chapters }: { membership: Me
         </section>
         <aside className="chapter-milestone">
           <h2>Milestone berikutnya</h2>
-          <p>{chapters.find(chapter => chapter.href && chapter.progress < 100)?.title ?? level.title}</p>
+          <p>{chapters.find(chapter => chapter.href && chapter.state !== "completed")?.title ?? level.title}</p>
 
           <Link href={"/journey?membership=" + membership}>Kembali ke Level</Link>
         </aside>

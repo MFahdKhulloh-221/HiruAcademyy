@@ -6971,3 +6971,14 @@ video { height: auto; }
 .pricing-discount-row { flex: 0 0 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px 12px; color: var(--muted); font-size: 13px; }
 .pricing-discount-row > span { color: var(--orange-dark); font-weight: 700; }
 .pricing-price-box .pricing-amount { overflow-wrap: anywhere; line-height: 1.2; min-width: 0; }
+
+/* Price and progress states scoped to existing student cards. */
+.pricing-minimum { flex: 0 0 100%; color: var(--muted); font-size: 13px; font-weight: 600; }
+.sensei-chapter-list .chapter-completed { border-color: #9bc4aa; }
+.sensei-chapter-list .chapter-completed .chapter-number,
+.sensei-chapter-list .chapter-completed .chapter-action-button { background: #eaf3e7; color: #32643a; }
+.sensei-chapter-list .chapter-completed .chapter-progress-bar { accent-color: #32643a; }
+.sensei-chapter-list .chapter-available .chapter-number,
+.sensei-chapter-list .chapter-entitlementLocked .chapter-number { background: #f0f1f5; color: #595e70; }
+.learning-activity-card.activity-completed { border-color: #9bc4aa; }
+.learning-activity-card.activity-completed [role="status"] { display: inline-flex; align-items: center; gap: 6px; color: #32643a; }
