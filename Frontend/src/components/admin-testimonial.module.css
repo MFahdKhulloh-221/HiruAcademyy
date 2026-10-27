@@ -1,12 +1,19 @@
 :global(.admin-shell .admin-dialog-layer) > .builderDialog { width: min(1100px, 100%); max-width: calc(100vw - 32px); max-height: calc(100dvh - 32px); padding: 0; overflow: hidden; }
 .builderDialog > :global(.admin-dialog-content) { display: block; margin-top: 0; overflow-y: auto; }
 .page { min-width: 0; padding: 24px; }
-.toolbar, .actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
-.toolbar { justify-content: space-between; margin: 24px 0; }
-.toolbar > div { display: flex; gap: 8px; flex-wrap: wrap; }
+.actions { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+.toolbar { display: grid; gap: 16px; margin: 24px 0; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: white; }
+.toolbarTop, .toolbarBottom { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; min-width: 0; }
+.toolbarTop { justify-content: space-between; align-items: center; }
+.statusFilter { display: flex; gap: 4px; padding: 4px; background: #f1f3f8; border-radius: 12px; }
+.searchFilter { width: min(100%, 360px); }
+.toolbarBottom > label:not(.landingToggle) { width: 200px; }
+.toolbar label { font-size: 13px; min-width: 0; }
+.toolbar .landingToggle { align-self: end; }
+@media (max-width: 639px) { .searchFilter, .toolbarBottom > label:not(.landingToggle) { width: 100%; } }
 .toolbar button[aria-pressed="true"] { background: var(--navy); color: white; }
 .toolbar label, .form label { display: grid; gap: 6px; }
-.toolbar select, .toolbar input, .form input:not([type="checkbox"]), .form textarea, .form select { min-width: 0; width: 100%; padding: 12px; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; font: inherit; background: white; color: var(--navy); }
+.toolbar select, .toolbar input:not([type="checkbox"]), .form input:not([type="checkbox"]), .form textarea, .form select { min-width: 0; width: 100%; padding: 12px; min-height: 44px; border: 1px solid var(--line); border-radius: 10px; font: inherit; background: white; color: var(--navy); }
 .list { --item-height: 156px; display: grid; grid-auto-rows: var(--item-height); gap: 8px; max-height: calc(8 * var(--item-height) + 7 * 8px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: #a6adba transparent; scrollbar-gutter: stable; }
 .list::-webkit-scrollbar, .reconcile::-webkit-scrollbar { width: 6px; }
 .list::-webkit-scrollbar-thumb, .reconcile::-webkit-scrollbar-thumb { background: #a6adba; border-radius: 8px; }
@@ -50,5 +57,14 @@
 .actionMenu:popover-open { display: grid; gap: 4px; }
 .actionMenu button { width: 100%; min-height: 44px; text-align: left; }
 
-.toolbar .kindFilter { display: grid; gap: 6px; }
 .toolbar .landingToggle { display: flex; align-items: center; }
+
+:global(.admin-shell .admin-dialog-layer) > .detailDialog { width: min(720px, calc(100vw - 32px)); }
+:global(.admin-shell .admin-dialog-layer) > .deleteDialog { width: min(520px, calc(100vw - 32px)); }
+.detailDialog > :global(.admin-dialog-content), .deleteDialog > :global(.admin-dialog-content) { display: block; margin-top: 0; overflow-y: auto; }
+.dialogBody { display: grid; gap: 16px; min-width: 0; }
+.dialogBody > p { margin: 0; line-height: 1.65; overflow-wrap: anywhere; }
+.detailMeta, .deleteNotice { color: var(--muted); font-size: 14px; }
+.deleteDialog > footer { display: flex; justify-content: flex-end; gap: 12px; }
+.deleteDialog > footer button { min-height: 44px; }
+@media (max-width: 639px) { .deleteDialog > footer { flex-direction: column-reverse; align-items: stretch; } }

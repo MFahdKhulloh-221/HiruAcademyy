@@ -4,6 +4,8 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AdminDialog, AdminPageHeader, AdminShell } from "@/components/admin-primitives";
 import { StudentAvatar } from "@/components/student-avatar";
 import { AdminMediaUpload } from "@/components/admin-media-upload";
+import { TestimonialCard } from "@/components/testimonial-card";
+import { VideoRecommendation } from "@/app/testimoni/video-recommendation";
 import { TestimonialFields, TestimonialPreview } from "@/components/testimonial-builder";
 import { apiRequest } from "@/lib/api";
 import { contentMedia, useContent, type TestimonialContent } from "@/lib/public-content-api";
@@ -27,11 +29,12 @@ export function AdminTestimonialPrototype() {
   const [view, setView] = useState<Item | null>(null);
   const [deleting, setDeleting] = useState<Item | null>(null);
   const [filter, setFilter] = useState("publish");
+  const [order, setOrder] = useState("newest");
   const [kind, setKind] = useState("all");
   const [landingOnly, setLandingOnly] = useState(false);
   const list = useRef<HTMLDivElement>(null);
   const [search, setSearch] = useState("");
-  useEffect(() => { list.current?.scrollTo({ top: 0 }); }, [filter, kind, landingOnly, search]);
+  useEffect(() => { list.current?.scrollTo({ top: 0 }); }, [filter, kind, landingOnly, search, order]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -40,6 +43,9 @@ export function AdminTestimonialPrototype() {
   const overLimit = selected.length > 6;
   const rows = content.data.filter(item => {
     return (filter === "publish" ? isPublic(item) : !isPublic(item)) && (kind === "all" || (item.type || (item.video_url ? "video" : "text")) === kind) && (!landingOnly || (isPublic(item) && item.landing)) && `${item.name} ${item.quote} ${item.title || ""}`.toLocaleLowerCase("id").includes(search.trim().toLocaleLowerCase("id"));
+  }).sort((a, b) => {
+    const difference = (Date.parse(a.created_at || "") || 0) - (Date.parse(b.created_at || "") || 0) || a.id - b.id;
+    return order === "newest" ? -difference : difference;
   });
   async function mutate(item: Item, body?: object, remove = false) {
     if (lock.current) return;
@@ -68,16 +74,27 @@ export function AdminTestimonialPrototype() {
     <section className={styles.landing} aria-label="Testimoni Pilihan Landing Page"><h2>Testimoni Pilihan Landing Page</h2><p>Maksimal 6 testimoni teks. Video hanya tampil di halaman /testimoni.</p>{overLimit ? <p role="alert">Perlu penyesuaian: {selected.length} dipilih, maksimal 6. Lepas pilihan sampai tersisa maksimal enam. Penambahan dan pengurutan dinonaktifkan sementara.</p> : <p>{selected.length} dari 6 testimoni dipilih</p>}
       {!selected.length && <p>Belum ada pilihan Landing.</p>}
       <ol className={overLimit ? styles.reconcile : undefined} tabIndex={overLimit ? 0 : undefined} aria-label={overLimit ? "Penyesuaian pilihan Landing" : undefined}>{selected.map((item, index) => <li key={item.id} className={styles.landingItem}>
-        <span aria-label={`Urutan ${index + 1}`}>{index + 1}</span><div className={styles.owner}><StudentAvatar name={item.name} url={contentMedia(item.image, item.image_resolved_url)} className={styles.avatar} /><div><strong>{item.name}</strong><p>{item.context}</p></div></div><p className={styles.quote}>{item.title || item.quote}</p>
+        <span aria-label={`Urutan ${index + 1}`}>{index + 1}.</span><div className={styles.owner}><StudentAvatar name={item.name} url={contentMedia(item.image, item.image_resolved_url)} className={styles.avatar} /><div><strong>{item.name}</strong><p>{item.context}</p></div></div><p className={styles.quote}>{item.title || item.quote}</p>
         <div className={styles.actions}><button className="button" aria-label={`Naik ${item.name}`} disabled={busy || overLimit || index === 0} onClick={() => void mutate(item, { landing_position: index })}>Naik</button><button className="button" aria-label={`Turun ${item.name}`} disabled={busy || overLimit || index === selected.length - 1} onClick={() => void mutate(item, { landing_position: index + 2 })}>Turun</button><button className="button" disabled={busy} onClick={() => toggleLanding(item, false)}>Hapus dari Landing</button></div>
       </li>)}</ol>
     </section>
-    <div className={styles.toolbar}><div role="group" aria-label="Status testimoni">{[["publish", "Publish"], ["archive", "Arsip"]].map(([key, label]) => <button className="button" key={key} aria-pressed={key === filter} onClick={() => setFilter(key)}>{label}</button>)}</div><div className={styles.kindFilter}><label htmlFor="admin-testimonial-kind">Jenis testimoni</label><select id="admin-testimonial-kind" value={kind} onChange={event => setKind(event.target.value)}><option value="all">Semua Jenis</option><option value="text">Testimoni Teks</option><option value="video">Testimoni Video</option></select></div><label className={styles.landingToggle}><input type="checkbox" checked={landingOnly} onChange={event => setLandingOnly(event.target.checked)} />Hanya Pilihan Landing</label><label>Cari testimoni<input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Nama atau isi testimoni" /></label></div>
+    <div className={styles.toolbar} aria-label="Filter testimoni">
+      <div className={styles.toolbarTop}>
+        <div className={styles.statusFilter} role="group" aria-label="Status testimoni">{[["publish", "Publish"], ["archive", "Arsip"]].map(([key, label]) => <button className="button" key={key} aria-pressed={key === filter} onClick={() => setFilter(key)}>{label}</button>)}</div>
+        <label className={styles.searchFilter}>Cari testimoni<input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Nama atau isi testimoni" /></label>
+      </div>
+      <div className={styles.toolbarBottom}>
+        <label>Jenis testimoni<select value={kind} onChange={event => setKind(event.target.value)}><option value="all">Semua Jenis</option><option value="text">Testimoni Teks</option><option value="video">Testimoni Video</option></select></label>
+        <label>Urutkan<select value={order} onChange={event => setOrder(event.target.value)}><option value="newest">Terbaru dahulu</option><option value="oldest">Terlama dahulu</option></select></label>
+        <label className={styles.landingToggle}><input type="checkbox" checked={landingOnly} onChange={event => setLandingOnly(event.target.checked)} />Hanya Pilihan Landing</label>
+        <button className="button" onClick={() => { setFilter("publish"); setKind("all"); setOrder("newest"); setLandingOnly(false); setSearch(""); }}>Reset Filter</button>
+      </div>
+    </div>
     {content.error && <p role="alert">{content.error} <button onClick={content.reload}>Coba lagi</button></p>}{message && <p role="status">{message}</p>}{error && !draft && !deleting && <p role="alert">{error}</p>}
     {content.loading && <p role="status">Memuat testimoni…</p>}
     <p role="status">{rows.length} hasil filter</p>
-    <div ref={list} className={styles.list} role="region" aria-label="Daftar testimoni" tabIndex={0}>{rows.map(item => <article className={styles.item} key={item.id}>
-      <div className={styles.owner}><StudentAvatar name={item.name} url={contentMedia(item.image, item.image_resolved_url)} className={styles.avatar} /><div><h2>{item.name}</h2><p>{item.context}</p><small>{item.type === "video" ? "Video" : "Teks"}</small></div></div>
+    <div ref={list} className={styles.list} role="region" aria-label="Daftar testimoni" tabIndex={0}>{rows.map((item, index) => <article className={styles.item} key={item.id}>
+      <div className={styles.owner}><span aria-label={`Nomor ${index + 1}`}>{index + 1}.</span><StudentAvatar name={item.name} url={contentMedia(item.image, item.image_resolved_url)} className={styles.avatar} /><div><h2>{item.name}</h2><p>{item.context}</p><small>{item.type === "video" ? "Video" : "Teks"}</small></div></div>
       <div className={styles.summary}><p className={styles.quote}>{item.title || item.quote}</p><p className={styles.status}>{item.type === "video" ? "Video" : "Teks"} / {publicationLabel(item)}</p>{item.archived_at && item.consent_public !== true && <p>Menunggu izin publikasi siswa</p>}</div>
       <div className={styles.actions}><label className={styles.landingToggle}><input type="checkbox" checked={!!item.landing && isPublic(item) && landingEligible(item)} disabled={busy || !isPublic(item) || !landingEligible(item) || (!item.landing && selected.length >= 6)} onChange={event => toggleLanding(item, event.target.checked)} />Tampilkan di Landing</label><button className="button" popoverTarget={`testimonial-actions-${item.id}`} aria-label={`Tindakan ${item.name}`} onClick={event => { const box = event.currentTarget.getBoundingClientRect(); const menu = document.getElementById(`testimonial-actions-${item.id}`); menu?.style.setProperty("top", `${Math.min(box.bottom + 4, window.innerHeight - 220)}px`); menu?.style.setProperty("left", `${Math.max(8, Math.min(box.right - 180, window.innerWidth - 188))}px`); }}>{"\u2022\u2022\u2022"}</button><div id={`testimonial-actions-${item.id}`} popover="auto" className={styles.actionMenu} onClick={event => { if ((event.target as HTMLElement).closest("button")) event.currentTarget.hidePopover(); }}><button className="button" onClick={() => setView(item)}>Lihat</button><button className="button" disabled={busy} onClick={() => edit(item)}>Edit</button>{isPublic(item) ? <button className="button" disabled={busy} onClick={() => void mutate(item, { archived_at: new Date().toISOString() })}>Arsipkan</button> : <button className="button" disabled={busy || item.consent_public !== true} title={item.consent_public !== true ? "Menunggu izin publikasi siswa" : undefined} onClick={() => edit({ ...item, archived_at: null, published: false, landing: false, show_on_testimonials: false })}>{item.archived_at ? "Pulihkan" : "Publish"}</button>}<button className="button" disabled={busy} onClick={() => { setError(""); setDeleting(item); }}>Hapus</button></div></div>
     </article>)}</div>{!content.loading && !rows.length && <p>Belum ada testimoni sesuai filter.</p>}
@@ -88,10 +105,10 @@ export function AdminTestimonialPrototype() {
 
       {!!draft.id && draft.consent_public !== true && <p>Menunggu izin publikasi siswa</p>}
       {draft.archived_at && <p>Arsip mengalahkan seluruh pilihan penayangan.</p>}
-      <fieldset disabled={busy || !!draft.archived_at || (!!draft.id && draft.consent_public !== true)}><legend>Penayangan</legend>{([['published', 'Aktifkan publikasi'], ['show_on_testimonials', 'Tampilkan di halaman /testimoni'], ['landing', 'Tampilkan di Landing Page (maksimal 6 testimoni teks)']] as const).map(([key, label]) => <label className={styles.check} key={key}><input type="checkbox" checked={!!draft[key]} disabled={key === "landing" && (!landingEligible(draft) || (!draft.landing && selected.length >= 6))} onChange={event => setDraft({ ...draft, [key]: event.target.checked })} />{label}</label>)}</fieldset>
+      <fieldset disabled={busy || !!draft.archived_at || (!!draft.id && draft.consent_public !== true)}><legend>Penayangan</legend>{!draft.id ? <label className={styles.check}><input type="checkbox" checked={!!draft.show_on_testimonials} onChange={event => setDraft({ ...draft, published: event.target.checked, show_on_testimonials: event.target.checked, landing: false })} />Tampilkan di halaman /testimoni</label> : ([['published', 'Aktifkan publikasi'], ['show_on_testimonials', 'Tampilkan di halaman /testimoni'], ['landing', 'Tampilkan di Landing Page (maksimal 6 testimoni teks)']] as const).map(([key, label]) => <label className={styles.check} key={key}><input type="checkbox" checked={!!draft[key]} disabled={key === "landing" && (!landingEligible(draft) || (!draft.landing && selected.length >= 6))} onChange={event => setDraft({ ...draft, [key]: event.target.checked })} />{label}</label>)}</fieldset>
       {error && <p role="alert">{error}</p>}<div className={styles.actions}><button className="button" type="button" disabled={busy} onClick={() => setDraft(null)}>Batal</button><button className="button button-primary" disabled={busy} type="submit">Simpan Testimoni</button></div>
     </form><TestimonialPreview value={draft} /></div>}</AdminDialog>
-    <AdminDialog open={!!view} title="Detail Testimoni" close={() => setView(null)}>{view && <><p>{view.source === "student" ? "Kiriman siswa" : "Konten Admin"} · {publicationLabel(view)}</p><TestimonialPreview value={view} /></>}</AdminDialog>
-    <AdminDialog open={!!deleting} title="Hapus Testimoni?" close={() => { if (!busy) setDeleting(null); }}><p>Hapus testimoni {deleting?.name}? Penghapusan record bersifat permanen. Media tidak dihapus. Gunakan Arsip jika ingin menyimpan record.</p>{error && <p role="alert">{error}</p>}<button className="button" disabled={busy} onClick={() => setDeleting(null)}>Batal</button><button className="button button-primary" disabled={busy} onClick={() => deleting && void mutate(deleting, undefined, true)}>Hapus Testimoni</button></AdminDialog>
+    <AdminDialog className={styles.detailDialog} open={!!view} title="Detail Testimoni" close={() => setView(null)}>{view && <div className={styles.dialogBody}><p className={styles.detailMeta}>{view.source === "student" ? "Kiriman siswa" : "Konten Admin"} / {publicationLabel(view)}</p>{view.type === "video" ? <VideoRecommendation item={view} /> : <TestimonialCard testimonial={view} />}</div>}</AdminDialog>
+    <AdminDialog className={styles.deleteDialog} open={!!deleting} title="Hapus Testimoni?" close={() => { if (!busy) setDeleting(null); }} actions={<><button className="button" disabled={busy} onClick={() => setDeleting(null)}>Batal</button><button className="button button-primary" disabled={busy} onClick={() => deleting && void mutate(deleting, undefined, true)}>Hapus Testimoni</button></>}><div className={styles.dialogBody}><p>Hapus testimoni <strong>{deleting?.name}</strong>?</p><p className={styles.deleteNotice}>Penghapusan record bersifat permanen. Media tidak dihapus. Gunakan Arsip jika ingin menyimpan record.</p>{error && <p role="alert">{error}</p>}</div></AdminDialog>
   </main></AdminShell>;
 }

@@ -89,6 +89,17 @@ test("fixture student, admin CRUD and public channels stay in sync", async ({ pa
   const row = () => page.getByRole("article").filter({ has: page.getByRole("heading", { name: user.name, exact: true }) });
   const dialog = () => page.getByRole("dialog");
   await expect(row()).toBeVisible();
+  await row().getByRole("button", { name: /^Tindakan / }).click();
+  await row().getByRole("button", { name: "Lihat", exact: true }).click();
+  await expect(dialog().getByRole("heading", { name: "Detail Testimoni", exact: true })).toBeVisible();
+  await expect(dialog().getByText("Pratinjau langsung, belum disimpan.")).toHaveCount(0);
+  await expect(dialog().getByRole("blockquote")).toContainText("Materi belajar jelas");
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.screenshot({ path: `C:/Users/Tulo/AppData/Local/Temp/opencode/testimonial-detail-${width}.png` });
+  }
+  await dialog().getByRole("button", { name: "Tutup dialog" }).click();
+
   await page.getByLabel("Cari testimoni").fill("tidak-ada");
   await expect(row()).toHaveCount(0);
   await page.getByLabel("Cari testimoni").fill("latihan");
@@ -143,6 +154,8 @@ test("fixture student, admin CRUD and public channels stay in sync", async ({ pa
   await publicState(false, false);
   await goto("/admin/testimoni");
   await page.getByRole("button", { name: "Tambah Testimoni", exact: true }).click();
+  await expect(dialog().getByRole("checkbox")).toHaveCount(1);
+  await expect(dialog().getByLabel("Aktifkan publikasi")).toHaveCount(0);
   await dialog().getByLabel("Nama / atribusi pemilik").fill("Kurasi Admin Fixture");
   await dialog().getByLabel("Program / konteks").fill("Atribusi terverifikasi");
   await dialog().getByLabel("Komentar / Pengalaman Belajar", { exact: true }).fill("Konten kurasi dengan atribusi yang benar.");
@@ -179,10 +192,10 @@ test("fixture student, admin CRUD and public channels stay in sync", async ({ pa
 
     await page.screenshot({ path: `C:/Users/Tulo/AppData/Local/Temp/opencode/admin-builder-${width}.png`, fullPage: true });
   }
-  await dialog().getByLabel("Aktifkan publikasi").check();
   await dialog().getByLabel("Tampilkan di halaman /testimoni").check();
   await dialog().getByRole("button", { name: "Simpan Testimoni" }).click();
   await expect(dialog()).toHaveCount(0);
+  expect(items.find(item => item.name === "Kurasi Admin Fixture")).toMatchObject({ published: true, show_on_testimonials: true, landing: false });
   await goto("/testimoni");
   await expect(page.getByRole("button", { name: "Tonton Video Admin Fixture" })).toBeVisible();
   await goto("/admin/testimoni");
@@ -191,6 +204,11 @@ test("fixture student, admin CRUD and public channels stay in sync", async ({ pa
   await adminRow.getByRole("button", { name: "Hapus", exact: true }).click();
   await page.setViewportSize({ width: 1440, height: 1000 });
   expect((await dialog().boundingBox())!.width).toBeLessThanOrEqual(560);
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: `C:/Users/Tulo/AppData/Local/Temp/opencode/testimonial-delete-${width}.png` });
+  }
   const beforeDelete = mutations;
   await expect(dialog().getByRole("heading", { name: "Hapus Testimoni?" })).toBeVisible();
   await dialog().getByRole("button", { name: "Batal", exact: true }).click();

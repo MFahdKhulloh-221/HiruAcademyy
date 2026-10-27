@@ -1,7 +1,9 @@
 import { expect, test } from "@playwright/test";
 
 test("legacy reconciliation, combined filters and eight-row scroll", async ({ page }) => {
-  const items = Array.from({ length: 15 }, (_, i) => ({ id: i + 1, name: `Siswa ${i + 1}`, context: "Program N4", quote: "Pengalaman belajar yang terarah dan menyenangkan.", type: i % 2 ? "video" : "text", title: i % 2 ? `Video ${i + 1}` : null, published: i < 14, consent_public: true, moderation_status: "approved", show_on_testimonials: true, landing: i % 2 === 0, archived_at: i === 14 ? "2026-10-26T00:00:00Z" : null, sort_order: i + 1, image: null }));
+  const items = Array.from({ length: 15 }, (_, i) => ({ id: i + 1, created_at: new Date(Date.UTC(2026, 9, 26 - i)).toISOString(), name: `Siswa ${i + 1}`, context: "Program N4", quote: "Pengalaman belajar yang terarah dan menyenangkan.", type: i % 2 ? "video" : "text", title: i % 2 ? `Video ${i + 1}` : null, published: i < 14, consent_public: true, moderation_status: "approved", show_on_testimonials: true, landing: i % 2 === 0, archived_at: i === 14 ? "2026-10-26T00:00:00Z" : null, sort_order: i + 1, image: null }));
+  // Deliberate timestamp tie; id must break tie, not incoming array order.
+  items[1].created_at = items[0].created_at;
   let writes = 0;
   await page.route("**/*", async route => {
     const req = route.request(), url = new URL(req.url());
@@ -23,6 +25,13 @@ test("legacy reconciliation, combined filters and eight-row scroll", async ({ pa
   await expect(panel).toContainText("Perlu penyesuaian: 7 dipilih, maksimal 6");
   await expect(panel.getByRole("button", { name: "Naik Siswa 3", exact: true })).toBeDisabled();
   await expect(page.getByRole("article").filter({ hasText: "Siswa 12" }).getByLabel("Tampilkan di Landing", { exact: true })).toBeDisabled();
+  await expect(list.getByRole("heading").first()).toHaveText("Siswa 2");
+  await expect(list.getByRole("heading").nth(1)).toHaveText("Siswa 1");
+  await page.getByRole("combobox", { name: "Urutkan", exact: true }).selectOption("oldest");
+  await expect(list.getByRole("heading").first()).toHaveText("Siswa 14");
+  await expect(list.getByRole("heading").nth(12)).toHaveText("Siswa 1");
+  await expect(list.getByRole("heading").nth(13)).toHaveText("Siswa 2");
+  await page.getByRole("button", { name: "Reset Filter", exact: true }).click();
   for (const width of [1440, 768, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     const sizes = await list.evaluate(e => ({ client: e.clientHeight, scroll: e.scrollHeight, row: e.querySelector("article")!.getBoundingClientRect().height }));
@@ -52,21 +61,36 @@ test("legacy reconciliation, combined filters and eight-row scroll", async ({ pa
     await page.getByRole("heading", { name: "Kelola Testimoni" }).click();
     await expect(menu).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-    await page.screenshot({ path: `C:/Users/Tulo/AppData/Local/Temp/opencode/admin-filters-${width}.png`, fullPage: true });
+    await page.getByRole("combobox", { name: "Urutkan", exact: true }).scrollIntoViewIfNeeded();
+    await page.locator('[aria-label="Filter testimoni"]').screenshot({ path: `C:/Users/Tulo/AppData/Local/Temp/opencode/admin-toolbar-${width}.png` });
   }
   await page.getByRole("combobox", { name: "Jenis testimoni", exact: true }).selectOption("text");
   await expect(list.getByRole("article")).toHaveCount(7);
   await page.getByRole("combobox", { name: "Jenis testimoni", exact: true }).selectOption("video");
   await expect(list.getByRole("article")).toHaveCount(7);
   expect(await list.evaluate(e => e.scrollTop)).toBe(0);
+  await expect(list.getByRole("heading").first()).toHaveText("Siswa 2");
   await page.getByLabel("Hanya Pilihan Landing").check();
   await expect(list.getByRole("article")).toHaveCount(0);
   await page.getByLabel("Cari testimoni").fill("Siswa 2");
   await expect(list.getByRole("article")).toHaveCount(0);
   await page.getByLabel("Cari testimoni").fill("");
   await page.getByLabel("Hanya Pilihan Landing").uncheck();
+  await page.getByRole("combobox", { name: "Jenis testimoni", exact: true }).selectOption("text");
+  await page.getByLabel("Hanya Pilihan Landing").check();
+  await page.getByLabel("Cari testimoni").fill("Siswa 1");
+  await page.getByRole("combobox", { name: "Urutkan", exact: true }).selectOption("oldest");
+  await expect(list.getByRole("heading")).toHaveText(["Siswa 13", "Siswa 11", "Siswa 1"]);
+  await page.getByRole("button", { name: "Reset Filter", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "Jenis testimoni", exact: true })).toHaveValue("all");
+  await expect(page.getByRole("combobox", { name: "Urutkan", exact: true })).toHaveValue("newest");
+  await expect(page.getByLabel("Cari testimoni")).toHaveValue("");
+  await expect(page.getByLabel("Hanya Pilihan Landing")).not.toBeChecked();
+  await expect(list.getByRole("article")).toHaveCount(14);
   await page.getByRole("button", { name: "Arsip", exact: true }).click();
+  await page.getByRole("combobox", { name: "Jenis testimoni", exact: true }).selectOption("video");
   await expect(list.getByRole("article")).toHaveCount(0);
+  await page.getByRole("combobox", { name: "Urutkan", exact: true }).selectOption("oldest");
   await page.getByRole("combobox", { name: "Jenis testimoni", exact: true }).selectOption("text");
   await expect(list.getByRole("article")).toHaveCount(1);
   await page.getByRole("combobox", { name: "Jenis testimoni", exact: true }).selectOption("all");
