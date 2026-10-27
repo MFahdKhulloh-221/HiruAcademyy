@@ -18,6 +18,7 @@ export function StudentHeaderActions({ membership }: { membership: Membership })
 }
 
 function HeaderActions({ membership }: { membership: Membership }) {
+  const onProfile = usePathname() === "/profile";
   const { user } = useAuth();
   const [open, setOpen] = useState<"profile" | "notifications" | null>(null);
   const root = useRef<HTMLDivElement>(null);
@@ -83,7 +84,7 @@ function HeaderActions({ membership }: { membership: Membership }) {
     {open === "profile" && <section id="student-profile-dropdown" aria-label="Profil akun" className={styles.dropdown}>
       <strong>{user?.name}</strong><p>{label}</p>
       <Link href="/profile" onClick={() => setOpen(null)}>Lihat Profil</Link>
-      <button type="button" disabled={!!avatar.busy} onClick={() => input.current?.click()}>{avatar.busy ? "Mengunggah..." : "Ganti Foto Profil"}</button>
+      {onProfile ? <Link href="#pengaturan" onClick={() => setOpen(null)}>Kelola Foto Profil</Link> : <button type="button" disabled={!!avatar.busy} onClick={() => input.current?.click()}>{avatar.busy ? "Mengunggah..." : "Ganti Foto Profil"}</button>}
       {avatar.error && <p role="alert">{avatar.error}</p>}
       {avatar.success && <p role="status">Foto profil berhasil diperbarui.</p>}
     </section>}

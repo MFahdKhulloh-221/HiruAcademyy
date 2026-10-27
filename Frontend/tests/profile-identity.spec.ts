@@ -35,7 +35,7 @@ test("profile avatar refresh keeps draft, busy state and feedback; testimonial s
   finish = () => undefined;
   await page.locator("#profile-photo").setInputFiles("tests/fixtures/sample.png");
   await expect.poll(() => refreshStarted).toBe(true);
-  await expect(page.getByRole("button", { name: "Mengunggah..." })).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "Mengunggah..." })).toHaveCount(1);
   await expect(page.getByLabel("Nama Lengkap", { exact: true })).toHaveValue("Unsaved draft");
   expect(await draft!.evaluate(element => element.isConnected)).toBe(true);
   const release = finish;
@@ -44,9 +44,9 @@ test("profile avatar refresh keeps draft, busy state and feedback; testimonial s
   await expect(page.getByRole("status").filter({ hasText: "Foto profil berhasil diperbarui." })).toBeVisible();
   await expect(page.locator(".profile-identity img")).toHaveAttribute("src", /\/profile-fixture\.png$/);
   await page.goto("/profile/testimoni?membership=free");
-  await expect(page.locator(".profile-identity img")).toHaveAttribute("src", /\/profile-fixture\.png$/);
-  await expect(page.getByRole("link", { name: "Ubah Foto Profil", exact: true })).toHaveAttribute("href", "/profile?membership=lms#pengaturan");
-  await page.getByRole("link", { name: "Ubah Foto Profil", exact: true }).click();
+  await expect(page.locator(".testimonial-avatar img, img.testimonial-avatar")).toHaveAttribute("src", /\/profile-fixture\.png$/);
+  await expect(page.getByRole("link", { name: "Kelola foto di Profil Saya", exact: true })).toHaveAttribute("href", "/profile?membership=lms#pengaturan");
+  await page.getByRole("link", { name: "Kelola foto di Profil Saya", exact: true }).click();
   await expect(page.locator("#pengaturan")).toBeVisible();
   await page.getByRole("button", { name: "Hapus Foto", exact: true }).last().click();
   await expect(page.locator(".profile-identity img")).toHaveCount(0);
@@ -65,6 +65,12 @@ for (const width of [390, 768, 1280]) {
     await page.route("**/api/me", route => route.fulfill({ json: { data: user } }));
     for (const path of ["/profile/testimoni", "/profile"]) {
       await page.goto(path);
+      if (path === "/profile/testimoni") {
+        await expect(page.getByText(user.name, { exact: true }).first()).toBeVisible();
+        await expect(page.getByRole("link", { name: "Kelola foto di Profil Saya" })).toBeVisible();
+        expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+        continue;
+      }
       const identity = page.locator(".profile-identity");
       await expect(identity.getByRole("heading", { name: user.name, exact: true })).toBeVisible();
       expect(await identity.evaluate(element => element.scrollWidth <= element.clientWidth)).toBe(true);

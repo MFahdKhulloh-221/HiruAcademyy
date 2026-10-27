@@ -135,10 +135,6 @@ function ProfileScreen({ membership, access }: { membership: Membership; access:
       </header>
 
       <ProfileIdentity>
-          <div className="profile-photo-actions">
-            <button type="button" className="button button-secondary" disabled={!!avatarBusy} onClick={() => photoInput.current?.click()}>{avatarBusy === "upload" ? "Mengunggah..." : "Ganti Foto"}</button>
-            {hasAvatar && <button type="button" className="button button-secondary" disabled={!!avatarBusy} onClick={() => { void updateAvatar(); }}>Hapus Foto</button>}
-          </div>
           <div className="profile-identity-tags">
             {access.source_grants.map((grant, index) => (
               <span className="profile-pill" key={`${grant.program_code}/${grant.plan_code}/${index}`}>
@@ -179,9 +175,9 @@ function ProfileScreen({ membership, access }: { membership: Membership; access:
           {avatarSuccess && <p role="status" className="profile-settings-success">Foto profil berhasil diperbarui.</p>}
           {avatarError && <p role="alert" className="profile-settings-error">{avatarError}</p>}
           <label className="profile-photo-label" htmlFor="profile-photo">Foto Profil</label>
-          <input ref={photoInput} id="profile-photo" className="profile-photo-input" type="file" accept="image/jpeg,image/png,image/webp" disabled={!!avatarBusy} onChange={selectAvatar} />
+          <input ref={photoInput} id="profile-photo" className="profile-photo-input" hidden aria-label="File foto profil" type="file" accept="image/jpeg,image/png,image/webp" disabled={!!avatarBusy} onChange={selectAvatar} />
           <div className="profile-photo-actions">
-            <button type="button" className="button button-primary" disabled={!!avatarBusy} onClick={() => photoInput.current?.click()}>{avatarBusy === "upload" ? "Mengunggah..." : "Pilih Foto"}</button>
+            <button type="button" className="button button-primary" disabled={!!avatarBusy} onClick={() => photoInput.current?.click()}>{avatarBusy === "upload" ? "Mengunggah..." : "Ganti Foto Profil"}</button>
             {hasAvatar && <button type="button" className="button button-secondary" disabled={!!avatarBusy} onClick={() => { void updateAvatar(); }}>Hapus Foto</button>}
           </div>
         </section>
