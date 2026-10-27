@@ -168,13 +168,11 @@ function ProgramContent() {
                 <ProgramPriceDisplay price={summaryPlan.id === "free" ? 0 : summaryPlan.offer?.effective_price ?? null} normalPrice={summaryPlan.offer?.base_price} discountPercent={summaryPlan.offer?.discount_percent} months={summaryPlan.offer?.duration_months ?? ""} />
                 <small className="meta-note">{summaryPlan.id === "free" ? "Akses Chapter 1 Gratis" : "Investasi pendidikan terarah"}</small>
               </div>
-              {summaryPlan.period && (
                 <div className="summary-meta-card period-highlight">
                   <span className="meta-label">DURASI &amp; AKSES</span>
-                  <strong className="meta-value">{summaryPlan.period}</strong>
+                  <strong className="meta-value">{summaryPlan.period || "Belum tersedia"}</strong>
                   <small className="meta-note">Masa aktif bimbingan materi</small>
                 </div>
-              )}
               <div className="summary-meta-card level-highlight">
                 <span className="meta-label">LEVEL TERPILIH</span>
                 <strong className="meta-value">{selectedLevel.code} — {selectedLevel.title}</strong>

@@ -6982,3 +6982,15 @@ video { height: auto; }
 .sensei-chapter-list .chapter-entitlementLocked .chapter-number { background: #f0f1f5; color: #595e70; }
 .learning-activity-card.activity-completed { border-color: #9bc4aa; }
 .learning-activity-card.activity-completed [role="status"] { display: inline-flex; align-items: center; gap: 6px; color: #32643a; }
+/* Keep selection summary geometry independent of plan and promotion content. */
+.program-summary-card .summary-card-inner { display: grid; grid-template-columns: minmax(0, 1fr); }
+.program-summary-card .summary-header { min-width: 0; }
+.program-summary-card .summary-meta-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; align-items: stretch; }
+.program-summary-card .summary-meta-card { min-width: 0; padding: 10px 14px; grid-template-rows: auto minmax(76px, auto) auto; align-items: start; }
+.program-summary-card .summary-meta-card > .meta-value { align-self: center; }
+.program-summary-card .pricing-price-box { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(20px, auto) auto 20px; gap: 2px; margin: 0; padding: 0; border: 0; align-content: center; }
+.program-summary-card .pricing-discount-row { grid-row: 1; font-size: 12px; }
+.program-summary-card .pricing-amount { grid-row: 2; font-size: 24px; line-height: 1.25; }
+.program-summary-card .pricing-period { grid-row: 3; }
+@media (max-width: 639px) { .program-summary-card .summary-meta-grid { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 639px) { .program-summary-card .summary-header { min-height: 112px; } }

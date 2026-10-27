@@ -42,7 +42,7 @@ for (const width of [1440, 390]) {
     await mock(page);
     await page.goto("/");
     const landing = page.locator(".landing-price-card").last();
-    await expect(landing).toContainText("Mulai dari");
+    await expect(landing.locator(".pricing-amount")).toHaveText("Mulai Rp90K");
     await expect(landing).toContainText("Rp90K"); // N1 included, cheaper SSW excluded.
     await expect(landing).toContainText("/6 bulan");
     await expect(landing.locator("s")).toHaveCount(0);
@@ -52,7 +52,8 @@ for (const width of [1440, 390]) {
     await page.screenshot({ path: testInfo.outputPath(`landing-${width}.png`) });
     await page.goto("/program?level=N5&plan=lms");
     const card = page.locator(".pricing-card").last();
-    await expect(card).toContainText("Rp99K");
+    await expect(card.locator(".pricing-amount")).toHaveText("Mulai Rp99K");
+    await expect(page.locator(".program-summary-card .pricing-amount")).toHaveText("Rp99K");
     await expect(card).toContainText("Diskon 10%");
     await expect(card.locator("s")).toHaveText("Rp110K");
     await expect(page.locator(".program-summary-card")).toContainText("Diskon 10%");
