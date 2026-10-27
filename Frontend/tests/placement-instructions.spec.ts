@@ -65,6 +65,7 @@ for (const width of [1440, 390]) {
       await expect(page.getByRole("heading", { name: "Placement runner existing" })).toBeVisible();
       expect(state.starts).toBe(2);
       await page.goBack();
+      await expect(page).toHaveURL(/\/placement#placement-form$/);
       await expect(page.getByRole("heading", { name: "Petunjuk dari Admin" })).toBeVisible();
       await page.goForward();
       await expect(page.getByRole("heading", { name: "Placement runner existing" })).toBeVisible();

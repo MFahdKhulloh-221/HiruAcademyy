@@ -1,12 +1,13 @@
 import { expect, test } from "@playwright/test";
+import path from "node:path";
 import { testimonialVideo } from "../src/lib/public-content-api";
 
 test("safe public video sources", () => {
   expect(testimonialVideo("javascript:alert(1)")).toBeNull();
   expect(testimonialVideo("https://user:pass@example.test/video.mp4")).toBeNull();
-  expect(testimonialVideo("https://youtu.be/abcdefghijk")).toEqual({ kind: "youtube", src: "https://www.youtube-nocookie.com/embed/abcdefghijk" });
-  expect(testimonialVideo("https://www.youtube.com/watch?v=abcdefghijk")).toEqual({ kind: "youtube", src: "https://www.youtube-nocookie.com/embed/abcdefghijk" });
-  expect(testimonialVideo("media/video/id.mp4", "https://cdn.example.test/signed.mp4?signature=test")).toEqual({ kind: "native", src: "https://cdn.example.test/signed.mp4?signature=test" });
+  expect(testimonialVideo("https://youtu.be/abcdefghijk")).toEqual({ kind: "youtube", src: "https://www.youtube-nocookie.com/embed/abcdefghijk", href: "https://www.youtube.com/watch?v=abcdefghijk" });
+  expect(testimonialVideo("https://www.youtube.com/watch?v=abcdefghijk")).toEqual({ kind: "youtube", src: "https://www.youtube-nocookie.com/embed/abcdefghijk", href: "https://www.youtube.com/watch?v=abcdefghijk" });
+  expect(testimonialVideo("media/video/id.mp4", "https://cdn.example.test/signed.mp4?signature=test")).toEqual({ kind: "native", src: "https://cdn.example.test/signed.mp4?signature=test", href: "https://cdn.example.test/signed.mp4?signature=test" });
 });
 
 for (const width of [360, 768, 1440]) {
@@ -51,9 +52,24 @@ test("public canonical resolved photos and YouTube/native testimonials", async (
   await page.route("**/api/testimonials", route => route.fulfill({ json: { data: [
     { id: 1, name: "Canonical Video", context: "Sensei", quote: "Published quote", image: "media/image/id.webp", image_resolved_url: "https://cdn.example.test/photo.webp", video_url: "https://youtu.be/abcdefghijk", video_title: "Approved video" },
     { id: 2, name: "Native Video", context: "Mandiri", quote: "Published native", image: null, video_url: "media/video/id.mp4", video_url_resolved_url: "https://cdn.example.test/native.mp4", video_title: "Native title" },
+    { id: 3, type: "text", name: "Canonical Student", context: "Mandiri", quote: "Published text", image: "media/image/student.webp", image_resolved_url: "https://cdn.example.test/photo.webp" },
   ] } }));
+  await page.route("https://cdn.example.test/photo.webp", route => route.fulfill({ contentType: "image/svg+xml", body: '<svg xmlns="http://www.w3.org/2000/svg" width="104" height="104"><rect width="104" height="104" fill="gray"/></svg>' }));
   await page.goto("/testimoni");
-  await expect(page.getByTitle("Approved video")).toHaveAttribute("src", "https://www.youtube-nocookie.com/embed/abcdefghijk");
-  await expect(page.getByLabel("Native title")).toHaveAttribute("src", "https://cdn.example.test/native.mp4");
-  await expect(page.getByAltText("Foto Canonical Video")).toHaveAttribute("src", "https://cdn.example.test/photo.webp");
+  await page.route("https://www.youtube-nocookie.com/embed/**", route => route.fulfill({ contentType: "text/html", body: "Video fixture" }));
+  await page.route("https://cdn.example.test/native.mp4", route => route.fulfill({ contentType: "video/mp4", path: path.join(__dirname, "fixtures/playable.mp4") }));
+  await expect(page.getByAltText("Foto profil Canonical Student")).toHaveAttribute("src", "https://cdn.example.test/photo.webp");
+  await expect(page.getByTitle("Approved video")).toHaveCount(0);
+  await page.getByRole("button", { name: "Tonton Approved video", exact: true }).click();
+  const youtube = page.getByRole("dialog", { name: "Approved video", exact: true });
+  await youtube.getByRole("button", { name: "Putar Approved video", exact: true }).click();
+  await expect(youtube.getByTitle("Approved video")).toHaveAttribute("src", "https://www.youtube-nocookie.com/embed/abcdefghijk");
+  await expect(youtube.getByRole("link", { name: "Buka video" })).toHaveAttribute("href", "https://www.youtube.com/watch?v=abcdefghijk");
+  await youtube.getByRole("button", { name: "Tutup video" }).click();
+  await expect(page.getByRole("button", { name: "Tonton Approved video", exact: true })).toBeFocused();
+  await page.getByRole("button", { name: "Tonton Native title", exact: true }).click();
+  const native = page.getByRole("dialog", { name: "Native title", exact: true });
+  await native.getByRole("button", { name: "Putar Native title", exact: true }).click();
+  await expect(native.getByLabel("Native title")).toHaveAttribute("src", "https://cdn.example.test/native.mp4");
+  await expect(native.getByRole("link", { name: "Buka video" })).toHaveAttribute("href", "https://cdn.example.test/native.mp4");
 });

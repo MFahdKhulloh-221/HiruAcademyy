@@ -81,7 +81,7 @@ export default function PlacementPage() {
               <span>Hasil langsung</span>
             </div>
             <div className="result-actions">
-              <a className="button button-primary placement-start-cta" href="#placement-form">Mulai Tes</a>
+              <Link className="button button-primary placement-start-cta" href="#placement-form">Mulai Tes</Link>
             </div>
           </div>
           <aside className="placement-outcomes">
