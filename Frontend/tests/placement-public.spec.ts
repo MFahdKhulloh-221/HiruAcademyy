@@ -34,10 +34,11 @@ for (const width of [360, 768, 1440]) {
     await expect(page.getByRole("radio").nth(1)).toBeChecked();
     await page.getByRole("button", { name: "Selesaikan Test" }).click();
     await expect(page).toHaveURL(/placement\/result\?attempt=12/);
-    await expect(page.getByRole("heading", { name: "Analisis kemampuan" })).toBeVisible();
-    await expect(page.locator(".placement-score-grid article")).toHaveCount(4);
-    await expect(page.locator(".placement-score-grid article").first()).toContainText("100 / 100");
-    await expect(page.locator(".program-price").first()).toContainText("123.456");
+    const analysis = page.locator(".placement-analysis");
+    await expect(analysis.getByRole("heading", { name: "Ringkasan Hasil per Kategori" })).toBeVisible();
+    await expect(analysis.locator("article")).toHaveCount(4);
+    await expect(analysis.getByRole("progressbar", { name: "Skor Bunpou" })).toHaveAttribute("value", "100");
+    await expect(page.getByRole("heading", { name: "Rekomendasi Level yang disarankan adalah N2" })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
   });
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError } from "@/lib/api";
 import { startAttempt } from "@/lib/assessment-attempt";
@@ -15,39 +15,10 @@ const outcomes = [
   ["Fokus yang perlu diperbaiki", "Temukan kemampuan yang sudah kuat dan bagian yang perlu kamu prioritaskan."],
 ];
 
-const reminders = [
-  {
-    icon: (
-      <svg aria-hidden="true" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
-        <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
-        <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
-      </svg>
-    ),
-    text: "Aktifkan audio atau gunakan earphone untuk soal Choukai.",
-  },
-  {
-    icon: (
-      <svg aria-hidden="true" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
-        <path d="M12 20h9" />
-        <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
-      </svg>
-    ),
-    text: "Kerjakan tanpa kamus, penerjemah, atau bantuan orang lain.",
-  },
-  {
-    icon: (
-      <svg aria-hidden="true" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24">
-        <circle cx="12" cy="12" r="10" />
-        <polyline points="12 6 12 12 16 14" />
-      </svg>
-    ),
-    text: "Selesaikan seluruh soal dalam satu sesi.",
-  },
-];
-
 export default function PlacementPage() {
   const { config: publishedConfig, loading, error: loadError } = usePublishedPlacement();
   const router = useRouter();
+  const pending = useRef(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string>();
   const [name, setName] = useState("");
@@ -81,10 +52,19 @@ export default function PlacementPage() {
     });
   }
 
-  const introHeading = publishedConfig?.introHeading ?? "";
-  const description = publishedConfig?.description ?? "";
+  const introHeading = publishedConfig?.introHeading?.trim() || "Placement Test";
+  const description = publishedConfig?.description?.trim() || "Kenali kemampuan bahasa Jepangmu untuk mendapatkan rekomendasi level belajar.";
   const questionCount = publishedConfig?.questionCount ?? "—";
-  const durationMinutes = publishedConfig?.durationMinutes ?? "—";
+  const durationMinutes = publishedConfig?.durationMinutes;
+  const instructions = [
+    "Pilih satu jawaban untuk setiap soal.",
+    publishedConfig?.adaptive === true
+      ? "Jawaban tersimpan saat dipilih. Soal berikutnya menyesuaikan jawabanmu; jawaban sebelumnya tidak dapat diubah."
+      : publishedConfig?.adaptive === false
+        ? "Gunakan Lanjut Soal dan Sebelumnya untuk berpindah soal. Jawaban dapat diubah sebelum tes diselesaikan."
+        : "Ikuti tombol navigasi yang tersedia saat mengerjakan tes.",
+    ...(typeof durationMinutes === "number" && Number.isFinite(durationMinutes) && durationMinutes > 0 ? [`Selesaikan tes dalam ${durationMinutes} menit. Pantau sisa waktu saat mengerjakan.`] : []),
+  ];
 
   if (loading) return <PublicPage active="Placement Test"><main className="public-main placement-page"><LoadingSkeleton variant="form" /></main></PublicPage>;
   return (
@@ -97,7 +77,7 @@ export default function PlacementPage() {
             <p>{description}</p>
             <div className="public-pills">
               <span>Gratis</span>
-              <span>{questionCount} soal | ±{durationMinutes} menit</span>
+              <span>{questionCount} soal{typeof durationMinutes === "number" && Number.isFinite(durationMinutes) && durationMinutes > 0 ? ` | ${durationMinutes} menit` : ""}</span>
               <span>Hasil langsung</span>
             </div>
             <div className="result-actions">
@@ -144,12 +124,12 @@ export default function PlacementPage() {
 
             <aside className="placement-guide-tips">
               <p className="kicker">SEBELUM MULAI</p>
-              <h3>Agar hasil tes lebih akurat:</h3>
+              <h3>Petunjuk pengerjaan</h3>
               <div className="placement-guide-reminders">
-                {reminders.map((item, index) => (
+                {instructions.map((text, index) => (
                   <article key={index}>
-                    <span aria-hidden="true">{item.icon}</span>
-                    <p>{item.text}</p>
+                    <span aria-hidden="true">{index + 1}</span>
+                    <p>{text}</p>
                   </article>
                 ))}
               </div>
@@ -158,6 +138,7 @@ export default function PlacementPage() {
 
             <form className="public-form" onSubmit={async event => {
               event.preventDefault();
+              if (pending.current) return;
               const errors = validate();
               setFieldErrors(errors);
               if (Object.keys(errors).length > 0) {
@@ -167,6 +148,7 @@ export default function PlacementPage() {
                 return;
               }
               if (!valid) return;
+              pending.current = true;
               setBusy(true);
               setError(undefined);
               try {
@@ -180,6 +162,7 @@ export default function PlacementPage() {
                 } else {
                   setError(cause instanceof Error ? cause.message : "Permintaan belum berhasil. Silakan coba lagi.");
                 }
+                pending.current = false;
                 setBusy(false);
               }
             }}>
