@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { commercialData, commercialId, commercialWrite, createCommercialDraft, type CommercialInvoice, type Offer } from "@/lib/commercial-api";
+import { commercialData, commercialId, commercialWrite, createCommercialDraft, InvoiceCreatedError, type CommercialInvoice, type Offer } from "@/lib/commercial-api";
 
 export type StudentAffiliateProjection = { affiliate: { id: number; name: string; code: string; status: string; rate: number | null } | null; code: string | null; totals: { pending: number; approved: number; paid: number } };
 export function useCommercialAffiliate() {
@@ -13,6 +13,7 @@ export function useCommercialAffiliate() {
 
 export function useCommercialOrder(level: string, plan: "lms" | "sensei") {
   const inFlight = useRef(false);
+  const creationBlocked = useRef(false);
   const [offers, setOffers] = useState<Offer[]>([]);
   const [invoice, setInvoice] = useState<CommercialInvoice | null>(null);
   const [error, setError] = useState("");
@@ -22,10 +23,10 @@ export function useCommercialOrder(level: string, plan: "lms" | "sensei") {
   const offer = offers.find(row => row.program.code.toUpperCase() === level.toUpperCase() && row.plan_code === plan && row.base_price !== null && row.program.code !== "n1");
   async function create(referral?: string) {
     if (invoice) return invoice;
-    if (inFlight.current || !offer) return null;
+    if (inFlight.current || creationBlocked.current || !offer) return null;
     inFlight.current = true; setBusy(true); setError("");
     try { const row = await createCommercialDraft({ level, plan, referral }); setInvoice(row); return row; }
-    catch (error) { setError(error instanceof Error ? error.message : "Permintaan belum berhasil."); return null; }
+    catch (error) { if (error instanceof InvoiceCreatedError) creationBlocked.current = true; setError(error instanceof Error ? error.message : "Permintaan belum berhasil."); return null; }
     finally { inFlight.current = false; setBusy(false); }
   }
   return { offer, offers, invoice, error, busy, loading, create };

@@ -17,12 +17,12 @@ for (const fail of [false, true]) {
     let failNext = fail;
     await page.route("**/api/**", route => route.fulfill({ json: { data: [] } }));
     await page.route("**/api/me", route => route.fulfill({ json: { data: user } }));
-    await page.route("**/api/public/offers", route => route.fulfill({ json: { data: [{ id: 1, program: { code: "n4", name: "JLPT N4", slug: "n4" }, plan_code: "lms", base_price: 99000, duration_months: 3 }] } }));
+    await page.route("**/api/public/offers", route => route.fulfill({ json: { data: [{ id: 1, program_id: 1, program: { code: "n4", name: "JLPT N4", slug: "n4" }, plan_code: "lms", base_price: 99000, duration_months: 3 }] } }));
     await page.route("**/sanctum/csrf-cookie", route => route.fulfill({ status: 204, headers: { "set-cookie": "XSRF-TOKEN=test; Path=/; SameSite=Lax" } }));
     await page.route("**/api/student/invoices", async route => {
       writes++;
       if (failNext) { failNext = false; await route.abort("failed"); }
-      else await route.fulfill({ json: { data: invoice } });
+      else { const raw = { ...invoice, program_code: undefined }; await route.fulfill({ json: { data: raw } }); }
     });
     await page.goto("/checkout?level=N4&plan=lms");
     await expect(page.locator(".checkout-before ol li")).toHaveText([
@@ -64,7 +64,8 @@ for (const fail of [false, true]) {
 test("invoice reads real API values; failed lookup never displays success", async ({ page }) => {
   await page.route("**/api/**", route => route.fulfill({ json: { data: [] } }));
   await page.route("**/api/me", route => route.fulfill({ json: { data: user } }));
-  await page.route("**/api/student/invoices/42", route => route.fulfill({ json: { data: invoice } }));
+  await page.route("**/api/public/programs", route => route.fulfill({ json: { data: [{ id: 1, code: "n4" }] } }));
+  await page.route("**/api/student/invoices/42", route => route.fulfill({ json: { data: { ...invoice, program_code: undefined } } }));
   await page.goto("/invoice?id=42");
   await expect(page.getByRole("link", { name: "Hubungi Admin via WhatsApp" })).toHaveAttribute("href", invoiceWhatsAppUrl(invoice));
   await expect(page.locator(".invoice-detail")).toContainText("42");
