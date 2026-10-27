@@ -55,6 +55,10 @@ async function mockTryOut(page: Page, answered = 0, duration: number | null = nu
           server = { ...server, status: "completed", completed_at: new Date(now).toISOString(), result: { correct: count, wrong: 0, unanswered: 100 - count } };
         }
       }
+      if (path.endsWith("/review")) {
+        expect(server.status).toBe("completed");
+        return reply({ ...server, questions: server.questions.map(item => ({ ...item, correct_option: "B", explanation: "Backend explanation" })) });
+      }
       return reply(server);
     }
     return reply([]);
@@ -82,10 +86,10 @@ for (const stage of ["", "&tryout_stage=check"]) {
     if (!stage) {
       await page.getByRole("button", { name: "Tata Bahasa", exact: true }).click();
       await expect(timer).toContainText(afterFive);
-      await page.getByRole("button", { name: "Selesaikan Try Out", exact: true }).click();
+      await page.getByRole("button", { name: "Periksa Jawaban", exact: true }).click();
     }
     await page.reload();
-    await expect.poll(async () => { await page.clock.runFor(1); return await page.getByRole("heading", { name: "Pemeriksaan Jawaban", exact: true }).isVisible(); }).toBe(true);
+    await expect.poll(async () => { await page.clock.runFor(1); return await page.getByRole("heading", { name: "Periksa Jawaban", exact: true }).isVisible(); }).toBe(true);
     await expect(timer).toContainText(afterFive);
     await page.clock.runFor(115000);
     await expect(page.getByRole("heading", { name: "Hasil Server Try Out", exact: true })).toBeVisible();
@@ -114,7 +118,7 @@ for (const failure of ["network", "incomplete"]) {
     await page.clock.runFor(30000);
     await expect(page.getByRole("alert").filter({ hasText: failure === "network" ? "HTTP 503" : "backend belum mengonfirmasi" })).toBeVisible();
     await expect(page.locator(".tryout-result-page")).toHaveCount(0);
-    await expect(page.getByRole("heading", { name: "Pemeriksaan Jawaban", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Periksa Jawaban", exact: true })).toBeVisible();
     mock.calls.incompleteExpiry = false;
     await page.getByRole("button", { name: "Coba Lagi", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Hasil Server Try Out", exact: true })).toBeVisible();
@@ -150,9 +154,9 @@ for (const width of [1280, 360]) {
     const mock = await mockTryOut(page, 80);
     await page.goto("/tryout?tryout=2&attempt=9");
     await expect(page.getByRole("heading", { name: "Soal 1 dari 100", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Selesaikan Try Out", exact: true }).click();
+    await page.getByRole("button", { name: "Periksa Jawaban", exact: true }).click();
     const check = page.locator(".tryout-answer-check");
-    await expect(check.getByRole("heading", { name: "Pemeriksaan Jawaban", exact: true })).toBeVisible();
+    await expect(check.getByRole("heading", { name: "Periksa Jawaban", exact: true })).toBeVisible();
     await expect(check).toContainText("Server Try Out • Attempt 9");
     await expect(check).toContainText("Total Soal: 100 • Terjawab: 80 • Belum Dijawab: 20");
     await expect(check).toContainText("Masih ada 20 soal yang belum dijawab. Kamu tetap dapat menyelesaikan Try Out, tetapi soal yang kosong akan dihitung sebagai tidak benar.");
@@ -160,7 +164,7 @@ for (const width of [1280, 360]) {
     await expect(check.locator(".answered")).toHaveCount(80);
     await expect(check.locator(".unanswered")).toHaveCount(20);
     await expect(check.getByRole("button", { name: "Soal 81, Belum Dijawab", exact: true })).toBeVisible();
-    await expect(check.getByRole("heading", { name: "Pemeriksaan Jawaban", exact: true })).toBeFocused();
+    await expect(check.getByRole("heading", { name: "Periksa Jawaban", exact: true })).toBeFocused();
     for (const [index, label] of assessmentSessionLabels.entries()) {
       const card = check.locator(".tryout-check-card").nth(index);
       await expect(card.getByRole("heading", { name: label, exact: true })).toBeVisible();
@@ -183,17 +187,17 @@ for (const width of [1280, 360]) {
     await expect(page).toHaveURL(new RegExp(`tryout_question=${mock.questions[29].id}`));
     await page.goBack();
     await expect(check).toBeVisible();
-    await expect(check.getByRole("heading", { name: "Pemeriksaan Jawaban", exact: true })).toBeFocused();
+    await expect(check.getByRole("heading", { name: "Periksa Jawaban", exact: true })).toBeFocused();
     await page.goForward();
     await expect(page.getByRole("heading", { name: "Question 30", exact: true })).toBeVisible();
-    await page.getByRole("button", { name: "Selesaikan Try Out", exact: true }).click();
+    await page.getByRole("button", { name: "Periksa Jawaban", exact: true }).click();
     await check.getByRole("button", { name: "Soal 80, Terjawab", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Question 80", exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Audio (Choukai)", exact: true })).toHaveAttribute("aria-pressed", "true");
     await page.getByRole("button", { name: "Selanjutnya", exact: true }).click();
     await page.locator("label").filter({ has: page.getByRole("radio", { name: "A. First", exact: true }) }).click();
     await expect(page.getByRole("status")).toHaveText("Tersimpan");
-    await page.getByRole("button", { name: "Selesaikan Try Out", exact: true }).click();
+    await page.getByRole("button", { name: "Periksa Jawaban", exact: true }).click();
     await expect(check.getByRole("button", { name: "Soal 81, Terjawab", exact: true })).toBeVisible();
     await expect(check).toContainText("Total Soal: 100 • Terjawab: 81 • Belum Dijawab: 19");
     await page.reload();
@@ -214,7 +218,7 @@ test("autosave response preserves newer question navigation (mock API)", async (
   let release!: () => void;
   mock.calls.pauseSave = new Promise<void>(resolve => { release = resolve; });
   await page.locator("label").filter({ has: page.getByRole("radio", { name: "A. First", exact: true }) }).click();
-  await page.getByRole("button", { name: "Selesaikan Try Out", exact: true }).click();
+  await page.getByRole("button", { name: "Periksa Jawaban", exact: true }).click();
   await page.getByRole("button", { name: "Soal 30, Belum Dijawab", exact: true }).click();
   release();
   await expect(page.getByRole("status")).toHaveText("Tersimpan");
@@ -229,7 +233,7 @@ for (const answered of [0, 50, 80, 100]) {
   test(`explicit confirmation submits ${answered}/100 once and retry clears check (mock API)`, async ({ page }) => {
     const mock = await mockTryOut(page, answered);
     await page.goto("/tryout?tryout=2&attempt=9&tryout_stage=check");
-    await expect(page.getByRole("heading", { name: "Pemeriksaan Jawaban", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Periksa Jawaban", exact: true })).toBeVisible();
     expect(mock.calls.submits).toBe(0);
     let confirmations = 0;
     page.on("dialog", async dialog => {
@@ -266,7 +270,7 @@ test("queue flush precedes confirmation; cancellation and failures retain check 
   let release!: () => void;
   mock.calls.pauseSave = new Promise<void>(resolve => { release = resolve; });
   await page.locator("label").filter({ has: page.getByRole("radio", { name: "A. First", exact: true }) }).click();
-  await page.getByRole("button", { name: "Selesaikan Try Out", exact: true }).click();
+  await page.getByRole("button", { name: "Periksa Jawaban", exact: true }).click();
   const finish = page.getByRole("button", { name: "Selesaikan Kuis", exact: true });
   let dialogs = 0;
   page.on("dialog", async dialog => { dialogs++; expect(mock.getServer().answers).toEqual({ [mock.questions[0].id]: "A" }); await dialog.dismiss(); });
@@ -290,7 +294,7 @@ test("queue flush precedes confirmation; cancellation and failures retain check 
   mock.calls.failSubmit = true;
   await finish.click();
   await expect(page.getByRole("alert").filter({ hasText: "Permintaan belum berhasil" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Pemeriksaan Jawaban", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Periksa Jawaban", exact: true })).toBeVisible();
   await expect(page.locator(".tryout-result-page")).toHaveCount(0);
   await expect(finish).toBeEnabled();
   expect(mock.calls.submits).toBe(1);
@@ -327,3 +331,89 @@ test("Try Out renders persisted instruction and semantic furigana", async ({ pag
   await expect(page.locator("ruby")).toContainText("学校");
   await expect(page.locator("ruby rt")).toHaveText("がっこう");
 });
+
+async function inspectMobileMenu(page: Page, stage: string, testInfo: import("@playwright/test").TestInfo) {
+  for (const [position, fraction] of [["top", 0], ["middle", 0.5], ["bottom", 1]] as const) {
+    await page.evaluate(f => window.scrollTo(0, (document.documentElement.scrollHeight - innerHeight) * f), fraction);
+    const metrics = await page.evaluate(() => {
+      const menu = document.querySelector<HTMLElement>(".student-mobile-trigger")!;
+      const box = menu.getBoundingClientRect();
+      const visible = box.bottom > 0 && box.top < innerHeight;
+      const overlaps = visible ? [...document.querySelectorAll("main h1, main h2, main p, main label, main button, main a")].filter(el => {
+        const r = el.getBoundingClientRect();
+        return r.width > 0 && r.height > 0 && r.left < box.right && r.right > box.left && r.top < box.bottom && r.bottom > box.top;
+      }).map(el => el.textContent?.trim()) : [];
+      const hit = visible ? document.elementFromPoint(box.x + box.width / 2, box.y + box.height / 2) : null;
+      return { scroll: scrollY, position: getComputedStyle(menu).position, box: box.toJSON(), overlaps, hit: hit?.closest("button")?.getAttribute("aria-label") };
+    });
+    await testInfo.attach(`${stage}-${position}-geometry`, { body: JSON.stringify(metrics), contentType: "application/json" });
+    expect(metrics.overlaps, `${stage} ${position}: menu must not cover content`).toEqual([]);
+    if (metrics.box.bottom > 0 && metrics.box.top < 1000) expect(metrics.hit).toBe("Buka navigasi");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: testInfo.outputPath(`viewport-${stage}-${position}.png`), fullPage: false });
+  }
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.getByRole("button", { name: "Buka navigasi", exact: true }).click();
+  await expect(page.getByRole("complementary", { name: "Navigasi siswa seluler" })).toBeVisible();
+  await page.locator(".student-mobile-close").click();
+}
+
+for (const width of [1440, 390]) {
+  test(`B1 last question, confirmation and review ${width}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.clock.install({ time: new Date("2026-10-11T00:00:00Z") });
+    const mock = await mockTryOut(page, 0, 600);
+    const server = mock.getServer();
+    server.questions = server.questions.slice(0, 3);
+    server.answers = { [server.questions[0].id]: "A", [server.questions[1].id]: "B" };
+    await page.goto("/tryout?tryout=2&attempt=9");
+    await expect(page.getByRole("heading", { name: "Question 1", exact: true })).toBeVisible();
+    await expect(page.getByRole("timer")).toBeVisible();
+    expect(await page.locator(".learning-question-head").evaluate(el => el.getBoundingClientRect().height)).toBeLessThan(150);
+    await page.screenshot({ path: testInfo.outputPath(`first-${width}.png`), fullPage: true });
+    if (width === 390) await inspectMobileMenu(page, "first", testInfo);
+    await page.getByRole("button", { name: "Selanjutnya", exact: true }).click();
+    await page.getByRole("button", { name: "Selanjutnya", exact: true }).click();
+    const last = page.locator(".learning-question-actions").getByRole("button", { name: "Periksa Jawaban", exact: true });
+    await expect(last).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`last-${width}.png`), fullPage: true });
+    if (width === 390) await inspectMobileMenu(page, "last", testInfo);
+    await last.click();
+    await expect(page.getByRole("heading", { name: "Periksa Jawaban", exact: true })).toBeVisible();
+    await expect(page.locator(".tryout-answer-check")).toContainText("Total Soal: 3 • Terjawab: 2 • Belum Dijawab: 1");
+    await expect(page.getByText("Jawaban benar", { exact: false })).toHaveCount(0);
+    expect(mock.calls.submits).toBe(0);
+    await page.screenshot({ path: testInfo.outputPath(`check-${width}.png`), fullPage: true });
+    if (width === 390) await inspectMobileMenu(page, "check", testInfo);
+    await page.getByRole("button", { name: "Soal 1, Terjawab", exact: true }).click();
+    await expect(page.getByRole("radio", { name: "A. First", exact: true })).toBeChecked();
+    await page.locator(".tryout-sidebar-actions").getByRole("button", { name: "Periksa Jawaban", exact: true }).click();
+    let confirmations = 0;
+    page.on("dialog", async dialog => { confirmations++; await dialog.accept(); });
+    await page.getByRole("button", { name: "Selesaikan Kuis", exact: true }).evaluate(button => { (button as HTMLButtonElement).click(); (button as HTMLButtonElement).click(); });
+    await expect(page.getByRole("heading", { name: "Hasil Server Try Out", exact: true })).toBeVisible();
+    expect(confirmations).toBe(1);
+    expect(mock.calls.submits).toBe(1);
+    await page.getByRole("button", { name: "Review Jawaban", exact: true }).click();
+    await expect(page.getByText("Jawaban kamu · Salah", { exact: true })).toBeVisible();
+    await expect(page.locator("label.review-correct")).toContainText("B.");
+    await expect(page.locator("label.review-correct")).toHaveCSS("color", "rgb(37, 78, 43)");
+    await expect(page.getByText("Backend explanation", { exact: true })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath(`review-wrong-${width}.png`), fullPage: true });
+    if (width === 390) await inspectMobileMenu(page, "review-wrong", testInfo);
+    await page.getByRole("button", { name: "Selanjutnya", exact: true }).click();
+    await expect(page.getByText("Jawaban kamu · Benar", { exact: true })).toBeVisible();
+    await expect(page.locator("label.review-wrong")).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath(`review-correct-${width}.png`), fullPage: true });
+    if (width === 390) await inspectMobileMenu(page, "review-correct", testInfo);
+    await page.getByRole("button", { name: "Selanjutnya", exact: true }).click();
+    await expect(page.getByText("Tidak dijawab", { exact: true })).toBeVisible();
+    await expect(page.getByRole("radio").first()).toBeDisabled();
+    await page.screenshot({ path: testInfo.outputPath(`review-empty-${width}.png`), fullPage: true });
+    if (width === 390) await inspectMobileMenu(page, "review-empty", testInfo);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.getByRole("button", { name: "Kembali ke Hasil", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Hasil Server Try Out", exact: true })).toBeVisible();
+    expect(mock.calls.submits).toBe(1);
+  });
+}

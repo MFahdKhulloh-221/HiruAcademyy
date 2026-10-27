@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useEffectEvent, useRef, useState } from "react";
+import { useCallback, useEffect, useEffectEvent, useRef, useState, type ReactNode } from "react";
 import { useAssessmentAttempt } from "@/components/assessment-hooks";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { useLearningRequest } from "@/components/learning-hooks";
@@ -9,7 +9,7 @@ import { FiClock, FiList, FiBarChart2, FiFileText, FiAlertTriangle, FiBookOpen, 
 import "./assessment-layout.css";
 import { assessmentSessions, assessmentSessionLabels, tryOutRemaining, type AttemptDomain } from "@/lib/assessment-attempt";
 
-export function BackendAssessmentRunner({ path, domain = "learning", title, startBody = {}, className = "learning-question-page", onComplete, onBack, scope, autoStart = false }: { onBack?: () => void; autoStart?: boolean; scope?: string; path: string; domain?: AttemptDomain; title: string; startBody?: object; className?: string; onComplete?: () => void }) {
+export function BackendAssessmentRunner({ path, domain = "learning", title, startBody = {}, className = "learning-question-page", onComplete, onBack, scope, autoStart = false, startActions }: { startActions?: (busy: boolean) => ReactNode; onBack?: () => void; autoStart?: boolean; scope?: string; path: string; domain?: AttemptDomain; title: string; startBody?: object; className?: string; onComplete?: () => void }) {
   const flow = useAssessmentAttempt(path, domain, scope);
   const loadInfo = useCallback((signal: AbortSignal) => domain === "tryout"
     ? apiRequest<{ data: { duration_minutes: number | null; max_score: number; sessions: Record<string, string> } }>(path.replace(/\/attempts$/, ""), { signal }).then(response => response.data)
@@ -119,7 +119,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
   }, [remaining, flow, attempt?.status, attempt?.id, scope, domain]);
   const tryOutTimer = domain === "tryout" && remaining !== null ? <div className="checkpoint-timer" role="timer"><span>TIMER</span><strong>{String(Math.floor(remaining / 60)).padStart(2, "0")}:{String(remaining % 60).padStart(2, "0")}</strong><small>Sisa waktu ujian</small></div> : null;
   if (flow.loadingAttempt) return <section className={className}><LoadingSkeleton variant="assessment" label="Memuat…" /></section>;
-  if (!attempt && domain === "tryout") return <section className="tryout-prestart"><div className="tryout-prestart-layout"><section className="tryout-prestart-info"><p className="dash-kicker">INFORMASI SIMULASI</p><h1>{title}</h1><div className="tryout-info-tiles"><div><FiClock aria-hidden="true" /><strong>{info.data?.duration_minutes == null ? "—" : `${info.data.duration_minutes} Menit`}</strong><span>Total Waktu</span></div><div><FiList aria-hidden="true" /><strong>{info.data ? Object.keys(info.data.sessions).length : "—"}</strong><span>Pembagian</span></div><div><FiBarChart2 aria-hidden="true" /><strong>{info.data?.max_score ?? "—"}</strong><span>Skor Maksimal</span></div><div><FiCheckSquare aria-hidden="true" /><strong>Review Mode</strong><span>Tersedia: —</span></div></div></section><section className="tryout-sections"><h2>Materi Sesi</h2>{Object.entries(info.data?.sessions ?? {}).map(([code, label]) => { const Icon = code === "audio" ? FiHeadphones : code === "reading" ? FiBookOpen : code === "grammar" ? FiFileText : FiList; return <div key={code}><Icon aria-hidden="true" /><strong>{label}</strong></div>; })}</section><section className="assessment-warning"><h2><FiAlertTriangle aria-hidden="true" />Peringatan</h2><p>OPEN: ketersediaan review dan teks peringatan.</p></section><div className="tryout-prestart-action">{flow.error && <p role="alert">{flow.error}</p>}<button className="button button-primary" type="button" disabled={flow.busy} onClick={() => void flow.start(startBody)}>Mulai Try Out</button></div>{info.error && <p className="tryout-prestart-error" role="alert">{info.error}</p>}</div></section>;
+  if (!attempt && domain === "tryout") return <section className="tryout-prestart"><div className="tryout-prestart-layout"><section className="tryout-prestart-info"><p className="dash-kicker">INFORMASI SIMULASI</p><h1>{title}</h1><div className="tryout-info-tiles"><div><FiClock aria-hidden="true" /><strong>{info.data?.duration_minutes == null ? "—" : `${info.data.duration_minutes} Menit`}</strong><span>Total Waktu</span></div><div><FiList aria-hidden="true" /><strong>{info.data ? Object.keys(info.data.sessions).length : "—"}</strong><span>Pembagian</span></div><div><FiBarChart2 aria-hidden="true" /><strong>{info.data?.max_score ?? "—"}</strong><span>Skor Maksimal</span></div><div><FiCheckSquare aria-hidden="true" /><strong>Review Mode</strong><span>Tersedia: —</span></div></div></section><section className="tryout-sections"><h2>Materi Sesi</h2>{Object.entries(info.data?.sessions ?? {}).map(([code, label]) => { const Icon = code === "audio" ? FiHeadphones : code === "reading" ? FiBookOpen : code === "grammar" ? FiFileText : FiList; return <div key={code}><Icon aria-hidden="true" /><strong>{label}</strong></div>; })}</section><section className="assessment-warning"><h2><FiAlertTriangle aria-hidden="true" />Peringatan</h2><p>{info.data?.duration_minutes != null ? `Pengerjaan dibatasi ${info.data.duration_minutes} menit sesuai durasi yang ditampilkan. Waktu berjalan sejak Try Out dimulai.` : "Ikuti informasi waktu yang ditampilkan saat pengerjaan."}</p><p>Pastikan koneksi internet stabil. Periksa jawaban sebelum menyelesaikan kuis. Setelah submit final, jawaban tidak dapat diubah; gunakan Review Jawaban pada hasil untuk memeriksa jawaban.</p></section><div className="tryout-prestart-action">{startActions?.(flow.busy)}{onBack && <button className="button button-secondary" type="button" disabled={flow.busy} onClick={onBack}>Kembali</button>}{flow.error && <p role="alert">{flow.error}</p>}<button className="button button-primary" type="button" disabled={flow.busy} onClick={() => void flow.start(startBody)}>Mulai Try Out</button></div>{info.error && <p className="tryout-prestart-error" role="alert">{info.error}</p>}</div></section>;
   if (!attempt) return <section className={className}><header className="learning-question-head"><h1>{title}</h1></header>{flow.error && <p role="alert">{flow.error}</p>}<button className="button button-primary" type="button" disabled={flow.busy || domain === "placement"} onClick={() => void flow.start(startBody)}>Mulai</button></section>;
   if (domain === "tryout" && attempt.status === "completed" && result && !reviewing) return (
     <section className="tryout-result-page">
@@ -155,7 +155,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
     const answered = questions.filter(item => Boolean(flow.answers[item.id])).length;
     const unanswered = questions.length - answered;
     return <section className="tryout-answer-check" aria-busy={Boolean(confirming)}>
-      <header><h1 ref={checkHeading} tabIndex={-1}>Pemeriksaan Jawaban</h1><p>{title} • Attempt {attempt.id}</p><p>Total Soal: {questions.length} • Terjawab: {answered} • Belum Dijawab: {unanswered}</p></header>
+      <header><h1 ref={checkHeading} tabIndex={-1}>Periksa Jawaban</h1><p>{title} • Attempt {attempt.id}</p><p>Total Soal: {questions.length} • Terjawab: {answered} • Belum Dijawab: {unanswered}</p></header>
       {tryOutTimer}
       {flow.error && <p role="alert">{flow.error}{remaining === 0 && <button type="button" disabled={flow.busy} onClick={() => void flow.expire()}>Coba Lagi</button>}</p>}
       <div className="tryout-check-sessions">{assessmentSessions.map((session, section) => {
@@ -185,7 +185,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
   return (
     <div className={domain === "tryout" ? `${className} tryout-runner-polished` : className}>
       <header className="learning-question-head">
-        {domain === "tryout" ? <><h1>Soal {Math.min(index + 1, questions.length)} dari {questions.length}</h1><p>{title}{sessionLabel ? ` • ${sessionLabel}` : ""}</p><p className="tryout-runner-status">{questions.filter(item => flow.answers[item.id]).length} / {questions.length} Terjawab<span role="status">{saveStatus}</span></p></> : <h1>{title}</h1>}
+        {domain === "tryout" ? <><h1>{reviewing ? "Review Jawaban · " : ""}Soal {Math.min(index + 1, questions.length)} dari {questions.length}</h1><p>{title}{sessionLabel ? ` • ${sessionLabel}` : ""}</p><p className="tryout-runner-status">{questions.filter(item => flow.answers[item.id]).length} / {questions.length} Terjawab<span role="status">{saveStatus}</span></p></> : <h1>{title}</h1>}
         {tryOutTimer}
         {domain !== "tryout" && remaining !== null && (
           <div className="checkpoint-timer" role="timer">
@@ -211,7 +211,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
               <fieldset disabled={Boolean((scope || domain === "tryout") && remaining === 0) || reviewing || flow.submitting || (domain !== "tryout" && flow.busy) || attempt.status === "completed"}>
                 <legend className="sr-only">Pilihan jawaban</legend>
                 {Object.entries(question.options).map(([option, label]) => (
-                  <label key={option} className={flow.answers[question.id] === option ? "selected" : ""}>
+                  <label key={option} className={domain === "tryout" && reviewing && attempt.status === "completed" ? option === question.correct_option ? "review-correct" : flow.answers[question.id] === option ? "review-wrong" : "" : flow.answers[question.id] === option ? "selected" : ""}>
                     <input
                       type="radio"
                       name={`answer-${question.id}`}
@@ -219,11 +219,13 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
                       onChange={() => flow.answer(question.id, option)}
                     />
                     {domain === "tryout" ? <><span className="tryout-option-letter">{option}.</span>{" "}<span className="tryout-option-text">{label}</span></> : <span>{option}. {label}</span>}
+                    {domain === "tryout" && reviewing && attempt.status === "completed" && (option === question.correct_option ? <strong className="tryout-review-label">{flow.answers[question.id] === option ? "Jawaban kamu · Benar" : "Jawaban benar"}</strong> : flow.answers[question.id] === option ? <strong className="tryout-review-label">Jawaban kamu · Salah</strong> : null)}
                   </label>
                 ))}
               </fieldset>
-              {reviewing && (
+              {reviewing && attempt.status === "completed" && (
                 <section>
+                  {domain === "tryout" && !flow.answers[question.id] && <p>Tidak dijawab</p>}
                   <p>Jawaban benar: {question.correct_option ? question.options[question.correct_option] : "—"}</p>
                   {question.explanation && <p>{question.explanation}</p>}
                 </section>
@@ -249,6 +251,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
                     Selanjutnya
                   </button>
                 )}
+                {domain === "tryout" && isLast && questions.length > 0 && <button type="button" className="button button-primary" disabled={flow.submitting} onClick={() => navigateTryOut(index, true)}>Periksa Jawaban</button>}
                 {domain !== "tryout" && isLast && questions.length > 0 && (
                   <button type="button" className="button button-primary" disabled={flow.busy || Boolean(flow.error) || !allAnswered} onClick={() => void flow.submit()}>
                     Kumpulkan Jawaban
@@ -278,7 +281,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
             </div>
             {domain === "tryout" && sessionQuestions.length > 25 && <footer className="tryout-navigator-pages"><button type="button" aria-label="Halaman soal sebelumnya" disabled={navigatorPage === 0} onClick={() => setIndex(questions.findIndex(item => item.id === sessionQuestions[(navigatorPage - 1) * 25]?.id))}><FiArrowLeft aria-hidden="true" /></button><span>{navigatorPage + 1} / {Math.ceil(sessionQuestions.length / 25)}</span><button type="button" aria-label="Halaman soal selanjutnya" disabled={(navigatorPage + 1) * 25 >= sessionQuestions.length} onClick={() => setIndex(questions.findIndex(item => item.id === sessionQuestions[(navigatorPage + 1) * 25]?.id))}><FiArrowRight aria-hidden="true" /></button></footer>}
           </nav>
-          {domain === "tryout" ? <><h2>PILIH SESI</h2><div className="tryout-session-list">{assessmentSessions.map((session, position) => <button type="button" key={session} aria-pressed={sessionIndex === position} disabled={!questions.some(item => item.session === session)} onClick={() => setIndex(questions.findIndex(item => item.session === session))}>{assessmentSessionLabels[position]}</button>)}</div>{!reviewing && attempt.status !== "completed" && <div className="tryout-sidebar-actions">{questions.length > 0 && <button type="button" className="button button-primary" disabled={flow.submitting} onClick={() => navigateTryOut(index, true)}>Selesaikan Try Out</button>}{onBack && <button type="button" className="button button-secondary" disabled={flow.busy} onClick={onBack}>Keluar Sesi</button>}</div>}</> : <span role="status">{saveStatus}</span>}
+          {domain === "tryout" ? <><h2>PILIH SESI</h2><div className="tryout-session-list">{assessmentSessions.map((session, position) => <button type="button" key={session} aria-pressed={sessionIndex === position} disabled={!questions.some(item => item.session === session)} onClick={() => setIndex(questions.findIndex(item => item.session === session))}>{assessmentSessionLabels[position]}</button>)}</div>{!reviewing && attempt.status !== "completed" && <div className="tryout-sidebar-actions">{questions.length > 0 && <button type="button" className="button button-primary" disabled={flow.submitting} onClick={() => navigateTryOut(index, true)}>Periksa Jawaban</button>}{onBack && <button type="button" className="button button-secondary" disabled={flow.busy} onClick={onBack}>Keluar Sesi</button>}</div>}</> : <span role="status">{saveStatus}</span>}
         </aside>
       </div>
     </div>

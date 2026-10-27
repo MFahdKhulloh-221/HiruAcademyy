@@ -781,3 +781,24 @@
     transform: none;
   }
 }
+/* Compact Try Out header only; other assessment domains retain existing layout. */
+.tryout-runner-polished .learning-question-head { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 16px; margin: 0 0 16px; padding: 0; }
+.tryout-runner-polished .learning-question-head h1 { margin: 0; font-size: clamp(20px, 2vw, 26px); line-height: 1.3; }
+.tryout-runner-polished .learning-question-head > p { grid-column: 1; margin: 0; font-size: 13px; line-height: 1.4; }
+.tryout-runner-polished .learning-question-head .checkpoint-timer { grid-column: 2; grid-row: 1 / 4; align-self: center; position: static; margin: 0; padding: 8px 12px; min-width: 100px; }
+.tryout-runner-polished .learning-question-head .checkpoint-timer strong { font-size: 22px; }
+.tryout-runner-polished .learning-question-card label.review-correct { border-color: #32643a; background: #eaf3e7; color: #254e2b; }
+.tryout-runner-polished .learning-question-card label.review-wrong { border-color: #a32b32; background: #fff0f0; color: #8b2028; }
+.tryout-runner-polished .tryout-review-label { font-size: 12px; margin-left: auto; }
+@media (max-width: 639px) {
+  .tryout-runner-polished .learning-question-head { gap: 4px 8px; }
+  .tryout-runner-polished .learning-question-head .checkpoint-timer { padding: 6px 8px; min-width: 84px; }
+  .tryout-runner-polished .learning-question-head .checkpoint-timer small { display: none; }
+  .tryout-runner-polished .learning-question-card label { flex-wrap: wrap; }
+  .tryout-runner-polished .tryout-review-label { flex-basis: 100%; margin-left: 0; }
+}
+/* Try Out menu scrolls with page, never floats over questions or answer checks. */
+@media (max-width: 800px) {
+  .student-shell:has(.sensei-tryout) .student-mobile-trigger { position: absolute; }
+  .supporting-main:has(.sensei-tryout) { padding-top: 76px !important; }
+}
