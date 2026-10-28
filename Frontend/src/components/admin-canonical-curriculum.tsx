@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useRef, useState, type FormEvent } from "react";
-import { AdminDataTable, AdminDialog, AdminPageHeader, AdminSection, AdminStatusBadge } from "@/components/admin-primitives";
+import { AdminDataTable, AdminDialog, AdminSection, AdminStatusBadge } from "@/components/admin-primitives";
+import { AdminJourneyToolbar } from "@/components/admin-journey-toolbar";
 import { useLearningRequest } from "@/components/learning-hooks";
 import { adminLearningContext, adminLearningDelete, adminLearningList, adminLearningSave, type AdminChapter, type AdminFlashcard } from "@/lib/admin-learning-api";
 
-export function AdminCanonicalCurriculum({ flashcards = false, nested = false }: { flashcards?: boolean; nested?: boolean }) {
+export function AdminCanonicalCurriculum({ flashcards = false }: { flashcards?: boolean; nested?: boolean }) {
   const resource = flashcards ? "flashcards" : "chapters";
   const load = useCallback(async (signal: AbortSignal) => {
     const context = await adminLearningContext(signal);
@@ -18,9 +19,14 @@ export function AdminCanonicalCurriculum({ flashcards = false, nested = false }:
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const pending = useRef(false);
+  const [selectedProgram, setProgram] = useState("");
+  const program = selectedProgram || (!flashcards ? String(request.data?.programs[0]?.id ?? "") : "");
+  const [chapter, setChapter] = useState("");
+  const chapters = request.data?.chapters.filter(item => !program || String(item.program_id) === program) ?? [];
+  const visible = request.data?.rows.filter(row => "chapter_id" in row ? chapters.some(item => item.id === row.chapter_id) && (!chapter || String(row.chapter_id) === chapter) : !program || String(row.program_id) === program) ?? [];
   function edit(row?: AdminChapter | AdminFlashcard) {
     setId(row?.id); setError("");
-    setDraft(flashcards ? { chapter_id: String(row && "chapter_id" in row ? row.chapter_id : request.data?.chapters[0]?.id ?? ""), japanese: row && "japanese" in row ? row.japanese : "", reading: row && "reading" in row ? row.reading : "", meaning: row && "meaning" in row ? row.meaning : "", example: row && "example" in row ? row.example ?? "" : "", sort_order: String(row?.sort_order ?? 0), status: row?.status ?? "draft" } : { program_id: String(row && "program_id" in row ? row.program_id : request.data?.programs[0]?.id ?? ""), chapter_number: String(row && "chapter_number" in row ? row.chapter_number : 1), title: row && "title" in row ? row.title : "", description: row && "description" in row ? row.description ?? "" : "", sort_order: String(row?.sort_order ?? 0), status: row?.status ?? "draft" });
+    setDraft(flashcards ? { chapter_id: String(row && "chapter_id" in row ? row.chapter_id : chapter || chapters[0]?.id || ""), japanese: row && "japanese" in row ? row.japanese : "", reading: row && "reading" in row ? row.reading : "", meaning: row && "meaning" in row ? row.meaning : "", example: row && "example" in row ? row.example ?? "" : "", sort_order: String(row?.sort_order ?? 0), status: row?.status ?? "draft" } : { program_id: String(row && "program_id" in row ? row.program_id : program || request.data?.programs[0]?.id || ""), chapter_number: String(row && "chapter_number" in row ? row.chapter_number : 1), title: row && "title" in row ? row.title : "", description: row && "description" in row ? row.description ?? "" : "", sort_order: String(row?.sort_order ?? 0), status: row?.status ?? "draft" });
   }
   async function save(event: FormEvent) {
     event.preventDefault();
@@ -41,7 +47,7 @@ export function AdminCanonicalCurriculum({ flashcards = false, nested = false }:
     catch (cause) { setError(cause instanceof Error ? cause.message : "Permintaan belum berhasil."); }
     finally { pending.current = false; setBusy(false); }
   }
-  return <div className="curriculum-tab-content"><AdminPageHeader headingLevel={nested ? 2 : 1} title={flashcards ? "Flashcard" : "Kurikulum"} actions={<button type="button" className="button button-primary" disabled={!request.data || busy} onClick={() => edit()}>Tambah {flashcards ? "Kartu" : "Chapter"}</button>} />{(error || request.error) && <p role="alert">{error || request.error}</p>}{request.error && <button type="button" onClick={request.retry}>Coba Lagi</button>}{(!request.error || request.data) && <AdminSection><AdminDataTable<AdminChapter | AdminFlashcard> loading={request.loading && !request.data} caption={flashcards ? "Flashcard" : "Chapter"} rows={request.data?.rows ?? []} rowKey={row => String(row.id)} columns={[
+  return <div className="curriculum-tab-content"><AdminJourneyToolbar requireProgram={!flashcards} programs={request.data?.programs ?? []} chapters={flashcards ? request.data?.chapters ?? [] : undefined} program={program} chapter={chapter} onProgram={value => { setProgram(value); setChapter(""); }} onChapter={setChapter}><button type="button" className="button button-primary" disabled={!request.data || busy} onClick={() => edit()}>+ Tambah {flashcards ? "Kartu" : "Chapter"}</button></AdminJourneyToolbar>{(error || request.error) && <p role="alert">{error || request.error}</p>}{request.error && <button type="button" onClick={request.retry}>Coba Lagi</button>}{(!request.error || request.data) && <AdminSection><AdminDataTable<AdminChapter | AdminFlashcard> loading={request.loading && !request.data} caption={flashcards ? "Flashcard" : "Chapter"} rows={visible} empty="Belum ada konten untuk filter ini." rowKey={row => String(row.id)} columns={[
     { key: "title", header: flashcards ? "Japanese" : "Judul", cell: row => "japanese" in row ? <ruby>{row.japanese}<rt>{row.reading}</rt></ruby> : row.title },
     { key: "parent", header: "Konteks", cell: row => "chapter_id" in row ? request.data?.chapters.find(item => item.id === row.chapter_id)?.title : request.data?.programs.find(item => item.id === row.program_id)?.name },
     { key: "order", header: "Urutan", cell: row => row.sort_order },
@@ -49,6 +55,6 @@ export function AdminCanonicalCurriculum({ flashcards = false, nested = false }:
   ]} actions={{ cell: row => <div className="admin-page-actions"><button type="button" disabled={busy} onClick={() => edit(row)}>Edit</button><button type="button" disabled={busy} onClick={() => void remove(row.id)}>Hapus</button></div> }} /></AdminSection>}<AdminDialog open={Boolean(draft)} title={flashcards ? "Flashcard" : "Chapter"} close={() => { if (!busy) setDraft(null); }}>{draft && <form className="admin-prototype-form" onSubmit={save}>
     <label className="admin-field">{flashcards ? "Chapter" : "Program"}<select required value={draft[flashcards ? "chapter_id" : "program_id"]} onChange={event => setDraft({ ...draft, [flashcards ? "chapter_id" : "program_id"]: event.target.value })}>{(flashcards ? request.data?.chapters : request.data?.programs)?.map(item => <option value={item.id} key={item.id}>{"title" in item ? item.title : item.name}</option>)}</select></label>
     {Object.entries(draft).filter(([key]) => !["chapter_id", "program_id", "status"].includes(key)).map(([key, value]) => <label className="admin-field" key={key}>{({ title: "Judul", description: "Deskripsi", chapter_number: "Chapter", japanese: "Japanese", reading: "Bacaan", meaning: "Arti", example: "Contoh kalimat", sort_order: "Urutan" } as Record<string, string>)[key]}<input required={!["description", "example"].includes(key)} type={["sort_order", "chapter_number"].includes(key) ? "number" : "text"} placeholder={({ japanese: "Contoh: 学校", reading: "Contoh: がっこう", meaning: "Contoh: Sekolah", example: "Contoh: 毎日学校へ行きます。", ...(flashcards ? { sort_order: "Contoh: 1" } : {}) } as Record<string, string>)[key]} value={value} onChange={event => setDraft({ ...draft, [key]: event.target.value })} /></label>)}
-    <label className="admin-field">Status<select value={draft.status} onChange={event => setDraft({ ...draft, status: event.target.value })}><option value="draft">Draft</option><option value="published">Published</option></select></label>{error && <p role="alert">{error}</p>}<button className="button button-primary" type="submit" disabled={busy}>Simpan</button>
+    <label className="admin-field">Status<select value={draft.status} onChange={event => setDraft({ ...draft, status: event.target.value })}><option value="draft">Draft</option><option value="published">Published</option></select></label>{error && <p role="alert">{error}</p>}<button type="button" className="button" disabled={busy} onClick={() => setDraft(null)}>Batal</button><button className="button button-primary" type="submit" disabled={busy}>Simpan</button>
   </form>}</AdminDialog></div>;
 }

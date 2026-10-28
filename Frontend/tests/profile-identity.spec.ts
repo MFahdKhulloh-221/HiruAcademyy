@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 const student = { id: 901, name: "Sakura Tanaka", email: "sakura@example.test", whatsapp: "081234567890", role: "student", avatar_resolved_url: null as string | null };
 
 async function catalog(page: Page) {
+  await page.route("**/api/student/dashboard", route => route.fulfill({ json: { data: { programs: [], chapters: [], access: { learning: { n5: "full" }, replay_levels: [], source_grants: [{ plan_code: "lms", program_code: "n5" }] } } } }));
   await page.route("**/api/public/programs", route => route.fulfill({ json: { data: [] } }));
   await page.route("**/api/student/access", route => route.fulfill({ json: { data: { learning: { n5: "full" }, replay_levels: [], source_grants: [{ plan_code: "lms", program_code: "n5" }] } } }));
   await page.route("**/api/student/notifications", route => route.fulfill({ json: { data: [] } }));
@@ -30,12 +31,13 @@ test("profile avatar refresh keeps draft, busy state and feedback; testimonial s
     await route.fulfill({ status: 204 });
   });
   await page.goto("/profile?membership=lms#pengaturan");
+  await page.getByRole("button", { name: "Ubah Profil", exact: true }).click();
   await page.getByLabel("Nama Lengkap", { exact: true }).fill("Unsaved draft");
   const draft = await page.getByLabel("Nama Lengkap", { exact: true }).elementHandle();
   finish = () => undefined;
   await page.locator("#profile-photo").setInputFiles("tests/fixtures/sample.png");
   await expect.poll(() => refreshStarted).toBe(true);
-  await expect(page.getByRole("button", { name: "Mengunggah..." })).toHaveCount(1);
+  await expect(page.getByRole("button", { name: "Mengunggah?" })).toHaveCount(1);
   await expect(page.getByLabel("Nama Lengkap", { exact: true })).toHaveValue("Unsaved draft");
   expect(await draft!.evaluate(element => element.isConnected)).toBe(true);
   const release = finish;

@@ -1,0 +1,84 @@
+import { expect, test } from "@playwright/test";
+
+for (const kind of ["reading", "mini", "tryout"] as const) for (const width of [1440, 768, 390]) {
+  test(`${kind} review ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    let completed = false;
+    let failReview = false;
+    let empty = false;
+    const questions = [1, 2, 3, 4].map(id => ({ id, session: "vocabulary_kanji", question: `Pertanyaan ${id}`, options: { A: "Pilihan A", B: "Pilihan B dengan teks panjang ".repeat(8), C: "Pilihan C" } }));
+    const answers = { 1: "A", 2: "B" };
+    const result = { correct: 1, wrong: 1, unanswered: 2, percentage: 25 };
+    let writes = 0;
+    await page.route(/\/(api\/|sanctum\/csrf-cookie)/, async route => {
+      const path = new URL(route.request().url()).pathname;
+      const method = route.request().method();
+      const headers = { "access-control-allow-origin": "http://localhost:3000", "access-control-allow-credentials": "true", "access-control-allow-methods": "GET, OPTIONS", "access-control-allow-headers": "accept, content-type, x-xsrf-token" };
+      const reply = (data: unknown) => route.fulfill({ headers, json: { data } });
+      if (method === "OPTIONS") return route.fulfill({ status: 204, headers });
+      if (method !== "GET") writes++;
+      if (path === "/api/me") return reply({ id: 71, name: "Siswa", email: "student@example.test", whatsapp: "628123456789", role: "student", account_status: "active" });
+      if (path === "/api/student/dashboard") return reply({ programs: [{ id: 1, code: "n5", name: "JLPT N5", family: "jlpt" }], access: { learning: { n5: "full" }, replay_levels: [], source_grants: [{ plan_code: "lms", program_code: "n5" }] }, chapters: [] });
+      if (path === "/api/student/access") return reply({ learning: { n5: "full" }, replay_levels: [], source_grants: [{ plan_code: "lms", program_code: "n5" }] });
+      if (path.includes("/attempts/9")) {
+        const review = path.endsWith("/review");
+        if (review && failReview) return route.fulfill({ headers, status: 503, json: {} });
+        expect(!review || completed).toBe(true);
+        return reply({ id: 9, kind, session: 1, part: 1, chapter_id: 11, status: completed ? "completed" : "in_progress", revision: 0, answers, result: completed ? result : null, questions: empty ? [] : questions.map(q => review ? { ...q, correct_option: q.id === 4 ? undefined : "A", explanation: q.id === 4 ? undefined : "<strong>Penjelasan backend</strong><em>Italic</em><u>Underline</u><ruby>\u5b66\u6821<rt>\u304c\u3063\u3053\u3046</rt></ruby>" } : { ...q, correct_option: "A", explanation: "Rahasia belum diizinkan" }) });
+      }
+      const detail = { id: 2, title: "Server Try Out", level: "N5", max_score: 180, duration_minutes: null, sessions: { vocabulary: "Kosakata" } };
+      if (path === "/api/student/try-outs") return reply([detail]);
+      if (path === "/api/student/try-outs/2") return reply(detail);
+      if (path.endsWith("/history")) return reply({ best_score: null, attempts: [] });
+      const chapter = { id: 11, chapter_number: 1, title: "Chapter Satu", access: "full", sort_order: 1, mini_checkpoint: { exists: true }, mini_checkpoints: [{ session: 1, part: 1, duration_minutes: 10, passing_score: 70, question_count: 4, configuration_valid: true }] };
+      if (path.endsWith("/chapters")) return reply([chapter]);
+      if (path.endsWith("/progress")) return reply({ chapter_id: 11, activities: {}, mini_unlocked: true, mini_eligible: true });
+      if (path.endsWith("/chapters/11")) return reply(chapter);
+      return reply([]);
+    });
+    const url = kind === "mini" ? "/learn/n5/chapter-1/checkpoint?attempt=9&attempt_scope=71/1/11/mini/1/1" : kind === "reading" ? "/learn/n5/chapter-1/reading?attempt=9" : "/tryout?tryout=2&attempt=9";
+    await page.goto(url);
+    await expect(page.getByRole("heading", { name: "Pertanyaan 1", exact: true })).toBeVisible();
+    await expect(page.locator(".review-correct, .review-wrong, .tryout-review-label")).toHaveCount(0);
+    await expect(page.getByText("Rahasia belum diizinkan", { exact: true })).toHaveCount(0);
+    completed = true;
+    await page.reload();
+    const openReview = page.getByRole("button", { name: "Review Jawaban", exact: true });
+    failReview = true;
+    await openReview.click();
+    await expect(page.getByRole("alert").filter({ hasText: "Permintaan belum berhasil" })).toBeVisible();
+    failReview = false;
+    await openReview.click();
+    const card = page.locator(".answer-review .learning-question-card");
+    await expect(card.locator("label.review-correct")).toContainText("Jawaban kamu \u00b7 Benar");
+    await expect(card.locator(".tryout-review-label")).toHaveCount(1);
+    expect(await card.locator("label.review-correct").evaluate(el => getComputedStyle(el).backgroundColor)).toBe("rgb(234, 243, 231)");
+    await expect(page.getByText(/Keterangan: Jawaban benar/)).toBeVisible();
+    await expect(card.locator("strong").filter({ hasText: "Penjelasan backend" })).toBeVisible();
+    await expect(card.locator("ruby rt")).toHaveText("\u304c\u3063\u3053\u3046");
+    await expect(card.locator("em")).toHaveText("Italic");
+    await expect(card.locator("u")).toHaveText("Underline");
+    await page.getByRole("navigation", { name: "Navigasi soal" }).getByRole("button", { name: "Soal 2", exact: true }).click();
+    await expect(card.locator("label.review-wrong")).toBeVisible();
+    await page.getByRole("button", { name: "Sebelumnya", exact: true }).click();
+    await page.getByRole("button", { name: "Selanjutnya", exact: true }).click();
+    await expect(card.locator("label.review-wrong")).toContainText("Jawaban kamu \u00b7 Salah");
+    await expect(card.locator("label.review-correct")).toContainText("Jawaban benar");
+    expect(await card.locator("label.review-wrong").evaluate(el => getComputedStyle(el).backgroundColor)).toBe("rgb(255, 240, 240)");
+    await expect(card.locator("label:not(.review-correct):not(.review-wrong)")).toHaveCount(1);
+    for (const radio of await card.getByRole("radio").all()) await expect(radio).toBeDisabled();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.getByRole("button", { name: "Selanjutnya", exact: true }).click();
+    await expect(card.getByText("Tidak dijawab", { exact: true })).toBeVisible();
+    await expect(card.locator("label.review-wrong")).toHaveCount(0);
+    await page.getByRole("button", { name: "Selanjutnya", exact: true }).click();
+    await expect(card.locator("label.review-correct")).toHaveCount(0);
+    await expect(card.getByText("Jawaban benar: —", { exact: true })).toBeVisible();
+    await page.getByRole("button", { name: "Kembali ke Hasil", exact: true }).click();
+    empty = true;
+    await openReview.click();
+    await expect(page.locator(".answer-review-legend")).toBeVisible();
+    await expect(card).toHaveCount(0);
+    expect(writes).toBe(0);
+  });
+}

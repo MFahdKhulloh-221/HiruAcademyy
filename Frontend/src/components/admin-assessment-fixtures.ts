@@ -25,6 +25,7 @@ export type AdminAssessmentQuestion = {
   status: "Draft" | "Published";
 };
 export type AdminAssessment = {
+  accessType?: "free" | "membership";
   id: string;
   kind: AdminAssessmentKind;
   title: string;

@@ -14,6 +14,7 @@ for (const width of [1440, 390]) {
       const reply = (data: unknown, status = 200) => route.fulfill({ status, headers, json: { data } });
       if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers });
       if (path === "/api/me") return reply({ id: 901, name: "Sakura Tanaka", email: "sakura@example.test", whatsapp: "081234567890", role: "student", account_status: "active", avatar_resolved_url: avatar });
+      if (path === "/api/student/dashboard") return reply({ programs: [{ id: 1, code: "n5", name: "JLPT N5", family: "jlpt" }], access: { learning: { n5: "full" }, replay_levels: [], source_grants: [{ plan_code: "lms", program_code: "n5" }] }, chapters: [] });
       if (path === "/api/student/access") return reply({ learning: { n5: "full" }, replay_levels: [], source_grants: [{ plan_code: "lms", program_code: "n5" }] });
       if (path === "/api/student/profile/avatar") {
         if (route.request().method() === "POST") uploads++; else deletes++;
@@ -25,8 +26,8 @@ for (const width of [1440, 390]) {
     });
     await page.route("**/profile-fixture.png", route => route.fulfill({ path: "tests/fixtures/sample.png", contentType: "image/png" }));
     await page.goto("/profile?membership=lms");
-    await expect(page.getByRole("heading", { name: "Profil dan status belajarmu" })).toBeVisible();
-    await expect(page.getByRole("button", { name: "Ganti Foto Profil", exact: true })).toHaveCount(1);
+    await expect(page.getByRole("heading", { name: "Profil", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Ganti Foto", exact: true })).toHaveCount(1);
     const navigation = width === 390 ? page.getByRole("complementary", { name: "Navigasi siswa seluler" }) : page.locator(".student-nav-desktop");
     if (width === 390) await page.getByRole("button", { name: "Buka navigasi" }).click();
     await expect(navigation.getByRole("link", { name: "Profil Saya", exact: true })).toHaveAttribute("aria-current", "page");
@@ -35,12 +36,12 @@ for (const width of [1440, 390]) {
     await navigation.getByRole("link", { name: "Profil Saya", exact: true }).click();
     if (width === 390) await expect(navigation).toHaveCount(0);
     await page.getByRole("button", { name: "Profil akun", exact: true }).click();
-    await expect(page.getByRole("button", { name: "Ganti Foto Profil", exact: true })).toHaveCount(1);
+    await expect(page.getByRole("button", { name: "Ganti Foto", exact: true })).toHaveCount(1);
     await page.getByRole("link", { name: "Kelola Foto Profil" }).click();
-    await expect(page).toHaveURL(/#pengaturan$/);
+    await expect(page).toHaveURL(/#foto-profil$/);
     const input = page.locator("#profile-photo");
     const chooser = page.waitForEvent("filechooser");
-    await page.getByRole("button", { name: "Ganti Foto Profil", exact: true }).click();
+    await page.getByRole("button", { name: "Ganti Foto", exact: true }).click();
     await (await chooser).setFiles({ name: "bad.txt", mimeType: "text/plain", buffer: Buffer.from("bad") });
     await expect(page.getByRole("alert").filter({ hasText: "format JPEG" })).toBeVisible();
     expect(uploads).toBe(0);
@@ -48,9 +49,10 @@ for (const width of [1440, 390]) {
       failure = status;
       await input.setInputFiles("tests/fixtures/sample.png");
       await expect(page.locator(".profile-settings-error")).toBeVisible();
-      await expect(page.getByRole("button", { name: "Ganti Foto Profil", exact: true })).toBeEnabled();
+      await expect(page.getByRole("button", { name: "Ganti Foto", exact: true })).toBeEnabled();
     }
     failure = 0;
+    await page.getByRole("button", { name: "Ubah Profil", exact: true }).click();
     await page.getByLabel("Nama Lengkap", { exact: true }).fill("Draft tetap ada");
     await input.setInputFiles("tests/fixtures/sample.png");
     await expect(page.locator(".profile-settings-success")).toBeVisible();
@@ -60,12 +62,13 @@ for (const width of [1440, 390]) {
     await expect(page.locator(".profile-identity img")).toHaveAttribute("src", /profile-fixture.png$/);
     await expect(page.getByRole("button", { name: "Hapus Foto", exact: true })).toHaveCount(1);
     await page.screenshot({ path: testInfo.outputPath(`profile-${width}.png`), fullPage: true });
-    await page.locator('[aria-labelledby="profile-photo-title"]').screenshot({ path: testInfo.outputPath(`avatar-${width}.png`) });
+    await page.locator("#foto-profil").screenshot({ path: testInfo.outputPath(`avatar-${width}.png`) });
     await page.getByRole("button", { name: "Hapus Foto", exact: true }).click();
     await expect(page.locator(".profile-identity img")).toHaveCount(0);
     expect(deletes).toBe(1);
     await expect(page.locator(".profile-settings-success")).toBeVisible();
-    await expect(page.getByRole("heading", { name: "Informasi Pribadi" })).toBeVisible();
+    await page.getByRole("button", { name: "Ubah Profil", exact: true }).click();
+    await expect(page.getByRole("tab", { name: "Data Pribadi", exact: true })).toHaveAttribute("aria-selected", "true");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 }

@@ -1,11 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { AdminJourneyHeader, AdminJourneyToolbar } from "@/components/admin-journey-toolbar";
 import { LuSearch } from "react-icons/lu";
 import { AdminMediaUpload, AdminVideoPreview } from "@/components/admin-media-upload";
 import { validVideoReference } from "@/lib/admin-media";
 import { adminLearningContext, adminLearningDelete, adminLearningList, adminLearningSave, type AdminMedia } from "@/lib/admin-learning-api";
-import { AdminDataTable, AdminDialog, AdminFilterToolbar, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge } from "@/components/admin-primitives";
+import { AdminDataTable, AdminDialog, AdminFilterToolbar, AdminSection, AdminShell, AdminStatusBadge } from "@/components/admin-primitives";
 
 export const learningMediaContexts = ["DASAR", "N5", "N4", "N3", "N2", "N1", "SSW", "Interview"] as const;
 export type LearningMedia = {
@@ -75,7 +76,8 @@ export function AdminLearningMediaWorkspace({ kind, initialRows }: { kind: "Vide
   const [view, setView] = useState<LearningMedia | null>(null);
   const [deleting, setDeleting] = useState<LearningMedia | null>(null);
   const [search, setSearch] = useState("");
-  const [context, setContext] = useState("");
+  const [program, setProgram] = useState("");
+  const [chapter, setChapter] = useState("");
   const [status, setStatus] = useState("");
   const [type, setType] = useState("");
   const [error, setError] = useState("");
@@ -85,7 +87,7 @@ export function AdminLearningMediaWorkspace({ kind, initialRows }: { kind: "Vide
   const closeView = useCallback(() => setView(null), []);
   const closeDelete = useCallback(() => setDeleting(null), []);
   const query = search.trim().toLowerCase();
-  const visible = rows.filter((row) => (!context || row.context === context) && (!status || row.status === status) && (!type || row.type === type) && [row.title, row.description, row.chapter, row.filename, row.context].some((value) => value.toLowerCase().includes(query))).sort((a, b) => Number(a.order) - Number(b.order));
+  const visible = rows.filter((row) => (!program || String(row.programId) === program) && (!chapter || String(row.chapterId) === chapter) && (!status || row.status === status) && (!type || row.type === type) && [row.title, row.description, row.chapter, row.filename, row.context].some((value) => value.toLowerCase().includes(query))).sort((a, b) => Number(a.order) - Number(b.order));
   function edit(row: LearningMedia) { setError(""); setDraft({ ...row }); }
   async function persist(item: LearningMedia) {
     const chapter = parents?.chapters.find(parent => parent.id === item.chapterId && parent.program_id === item.programId);
@@ -110,15 +112,17 @@ export function AdminLearningMediaWorkspace({ kind, initialRows }: { kind: "Vide
     catch (cause) { setError(cause instanceof Error ? cause.message : "Permintaan belum berhasil."); }
     finally { setBusy(false); }
   }
-  return <AdminShell current={video ? "/admin/video-lesson" : "/admin/modul"}><main className="admin-public-prototype admin-learning-media-prototype">
-    <AdminPageHeader title={kind} actions={<button className="button button-primary" type="button" onClick={() => edit({ id: crypto.randomUUID(), title: "", description: "", context: "N4", chapter: "", type: video ? "Video" : "Umum", file: null, filename: "", url: "", duration: "", order: String(rows.length + 1), status: "Draft" })}>Tambah {kind}</button>} />
+  return <AdminShell current={video ? "/admin/video-lesson" : "/admin/modul"}><main className="admin-page curriculum-admin-page admin-learning-media-prototype">
+    <AdminJourneyHeader tab={video ? "Video Lesson" : "Modul"} />
+    <AdminJourneyToolbar programs={parents?.programs ?? []} chapters={parents?.chapters ?? []} program={program} chapter={chapter} onProgram={value => { setProgram(value); setChapter(""); }} onChapter={setChapter}>
+      <button className="button button-primary" type="button" disabled={!parents || busy} onClick={() => edit({ id: crypto.randomUUID(), title: "", description: "", context: "", chapter: "", programId: program ? Number(program) : undefined, chapterId: chapter ? Number(chapter) : undefined, type: video ? "Video" : "Umum", file: null, filename: "", url: "", duration: "", order: String(rows.length + 1), status: "Draft" })}>+ Tambah {kind}</button>
+    </AdminJourneyToolbar>
     <p role="status">{message}</p>{error && !draft && <p role="alert">{error}</p>}
     <AdminSection><AdminFilterToolbar>
       <label className="admin-search-box admin-learning-media-search"><input type="search" aria-label={`Cari ${kind}`} value={search} onChange={(event) => setSearch(event.target.value)} /><span aria-hidden="true"><LuSearch /></span></label>
-      <label className="admin-field">Konteks<select value={context} onChange={(event) => setContext(event.target.value)}><option value="">Semua</option>{learningMediaContexts.map((value) => <option key={value}>{value}</option>)}</select></label>
       {!video && <label className="admin-field">Jenis<select value={type} onChange={(event) => setType(event.target.value)}><option value="">Semua</option>{["Tata Bahasa", "Huruf/Kanji", "Umum"].map((value) => <option key={value}>{value}</option>)}</select></label>}
       <label className="admin-field">Status<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Semua</option><option>Draft</option><option>Published</option></select></label>
-    </AdminFilterToolbar><AdminDataTable loading={loading && !parents} caption={kind} rows={visible} rowKey={(row) => row.id} columns={[
+    </AdminFilterToolbar><AdminDataTable loading={loading && !parents} caption={kind} empty="Belum ada konten untuk filter ini." rows={visible} rowKey={(row) => row.id} columns={[
       { key: "title", header: "Judul", cell: (row) => row.title },
       { key: "context", header: "Konteks", cell: (row) => `${row.context} • ${row.chapter}` },
       { key: "type", header: "Jenis", cell: (row) => row.type },

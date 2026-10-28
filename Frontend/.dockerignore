@@ -1,0 +1,11 @@
+node_modules/
+.next/
+out/
+.env*
+!.env.production.example
+playwright/.auth/
+playwright-report/
+test-results/
+*.log
+*.pem
+*.key

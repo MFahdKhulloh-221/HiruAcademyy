@@ -1,0 +1,38 @@
+.reading-assessment .reading-panels { grid-template-columns: minmax(0, 1fr); }
+.reading-assessment .reading-panels > div,
+.reading-assessment .reading-panels main { min-width: 0; }
+.reading-assessment .reading-passage,
+.reading-assessment .learning-question-card { overflow-wrap: anywhere; }
+.reading-assessment .reading-passage { margin-bottom: 0; }
+.reading-assessment .reading-passage > p { white-space: pre-wrap; }
+.reading-assessment .reading-passage > .reading-instruction { font-size: 16px; line-height: 1.6; }
+.reading-assessment .reading-passage:focus-visible { outline: 2px solid var(--orange-dark); outline-offset: 3px; }
+.reading-assessment .learning-question-card { margin-top: 0; }
+.reading-assessment .learning-question-card fieldset { min-inline-size: 0; }
+.reading-assessment .learning-question-card label,
+.reading-assessment .learning-question-card label span { min-width: 0; }
+.reading-assessment .learning-question-sidebar { margin-top: 16px; }
+.reading-assessment .learning-question-sidebar nav > div { grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); }
+.reading-assessment .learning-question-sidebar nav button { min-width: 44px; min-height: 44px; }
+@media (min-width: 1024px) {
+  .learning-content:has(.reading-assessment) { padding-block: 16px 32px; }
+  .learning-content:has(.reading-assessment) > .student-breadcrumb { margin-block: 0 4px; }
+  .reading-assessment .learning-question-card > .dash-kicker { margin-block: 0 8px; }
+  .reading-assessment .reading-panels { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
+  .reading-assessment .reading-panels > .reading-passage,
+  .reading-assessment .reading-panels > div { height: clamp(24rem, calc(100dvh - 240px), 50rem); overflow-y: auto; scrollbar-gutter: stable; }
+  .reading-assessment .reading-panels > div { padding: 2px 4px 4px; }
+  .reading-assessment .learning-question-head { margin-bottom: 8px; }
+  .reading-assessment .learning-question-head h1 { font-size: 28px; line-height: 1.2; }
+  .reading-assessment .learning-question-card { padding: 14px; }
+  .reading-assessment .reading-passage { padding: 16px; border-radius: 16px; }
+  .reading-assessment .reading-passage > p:not(.dash-kicker):not(.reading-instruction) { margin-block: 8px 0; font-size: 18px; line-height: 1.7; }
+  .reading-assessment .learning-question-card h2 { margin-block: 8px; font-size: 20px; line-height: 1.45; }
+  .reading-assessment .learning-question-card > p:not(.dash-kicker) { font-size: 16px; line-height: 1.6; }
+  .reading-assessment .learning-question-card fieldset { gap: 6px; margin-top: 12px; }
+  .reading-assessment .learning-question-card > p { margin-block: 8px; }
+  .reading-assessment .reading-passage h2 { margin-top: 0; }
+  .reading-assessment .learning-question-card label { min-height: 44px; padding: 8px 12px; font-size: 16px; line-height: 1.5; }
+  .reading-assessment .learning-question-actions { margin-top: 12px; }
+  .reading-assessment .learning-question-sidebar > nav { padding: 14px; }
+}

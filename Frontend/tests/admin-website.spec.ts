@@ -22,13 +22,32 @@ test.beforeEach(async ({ page }) => {
   await page.evaluate((key) => localStorage.removeItem(key), storageKey);
 });
 
-test("Scenario 1: approved Landing copy remains static and Admin cannot publish replacement", async ({ page }) => {
-  await page.goto("/");
-  const approvedHeading = await page.getByRole("heading", { level: 1 }).textContent();
+test("Scenario 1: server-backed Hero editor is available without changing published copy", async ({ page }) => {
+  const hero = {
+    eyebrow: "BELAJAR BERSAMA HIRU",
+    heading: "Hero tersimpan dari server",
+    support: "Materi belajar terarah bersama Hiru Academy.",
+    primaryCtaLabel: "Lihat program",
+    primaryCtaPath: "/program",
+    secondaryCtaLabel: "Baca artikel",
+    secondaryCtaPath: "/blog",
+  };
+  let adminReads = 0;
+  await page.route("**/api/admin/landing/hero", route => {
+    expect(route.request().method()).toBe("GET");
+    adminReads++;
+    return route.fulfill({ json: { data: { draft: null, published: hero, revision: 1 } } });
+  });
+  await page.route("**/api/public/landing/hero", route => route.fulfill({ json: { data: hero } }));
   await page.goto("/admin/landing-page");
-  await expect(page.getByLabel("Judul Utama (Headline)")).toBeDisabled();
+  await expect(page.getByLabel("Judul Hero", { exact: true })).toBeEnabled();
+  await expect(page.getByLabel("Judul Hero", { exact: true })).toHaveValue(hero.heading);
+  expect(adminReads).toBeGreaterThan(0);
+  await expect(page.getByRole("region", { name: "Pratinjau Hero", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Simpan Draft Hero", exact: true })).toBeEnabled();
+  await expect(page.getByRole("button", { name: "Publikasikan Hero", exact: true })).toBeVisible();
   await page.goto("/");
-  await expect(page.getByRole("heading", { level: 1 })).toHaveText(approvedHeading ?? "");
+  await expect(page.getByRole("heading", { level: 1 })).toHaveText(hero.heading);
 });
 
 test("Scenario 2: promotion overlays N4 offer price without mutating base price", async ({ page }) => {
@@ -63,6 +82,7 @@ test("Scenario 3: Blog authoring -> Title, slug, summary, body blocks, SEO -> Dr
   await page.getByRole("button", { name: "Tambah Artikel", exact: true }).click();
   await expect(page.getByRole("dialog")).toBeVisible();
 
+  await page.getByRole("combobox", { name: "Kategori", exact: true }).selectOption({ label: "JLPT" });
   await page.getByLabel("Judul Artikel").fill("Panduan Efektif Menembus JLPT N3");
   await page.getByRole("textbox", { name: /^Excerpt/ }).fill("Langkah strategis memahami materi N3 dengan efisien dan terarah.");
   await page.getByRole("textbox", { name: /^Isi Artikel/ }).fill("Kunci kelulusan JLPT N3 terletak pada penguasaan dokkai dan variasi pola tata bahasa.");
@@ -73,6 +93,8 @@ test("Scenario 3: Blog authoring -> Title, slug, summary, body blocks, SEO -> Dr
   await page
     .getByLabel(/Meta Description/)
     .fill("Pelajari panduan komprehensif menghadapi ujian JLPT N3 bersama Sensei.");
+  await page.getByRole("tab", { name: "Jadwal & Penulis", exact: true }).click();
+  await page.getByLabel("Nama Penulis / Kontributor").selectOption({ label: "Hiru Academy" });
 
   await page.getByRole("button", { name: "Simpan Artikel", exact: true }).click();
 

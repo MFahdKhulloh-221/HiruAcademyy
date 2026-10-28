@@ -1,7 +1,7 @@
 import { apiRequest } from "@/lib/api";
 
 export type LearningProgram = { id: number; code: string; slug?: string; name: string; description?: string | null; family: string };
-export type LearningAccess = { learning: Record<string, "full" | "preview" | "none">; replay_levels: string[]; source_grants: { plan_code: string; program_code: string }[] };
+export type LearningAccess = { learning: Record<string, "full" | "preview" | "none">; replay_levels: string[]; source_grants: { plan_code: string; program_code: string; starts_at?: string; ends_at?: string }[] };
 export type LearningResource = { id: number; title: string; description?: string | null; sort_order: number };
 export type LearningModule = LearningResource & { module_type: "grammar" | "kanji" | "general"; file_url: string | null; file_url_resolved_url?: string | null };
 export type CanonicalChapter = LearningResource & {
@@ -11,9 +11,9 @@ export type CanonicalChapter = LearningResource & {
   modules?: LearningModule[];
   flashcards?: { id: number; japanese: string; reading: string; meaning: string; example: string | null; sort_order: number }[];
   mini_checkpoint?: { exists: boolean };
-  mini_checkpoints?: { session: number; part: number; duration_minutes: number | null; question_count: number; configuration_valid: boolean }[];
+  mini_checkpoints?: { session: number; part: number; duration_minutes: number | null; passing_score?: number | null; question_count: number; configuration_valid: boolean }[];
 };
-export type ChapterProgress = { chapter_id: number; activities: Record<string, { total: number; completed: number; complete: boolean; completed_ids?: number[] }>; mini_eligible?: boolean; mini_unlocked: boolean };
+export type ChapterProgress = { chapter_id: number; activities: Record<string, { total: number; completed: number; complete: boolean; completed_ids?: number[] }>; mini_eligible?: boolean; mini_completed?: boolean; mini_unlocked: boolean };
 export type LibraryModule = {
   id: string;
   resource_id: number;
@@ -102,11 +102,8 @@ export function learningMembership(access: LearningAccess): "free" | "lms" | "se
   return access.source_grants.some(item => item.plan_code === "sensei") ? "sensei" : access.source_grants.some(item => item.plan_code === "lms") ? "lms" : "free";
 }
 export async function learningCatalog(signal?: AbortSignal) {
-  const [programs, access] = await Promise.all([
-    apiRequest<{ data: LearningProgram[] }>("/api/public/programs", { signal }),
-    apiRequest<{ data: LearningAccess }>("/api/student/access", { signal }),
-  ]);
-  return { programs: programs.data, access: access.data };
+  const { data } = await apiRequest<{ data: Pick<LearningDashboardData, "programs" | "access"> }>("/api/student/dashboard", { signal });
+  return { programs: data.programs, access: data.access };
 }
 export type LearningDashboardData = {
   programs: LearningProgram[];

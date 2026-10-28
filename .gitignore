@@ -4,3 +4,10 @@ Backend/.env.*
 
 Backend/database/*.sqlite
 Backend/database/*.sqlite-*
+
+/test-results/
+*.dump
+*.backup
+*.sql
+*.pem
+*.key

@@ -189,14 +189,14 @@ test.describe("Mini learning regression — mock API only, no backend or DB", ()
     const api = await mockMiniApi(page);
     await page.goto("/login");
     await loginMini(page, api.users.A.email);
-    const before = [api.count("GET", "/api/public/programs"), api.count("GET", "/api/student/access")];
+    const before = api.count("GET", "/api/student/dashboard");
     await openMini(page);
-    const initial = [api.count("GET", "/api/public/programs"), api.count("GET", "/api/student/access")];
-    expect(initial).toEqual(before.map(count => count + 1));
+    const initial = api.count("GET", "/api/student/dashboard");
+    expect(initial).toBe(before + 1);
     await page.getByLabel("Pilih Level:").selectOption("n5");
     await page.getByRole("button", { name: "Mulai Mini Checkpoint" }).click();
     await expect(page.getByRole("button", { name: "Mulai", exact: true })).toBeEnabled();
-    expect([api.count("GET", "/api/public/programs"), api.count("GET", "/api/student/access")], "Mini runner must reuse resolved catalog").toEqual(initial);
+    expect(api.count("GET", "/api/student/dashboard"), "Mini runner must reuse resolved catalog").toBe(initial);
     await page.getByRole("button", { name: "Mulai", exact: true }).click();
     await expect(page.getByRole("heading", { name: "A N5 question" })).toBeVisible();
     await expect(page.getByText("Jawaban benar:", { exact: false })).toHaveCount(0);
@@ -265,7 +265,7 @@ test.describe("Mini learning regression — mock API only, no backend or DB", ()
     await expect(page.getByRole("heading", { name: "Hasil Mini Checkpoint" })).toBeVisible();
     expect(data.answers).toEqual({ "500": "A" });
     expect(api.count("POST", "/api/student/programs/5/chapters/9/attempts/700/submit")).toBe(1);
-    await page.getByRole("button", { name: "Lihat Jawaban" }).click();
+    await page.getByRole("button", { name: "Review Jawaban" }).click();
     await expect(page.getByText("Jawaban benar: Cat", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "Kembali ke Hasil" }).click();
     await page.getByRole("button", { name: "Coba Lagi", exact: true }).click();
@@ -377,7 +377,7 @@ test.describe("Mini learning regression — mock API only, no backend or DB", ()
     });
     expect(denied).toEqual({ status: 404, body: { data: null } });
     expect(api.count("POST", "/api/student/programs/5/chapters/9/attempts", "B")).toBe(0);
-    expect(api.count("GET", "/api/student/access", "B")).toBeGreaterThan(0);
+    expect(api.count("GET", "/api/student/dashboard", "B")).toBeGreaterThan(0);
     expect(await page.evaluate(() => Object.keys(localStorage).filter(key => /learning-progress|attempt|auth-token/.test(key)))).toEqual([]);
     expect(api.unknown).toEqual([]);
     expect(api.errors).toEqual([]);

@@ -133,10 +133,11 @@ export function ChapterJourney({ membership, level, chapters }: { membership: Me
       <section className="chapter-progress-card">
         <div>
           <h2>{chapters.length} Chapter</h2>
-          <p>Progress{membership === "sensei" ? ", kelas Sensei, dan replay" : " materi dan quiz"} level lain tetap disimpan secara terpisah.</p>
+          <p>Progress{membership === "sensei" ? ", kelas Sensei, dan replay" : " materi dan quiz"} program lain tetap disimpan secara terpisah.</p>
         </div>
 
       </section>
+      {chapters.length === 0 && <p role="status">Belum ada chapter tersedia untuk program ini.</p>}
       <div className="chapter-journey-layout">
         <section className="chapter-list sensei-chapter-list" aria-label={"Chapter " + level.title}>
           {chapters.map((chapter) => (
@@ -156,7 +157,7 @@ export function ChapterJourney({ membership, level, chapters }: { membership: Me
                     <strong>{chapter.progress}%</strong>
                   </div>
                 )}
-                <small className="chapter-checkpoint-status">Checkpoint: {chapter.checkpointUnlocked ? "terbuka" : "terbuka setelah semua bagian selesai"}</small>
+                <small className="chapter-checkpoint-status">{chapter.checkpointLabel ?? `Checkpoint: ${chapter.checkpointUnlocked ? "terbuka" : "terbuka setelah semua bagian selesai"}`}</small>
               </div>
               <div className="chapter-action">
                 {chapter.href ? (
@@ -171,7 +172,7 @@ export function ChapterJourney({ membership, level, chapters }: { membership: Me
                   </button>
                 ) : chapter.state === "entitlementLocked" ? (
                   <Link className="chapter-action-button" href={`/renewal?membership=${membership}&target=${level.code.toLowerCase()}`}>
-                    Upgrade ke {level.code === "SSW" ? "SSW Pengolahan Makanan" : level.code === "INTERVIEW" ? "Interview" : `JLPT ${level.code}`}
+                    Upgrade ke {level.code === "SSW" ? "SSW Pengolahan Makanan" : level.code === "INTERVIEW" ? "Interview" : /^N[1-5]$/.test(level.code) ? `JLPT ${level.code}` : level.title}
                     <b aria-hidden="true"><LuArrowRight /></b>
                   </Link>
                 ) : (
@@ -188,7 +189,7 @@ export function ChapterJourney({ membership, level, chapters }: { membership: Me
           <h2>Milestone berikutnya</h2>
           <p>{chapters.find(chapter => chapter.href && chapter.state !== "completed")?.title ?? level.title}</p>
 
-          <Link href={"/journey?membership=" + membership}>Kembali ke Level</Link>
+          <Link href={"/journey?membership=" + membership}>Kembali ke Program</Link>
         </aside>
       </div>
     </>

@@ -1,20 +1,21 @@
 "use client";
 
 import { useState, useCallback, useEffect } from "react";
-import Link from "next/link";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { StudentNavigation } from "@/components/student-navigation";
 import { ChapterAssessment } from "@/components/chapter-assessment";
 import { useLearningRequest, type LearningCatalog } from "@/components/learning-hooks";
-import { learningCatalog, learningChapters, learningMembership, programSlug } from "@/lib/learning-api";
+import { learningDashboard, learningMembership, programSlug } from "@/lib/learning-api";
+import { practiceActivities } from "@/lib/practice-catalog";
 import type { Membership } from "@/lib/dashboard-mock";
 import { chapterAttemptPath, readAttempt } from "@/lib/assessment-attempt";
 import { ApiError } from "@/lib/api";
 
-const practiceCategories = ["Semua", "Kosakata", "Kanji", "Tata Bahasa", "Audio", "Reading"] as const;
+const practiceCategories = ["Semua", "Audio", "Reading"] as const;
 type PracticeCat = (typeof practiceCategories)[number];
 
 export function PracticeScreen({ membership, resolvedCatalog }: { membership: Membership; resolvedCatalog?: LearningCatalog }) {
+  void resolvedCatalog;
   const [selected, setSelected] = useState<{ level: string; chapterSlug: string; kind: "audio" | "reading" }>();
   useEffect(() => {
     const timer = window.setTimeout(() => {
@@ -32,9 +33,9 @@ export function PracticeScreen({ membership, resolvedCatalog }: { membership: Me
   const [levelFilter, setLevelFilter] = useState<string>("all");
 
   const load = useCallback(async (signal: AbortSignal) => {
-    const catalog = resolvedCatalog ?? await learningCatalog(signal);
-    const programs = catalog.programs.filter(program => program.family === "jlpt");
-    const chapters = await Promise.all(programs.map(async program => ({ program, chapters: await learningChapters(program.id, signal) })));
+    const dashboard = await learningDashboard(signal);
+    const catalog = dashboard.catalog;
+    const chapters = catalog.programs.filter(program => program.family === "jlpt").map(program => ({ program, chapters: dashboard.chapters.filter(item => item.program.id === program.id).map(item => item.chapter) }));
     const params = new URLSearchParams(window.location.search);
     const id = params.get("attempt");
     let restored: { level: string; chapterSlug: string; kind: "audio" | "reading" } | undefined;
@@ -56,8 +57,8 @@ export function PracticeScreen({ membership, resolvedCatalog }: { membership: Me
       }
       if (!restored) throw new ApiError(404);
     }
-    return { membership: learningMembership(catalog.access), chapters, restored };
-  }, [resolvedCatalog]);
+    return { membership: learningMembership(catalog.access), activities: practiceActivities(dashboard), restored };
+  }, []);
 
   const catalog = useLearningRequest(load, "practice-chapters");
   useEffect(() => {
@@ -67,27 +68,9 @@ export function PracticeScreen({ membership, resolvedCatalog }: { membership: Me
     return () => window.clearTimeout(timer);
   }, [catalog.data]);
 
-  const filteredChapters = (catalog.data?.chapters ?? [])
-    .filter(({ program }) => levelFilter === "all" || program.code.toLowerCase() === levelFilter.toLowerCase())
-    .flatMap(({ program, chapters }) =>
-      chapters
-        .filter(chapter => chapter.access !== "none")
-        .flatMap(chapter => {
-          const kinds: { kind: PracticeCat; assessmentKind?: "audio" | "reading" }[] = [];
-          if (category === "Semua" || category === "Audio") kinds.push({ kind: "Audio", assessmentKind: "audio" });
-          if (category === "Semua" || category === "Reading") kinds.push({ kind: "Reading", assessmentKind: "reading" });
-          if (category === "Semua" || category === "Kosakata") kinds.push({ kind: "Kosakata" });
-          if (category === "Semua" || category === "Kanji") kinds.push({ kind: "Kanji" });
-          if (category === "Semua" || category === "Tata Bahasa") kinds.push({ kind: "Tata Bahasa" });
-          return kinds.map(({ kind, assessmentKind }) => ({
-            program,
-            chapter,
-            kind,
-            assessmentKind,
-            key: `${program.id}/${chapter.id}/${kind}`,
-          }));
-        })
-    );
+  const filteredChapters = (catalog.data?.activities ?? [])
+    .filter(item => levelFilter === "all" || item.program.code === levelFilter)
+    .filter(item => category === "Semua" || item.kind === category.toLowerCase());
 
   return (
     <div className="supporting-shell student-shell">
@@ -112,6 +95,7 @@ export function PracticeScreen({ membership, resolvedCatalog }: { membership: Me
           <>
             <button type="button" className="practice-back" onClick={() => {
               setSelected(undefined);
+              catalog.retry();
               const url = new URL(window.location.href);
               for (const key of ["practice_level", "practice_chapter", "practice_kind", "attempt", "start"]) url.searchParams.delete(key);
               window.history.replaceState(null, "", url);
@@ -158,21 +142,21 @@ export function PracticeScreen({ membership, resolvedCatalog }: { membership: Me
               </div>
             </div>
 
+            {catalog.data && filteredChapters.length === 0 && <p role="status">Belum ada latihan soal yang tersedia untuk akses dan filter ini.</p>}
             <section className="practice-journey-list">
-              {filteredChapters.map(({ program, chapter, kind, assessmentKind, key }) => (
-                <article className="practice-journey-card" key={key}>
+              {filteredChapters.map(({ program, chapter, kind, activity, id }) => (
+                <article className="practice-journey-card" key={id}>
                   <div className="practice-journey-number">{String(chapter.chapter_number).padStart(2, "0")}</div>
                   <div className="practice-journey-copy">
-                    <h2>{program.name} | {chapter.title} | {kind}</h2>
-                    <p>{assessmentKind ? `Uji pemahamanmu melalui latihan soal ${kind}.` : kind === "Kosakata" ? "Hafalkan dan ulangi kosakata melalui kartu belajar." : `Pelajari materi ${kind} dari chapter ini.`}</p>
+                    <h2>{program.name} | {chapter.title} | {kind === "audio" ? "Audio" : "Reading"}</h2>
+                    <p>{activity.completed}/{activity.total} soal selesai ? {activity.complete ? "Selesai" : activity.completed > 0 ? "Dalam pengerjaan" : "Belum dikerjakan"}</p>
                   </div>
                   <div className="practice-journey-action">
-                    {assessmentKind ? (
-                      <button
+                    <button
                         type="button"
                         className="button button-primary"
                         onClick={() => {
-                          const selection = { level: programSlug(program.code), chapterSlug: `chapter-${chapter.chapter_number}`, kind: assessmentKind };
+                          const selection = { level: programSlug(program.code), chapterSlug: `chapter-${chapter.chapter_number}`, kind };
                           const url = new URL(window.location.href);
                           url.searchParams.set("practice_level", selection.level);
                           url.searchParams.set("practice_chapter", selection.chapterSlug);
@@ -182,18 +166,9 @@ export function PracticeScreen({ membership, resolvedCatalog }: { membership: Me
                           setSelected(selection);
                         }}
                       >
-                        Kerjakan Latihan
+                        {activity.complete ? "Latihan Lagi" : "Kerjakan Latihan"}
                       </button>
-                    ) : (
-                      <Link
-                        href={`/learn/${programSlug(program.code)}/chapter-${chapter.chapter_number}${
-                          kind === "Kosakata" ? "/flashcards" : kind === "Kanji" ? "/kanji" : "/grammar"
-                        }`}
-                        className="button button-primary"
-                      >
-                        {kind === "Kosakata" ? "Belajar Flashcard" : "Pelajari Materi"}
-                      </Link>
-                    )}
+
                   </div>
                 </article>
               ))}

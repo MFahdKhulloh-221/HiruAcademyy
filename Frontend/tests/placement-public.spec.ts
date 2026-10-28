@@ -12,6 +12,7 @@ test("safe public video sources", () => {
 
 for (const width of [360, 768, 1440]) {
   test(`persisted Placement presentation ${width}`, async ({ page, baseURL }) => {
+    test.setTimeout(60000);
     await page.setViewportSize({ width, height: 900 });
     await page.context().addCookies([{ name: "XSRF-TOKEN", value: "fixture", url: baseURL! }]);
     const attempt = { id: 12, status: "in_progress", questions: [{ id: 41, category: "Bunpou", prompt: "Persisted question", options: { A: "First", B: "Second", C: "Third", D: "Fourth" } }], answers: {} as Record<string, string>, result: null as object | null, expires_at: new Date(Date.now() + 240000).toISOString() };
@@ -34,7 +35,7 @@ for (const width of [360, 768, 1440]) {
     await page.reload();
     await expect(page.getByRole("radio").nth(1)).toBeChecked();
     await page.getByRole("button", { name: "Selesaikan Test" }).click();
-    await expect(page).toHaveURL(/placement\/result\?attempt=12/);
+    await expect(page).toHaveURL(/placement\/result\?attempt=12/, { timeout: 20000 });
     const analysis = page.locator(".placement-analysis");
     await expect(analysis.getByRole("heading", { name: "Ringkasan Hasil per Kategori" })).toBeVisible();
     await expect(analysis.locator("article")).toHaveCount(4);

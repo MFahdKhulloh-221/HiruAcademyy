@@ -1,0 +1,29 @@
+.page { width: 100%; max-width: 900px; margin: 0 auto; display: grid; gap: 24px; color: #252833; }
+.header h1 { margin: 0 0 8px; font-size: clamp(26px, 4vw, 34px); }
+.header p { margin: 0; color: #626773; }
+.card, .identity { background: #fff; border: 1px solid #e3e5eb; border-radius: 12px; padding: 24px; box-shadow: none; min-width: 0; }
+.identity :global(.profile-identity) { background: transparent; border: 0; box-shadow: none; padding: 0; margin: 0; border-radius: 0; }
+.identity :global(.profile-identity)::before, .identity :global(.profile-identity)::after { display: none; }
+.identity h2, .identity p { overflow-wrap: anywhere; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.sectionHead { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.page h2 { margin: 0; font-size: 20px; }
+.memberships { list-style: none; padding: 0; margin: 16px 0 0; }
+.memberships li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 20px; padding: 12px 0; border-top: 1px solid #eeeef3; }
+.page small { color: #626773; font-size: 13px; }
+.quickLinks { display: flex; flex-wrap: wrap; gap: 12px 28px; }
+.quickLinks a { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 44px; color: #954900; font-weight: 600; text-decoration: none; }
+.tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; border-bottom: 1px solid #e3e5eb; padding-bottom: 8px; }
+.tabs button { min-height: 44px; padding: 10px 14px; border: 0; border-radius: 6px; background: transparent; color: #535865; cursor: pointer; font: inherit; }
+.tabs button[aria-selected="true"] { color: #954900; background: #fff2e6; font-weight: 600; }
+.page :is(button, a, input, select):focus-visible { outline: 2px solid #954900; outline-offset: 3px; }
+.panel { padding-top: 24px; }
+.form { display: grid; gap: 20px; }
+.form fieldset { border: 0; padding: 0; margin: 0; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.form label { display: grid; align-content: start; gap: 8px; font-size: 14px; font-weight: 600; min-width: 0; }
+.form :is(input, select) { min-width: 0; width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #d7dbe3; border-radius: 6px; background: #fff; color: inherit; font: inherit; box-sizing: border-box; }
+.form input[readonly] { background: #f5f6f8; color: #626773; }
+.form > button { justify-self: start; }
+.page :global(.button) { min-height: 44px; white-space: normal; }
+.page :global(.button-primary) { background: #f48220; color: #5a2a00; }
+@media (max-width: 639px) { .page { gap: 20px; } .card, .identity { padding: 20px; } .form fieldset { grid-template-columns: 1fr; } .quickLinks { flex-direction: column; gap: 4px; } .tabs button { flex: 1 1 100px; padding: 10px 6px; } }

@@ -19,11 +19,18 @@ class TryOutAttemptService
             abort_unless($attempt->user_id === $user->id && $attempt->try_out_id === $tryOut->id, 404);
         }
         $program = $tryOut->program()->firstOrFail();
-        abort_unless($program->status === 'active' && $program->family === 'jlpt' && in_array($program->code, ['n5', 'n4', 'n3', 'n2', 'n1'], true), 404);
-        abort_unless($this->access->canAccessChapter($user, $program->code, 1), 403);
+        $tryOut->setRelation('program', $program);
+        abort_unless($this->access->canAccessProgram($user, $program) && $program->family === 'jlpt' && in_array($program->code, ['n5', 'n4', 'n3', 'n2', 'n1'], true), 404);
+        abort_unless($this->canAccess($user, $tryOut), 403);
         if (! $attempt) {
             abort_unless($tryOut->status === 'published', 404);
         }
+    }
+
+    public function canAccess(User $user, TryOut $tryOut): bool
+    {
+        return $tryOut->access_type === 'free'
+            || ($this->access->canAccessChapter($user, $tryOut->program->code, 2));
     }
 
     public function start(User $user, TryOut $tryOut): TryOutAttempt

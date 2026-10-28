@@ -1,7 +1,7 @@
 "use client";
 
 import { apiRequest, ApiError } from "@/lib/api";
-import type { EffectiveAccess } from "@/lib/commercial-api";
+import { learningCatalog } from "@/lib/learning-api";
 
 export type ClassSchedule = { id: number; program_id: number; program?: SystemProgram; title: string; description: string | null; scheduled_at: string; duration_minutes: number | null; meeting_url: string | null; chapter: string | null; session: string | null; sensei_name: string | null; status: string; sort_order: number };
 export type ReplayVideo = { id: number; replay_playlist_id: number; title: string; description: string | null; video_url: string | null; video_url_resolved_url?: string | null; recorded_at: string | null; chapter: string | null; session: string | null; sensei_name: string | null; status: string; sort_order: number };
@@ -16,6 +16,6 @@ export async function systemWrite<T>(path: string, method: string, body?: unknow
 export const studentSchedules = (signal: AbortSignal) => systemData<ClassSchedule[]>("/api/student/class-schedules", signal);
 export const studentNotifications = (signal: AbortSignal) => systemData<SystemNotification[]>("/api/student/notifications", signal);
 export async function studentReplays(signal: AbortSignal) {
-  const [playlists, access, programs] = await Promise.all([systemData<ReplayPlaylist[]>("/api/student/replays", signal), systemData<EffectiveAccess>("/api/student/access", signal), systemData<SystemProgram[]>("/api/public/programs", signal)]);
-  return { playlists, access, programs };
+  const [playlists, catalog] = await Promise.all([systemData<ReplayPlaylist[]>("/api/student/replays", signal), learningCatalog(signal)]);
+  return { playlists, ...catalog };
 }

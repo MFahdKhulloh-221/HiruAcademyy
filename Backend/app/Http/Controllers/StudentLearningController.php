@@ -19,10 +19,10 @@ use Illuminate\Http\Request;
 
 class StudentLearningController extends Controller
 {
-    public function dashboard(Request $request, EntitlementService $entitlements, LearningProgressService $progress)
+    public function dashboard(Request $request, EntitlementService $entitlements, LearningProgressService $progress, ChapterAccessPolicy $policy)
     {
         $access = $entitlements->effectiveAccess($request->user());
-        $programs = Program::where('status', 'active')->orderBy('sort_order')->orderBy('id')->get();
+        $programs = $policy->scopePrograms(Program::query(), $request->user(), $access['learning'])->orderBy('sort_order')->orderBy('id')->get();
         $chapters = Chapter::whereIn('program_id', $programs->modelKeys())->where('status', 'published')
             ->withExists(['miniCheckpointQuestions as mini_checkpoint_exists' => fn ($query) => $query->where('status', 'published')])
             ->orderBy('sort_order')->orderBy('chapter_number')->orderBy('id')->get();
@@ -53,7 +53,7 @@ class StudentLearningController extends Controller
     {
         $user = $request->user();
         $chapters = Chapter::query()->where('status', 'published')
-            ->whereHas('program', fn ($q) => $q->where('status', 'active'))
+            ->whereHas('program', fn ($q) => $policy->scopePrograms($q, $user))
             ->whereHas('flashcards', fn ($q) => $q->where('status', 'published'))
             ->with(['program', 'flashcards' => fn ($q) => $q->where('status', 'published')->orderBy('sort_order')->orderBy('id')])
             ->orderBy('sort_order')->orderBy('chapter_number')->orderBy('id')->get();
@@ -125,7 +125,7 @@ class StudentLearningController extends Controller
     {
         $user = $request->user();
         $access = $entitlements->effectiveAccess($user)['learning'];
-        $programs = Program::where('status', 'active')->orderBy('sort_order')->orderBy('id')->get();
+        $programs = $policy->scopePrograms(Program::query(), $user, $access)->orderBy('sort_order')->orderBy('id')->get();
 
         $totalReq = 0;
         $totalComp = 0;
@@ -238,7 +238,7 @@ class StudentLearningController extends Controller
 
     public function index(Request $request, Program $program, EntitlementService $entitlements, ChapterAccessPolicy $policy)
     {
-        abort_unless($program->status === 'active', 404);
+        abort_unless($policy->canAccessProgram($request->user(), $program), 404);
         $access = $entitlements->effectiveAccess($request->user())['learning'][$program->code] ?? 'none';
         $chapters = Chapter::where('program_id', $program->id)->where('status', 'published')
             ->withExists(['miniCheckpointQuestions as mini_checkpoint_exists' => fn ($query) => $query->where('status', 'published')])
@@ -252,7 +252,7 @@ class StudentLearningController extends Controller
 
     public function show(Request $request, Program $program, Chapter $chapter, EntitlementService $entitlements, ChapterAccessPolicy $policy)
     {
-        abort_unless($program->status === 'active' && $chapter->program_id === $program->id && $chapter->status === 'published', 404);
+        abort_unless($policy->canAccessProgram($request->user(), $program) && $chapter->program_id === $program->id && $chapter->status === 'published', 404);
         abort_unless($policy->canAccessChapter($request->user(), $program->code, $chapter->chapter_number), 403);
         $chapter->setAttribute('access', $entitlements->effectiveAccess($request->user())['learning'][$program->code]);
         $published = fn ($query) => $query->where('status', 'published');

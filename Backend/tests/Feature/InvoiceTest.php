@@ -456,6 +456,43 @@ class InvoiceTest extends TestCase
         $this->assertSame('2027-04-03', $grant->ends_at->toDateString());
     }
 
+    public function test_active_and_expired_renewals_use_verified_payment_and_preserve_original_grants(): void
+    {
+        $service = app(InvoiceWorkflowService::class);
+        foreach (['n5', 'n4', 'n3', 'n2', 'n1'] as $code) {
+            foreach (['lms', 'sensei'] as $plan) {
+                $offer = $this->offer($code, $plan);
+                $offer->update(['base_price' => 99000, 'status' => 'active']);
+                foreach (['2026-09-30', '2026-12-31'] as $expiry) {
+                    $original = AccessGrant::create(['user_id' => $this->student->id, 'program_id' => $offer->program_id, 'plan_code' => $plan, 'status' => 'active', 'starts_at' => '2026-01-01', 'ends_at' => $expiry]);
+                    $invoice = $service->create($this->student, $offer);
+                    $this->assertSame($original->id, $invoice->renewal_grant_id);
+                    foreach (['awaiting_payment', 'paid'] as $status) {
+                        $invoice = $service->transition($invoice, $status, $this->student);
+                        $this->assertNull($invoice->accessGrant()->first());
+                        $this->assertSame($expiry, $original->fresh()->ends_at->toDateString());
+                    }
+                    $invoice = $service->transition($invoice, 'verified', $this->admin);
+                    $verified = $invoice->verified_at->startOfDay();
+                    $this->travelTo(now()->addDays(2));
+                    $invoice = $service->transition($invoice, 'active', $this->admin);
+                    $grant = $invoice->accessGrant()->sole();
+                    $expected = $expiry < $verified->toDateString()
+                        ? $verified->addMonthsNoOverflow($offer->duration_months)->subDay()
+                        : $original->ends_at->addMonthsNoOverflow($offer->duration_months);
+                    $this->assertSame($verified->toDateString(), $grant->starts_at->toDateString());
+                    $this->assertSame($expected->toDateString(), $grant->ends_at->toDateString());
+                    $service->transition($invoice, 'active', $this->admin);
+                    $this->assertSame(1, $invoice->accessGrant()->count());
+                    $this->assertSame($expiry, $original->fresh()->ends_at->toDateString());
+                    $grant->delete();
+                    $invoice->delete();
+                    $original->delete();
+                }
+            }
+        }
+    }
+
     public static function activationDates(): array
     {
         return [

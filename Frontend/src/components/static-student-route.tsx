@@ -41,7 +41,7 @@ function StudentServiceRoute({ kind }: { kind: RouteKind }) {
   const request = useLearningCatalog();
   if (!request.data) return request.error ? <main className="supporting-main"><p role="alert">{request.error}</p><button type="button" onClick={request.retry}>Coba Lagi</button></main> : <StudentLoading shell={kind === "tryout" ? "supporting" : "sensei"} variant={kind === "ask" ? "form" : kind === "replay-player" ? "learning" : "cards"} label="Memuat…" />;
   const membership = learningMembership(request.data.access);
-  if (kind === "tryout") return <div className="supporting-shell student-shell"><StudentNavigation membership={membership} /><main className="supporting-main"><SenseiTryoutScreen /></main></div>;
+  if (kind === "tryout") return <div className="supporting-shell student-shell"><StudentNavigation membership={membership} /><main className="supporting-main"><SenseiTryoutScreen membership={membership} /></main></div>;
   const breadcrumbs = kind === "class-detail" ? [{ label: "Jadwal", href: `/schedule?membership=${membership}` }, { label: "Chapter 4" }] : kind === "replay-player" ? [{ label: "Replay", href: `/replay?membership=${membership}` }, { label: "Chapter 4" }] : undefined;
   return <SenseiShell membership={membership} breadcrumbs={breadcrumbs}>
     {kind === "schedule" && <ScheduleScreen />}

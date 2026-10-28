@@ -9,8 +9,8 @@ export type SenseiContent = { id: number; name: string; role: string; bio: strin
 export type TestimonialContent = { id: number; created_at?: string | null; name: string; context: string; quote: string; image: string | null; image_resolved_url?: string | null; type: "text" | "video"; title: string | null; video_url: string | null; video_url_resolved_url?: string | null; video_title: string | null; video_thumbnail: string | null; video_thumbnail_resolved_url?: string | null; show_on_testimonials: boolean; published?: boolean; landing?: boolean; sort_order?: number };
 export type ArticleContent = { id: number; title: string; slug: string; excerpt: string | null; body: string; thumbnail: string | null; category: string; seo_title: string | null; meta_description: string | null; featured: boolean; published_at: string | null; author: string; published?: boolean };
 export type ShowcaseContent = { id: number; key: string; label: string; image_src: string; alt: string; visible?: boolean; sort_order?: number };
-export type PublicOffer = { program: { code: string; slug: string; name: string }; plan_code: string; base_price: number; effective_price: number; currency: string; duration_months: number; discount_percent: number };
-export type PublicProgram = { code: string; slug: string; name: string; family: string };
+export type PublicOffer = { program: { code: string; slug: string; name: string }; plan_code: string; base_price: number; effective_price: number; currency: string; duration_months: number; discount_percent: number; promotion?: { discount_percent: number; starts_at: string | null; ends_at: string | null } | null };
+export type PublicProgram = { code: string; slug: string; name: string; description: string | null; family: string };
 
 export function useContent<T>(path: string, single = false) {
   const key = JSON.stringify([path, single]);

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ActivityCompletion;
 use App\Models\Chapter;
+use App\Models\LearningAttempt;
 use App\Models\Program;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Collection;
@@ -18,7 +19,7 @@ class LearningProgressService
     {
         $program->refresh();
         $chapter->refresh();
-        abort_unless($program->status === 'active' && $chapter->status === 'published' && $chapter->program_id === $program->id, 404);
+        abort_unless($this->policy->canAccessProgram($user, $program) && $chapter->status === 'published' && $chapter->program_id === $program->id, 404);
         abort_unless($this->policy->canAccessChapter($user, $program->code, $chapter->chapter_number), 403);
     }
 
@@ -44,6 +45,13 @@ class LearningProgressService
         };
     }
 
+    public function miniEligible(User $user, Program $program): bool
+    {
+        return $program->family === 'jlpt'
+            && in_array($program->code, ['n5', 'n4', 'n3', 'n2'], true)
+            && in_array($program->code, app(EntitlementService::class)->effectiveAccess($user)['replay_levels'], true);
+    }
+
     public function progress(User $user, Program $program, Chapter $chapter): array
     {
         $this->authorize($user, $program, $chapter);
@@ -52,14 +60,14 @@ class LearningProgressService
         $completions = [];
         foreach ($types as $type) {
             $resources[$type] = $this->resources($chapter, $type)->pluck('id')->all();
-            $completions[$type] = ActivityCompletion::where('user_id', $user->id)->where('type', $type)->whereIn('resource_id', $resources[$type])->pluck('resource_id')->map(fn ($id) => (int) $id)->all();
+            $completions[$type] = ActivityCompletion::where('user_id', $user->id)->where('chapter_id', $chapter->id)->where('type', $type)->whereIn('resource_id', $resources[$type])->pluck('resource_id')->map(fn ($id) => (int) $id)->all();
         }
         $readingReady = ! in_array('reading', $types, true) || ! $chapter->readingPassages()->where('status', 'published')->whereDoesntHave('questions', fn ($query) => $query->where('status', 'published'))->exists();
 
-        return $this->assemble($program, $chapter, $resources, $completions, $readingReady);
+        return $this->assemble($program, $chapter, $resources, $completions, $readingReady, $this->miniEligible($user, $program), $this->miniCompleted($user, $chapter));
     }
 
-    public function assemble(Program $program, Chapter $chapter, array $resources, array $completions, bool $readingReady): array
+    public function assemble(Program $program, Chapter $chapter, array $resources, array $completions, bool $readingReady, bool $miniEligible = false, bool $miniCompleted = false): array
     {
         $activities = [];
         foreach ($this->requiredTypes($program) as $type) {
@@ -75,9 +83,14 @@ class LearningProgressService
             ];
         }
 
-        $required = array_filter($activities, fn ($activity) => $activity['total'] > 0);
+        $required = $program->family === 'jlpt' ? $activities : array_filter($activities, fn ($activity) => $activity['total'] > 0);
+        return ['chapter_id' => $chapter->id, 'activities' => $activities, 'mini_eligible' => $miniEligible, 'mini_completed' => $miniCompleted, 'mini_unlocked' => $miniEligible && $required !== [] && ! in_array(false, array_column($required, 'complete'), true)];
+    }
 
-        return ['chapter_id' => $chapter->id, 'activities' => $activities, 'mini_unlocked' => $program->family !== 'interview' && $required !== [] && ! in_array(false, array_column($required, 'complete'), true)];
+    private function miniCompleted(User $user, Chapter $chapter): bool
+    {
+        return LearningAttempt::where('user_id', $user->id)->where('chapter_id', $chapter->id)
+            ->where('kind', 'mini')->where('status', 'completed')->exists();
     }
 
     public function batch(User $user, Collection $chapters, Collection $programs): array
@@ -105,12 +118,18 @@ class LearningProgressService
                 array_push($allIds, ...$ids);
             }
         }
-        $completions = ActivityCompletion::where('user_id', $user->id)->whereIn('resource_id', array_unique($allIds))
+        $completions = ActivityCompletion::where('user_id', $user->id)->whereIn('chapter_id', $chapters->modelKeys())->whereIn('resource_id', array_unique($allIds))
             ->get(['type', 'resource_id'])->groupBy('type')->map(fn ($rows) => $rows->pluck('resource_id')->map(fn ($id) => (int) $id)->all())->all();
+        $completedMini = LearningAttempt::where('user_id', $user->id)->whereIn('chapter_id', $chapters->modelKeys())
+            ->where('kind', 'mini')->where('status', 'completed')->pluck('chapter_id')->flip();
+        $replayLevels = app(EntitlementService::class)->effectiveAccess($user)['replay_levels'];
         $result = [];
         foreach ($chapters as $chapter) {
             $result[$chapter->id] = $this->assemble($programs->get($chapter->program_id), $chapter, $resources[$chapter->id], $completions,
-                ! $chapter->readingPassages->contains(fn ($passage) => $passage->questions->isEmpty()));
+                ! $chapter->readingPassages->contains(fn ($passage) => $passage->questions->isEmpty()),
+                $programs->get($chapter->program_id)->family === 'jlpt'
+                    && in_array($programs->get($chapter->program_id)->code, ['n5', 'n4', 'n3', 'n2'], true)
+                    && in_array($programs->get($chapter->program_id)->code, $replayLevels, true), $completedMini->has($chapter->id));
         }
 
         return $result;

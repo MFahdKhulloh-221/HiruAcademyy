@@ -1,0 +1,12 @@
+.answer-review .learning-question-card label.review-correct { border-color: #32643a; background: #eaf3e7; color: #254e2b; }
+.answer-review .learning-question-card label.review-wrong { border-color: #a32b32; background: #fff0f0; color: #8b2028; }
+.answer-review > main { min-width: 0; }
+.answer-review .learning-question-sidebar nav > div { grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); }
+.answer-review .learning-question-card label { min-width: 0; flex-wrap: wrap; overflow-wrap: anywhere; }
+.answer-review .learning-question-card fieldset { min-inline-size: 0; }
+.answer-review .learning-question-card label > span { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.answer-review .tryout-review-label { font-size: 12px; margin-left: auto; }
+.answer-review-legend { font-size: 14px; line-height: 1.6; }
+@media (max-width: 639px) {
+  .answer-review .tryout-review-label { flex-basis: 100%; margin-left: 0; }
+}

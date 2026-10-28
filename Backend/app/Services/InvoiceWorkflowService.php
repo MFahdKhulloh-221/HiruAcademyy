@@ -25,6 +25,9 @@ class InvoiceWorkflowService
             if ($program->status !== 'active' || $offer->status !== 'active' || $offer->base_price === null) {
                 throw ValidationException::withMessages(['program_offer_id' => 'Offer is not currently sellable.']);
             }
+            $renewal = in_array($program->code, ['n5', 'n4', 'n3', 'n2', 'n1'], true)
+                ? $this->membership($student->id, $offer->program_id, $offer->plan_code)->first()
+                : null;
             $offer->load('promotions');
             $pricing = $offer->pricing();
 
@@ -35,6 +38,7 @@ class InvoiceWorkflowService
                 'discount_percent' => $pricing['discount_percent'], 'discount_amount' => $pricing['discount_amount'],
                 'total_price' => $pricing['effective_price'], 'currency' => $offer->currency,
                 'duration_months' => $offer->duration_months,
+                'renewal_grant_id' => $renewal?->id,
                 'due_date' => $metadata['due_date'] ?? null, 'note' => $metadata['note'] ?? null,
             ])->fresh();
             app(AffiliateService::class)->referral($invoice, $metadata['referral_code'] ?? null);
@@ -68,18 +72,36 @@ class InvoiceWorkflowService
             if ($target === 'active') {
                 $student = User::whereKey($invoice->user_id)->lockForUpdate()->firstOrFail();
                 $this->requireStudent($student);
-                $start = today()->toImmutable();
+                $start = $invoice->renewal_grant_id !== null ? $invoice->verified_at->startOfDay() : today()->toImmutable();
+                $end = $start->addMonthsNoOverflow($invoice->duration_months)->subDay();
+                if ($invoice->renewal_grant_id !== null) {
+                    $source = AccessGrant::whereKey($invoice->renewal_grant_id)->lockForUpdate()->firstOrFail();
+                    if ($source->user_id !== $student->id || $source->program_id !== $invoice->program_id || $source->plan_code !== $invoice->plan_code || $source->status !== 'active') {
+                        throw ValidationException::withMessages(['renewal_grant_id' => 'Renewal membership does not match this invoice.']);
+                    }
+                    $latest = $this->membership($student->id, $invoice->program_id, $invoice->plan_code)->first();
+                    if ($latest && $latest->ends_at->greaterThanOrEqualTo($start)) {
+                        $end = $latest->ends_at->addMonthsNoOverflow($invoice->duration_months);
+                    }
+                }
                 AccessGrant::create([
                     'source_invoice_id' => $invoice->id, 'user_id' => $invoice->user_id,
                     'program_id' => $invoice->program_id, 'plan_code' => $invoice->plan_code,
                     'status' => 'active', 'starts_at' => $start,
-                    'ends_at' => $start->addMonthsNoOverflow($invoice->duration_months)->subDay(),
+                    'ends_at' => $end,
                 ]);
             }
             $invoice->update(['status' => $target, $timestamp => now()]);
 
             return $invoice;
         });
+    }
+
+    private function membership(int $userId, int $programId, string $plan): \Illuminate\Database\Eloquent\Builder
+    {
+        return AccessGrant::where('user_id', $userId)->where('program_id', $programId)
+            ->where('plan_code', $plan)->where('status', 'active')
+            ->orderByDesc('ends_at')->orderByDesc('id')->lockForUpdate();
     }
 
     private function requireStudent(User $user): void

@@ -69,3 +69,23 @@ test("conflicting canonical answer stays rejected without overwrite", async () =
   expect(persistence.attempt.answers).toEqual({ "1": "B" });
   expect(writes).toBe(1);
 });
+
+
+test("percentage placement duplicate submit preserves one canonical result and rejects later writes", async () => {
+  const initial: ServerAttempt = { id: 12, scoring_version: "percentage-v1", revision: 4, status: "in_progress", questions: [], answers: { "41": "C" }, result: null };
+  const completed: ServerAttempt = { ...initial, status: "completed", result: { correct: 0, wrong: 1, unanswered: 0, percentage: 0, recommendation_level: "N5" } };
+  let writes = 0;
+  const request = (async (path: string, options: RequestInit) => {
+    writes++;
+    expect(path).toBe("/placement/12/submit");
+    expect(JSON.parse(String(options.body))).toEqual({ answers: initial.answers, revision: 4 });
+    return { data: completed };
+  }) as typeof apiRequest;
+  const persistence = new AttemptPersistence(initial, "/placement/12", "placement", request);
+  const first = persistence.submit(initial.answers);
+  expect(persistence.submit({ "41": "A" })).toBe(first);
+  expect(await first).toEqual(expect.objectContaining(completed));
+  expect(await persistence.save({ "41": "A" })).toEqual(expect.objectContaining(completed));
+  expect(await persistence.submit({})).toEqual(expect.objectContaining(completed));
+  expect(writes).toBe(1);
+});

@@ -1,0 +1,938 @@
+{
+    "head":  "bfaa5ac33f551908545b8b1b87a607d0cf462d6a",
+    "branch":  "checkpoint-65383c6-20261021-104923",
+    "scope":  "All changed tracked and nonignored untracked files; unchanged files come from HEAD. Manifest excludes itself. Not a deployable source archive.",
+    "release_status":  "NO-GO",
+    "files":  [
+                  {
+                      "path":  ".gitignore",
+                      "sha256":  "cf526ecf3d426c812498d243bb0dec98bc55118b3aee174409213c2b818dbd77",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/app/Http/Controllers/AdminBlogCatalogController.php",
+                      "sha256":  "a3db7297c7d05cf060796f6c1478af4d4631b267a66958b3dd0cae31bed024b2",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/app/Http/Controllers/CheckpointController.php",
+                      "sha256":  "88ee58703b83030854008cc14575bae597a66a039768b52d8ee70b32da99cb88",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/app/Http/Controllers/InvoiceController.php",
+                      "sha256":  "fb3d09de926cdc93b83037258194b367c43f4be83c6d0f7ceab88119112bc987",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/app/Http/Controllers/LandingHeroController.php",
+                      "sha256":  "e1fe655f59f625d092d538a99791b3c47bb162e5e11c0d83217c0d5a57e2a2bb",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/app/Http/Controllers/PublicContentController.php",
+                      "sha256":  "6d39130a1b8ced05fca61e10814eb2b149afe56f703479ac12aa05d82a5a30ce",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/app/Http/Controllers/PublicPlacementController.php",
+                      "sha256":  "a79983d986415b4177144a6d1089b88248bb3519d6dfa9c0846fcda24b166f21",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/app/Http/Controllers/StudentLearningController.php",
+                      "sha256":  "b42c9d391e7403585df04c02eb99f579dbb2eb3c6ded1026f8808f37dcaea879",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/app/Http/Controllers/StudentTryOutController.php",
+                      "sha256":  "130e7f2fc9539d3a0d3724b84e0d9440e0a99dca8dbf952e7224e8f70b7ccd8b",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/app/Http/Resources/StudentChapterResource.php",
+                      "sha256":  "132ab659df4890cad212fc91a17cedf52a911a633866bac84e9aee0a7043e2ef",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/app/Models/BlogCategory.php",
+                      "sha256":  "08bec222bc891014de4f22d0a90b822e8bdbc3b711da8ae16bc886b39e9071e6",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/app/Models/BlogContributor.php",
+                      "sha256":  "c1350c7640958b80b58e2addc6a237ecccb4cba9464ab2cd9eac548cb97330de",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/app/Models/Chapter.php",
+                      "sha256":  "da81c24962396a47bb9d1791d4d79beb6b9bd54ba54516ab51c5301e0e123915",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/app/Models/CheckpointAttempt.php",
+                      "sha256":  "13831190f3196f4146643f451c64c1ab548a3ddc94bb8cc42aff46ecb6cc3f36",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/app/Models/CheckpointPackage.php",
+                      "sha256":  "98cfc3438f25822bc5abf78cc7df7b29a92b71a998f65fb67c8afcc4afc15820",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/app/Models/CheckpointQuestion.php",
+                      "sha256":  "cec5ecb787c5d4efb35fb31b61070fffeb57ebdc49db8311e7ee2ec4457a5392",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/app/Models/ProgramOffer.php",
+                      "sha256":  "051403aa3daaa81eb6ba0157a1806aa2eaab3d36c35bd4c36495ab3a4a929708",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/app/Models/TryOut.php",
+                      "sha256":  "93fb7b5ac2d541957a985f745264b5aa1864b312bdad9191fb97c14d8e86aca8",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/app/Services/BlogCatalogService.php",
+                      "sha256":  "06b4cdc75a2d2aa7b006de1dd61a202937a7c2834daacd0e9da1f59229f9a377",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/app/Services/ChapterAccessPolicy.php",
+                      "sha256":  "3503d06d3df76b2c0f2d9ceea11cfe8bb2f341730c33142e84a118f34d2b9fa0",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/app/Services/CheckpointAttemptService.php",
+                      "sha256":  "5d15d551bc3b4a928e8dd422d837584dbecb8ec341724ed704df19139940fd1d",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/app/Services/CheckpointPackageService.php",
+                      "sha256":  "7864da52bf4ca89a7ffca4e571896efda0a49cb469817a85458805a9534a9795",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/app/Services/InvoiceWorkflowService.php",
+                      "sha256":  "d82925d0d21398d34159142188a829472d47dc341c2bf93cec9bb75218b4767c",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/app/Services/LandingHeroService.php",
+                      "sha256":  "c12e595c57c15aaeed98cfa51a39eaf95c7c816360e3084e3dab28afc958a768",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/app/Services/LearningContentService.php",
+                      "sha256":  "94d9b61d47483924f8c8c3fcccf66dbe66df77a1621eafd1ecb301eb14c72c95",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/app/Services/LearningLibraryService.php",
+                      "sha256":  "5141511eded404cbe0680540c69470799ecb0421af270d892b03e9026a092d6a",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/app/Services/LearningProgressService.php",
+                      "sha256":  "02ed434c6419459ac90c9e40fb2634fe71e1292a6d7a0b0018241af8c9164d91",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/app/Services/PlacementService.php",
+                      "sha256":  "7184f7f146268111c2e0ea66f1014cdcd1831c44a73edd7fa79c8f9999ae958f",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/app/Services/PublicContentService.php",
+                      "sha256":  "06f248e93f21a07f7bfbd29200a47039161758f7c5a4943bf55c6d4067ffa032",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/app/Services/TryOutAttemptService.php",
+                      "sha256":  "43b4cba9005df4184b63f7024d9f19339258db84fe87f81eb83eb6d932e4fc6c",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/app/Services/TryOutService.php",
+                      "sha256":  "b7db0dd0ef9c036756e447a09db18ad97e3483262fb97d0fdef3a19f11c6aca8",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/app/Support/DatabaseSafety.php",
+                      "sha256":  "f2522316d06b719f57ce59e9b848e7f93934bcdd4f6ba7b365c7a9bfadc5e330",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/database/migrations/2026_10_21_000002_expand_programs_family_check.php",
+                      "sha256":  "7e442503126d8ee08cc327de96a94ace80ef7f4b74130b654a696ce1b8c9e940",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/database/migrations/2026_10_27_000001_create_blog_catalogs.php",
+                      "sha256":  "f615c045d438cfde5f34babe08a75c3f70e4ce9dc64e3e9f022d3d67b3c69aef",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/database/migrations/2026_10_28_000001_create_checkpoint_questions_table.php",
+                      "sha256":  "07ca987e439dc57290b5235b734dba45401fea2e92bd4db76156779d069195fb",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/database/migrations/2026_10_28_000002_add_renewal_grant_to_invoices.php",
+                      "sha256":  "afc0cb9a4a1d6ffb40c572a9ccd51872198cfb68632e115f1e1a8f142b43f254",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/database/migrations/2026_10_28_000003_add_access_type_to_try_outs.php",
+                      "sha256":  "0e495924d2f7a68832fd6dfe399723d2c4f00ad0363056352f2ea12297954934",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/database/migrations/2026_10_28_000003_create_checkpoint_packages_and_attempts.php",
+                      "sha256":  "7de6b5e79b7054f78a48eee203dd1581e6a0e76bf77670c961fe9771878c73f3",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/render-start.sh",
+                      "sha256":  "d949a3655a40bbc72d2d201d6686aba0f2fefb8c051cfd525829850d46a3b7e3",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/routes/web.php",
+                      "sha256":  "34ed06625fae32c0a3b34750be5e22f7c03ddd16065f9427ff990171244c99a4",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/tests/disposable-postgres.md",
+                      "sha256":  "041126798e19082f394c9fb9e46d479c741286b1e2d212cc363021613a8be07c",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/tests/Feature/CheckpointHttpTest.php",
+                      "sha256":  "ea3248fe8c15d8f28131a47e711469d4d7e732887a9d54a9185ffcf6aa12a050",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/tests/Feature/DashboardContractTest.php",
+                      "sha256":  "b598009a1c4d6b10a034b96d043bd7d00ce24c328ea806882d959a143c5071d8",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/tests/Feature/InvoiceConcurrencyTest.php",
+                      "sha256":  "3e4790bf5e63a860a9b5dce75e05d0eb7c2fc50728b8a952c504673b992f5c69",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/tests/Feature/InvoiceTest.php",
+                      "sha256":  "0a98c9e728cda4fe1be959584c8bf08510f2041ad04e42b3830eeb29fb93f8fb",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/tests/Feature/LearningAssessmentTest.php",
+                      "sha256":  "18be8b894306b73aaa7142924809cf333215e1ea31b1ac0630ca7df708e232e8",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/tests/Feature/LearningContentTest.php",
+                      "sha256":  "22a8d1e5e2c6fe518bef50ae99ae760db5e530d41ab87fa2e1609a8fa64dfbdd",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/tests/Feature/TryOutAssessmentTest.php",
+                      "sha256":  "cbf7e81a5917f7e48afc264925e10b840c22611784482442c29d78d7a55d9be0",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Backend/tests/Unit/AnswerReviewSecurityTest.php",
+                      "sha256":  "3e91e321543c5665ce9dda5219021993fe473d6e613760f89c1557bc99701158",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/tests/Unit/BlogCatalogTest.php",
+                      "sha256":  "762a9c7251838e64deb51618575c593dc18a420dc1313dd681d9dcf6e4990187",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/tests/Unit/ChapterMaterialAccessTest.php",
+                      "sha256":  "2996f7082f7ec1aa6c25d178c12deb79d62689dd6f6241493dc86e08fa945af3",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/tests/Unit/CheckpointAttemptTest.php",
+                      "sha256":  "57f6e555f22197af2ece45c7fc56259f044691ab0aae94fa8503a8326ffd3de7",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/tests/Unit/CheckpointQuestionTest.php",
+                      "sha256":  "4b15c2436165f3c54ce274a80c1b2f234941d02b9de4f95e5998f926eceb6d89",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/tests/Unit/HeroRoleMiddlewareTest.php",
+                      "sha256":  "8895fc984ba168321e296fc07312284e404e032d0f2ccd64717b134e6d9b8043",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/tests/Unit/InactiveProgramEntitlementTest.php",
+                      "sha256":  "8a68bd07adb1a34120550fe35fb1c47d14197fb3dd99eac0f6d4c565370701f4",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/tests/Unit/LandingHeroTest.php",
+                      "sha256":  "e5ee895bc218850a7d9582513d5cee686dc0f78e77aa409fa5a84a87a77d3376",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/tests/Unit/LearningLibraryAccessTest.php",
+                      "sha256":  "e6a6ffe29b72cebd61353e411ac09709b97242437d7354044dfc54553e562d35",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/tests/Unit/MiniAccessTest.php",
+                      "sha256":  "6902a05875ba2ae6c9f17d223082798d4bac441659ac5eea96431a6625dce985",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/tests/Unit/MiniCheckpointQuestionTest.php",
+                      "sha256":  "7d24cdcf5823d03c6e24dd35c4ec730a6f396839298a1fa39f8b9485a12dd470",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/tests/Unit/MiniEligibilityTest.php",
+                      "sha256":  "63185f1bed50f1b1edb8380317596ea5fccfe359ca5070d3c474b341cd4c93de",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/tests/Unit/OfferInvoiceGuardTest.php",
+                      "sha256":  "9c48eb0820064f0e403efac7359cdb844aaa242e328eac00c4be6cff909fabda",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/tests/Unit/PlacementResumeTest.php",
+                      "sha256":  "1b4e72917629216ddf7a6670d24f3455c741e38c05bbc94040924af1d8819cad",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/tests/Unit/PracticeProgressTest.php",
+                      "sha256":  "3ed86fb2ad2d5cb41f83773a9f2e9c7c9ff344202d5569f80753679015cd7ae2",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/tests/Unit/ProgramOfferPricingBoundaryTest.php",
+                      "sha256":  "1432dd5998da27cb505eb1526ab6d24468c327dd42d2cc64da910aff44ed40ae",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/tests/Unit/QuestionRichTextTest.php",
+                      "sha256":  "da391479ec016cd64be9248263cb74d4d373804eeb35e82f1bfa37effc668bd6",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/tests/Unit/ReadingAttemptSnapshotPayloadTest.php",
+                      "sha256":  "69c9bd46bf1398ac9ebc5d7c8343c07d3526b40baa63c3b1730bfc18040afe0c",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/tests/Unit/ReplayAccessTest.php",
+                      "sha256":  "147e72feaa55303df7dea3dc8727f71f238872c6932474efae311cca782e8db0",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/tests/Unit/StandaloneJourneyTest.php",
+                      "sha256":  "c7da1cf09bf47bd6610b05846f6afb22668b59b9f0ae8b05a215de5e63b69974",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Backend/tests/Unit/TryOutAccessTest.php",
+                      "sha256":  "d7aa72d1b679a1cbcae641adcadc401d6888b1365e95a7a1063f9688913ca9cd",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "deploy-vps/Caddyfile",
+                      "sha256":  "d73b5b5801fceb96426973bdd94f184fb9d83ee11621727912c1a2c17127df8d",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "deploy-vps/compose.yaml",
+                      "sha256":  "cef5ff43ea72c467d17d653079c069f8a582d1c47c7557dd74fa4e4993b7ea83",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "deploy-vps/patch-preview-media.php",
+                      "sha256":  "501a7004a7780e9834eeccb952aec0155069fdb2a2fb84c5df93d9aeb19b708a",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "deploy-vps/validate-preview.sh",
+                      "sha256":  "c3e1e9a9636eafb668bbcfc61dd3934a92d8d409af3c99652799c03895e7c806",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/.dockerignore",
+                      "sha256":  "a7a541dc1536d4885924dbdeef9e47c7b4fe8c990438df62444cc793cbcd172b",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/src/app/admin/admin.css",
+                      "sha256":  "c597d54c14caa7c71fcb36af2fe8a712f1b2740f4ff9e0681b9e688d6a36ea2b",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/app/admin/checkpoint/page.tsx",
+                      "sha256":  "47a166a2e3638ce182b27982b60764d11e51afba6b99446ab6121da3c4f42dd5",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/src/app/admin/kurikulum-materi/page.tsx",
+                      "sha256":  "e09b57aee1f3294fb47f95a2d749fcfcfe9344118c3188ceeae04b9c966164c8",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/app/admin/replay-rekaman/page.tsx",
+                      "sha256":  "53729a09ed08f53686463780ebe08176312467e9073545662c1109768c7777ad",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/src/app/checkout/page.tsx",
+                      "sha256":  "45d45953116b4d8bb3c18f0db05af57d25b68315b4c69fe596e931a5b086e0f0",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/app/checkpoint/page.tsx",
+                      "sha256":  "023f7b5e7c02fdc9de049ebb0a42be324b860806f868443d9d2a6198d3fee500",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/src/app/globals.css",
+                      "sha256":  "1b1fef57f9fc11fe77defef90d55aa6aafc08f9d46a0fd35c7edc3ee03f11eaf",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/app/page.tsx",
+                      "sha256":  "69cadee82c117a2a008460a809a9f40a59ff9c46934a89b54739913b74a8f5f8",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/app/program/[level]/page.tsx",
+                      "sha256":  "a457d3d361d184614804ec9219a4f72b2421ddaafc9775a70ff323559175bf73",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/app/program/page.tsx",
+                      "sha256":  "93340f7442791fa9c8c13a0b823ab176ff86dba15f522d0904fb4b2a1a6b10cb",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/app/register/page.tsx",
+                      "sha256":  "992ff95853311fd2d169e039789b3f0b1b7717eedfa0dade8c1e5c1c641fccfd",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/app/stitch-visual.css",
+                      "sha256":  "a73345e2a39ab4d87d19c1ba0ca300b86a758c0dff5bbe4523e68601177bd144",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/admin-assessment-fixtures.ts",
+                      "sha256":  "c337dd0c7fff83e71e94e9e58cca560020323fae8ce12a5a79fa79d4c55f8afa",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/admin-assessment-preview.tsx",
+                      "sha256":  "8f0a8b31f053a49f50322419ffab97f5ab1980ee7b8dd575e7a0efce31ba5335",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/admin-assessment-prototype.tsx",
+                      "sha256":  "72b964e049359fffead4f73811e2639717b52bd1d8badc4e20e5dc9f76248bde",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/admin-blog-catalog.tsx",
+                      "sha256":  "da206491781ada7689f2756602b40a67901c0ad9be3f9b3d01113d099bad8e54",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/src/components/admin-blog-prototype.tsx",
+                      "sha256":  "256dd9f0801f88403117a07fe48d67982e65815c1cb406855e7987244baf0f07",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/admin-canonical-curriculum.tsx",
+                      "sha256":  "d2d2e48c2c3c365d1e127e12f82a836f8e704123c017ad9749632862ef13c706",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/admin-checkpoint-packages.tsx",
+                      "sha256":  "1cf151ee39398f787bbb2d51496f06bd3b1593dc90f744d5f18c2926d263e6d9",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/src/components/admin-checkpoint-workspace.tsx",
+                      "sha256":  "c9efd4c69f3de14d613b9bf1043d569d83eb7b68ec2681fcae360db97da9e8f5",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/src/components/admin-commercial-prototype.tsx",
+                      "sha256":  "5bf520a304ad6bcba9fb3d8ac4ede34cf0f55c4867448ff4267b98d9c7d93566",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/admin-journey-toolbar.tsx",
+                      "sha256":  "c54c89388f07f1b5c35f5e6329318fbb22bfb67388da2a80fe5889562fe5cf0d",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/src/components/admin-learning-media-preview.tsx",
+                      "sha256":  "d2d92e594969ad6408ca29873a3bd6aefaeaa21af89df7003a8f91aa14b39934",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/admin-programs.tsx",
+                      "sha256":  "c167ce3fa2043264030c1628f5578ff94474543914a63121636ee316a9e4d989",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/admin-question-workspace.tsx",
+                      "sha256":  "a8739db1c5e3f6a9b213520e4077405781769f4b14bb01ac62a889c66b7f8834",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/admin-tryout-builder.module.css",
+                      "sha256":  "97822f76124b0a4b73762a8fca8626c4a01985c66fe474667c24b3188d1cb2d7",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/src/components/admin-tryout-question-builder.tsx",
+                      "sha256":  "3f470e8897017b3a2ed68c4812182ff344584a8cdc204a229af9ba34a67d5571",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/src/components/answer-review.css",
+                      "sha256":  "cc86df73d571e04b4ee6380d9e4084f1c3d81b06fa572857b6dbef85f0b7c20c",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/src/components/assessment-builder.tsx",
+                      "sha256":  "54a63a05a7e149dbb61da47dd1fa3fed2cf3cf01f631869a70cc7c8daaf79be4",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/assessment-hooks.ts",
+                      "sha256":  "b7e14a5ff73d36f894f4dcb336b07a57c905a4d3ab74edbd7a21682d59790990",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/backend-assessment-runner.tsx",
+                      "sha256":  "98c9943ceab61574f3032f8b915ec57d626770d13f619d52498ebe3428281974",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/chapter-assessment.tsx",
+                      "sha256":  "d416e1fdd3868d191b317da3385a912c62bbf2341e53171299c7d08256b6f4c1",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/chapter-journey.tsx",
+                      "sha256":  "872dbcf31a8c23f40eecda3d7c105d0a1b49019a6f339fafc8d57f94877b569f",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/checkpoint-student-page.tsx",
+                      "sha256":  "69c65ec7c95a298dae41c0dc66f77f82ad5334b6bc8744275a39cabc7a5c87b2",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/src/components/commercial-hooks.ts",
+                      "sha256":  "42846f13c97b6cb82c9b58d60f4f0590067af0a6ec0524bb5f0b29beb0d05a1c",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/curriculum-builder.tsx",
+                      "sha256":  "4bf5d1d7d70eb8825a3533e44b5f21e1b5b6b00724b758fb71637805b993a07c",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/landing-hero-editor.tsx",
+                      "sha256":  "4bc855b6f6220ab14f835ead7f4c4d7404ef2fb656926c4e1aa303508229d073",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/src/components/landing-price-card.tsx",
+                      "sha256":  "06766712f9b9ad4339143e5b100742d73a1245a415be08175af5c7f66bfa7367",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/learning-dashboard.tsx",
+                      "sha256":  "2f4f5aa4ac59552747ecfa557e3b33515bee6fefa61e2605b25279933370e86f",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/learning-journey.tsx",
+                      "sha256":  "c6c8a20b2518fc51c5638b926bfc3511ad8579b3941f95bb2c6310523923913d",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/learning-shell.tsx",
+                      "sha256":  "9bfcf762bae10292daba19a289945a8789360f9c968b40f2de6df0c6c1f408ff",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/learning-vertical.tsx",
+                      "sha256":  "d1724f4e04cdac0593ff74e0fe8d87e29c0edb5afca79c82725bcf647de71e53",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/practice-screen.tsx",
+                      "sha256":  "881e73040c8477582a2344df30f0aa7754833616f8c34f7c33a7399a68b9dada",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/profile-screen.module.css",
+                      "sha256":  "ab525bffedc5b66fa5d2a5832cc0f1d3e937df63bbb6913f086af8ac2122e778",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/src/components/profile-screen.tsx",
+                      "sha256":  "90611a08c62b9839ac327710742028aa39a2f58daf8e68c3bafec71f9529a37d",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/src/components/public-program-catalog.tsx",
+                      "sha256":  "0489476cfbefc426671a00d465434d4607acb77a69bf1ac80dd1d3524f1af3f1",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/src/components/reading-layout.css",
+                      "sha256":  "bdef54d671cb576cfdac3ebab71daa82b3c29fabb3c3ae1ad46037ff533df68e",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/src/components/sensei-screens.tsx",
+                      "sha256":  "3bcc132b5ad9e46b41042123a717ad88bc4964a38b4e86e82ed0e55ea5ba2cdb",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/sensei-tryout-screen.tsx",
+                      "sha256":  "91a788ea696d8bfad84018ba28a70dec085db6c4d6a302f5ba4c8d89204077c0",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/static-student-route.tsx",
+                      "sha256":  "34b21d3f64b48bceed1a60fdcc4b0349efda7390f3fc01250a3cb45c7cb2820f",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/student-community.css",
+                      "sha256":  "d9cbcdcd0200a7b59db4cde58bfc45b6275856039ab9f7d14038a28369e48c6e",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/src/components/student-community-screen.tsx",
+                      "sha256":  "1bf62da1f9fd6f4d206c9962b28e523b0221efce847131884423f948d1d03a8f",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/student-dashboard.tsx",
+                      "sha256":  "8855faf772da0cdb90114e51d926da3fff8ca2ca9c29d1258635a6712bb4f3cd",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/student-header-actions.tsx",
+                      "sha256":  "a611bec286a27e999e8b0116cb0fb86e7f92030c86fcd47575252f7b41161e6b",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/student-navigation.tsx",
+                      "sha256":  "93d3d305c05af1a2437fd6ae45a4b7f04e2bb040fb7c26789bcfb258ceb036df",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/supporting-screen.tsx",
+                      "sha256":  "67ec1a15e5e3e6fbedb6e06536fea4a44a815a12e0f7c1ff598f28312b187709",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/components/website-content-studio.tsx",
+                      "sha256":  "86fccfeae0159d8b2ff859bc8c53c05a925d011624a9c9451af6758fd1499046",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/lib/admin-console.ts",
+                      "sha256":  "898d27e66841aad4bb7fa3d89f6fb6903b8547c7f1df31a234084c0ba4323877",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/lib/admin-tryout-api.ts",
+                      "sha256":  "194a0e428e8b6f2e7301946541c4443c450693c4a59933f5245b68aebea00324",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/lib/assessment-attempt.ts",
+                      "sha256":  "a8fa0e9210a4c4651df477262571832026c36e95fc5e26276ad1c5cd7727a12d",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/lib/commercial-api.ts",
+                      "sha256":  "8483ecca4bdb4f812d9a130de76db8cb0f0b3c70872f919939b086e8063e90b1",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/lib/journey-mock.ts",
+                      "sha256":  "5036e01377e48f54c27b83ed13af82fb50bf88ad408cfe2033e337096f516e2c",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/lib/landing-hero-api.ts",
+                      "sha256":  "ff91528cad495e8917532e41a5e8a85b0432e7f8f0fabf56cb3ba5b7a04c0da0",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/src/lib/learning-api.ts",
+                      "sha256":  "4f07ac4fb36b68dcc9b69fa6587bbe251c3e299b4ed2762c7fa023e93fa8fb5c",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/lib/practice-catalog.ts",
+                      "sha256":  "14bc2b007103428cdf608a2fccd96af03e4c1f8bc50ac63df06edb4eba155b11",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/src/lib/public-content-api.ts",
+                      "sha256":  "825547fcbd323f030d061053a7a20c5ef245a95052e62a096e52b143da0d70fb",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/lib/schedule-replay-api.ts",
+                      "sha256":  "54be188a37cb0d3f82183dd6eff1ee92ad0690bff352404ec251a7e688a10551",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/src/lib/website-store.ts",
+                      "sha256":  "09dc92147c05d0c910d14c24708ecbc58eb6ac82bf3e64336e647d3d0639f702",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/tests/admin-curriculum.spec.ts",
+                      "sha256":  "1fdedbe306d26aa77101d3bc8a0267e37f4521c6b45aec751dace93f3229c0bc",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/tests/admin-journey-header.spec.ts",
+                      "sha256":  "f48bc2892be2a48504638338deda426d1a7b4cfbe17df987e9f5c00bcc20891c",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/admin-journey-layout.spec.ts",
+                      "sha256":  "7b5e1427732e15d5db39f95029c37b64b90d80e2dd18993c792f18a59d25e7ec",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/admin-replay-navigation.spec.ts",
+                      "sha256":  "a95351aa0339d72bc1523b229b2810bb0f28625a0e0b4dc1f26e6001a6b0218b",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/admin-tryout-fixes.spec.ts",
+                      "sha256":  "88bae6ad582cc10ef916b8b8fb0183548b6344a8826a4f42f6411ad8b3b3c0bc",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/tests/admin-website.spec.ts",
+                      "sha256":  "b402fcc39059a9c9bb02ab8995fdc87a62b115b8da760fa790f9b75225a1ce66",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/tests/affiliate-identity.spec.ts",
+                      "sha256":  "4869746e46ba1a2b2c905cf1655d99c2b5af6baf845010b42056ca3b03af24fd",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/answer-review.spec.ts",
+                      "sha256":  "97a6733dda1e5346d4f74b93eaf04d66c3317c8e3f3ef2f6c717336dfa366e4f",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/api-regression.test.mjs",
+                      "sha256":  "674052d68722a280f9ab3f34b89d219fa5155f321673c8852b721e4bf51214e0",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/tests/batch2b-media.spec.ts",
+                      "sha256":  "31d384aba23f489e909a6f9169908d9b1855382bc3d6eacaef2db6f7103a4811",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/blog-catalogs.spec.ts",
+                      "sha256":  "8e9454d98a53878d2e07cf1e15b761c5e63992ee3252f84227652a5dc3185561",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/canonical-fixture.ts",
+                      "sha256":  "04a0bc59f56d0845c45cd6e8dcc46fcffce4c1ecdf8aa84fb7be7ef40717f035",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/tests/chapter-activity-layout.spec.ts",
+                      "sha256":  "955fd36e73a7408256fc9e8d3bbdedf259a5d9b70909ce8341c4c5437704856c",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/checkout-invoice.spec.ts",
+                      "sha256":  "97884322e42d2134743e89006f9b33f30ce0423ff019a02dcb5c21f269121ca8",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/tests/checkpoint-builder.spec.ts",
+                      "sha256":  "47fa3e918d1bb8bb9020151cbd9bd311ca7fe89c011afac432b37ed1edb626e3",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/checkpoint-flow.spec.ts",
+                      "sha256":  "ad46ebc1a505427a72e6ecf0494d79521e3a0a06330c8c94250f95fe8509d164",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/checkpoint-workspace.spec.ts",
+                      "sha256":  "54c17d6cb180963d3575bccda1a65d3fb9276c0e3a6676b4b83b74e88516ed79",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/community-categories.spec.ts",
+                      "sha256":  "190ba3b5eb63dbf73896348cb2512361f03813860685df0278f733685224f32a",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/daily-practice.spec.ts",
+                      "sha256":  "fd03bd44ff29bcfe13b8ebd6f957fc72318fff17ee30177ea27af9d785e002df",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/gamification.spec.ts",
+                      "sha256":  "efc4d8b7447dd6b609e1e87727e739f9fc4a9dfc2ab3e2468ea1f32db29bffe9",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/gamification-contract.test.mjs",
+                      "sha256":  "db2204032eef07ae1f90f39ed9562956a99c7766e9d9a2054609b6d0748d40b9",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/tests/hero-landing.spec.ts",
+                      "sha256":  "97800143b79b41a14b86d0c304da241fa9714be7cf6b4b805a85a8af1097be0f",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/inactive-program-access.spec.ts",
+                      "sha256":  "1ac636a6319d85f2585962eeefe4ba174c8938a27ee06b46ad20174e7257e5a4",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/journey-mini-final.spec.ts",
+                      "sha256":  "95cdf108664bbb2ccdb31d52e657e7d30f554e198d03bb9615465f2fc16cc6df",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/learning-features-c2.spec.ts",
+                      "sha256":  "8b24d5d0d5be8a041a8d0e99265af8cd48b9797d40ee5f5df3e47bf5407ab224",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/tests/mini-admin-config.spec.ts",
+                      "sha256":  "04354c90af65a323361cb22fe9c55c0a20a4aac0864ea44ee38441aaab0bb099",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/mini-learning-regression.spec.ts",
+                      "sha256":  "73da18f1f28bd6cac6f8ea21a767b526155d7561f95341e83aa225d4191b29b6",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/tests/missing-module-media.spec.ts",
+                      "sha256":  "32bd21193f46a448b76e0fd0be9b09170057dc463cab9681f88e05241d36fc6e",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/placement-adaptive-persistence.spec.ts",
+                      "sha256":  "9c839b54ed4f8867b35fd11bf5fb7d3e43ee8e1e86d254cb1869d3435b3bb39e",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/tests/placement-devices.spec.ts",
+                      "sha256":  "eb6025f582f7b0c5dc5a522cbd4548a8a022c0604e0574f0c89aa0f03c978652",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/placement-public.spec.ts",
+                      "sha256":  "79447871deddcc0cf765191a297535979e5ff1e1b4d48849d7f61fc817a7cea8",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/tests/profile-account-settings.spec.ts",
+                      "sha256":  "2a6e907db00e715876ffb8ae72252f4a403d110373ed0f19784137e47786e0b5",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/profile-c1.spec.ts",
+                      "sha256":  "a7a748017718f5fca64be43f0ab3409b8d82cb1496280710ff776f535be10feb",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/tests/profile-clean.spec.ts",
+                      "sha256":  "fe4336854476fa9368cf8714732f5d030e7235635db156e73ead1dfed0d5195a",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/profile-identity.spec.ts",
+                      "sha256":  "bf247c1986538a19781653a1a149848b338d908f92b756fd6288fbc0fc28e253",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/tests/program-catalog.spec.ts",
+                      "sha256":  "f36cc52e9326ce28b502459e4f9d09df17111da2294a167c0e32824af69a142b",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/question-builders-rich-text.spec.ts",
+                      "sha256":  "0fe78a6e2dba500338c1247a596c4edc72a1c9fccb2a711f2a10dec12b0f3b20",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/question-rich-rendering.spec.ts",
+                      "sha256":  "71bbdf7288c65f071f5cb473fe5e2736b94245d33b83f902d7ddc119a3dc603d",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/reading-layout.spec.ts",
+                      "sha256":  "171cf6acb607bff8c3f6c18b1a7c8592783c010bdd9069c07f1ac95bfac15add",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/renewal-levels.spec.ts",
+                      "sha256":  "af9df9404863582bf178d3f2ecd6db9f23d3b008007e89d790918cacfa01e060",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/standalone-journeys.spec.ts",
+                      "sha256":  "97fd878ce0b21adffd4ee5ed703736b8269f42a61851cc8b088a46bfc353c2d5",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/tryout-access.spec.ts",
+                      "sha256":  "5320a3cde20f50c0bf95dde65f8ab3b29d9b72ce9cc5661abf38a3d391900a0d",
+                      "tracked":  false
+                  },
+                  {
+                      "path":  "Frontend/tests/tryout-answer-check.spec.ts",
+                      "sha256":  "42f09fc1248c2dbcd9b713f825981a68cfa8b355929fff8c6a017b8692b01fc9",
+                      "tracked":  true
+                  },
+                  {
+                      "path":  "Frontend/tests/tryout-start.spec.ts",
+                      "sha256":  "9605157ace07036d7c41647b378ccd42c1cf61eb254e261b23b6e39035a605e6",
+                      "tracked":  true
+                  }
+              ]
+}

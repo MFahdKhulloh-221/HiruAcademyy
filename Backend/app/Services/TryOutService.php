@@ -41,6 +41,7 @@ class TryOutService
             $required = $model->exists ? 'sometimes' : 'required';
             $data = $this->validateInput($input, [
                 'program_id' => [$required, 'required', 'integer', 'exists:programs,id'],
+                'access_type' => ['sometimes', 'required', Rule::in(['free', 'membership'])],
                 'title' => [$required, 'required', 'string', 'max:255'],
                 'status' => ['sometimes', 'required', Rule::in(['draft', 'published'])],
                 'total_passing_score' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:2147483647'],
@@ -135,7 +136,16 @@ class TryOutService
                 }
                 unset($rule);
             }
-            $model->fill($this->validateInput($input, $rules));
+            $data = $this->validateInput($input, $rules);
+            foreach (['question', 'instruction', 'reading_passage', 'explanation'] as $field) {
+                if (isset($data[$field])) {
+                    $data[$field] = PlacementRichText::sanitize($data[$field]);
+                }
+            }
+            if (isset($data['options'])) {
+                $data['options'] = array_map(PlacementRichText::sanitize(...), $data['options']);
+            }
+            $model->fill($data);
             $model->try_out_id = $parent->id;
             $model->status ??= 'draft';
             $model->sort_order ??= 0;
@@ -213,7 +223,7 @@ class TryOutService
 
     public function payload(TryOut $tryOut): array
     {
-        return ['id' => $tryOut->id, 'program_id' => $tryOut->program_id, 'level' => strtoupper($tryOut->program->code), 'title' => $tryOut->title, 'status' => $tryOut->status, 'max_score' => $tryOut->max_score, 'sort_order' => $tryOut->sort_order, 'session_passing_scores' => $tryOut->session_passing_scores, 'section_passing_score' => $tryOut->session_passing_scores === null ? 19 : null, 'section_passing_score_basis' => $tryOut->session_passing_scores === null ? 'correct_answers' : 'points', 'total_passing_score' => $tryOut->total_passing_score, 'duration_minutes' => $tryOut->duration_minutes, 'sessions' => self::SESSIONS];
+        return ['access_type' => $tryOut->access_type ?? 'membership', 'id' => $tryOut->id, 'program_id' => $tryOut->program_id, 'level' => strtoupper($tryOut->program->code), 'title' => $tryOut->title, 'status' => $tryOut->status, 'max_score' => $tryOut->max_score, 'sort_order' => $tryOut->sort_order, 'session_passing_scores' => $tryOut->session_passing_scores, 'section_passing_score' => $tryOut->session_passing_scores === null ? 19 : null, 'section_passing_score_basis' => $tryOut->session_passing_scores === null ? 'correct_answers' : 'points', 'total_passing_score' => $tryOut->total_passing_score, 'duration_minutes' => $tryOut->duration_minutes, 'sessions' => self::SESSIONS];
     }
 
     public function adminQuestion(TryOutQuestion $question): array

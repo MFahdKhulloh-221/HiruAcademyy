@@ -6,6 +6,7 @@ use App\Models\PlacementAttempt;
 use App\Models\PlacementConfig;
 use App\Models\PlacementQuestion;
 use App\Models\Program;
+use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
@@ -226,6 +227,17 @@ class PlacementService
         }
     }
 
+    public function current(Request $request): ?PlacementAttempt
+    {
+        $this->assertStudent($request);
+        abort_unless($request->user(), 401);
+        $attempt = PlacementAttempt::where('user_id', $request->user()->id)
+            ->where('status', 'in_progress')->where('config_snapshot->preview', null)
+            ->orderByDesc('id')->first();
+
+        return $attempt ? $this->refreshAttempt($request, $attempt) : null;
+    }
+
     public function start(Request $request): PlacementAttempt
     {
         $this->assertStudent($request);
@@ -245,6 +257,14 @@ class PlacementService
         }
 
         return DB::transaction(function () use ($request, $data, $token) {
+            if ($request->user()) {
+                $student = User::whereKey($request->user()->id)->lockForUpdate()->firstOrFail();
+                abort_unless($student->role === 'student' && $student->account_status === 'active', 403);
+                $existing = $this->current($request);
+                if ($existing && $existing->status === 'in_progress') {
+                    return $existing;
+                }
+            }
             $config = PlacementConfig::whereKey($this->published()->id)->lockForUpdate()->firstOrFail();
             abort_unless($config->status === 'published', 404);
             try {
@@ -439,6 +459,7 @@ class PlacementService
             'questions' => array_map(fn ($question) => $this->publicQuestion($question), $this->issuedQuestions($attempt)),
             'answers' => $attempt->answers,
             'result' => $attempt->status === 'completed' ? [...array_intersect_key($attempt->result_snapshot, array_flip(['correct', 'wrong', 'unanswered', 'total', 'percentage', 'recommendation_level', 'result_title', 'result_description', 'estimation_label', 'evidence', 'recommended_program', 'availability_message', 'program_message'])), 'areas' => $attempt->result_snapshot['areas'] ?? $this->categoryResults($attempt, $attempt->answers)] : null,
+            'server_now' => CarbonImmutable::now('UTC')->toISOString(),
             'started_at' => $attempt->started_at->utc()->toISOString(),
             'expires_at' => $attempt->expires_at->utc()->toISOString(),
             'completed_at' => $attempt->completed_at?->utc()->toISOString(),

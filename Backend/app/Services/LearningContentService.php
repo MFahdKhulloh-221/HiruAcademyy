@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\AudioQuestion;
 use App\Models\Chapter;
+use App\Models\CheckpointQuestion;
 use App\Models\Flashcard;
 use App\Models\LearningAttempt;
 use App\Models\LearningModule;
@@ -23,6 +24,7 @@ class LearningContentService
 {
     public const RESOURCES = [
         'chapters' => [Chapter::class, null],
+        'checkpoint-questions' => [CheckpointQuestion::class, null],
         'video-lessons' => [VideoLesson::class, 'video'],
         'modules' => [LearningModule::class, 'module'],
         'flashcards' => [Flashcard::class, 'flashcard'],
@@ -77,7 +79,7 @@ class LearningContentService
             'audio-questions' => ['title' => ['sometimes', 'nullable', 'string', 'max:255'], 'audio_url' => ['sometimes', 'nullable', 'string', app(MediaService::class)->rule('audio')]],
             default => [],
         };
-        if (in_array($resource, ['audio-questions', 'reading-questions', 'mini-checkpoint-questions'])) {
+        if (in_array($resource, ['audio-questions', 'reading-questions', 'mini-checkpoint-questions', 'checkpoint-questions'])) {
             $rules += [
                 'question' => $text,
                 'options' => [$required, 'required', 'array:A,B,C,D', 'size:4'],
@@ -97,6 +99,7 @@ class LearningContentService
             $rules['session'] = ['sometimes', 'required', 'integer', 'min:1', 'max:2147483647'];
             $rules['part'] = ['sometimes', 'required', 'integer', 'min:1', 'max:2147483647'];
             $rules['duration_minutes'] = ['sometimes', 'nullable', 'integer', 'min:1', 'max:2147483647'];
+            $rules['passing_score'] = ['sometimes', 'nullable', 'integer', 'min:0', 'max:100'];
         }
 
         return $rules;
@@ -111,7 +114,33 @@ class LearningContentService
     {
         $class = $this->model($resource);
         $model ??= new $class;
+        if ($resource === 'checkpoint-questions') {
+            $unknown = array_diff(array_keys($input), ['id', 'chapter_id', 'question', 'options', 'correct_option', 'explanation', 'sort_order', 'status']);
+            if ($unknown !== []) {
+                throw ValidationException::withMessages(array_fill_keys($unknown, 'Field is prohibited.'));
+            }
+        }
         $data = Validator::make($input, $this->rules($resource, $model))->validate();
+        if (in_array($resource, ['audio-questions', 'reading-questions', 'mini-checkpoint-questions', 'reading-passages', 'checkpoint-questions'], true)) {
+            foreach (['question', 'explanation', 'body'] as $field) {
+                if (isset($data[$field])) {
+                    $data[$field] = PlacementRichText::sanitize($data[$field]);
+                }
+            }
+            if (isset($data['options'])) {
+                $data['options'] = array_map(PlacementRichText::sanitize(...), $data['options']);
+            }
+            Validator::make($data, $this->rules($resource, $model))->validate();
+        }
+
+
+        if ($resource === 'checkpoint-questions') {
+            foreach (\Illuminate\Support\Arr::dot(array_intersect_key($data, array_flip(['question', 'options']))) as $field => $value) {
+                if ($value !== null && trim(html_entity_decode(strip_tags($value), ENT_QUOTES | ENT_HTML5, 'UTF-8'), " \t\n\r\0\x0B\xc2\xa0") === '') {
+                    throw ValidationException::withMessages([$field => 'Text must not be empty.']);
+                }
+            }
+        }
 
         try {
             return DB::transaction(function () use ($resource, $model, $data) {
@@ -151,7 +180,7 @@ class LearningContentService
                         ->when($model->exists, fn ($query) => $query->whereKeyNot($model->getKey()))->exists()) {
                         throw ValidationException::withMessages(['chapter_id' => 'Only one video is allowed per chapter.']);
                     }
-                    if (! $this->allowed($chapter->program()->firstOrFail()->family, self::RESOURCES[$resource][1])) {
+                    if ($resource !== 'checkpoint-questions' && ! $this->allowed($chapter->program()->firstOrFail()->family, self::RESOURCES[$resource][1])) {
                         throw ValidationException::withMessages([$parent => 'Content is not allowed in this program family.']);
                     }
                 }
@@ -159,8 +188,8 @@ class LearningContentService
                     $group = MiniCheckpointQuestion::where('chapter_id', $model->chapter_id)
                         ->where('session', $model->session)->where('part', $model->part)->where('status', 'published')
                         ->when($model->exists, fn ($query) => $query->whereKeyNot($model->getKey()))->get()
-                        ->map(fn ($question) => $question->only(['session', 'part', 'duration_minutes']))->all();
-                    $group[] = $model->only(['session', 'part', 'duration_minutes']);
+                        ->map(fn ($question) => $question->only(['session', 'part', 'duration_minutes', 'passing_score']))->all();
+                    $group[] = $model->only(['session', 'part', 'duration_minutes', 'passing_score']);
                     app(LearningAttemptService::class)->miniConfiguration($group);
                 }
                 $model->save();
@@ -183,6 +212,9 @@ class LearningContentService
         $class = $this->model($resource);
         DB::transaction(function () use ($resource, $class, $id) {
             $model = $class::whereKey($id)->lockForUpdate()->firstOrFail();
+            if ($resource === 'chapters' && CheckpointQuestion::where('chapter_id', $model->id)->exists()) {
+                throw ValidationException::withMessages(['chapter' => 'Chapter has Checkpoint questions and cannot be deleted.']);
+            }
             if ($resource === 'chapters' && LearningAttempt::where('chapter_id', $model->id)->exists()) {
                 throw ValidationException::withMessages(['chapter' => 'Chapter has retained learning attempts and cannot be deleted.']);
             }

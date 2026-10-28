@@ -22,12 +22,12 @@ class StudentChapterResource extends JsonResource
             ->map(function ($questions) {
                 $first = $questions->first();
                 try {
-                    $configuration = app(LearningAttemptService::class)->miniConfiguration($questions->map(fn ($question) => $question->only(['session', 'part', 'duration_minutes']))->values()->all());
+                    $configuration = app(LearningAttemptService::class)->miniConfiguration($questions->map(fn ($question) => $question->only(['session', 'part', 'duration_minutes', 'passing_score']))->values()->all());
                 } catch (ValidationException) {
                     $configuration = null;
                 }
 
-                return ['session' => $first->session, 'part' => $first->part, 'duration_minutes' => $configuration['duration_minutes'] ?? null, 'question_count' => $questions->count(), 'configuration_valid' => $configuration !== null];
+                return ['session' => $first->session, 'part' => $first->part, 'duration_minutes' => $configuration['duration_minutes'] ?? null, 'passing_score' => $configuration['passing_score'] ?? null, 'question_count' => $questions->count(), 'configuration_valid' => $configuration !== null];
             })->sortBy(['session', 'part'])->values()->all();
         foreach ([
             'video_lessons' => ['videoLessons', ['id', 'title', 'video_url', 'description', 'sort_order']],

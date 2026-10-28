@@ -8,8 +8,10 @@ for (const width of [1440, 390]) {
     const programs = [{ id: 1, code: "n5", name: "JLPT N5", family: "jlpt" }];
     const access = { learning: { n5: "full" as const }, replay_levels: [], source_grants: [{ plan_code: "lms", program_code: "n5" }] };
     const chapter = { id: 11, chapter_number: 1, title: "Chapter Satu", sort_order: 1, access: "full" as const };
-    const progress = { chapter_id: 11, activities: {}, mini_unlocked: false };
+    const progress = { chapter_id: 11, activities: { audio: { total: 1, completed: 0, complete: false }, reading: { total: 1, completed: 0, complete: false } }, mini_unlocked: false };
     const starts: string[] = [];
+    let answers: Record<string, string> = {};
+    const audioAttempt = () => ({ id: 4, kind: "audio", chapter_id: 11, revision: 1, status: "in_progress", answers, questions: [{ id: 81, question: "Soal latihan existing", options: { A: "Satu", B: "Dua" } }], result: null });
     await page.route(/\/(api\/|sanctum\/csrf-cookie)/, async route => {
       const path = new URL(route.request().url()).pathname;
       const method = route.request().method();
@@ -17,6 +19,11 @@ for (const width of [1440, 390]) {
       const reply = (data: unknown) => route.fulfill({ headers, json: { data } });
       if (method === "OPTIONS") return route.fulfill({ status: 204, headers });
       if (path === "/sanctum/csrf-cookie") return route.fulfill({ status: 204, headers: { ...headers, "set-cookie": "XSRF-TOKEN=fixture; Path=/" } });
+      if (method === "PUT" && path.endsWith("/attempts/4/answers")) {
+        answers = route.request().postDataJSON().answers;
+        return reply(audioAttempt());
+      }
+      if (method === "GET" && path.endsWith("/attempts/4")) return reply(audioAttempt());
       if (method !== "GET") {
         expect(path).toBe("/api/student/programs/1/chapters/11/attempts");
         starts.push(route.request().postDataJSON().kind);
@@ -35,7 +42,7 @@ for (const width of [1440, 390]) {
       return reply([]);
     });
     await page.goto("/dashboard");
-    const practice = page.locator('main a[href^="/practice"]');
+    const practice = page.locator('main a[href^="/practice"]').filter({ hasText: 'Soal Audio/Reading' });
     const flashcards = page.locator('main a[href^="/flashcards"]');
     await expect(practice).toContainText("Soal Audio/Reading & materi chapter");
     await expect(flashcards).toContainText("Hafalan kosakata dengan kartu belajar");
@@ -43,16 +50,39 @@ for (const width of [1440, 390]) {
     await practice.click();
     await expect(page.getByRole("heading", { name: "Latihan Harian" })).toBeVisible();
     const cards = page.locator(".practice-journey-card");
-    await expect(cards.filter({ hasText: "Kosakata" }).getByRole("link", { name: "Belajar Flashcard" })).toHaveAttribute("href", "/learn/n5/chapter-1/flashcards");
-    for (const [category, suffix] of [["Kanji", "kanji"], ["Tata Bahasa", "grammar"]]) {
-      await expect(cards.filter({ hasText: category }).getByRole("link", { name: "Pelajari Materi" })).toHaveAttribute("href", `/learn/n5/chapter-1/${suffix}`);
-    }
+    await expect(cards).toHaveCount(2);
+    await expect(page.getByRole("link", { name: "Belajar Flashcard", exact: true })).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath(`practice-${width}.png`), fullPage: true });
     for (const category of ["Audio", "Reading"]) {
       await cards.filter({ hasText: `| ${category}` }).getByRole("button", { name: "Kerjakan Latihan" }).click();
       await expect(page.getByRole("heading", { name: "Soal latihan existing" })).toBeVisible();
       await page.getByRole("button", { name: "Kembali ke Daftar Latihan" }).click();
     }
+    expect(starts).toEqual(["audio", "reading"]);
+    await cards.filter({ hasText: "| Audio" }).getByRole("button", { name: "Kerjakan Latihan" }).click();
+    await expect(page.getByRole("heading", { name: "Soal latihan existing" })).toBeVisible();
+    const saved = page.waitForResponse(response => response.request().method() === "PUT" && response.url().endsWith("/attempts/4/answers"));
+    await page.getByRole("radio", { name: "A. Satu" }).check();
+    await saved;
+    await expect(page.getByRole("status").filter({ hasText: "Tersimpan" })).toBeVisible();
+    await page.getByRole("button", { name: "Kembali ke Daftar Latihan" }).click();
+    await cards.filter({ hasText: "| Audio" }).getByRole("button", { name: "Kerjakan Latihan" }).click();
+    await expect(page.getByRole("radio", { name: "A. Satu" })).toBeChecked();
+    answers = { "81": "B" };
+    await page.reload();
+    await expect(page.getByRole("radio", { name: "B. Dua" })).toBeChecked();
+    answers = { "81": "A" };
+    await page.goto("/learn/n5/chapter-1/audio?start=1");
+    await expect(page.getByRole("radio", { name: "A. Satu" })).toBeChecked();
+    await page.getByRole("link", { name: "Kembali ke Aktivitas Chapter" }).click();
+    await expect(page).toHaveURL(/\/learn\/n5\/chapter-1$/);
+    await page.goto("/learn/n5/chapter-1/audio?start=1");
+    await expect(page.getByRole("radio", { name: "A. Satu" })).toBeChecked();
+    if (width === 390) await page.getByRole("button", { name: "Buka navigasi" }).click();
+    await page.getByRole("link", { name: "Dashboard", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Soal latihan existing" })).toHaveCount(0);
+    await page.goto("/learn/n5/chapter-1/audio?start=1");
+    await expect(page.getByRole("radio", { name: "A. Satu" })).toBeChecked();
     expect(starts).toEqual(["audio", "reading"]);
     await page.goto("/dashboard");
     await page.locator('main a[href^="/flashcards"]').click();

@@ -1,19 +1,18 @@
 "use client";
 
 import Link from "next/link";
+import { AdminJourneyHeader, journeyTabs } from "@/components/admin-journey-toolbar";
+import { AdminQuestionWorkspace } from "@/components/admin-question-workspace";
 import { AdminPrograms } from "@/components/admin-programs";
 import { AdminCanonicalCurriculum } from "@/components/admin-canonical-curriculum";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { AdminShell } from "@/components/admin-shell";
 import {
-  AdminBreadcrumb,
   AdminConfirmDialog,
   AdminDataTable,
   AdminDialog,
-  AdminPageHeader,
   AdminStatusBadge,
-  AdminTabs,
 } from "@/components/admin-primitives";
 import {
   createChapter,
@@ -47,54 +46,26 @@ import {
 } from "@/lib/admin-curriculum-store";
 import { readAssessments } from "@/lib/admin-assessment-store";
 
-const mainTabs = [
-  "Program",
-  "Kurikulum",
-  "Flashcard",
-  "Perpustakaan Materi",
-  "Replay Rekaman",
-] as const;
-type MainTab = (typeof mainTabs)[number];
+const mainTabs = Object.keys(journeyTabs) as (keyof typeof journeyTabs)[];
+type MainTab = keyof typeof journeyTabs;
 
 export function CurriculumBuilder() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const rawTab = searchParams.get("tab") as MainTab | null;
+  const tabParam = searchParams.get("tab");
+  const rawTab = (tabParam === "Kurikulum" ? "Chapter" : tabParam) as MainTab | null;
   const currentTab: MainTab =
-    rawTab && mainTabs.includes(rawTab) ? rawTab : "Kurikulum";
-
-  function setTab(tab: string) {
-    router.replace(`/admin/kurikulum-materi?tab=${encodeURIComponent(tab)}`);
-  }
+    rawTab && mainTabs.includes(rawTab) ? rawTab : "Chapter";
 
   return (
     <AdminShell current="/admin/kurikulum-materi">
       <main className="admin-page curriculum-admin-page">
-        <AdminBreadcrumb
-          items={[
-            { label: "Admin", href: "/admin" },
-            { label: "Kurikulum & Materi" },
-            ...(currentTab !== "Kurikulum" ? [{ label: currentTab }] : []),
-          ]}
-        />
-        <AdminPageHeader
-          eyebrow="ADMIN • CONTENT STUDIO"
-          title={currentTab === "Program" ? "Journey / Program" : "Kurikulum & Materi"}
-          description={currentTab === "Program" ? "Kelola daftar program, urutan, dan status tampil di Journey siswa." : "Pusat pengelolaan silabus chapter, dek flashcard interaktif, materi referensi, dan rekaman kelas bimbingan."}
-        />
-
-        <AdminTabs
-          tabs={mainTabs}
-          active={currentTab}
-          onChange={setTab}
-          label="Menu Kurikulum & Materi"
-        >
+        <AdminJourneyHeader tab={currentTab} />
+        <div>
           {currentTab === "Program" && <AdminPrograms />}
-          {currentTab === "Kurikulum" && <AdminCanonicalCurriculum nested />}
+          {currentTab === "Chapter" && <AdminCanonicalCurriculum nested />}
           {currentTab === "Flashcard" && <AdminCanonicalCurriculum flashcards nested />}
-          {currentTab === "Perpustakaan Materi" && <div className="library-tab-content"><Link href="/admin/modul">Modul</Link><p>Perpustakaan Materi mengikuti modul published pada chapter.</p></div>}
-          {currentTab === "Replay Rekaman" && <ReplayTab />}
-        </AdminTabs>
+          {currentTab === "Mini Checkpoint" && <AdminQuestionWorkspace kind="Mini Checkpoint" nested />}
+        </div>
       </main>
     </AdminShell>
   );
@@ -1684,7 +1655,7 @@ function LibraryMaterialModal({
   );
 }
 
-function ReplayTab() {
+export function ReplayTab() {
   const { store, refresh } = useCurriculumStore();
   const [filterProgram, setFilterProgram] = useState<string>("");
   const [editingReplay, setEditingReplay] = useState<ReplayRecord | null>(null);

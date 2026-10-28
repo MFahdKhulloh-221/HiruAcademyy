@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AccessGrantController;
 use App\Http\Controllers\AdminAffiliateController;
+use App\Http\Controllers\AdminBlogCatalogController;
 use App\Http\Controllers\AdminCommissionController;
 use App\Http\Controllers\AdminLearningController;
 use App\Http\Controllers\AdminMediaController;
@@ -18,6 +19,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CommunityController;
 use App\Http\Controllers\EffectiveAccessController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\LandingHeroController;
 use App\Http\Controllers\ProgramController;
 use App\Http\Controllers\ProgramOfferController;
 use App\Http\Controllers\PromotionController;
@@ -32,6 +34,7 @@ use App\Http\Controllers\StudentProfileAvatarController;
 use App\Http\Controllers\StudentScheduleReplayController;
 use App\Http\Controllers\StudentTestimonialController;
 use App\Http\Controllers\StudentTryOutController;
+use App\Services\BlogCatalogService;
 use App\Services\LearningContentService;
 use App\Services\PlacementService;
 use App\Services\PublicContentService;
@@ -40,6 +43,17 @@ use Illuminate\Support\Facades\Route;
 
 Route::prefix('api')->middleware('throttle:api')->group(function () {
     Route::middleware(['auth:sanctum', 'active', 'role:admin'])->prefix('admin')->group(function () {
+        Route::get('checkpoint-packages', [\App\Http\Controllers\CheckpointController::class, 'adminIndex']);
+        Route::post('checkpoint-packages', [\App\Http\Controllers\CheckpointController::class, 'store']);
+        Route::get('checkpoint-packages/{package}', [\App\Http\Controllers\CheckpointController::class, 'adminShow']);
+        Route::delete('checkpoint-packages/{package}', [\App\Http\Controllers\CheckpointController::class, 'destroy']);
+        Route::put('checkpoint-packages/{package}', [\App\Http\Controllers\CheckpointController::class, 'update']);
+        foreach (array_keys(BlogCatalogService::RESOURCES) as $resource) {
+            Route::get($resource, [AdminBlogCatalogController::class, 'index'])->defaults('resource', $resource);
+            Route::post($resource, [AdminBlogCatalogController::class, 'store'])->defaults('resource', $resource);
+            Route::patch("$resource/{content}", [AdminBlogCatalogController::class, 'update'])->whereNumber('content')->defaults('resource', $resource);
+            Route::delete("$resource/{content}", [AdminBlogCatalogController::class, 'destroy'])->whereNumber('content')->defaults('resource', $resource);
+        }
         Route::post('media', [AdminMediaController::class, 'store']);
         Route::delete('media', [AdminMediaController::class, 'destroy']);
         foreach (array_keys(ScheduleReplayService::RESOURCES) as $resource) {
@@ -105,6 +119,9 @@ Route::prefix('api')->middleware('throttle:api')->group(function () {
         });
         Route::get('payouts', [AdminPayoutController::class, 'index']);
         Route::post('payouts', [AdminPayoutController::class, 'store']);
+        Route::get('landing/hero', [LandingHeroController::class, 'show']);
+        Route::patch('landing/hero/draft', [LandingHeroController::class, 'draft']);
+        Route::post('landing/hero/publish', [LandingHeroController::class, 'publish']);
         Route::get('settings', [AdminSettingsController::class, 'index']);
         Route::patch('settings', [AdminSettingsController::class, 'update']);
         Route::get('users', [AdminUserController::class, 'index']);
@@ -125,6 +142,15 @@ Route::prefix('api')->middleware('throttle:api')->group(function () {
         Route::patch('community/replies/{reply}', [CommunityController::class, 'adminUpdateReply']);
     });
     Route::middleware(['auth:sanctum', 'active', 'role:student'])->prefix('student')->group(function () {
+        Route::get('checkpoint-packages', [\App\Http\Controllers\CheckpointController::class, 'index']);
+        Route::get('checkpoint-packages/{package}', [\App\Http\Controllers\CheckpointController::class, 'show']);
+        Route::post('checkpoint-packages/{package}/attempts', [\App\Http\Controllers\CheckpointController::class, 'start']);
+        Route::get('checkpoint-packages/{package}/history', [\App\Http\Controllers\CheckpointController::class, 'history']);
+        Route::get('checkpoint-packages/{package}/attempts/{attempt}', [\App\Http\Controllers\CheckpointController::class, 'attempt']);
+        Route::put('checkpoint-packages/{package}/attempts/{attempt}/answers', [\App\Http\Controllers\CheckpointController::class, 'save']);
+        Route::post('checkpoint-packages/{package}/attempts/{attempt}/submit', [\App\Http\Controllers\CheckpointController::class, 'submit']);
+        Route::get('checkpoint-packages/{package}/attempts/{attempt}/result', [\App\Http\Controllers\CheckpointController::class, 'result']);
+        Route::get('checkpoint-packages/{package}/attempts/{attempt}/review', [\App\Http\Controllers\CheckpointController::class, 'review']);
         Route::get('testimonial', [StudentTestimonialController::class, 'show']);
         Route::put('testimonial', [StudentTestimonialController::class, 'update']);
         Route::post('profile/avatar', [StudentProfileAvatarController::class, 'store']);
@@ -179,9 +205,11 @@ Route::prefix('api')->middleware('throttle:api')->group(function () {
     Route::get('blog/{slug}', [PublicContentController::class, 'article']);
     Route::get('placement', [PublicPlacementController::class, 'index']);
     Route::post('placement/attempts', [PublicPlacementController::class, 'start'])->block();
+    Route::get('placement/attempts/current', [PublicPlacementController::class, 'current'])->middleware(['auth:sanctum', 'active', 'role:student']);
     Route::get('placement/attempts/{attempt}', [PublicPlacementController::class, 'show'])->whereNumber('attempt');
     Route::put('placement/attempts/{attempt}/answers', [PublicPlacementController::class, 'save'])->whereNumber('attempt');
     Route::post('placement/attempts/{attempt}/submit', [PublicPlacementController::class, 'submit'])->whereNumber('attempt');
+    Route::get('public/landing/hero', [LandingHeroController::class, 'publicShow']);
     Route::get('public/offers', [ProgramOfferController::class, 'publicIndex']);
     Route::get('admin/offers', [ProgramOfferController::class, 'adminIndex'])
         ->middleware(['auth:sanctum', 'active', 'role:admin']);

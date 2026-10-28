@@ -79,12 +79,12 @@ function HeaderActions({ membership }: { membership: Membership }) {
     }}><LuBell aria-hidden="true" />{unread > 0 && <span className={styles.badge} aria-label={`${unread} notifikasi belum dibaca`}>{unread > 99 ? "99+" : unread}</span>}</button>
     <button ref={profileTrigger} type="button" className={styles.account} aria-label="Profil akun" aria-expanded={open === "profile"} aria-controls="student-profile-dropdown" onClick={() => setOpen(open === "profile" ? null : "profile")}>
       <StudentAvatar name={user?.name ?? ""} url={user?.avatar_resolved_url} className="dash-avatar" />
-      <span className={styles.identity}><strong>{user?.name}</strong><span>{label}</span></span>
+      {!onProfile && <span className={styles.identity}><strong>{user?.name}</strong><span>{label}</span></span>}
     </button>
     {open === "profile" && <section id="student-profile-dropdown" aria-label="Profil akun" className={styles.dropdown}>
       <strong>{user?.name}</strong><p>{label}</p>
       <Link href="/profile" onClick={() => setOpen(null)}>Lihat Profil</Link>
-      {onProfile ? <Link href="#pengaturan" onClick={() => setOpen(null)}>Kelola Foto Profil</Link> : <button type="button" disabled={!!avatar.busy} onClick={() => input.current?.click()}>{avatar.busy ? "Mengunggah..." : "Ganti Foto Profil"}</button>}
+      {onProfile ? <Link href="#foto-profil" onClick={() => setOpen(null)}>Kelola Foto Profil</Link> : <button type="button" disabled={!!avatar.busy} onClick={() => input.current?.click()}>{avatar.busy ? "Mengunggah..." : "Ganti Foto Profil"}</button>}
       {avatar.error && <p role="alert">{avatar.error}</p>}
       {avatar.success && <p role="status">Foto profil berhasil diperbarui.</p>}
     </section>}

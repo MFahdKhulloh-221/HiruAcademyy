@@ -125,8 +125,8 @@ export function ReplayScreen(props: { purchasedLevel?: string } = {}) {
   return <div className="replay-page-container batch3-replay">
     <div className="sensei-title-row replay-head-row"><PageHead eyebrow="BELAJAR DENGAN SENSEI • REPLAY KELAS" title="Rekaman Sesi Kelas Bersama Sensei" description="Tonton kembali penjelasan materi, pembahasan latihan, dan sesi tanya jawab interaktif." /><Link href="/schedule" className="button button-secondary replay-schedule-btn">Lihat Jadwal Kelas</Link></div>
     <div className="replay-filter-bar"><label className="replay-search-input"><span aria-hidden="true"><LuSearch /></span><input aria-label="Cari rekaman" value={search} onChange={event => setSearch(event.target.value)} placeholder="Cari judul rekaman, chapter, atau topik..." /></label><div className="replay-tabs-group">{replayLevels.map(level => { const allowed = access.replay_levels.includes(level.toLowerCase()); return <button className={`replay-tab-btn ${selected === level.toLowerCase() ? "active" : ""}`} aria-pressed={selected === level.toLowerCase()} type="button" disabled={!allowed} onClick={() => setFilter(level.toLowerCase())} key={level}>{level}{allowed ? "" : " • Terkunci"}</button>; })}</div></div>
-    {featured && <section className="replay-featured-card"><ReplayPreview item={featured} /><div className="replay-featured-info"><div className="replay-featured-badges"><span className="replay-badge-status">Rekaman Terbaru</span><span className="replay-category-tag">{selected.toUpperCase()}</span></div><h2>{featured.title}</h2><p>{featured.description}</p><Link className="button button-primary" href={`/replay/chapter-4?id=${featured.id}`}>Tonton Replay<span className="batch3-sr-only">: {featured.title}</span></Link></div></section>}
-    <div className="replay-section-header"><h2>Daftar Rekaman Sesi</h2><span>{visible.length} rekaman tersedia</span></div>
+    {featured && <section className="replay-featured-card"><ReplayPreview item={featured} /><div className="replay-featured-info"><div className="replay-featured-badges"><span className="replay-badge-status">Playlist Pilihan</span><span className="replay-category-tag">{selected.toUpperCase()}</span></div><h2>{featured.title}</h2><p>{featured.description}</p><Link className="button button-primary" href={`/replay/chapter-4?id=${featured.id}`}>Tonton Replay<span className="batch3-sr-only">: {featured.title}</span></Link></div></section>}
+    <div className="replay-section-header"><h2>Daftar Rekaman Sesi</h2><span>{visible.length} playlist tersedia</span></div>
     {visible.length ? <section className="replay-cards-grid">{visible.map(item => <article className="replay-session-card" key={item.id}><ReplayPreview item={item} /><div className="replay-card-body"><span className="replay-category-tag">{selected.toUpperCase()}</span><h3>{item.title}</h3><p>{item.description}</p><Link className="button button-primary" href={`/replay/chapter-4?id=${item.id}`}>Tonton Replay<span className="batch3-sr-only">: {item.title}</span></Link></div></article>)}</section> : <section className="sensei-status-panel"><h2>Belum ada rekaman</h2><p>Replay tampil setelah sesi selesai diverifikasi dan dipublikasikan.</p></section>}
     <section className="sensei-announcement"><strong>Pengumuman</strong><p>Replay tampil setelah rekaman sesi selesai diverifikasi dan dipublikasikan.</p></section>
   </div>;
@@ -151,10 +151,12 @@ export function ReplayPlayerScreen({ playlistId }: { playlistId?: string; youtub
 }
 
 function ReplayMedia({ url, title }: { url: string; title: string }) {
+  const [failedUrl, setFailedUrl] = useState<string>();
+  if (failedUrl === url) return <section className="batch3-media-empty"><h2>Video gagal dimuat</h2><p>Periksa koneksi atau pilih rekaman lain.</p><button className="button button-secondary" type="button" onClick={() => setFailedUrl(undefined)}>Coba Lagi Video</button></section>;
   const parsed = new URL(url);
   const youtube = ["www.youtube.com", "youtube.com", "m.youtube.com"].includes(parsed.hostname) ? parsed.searchParams.get("v") || parsed.pathname.match(/^\/(?:embed|shorts)\/([A-Za-z0-9_-]{11})$/)?.[1] : parsed.hostname === "youtu.be" ? parsed.pathname.slice(1) : null;
   if (youtube && /^[A-Za-z0-9_-]{11}$/.test(youtube)) return <iframe key={url} title={title} src={`https://www.youtube-nocookie.com/embed/${youtube}`} allow="encrypted-media; picture-in-picture" allowFullScreen />;
-  if (/\.(?:mp4|webm|ogg|mov|m4v)$/i.test(parsed.pathname)) return <video key={url} src={url} controls preload="metadata" aria-label={title} />;
+  if (/\.(?:mp4|webm|ogg|mov|m4v)$/i.test(parsed.pathname)) return <video key={url} src={url} controls preload="metadata" aria-label={title} onError={() => setFailedUrl(url)} />;
   return <div className="batch3-media-empty"><LuPlay aria-hidden="true" /><h2>{title}</h2><a className="button button-primary" href={url} target="_blank" rel="noopener noreferrer">Tonton Replay</a></div>;
 }
 

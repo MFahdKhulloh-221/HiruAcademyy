@@ -33,7 +33,11 @@ class ProgramOffer extends Model
 
         return [
             'base_price' => $this->base_price,
-            'promotion' => $promotion === null ? null : ['discount_percent' => $promotion->discount_percent],
+            'promotion' => $promotion === null ? null : [
+                'discount_percent' => $promotion->discount_percent,
+                'starts_at' => $promotion->starts_at?->format('Y-m-d'),
+                'ends_at' => $promotion->ends_at?->format('Y-m-d'),
+            ],
             'discount_percent' => $promotion?->discount_percent ?? 0,
             'discount_amount' => $discount,
             'effective_price' => $this->base_price === null ? null : max(0, $this->base_price - $discount),

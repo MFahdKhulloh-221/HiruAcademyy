@@ -37,7 +37,7 @@ class InvoiceController extends Controller
             'affiliate_id' => ['prohibited'], 'commission' => ['prohibited'], 'rate' => ['prohibited'], 'amount' => ['prohibited'],
             'due_date' => ['nullable', 'date_format:Y-m-d'], 'note' => ['nullable', 'string', 'max:5000'],
         ];
-        foreach (['user_id', 'status', 'base_price', 'discount', 'discount_percent', 'discount_amount', 'total_price', 'effective_price', 'duration', 'duration_months', 'currency', 'program_id', 'plan_code', 'source_invoice_id'] as $field) {
+        foreach (['user_id', 'status', 'base_price', 'discount', 'discount_percent', 'discount_amount', 'total_price', 'effective_price', 'duration', 'duration_months', 'currency', 'program_id', 'plan_code', 'source_invoice_id', 'renewal_grant_id'] as $field) {
             $rules[$field] = ['prohibited'];
         }
         $data = $request->validate($rules);
@@ -55,7 +55,7 @@ class InvoiceController extends Controller
             'due_date' => ['nullable', 'date_format:Y-m-d'],
             'note' => ['nullable', 'string', 'max:5000'],
             'status' => ['prohibited'], 'base_price' => ['prohibited'], 'total_price' => ['prohibited'],
-            'discount_amount' => ['prohibited'], 'duration_months' => ['prohibited'],
+            'discount_amount' => ['prohibited'], 'duration_months' => ['prohibited'], 'renewal_grant_id' => ['prohibited'],
         ]);
         $invoice = $workflow->create(User::findOrFail($data['user_id']), ProgramOffer::findOrFail($data['program_offer_id']), $data);
 

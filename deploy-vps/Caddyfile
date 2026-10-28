@@ -1,6 +1,13 @@
 {$DOMAIN} {
     encode zstd gzip
 
+    # ponytail: block student Checkpoint until authenticated HTTP authorization passes;
+    # remove this handler only after ownership and entitlement checks pass over HTTP.
+    @checkpoint path /api/student/checkpoint-packages /api/student/checkpoint-packages/*
+    handle @checkpoint {
+        respond "Checkpoint preview unavailable" 403
+    }
+
     @laravel path /api /api/* /sanctum /sanctum/* /storage /storage/* /up
     handle @laravel {
         reverse_proxy backend:10000

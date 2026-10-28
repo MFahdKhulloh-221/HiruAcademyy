@@ -920,3 +920,12 @@ a { color:inherit; text-decoration:none; }
 .placement-rich-content :is(p,div) { display: block; margin: 0; }
 .placement-furigana-panel { display: grid; gap: 12px; padding: 12px; border-top: 1px solid #dfe2e8; background: #f8fafc; }
 .placement-furigana-panel > div { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Chapter activity badges stay in the top row, separate from description and action. */
+.learning-activity-grid .learning-activity-card { min-width: 0; }
+.learning-activity-grid .learning-activity-top { align-items: flex-start; justify-content: space-between; }
+.learning-activity-grid .learning-activity-icon { flex: 0 0 48px; }
+.learning-activity-grid .learning-activity-status { max-width: calc(100% - 58px); text-align: right; font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
+.learning-activity-grid .activity-completed .learning-activity-status { background: #e7f4eb; color: #245334; }
+.learning-activity-grid .activity-locked .learning-activity-status { background: #eeeef3; color: #535865; }
+.learning-activity-grid .learning-activity-card h3 { overflow-wrap: anywhere; }

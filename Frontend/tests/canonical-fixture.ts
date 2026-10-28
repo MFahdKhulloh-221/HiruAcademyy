@@ -22,6 +22,8 @@ export const test = base.extend<{ canonicalApi: void }>({
     const settings: Record<string, unknown> = {};
     const programs = ["n5", "n4", "n3"].map((code, index) => ({ id: index + 1, code, slug: code, name: `JLPT ${code.toUpperCase()}`, family: "jlpt" }));
     const offers = programs.flatMap(program => ["lms", "sensei"].map((plan, index) => ({ id: program.id * 10 + index, program_id: program.id, program, plan_code: plan, currency: "IDR", base_price: 99000, effective_price: 99000, discount_amount: 0, discount_percent: 0, duration_months: plan === "lms" ? 6 : 1, status: "active" })));
+    collections.set("/api/admin/blog-categories", ["Tips Belajar", "Grammar / Bunpou", "Listening / Choukai", "JLPT"].map((name, index) => ({ id: 1000 + index, name, active: true })));
+    collections.set("/api/admin/blog-contributors", [{ id: 1010, name: "Hiru Academy", active: true }]);
     collections.set("/api/admin/users", [{ id: 901, name: "Browser Student", email: "browser.student@example.test", whatsapp: "6281999000012", account_status: "active" }]);
     collections.set("/api/admin/placement-leads", [
       { id: 1, date: "2026-10-01T08:00:00Z", name: "Budi Santoso", whatsapp: "6281234567890", target: "N5", score: 75, recommended_level: "N5", status: "new" },

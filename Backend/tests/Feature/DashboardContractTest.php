@@ -37,7 +37,8 @@ class DashboardContractTest extends TestCase
     {
         $this->actingAs($user);
         $data = $this->getJson('/api/student/dashboard')->assertOk()->json('data');
-        $this->assertSame($this->getJson('/api/public/programs')->assertOk()->json('data'), $data['programs']);
+        $publicPrograms = $this->getJson('/api/public/programs')->assertOk()->json('data');
+        $this->assertSame($publicPrograms, array_values(array_filter($data['programs'], fn ($program) => in_array($program['id'], array_column($publicPrograms, 'id'), true))));
         $this->assertSame($this->getJson('/api/student/access')->assertOk()->json('data'), $data['access']);
         $expected = [];
         foreach ($data['programs'] as $program) {
@@ -113,7 +114,7 @@ class DashboardContractTest extends TestCase
         Program::where('code', 'n1')->update(['status' => 'inactive']);
         Chapter::where('program_id', Program::where('code', 'n5')->firstOrFail()->id)->update(['status' => 'draft']);
         $data = $this->parity($user);
-        $this->assertNotContains('n1', array_column($data['programs'], 'code'));
+        $this->assertContains('n1', array_column($data['programs'], 'code'));
     }
 
     public function test_access_dates_tiers_preview_and_admin_projection(): void
@@ -181,7 +182,8 @@ class DashboardContractTest extends TestCase
             }
         }
         $this->assertSame($counts[0], $counts[1]);
-        $this->assertLessThanOrEqual(11, $counts[1]);
+        // Mini history and effective entitlement checks add fixed queries, never per chapter.
+        $this->assertLessThanOrEqual(14, $counts[1]);
         $this->actingAs($admin);
         DB::flushQueryLog();
         DB::enableQueryLog();

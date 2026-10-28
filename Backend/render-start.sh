@@ -8,7 +8,9 @@ mkdir -p storage/framework/cache/data storage/framework/sessions storage/framewo
 chown -R www-data:www-data storage bootstrap/cache
 php artisan package:discover --no-interaction
 php artisan config:cache
-php artisan migrate --force --no-interaction
+if [ "${RUN_MIGRATIONS:-true}" = "true" ]; then
+    php artisan migrate --force --no-interaction
+fi
 sed -i "s/^Listen 80$/Listen $port/" /etc/apache2/ports.conf
 sed -i "s/<VirtualHost \*:80>/<VirtualHost *:$port>/" /etc/apache2/sites-available/000-default.conf
 exec apache2-foreground

@@ -1,0 +1,71 @@
+.form :global(.placement-text-editor > [contenteditable]) { font-weight: 400; }
+.workspace { min-width: 0; }
+.toolbar { display: flex; align-items: end; flex-wrap: wrap; gap: 16px; margin-bottom: 20px; }
+.filters { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; min-width: 0; flex: 1; }
+.filters label { flex: 1 1 150px; }
+.filters input, .filters select { width: 100%; min-height: 44px; }
+.toolbar > button { margin-left: auto; }
+.workspace :global(.admin-data-table) { min-width: 1120px; table-layout: auto; }
+.workspace :global(.admin-data-table th), .workspace :global(.admin-data-table td) { overflow-wrap: normal; word-break: normal; vertical-align: middle; padding: 12px; }
+.workspace :global(.admin-data-table td:not(:first-child)) { white-space: nowrap; }
+.workspace :global(.admin-data-table td:first-child) { min-width: 180px; max-width: 320px; }
+.workspace :global(.admin-data-table td:nth-child(3)) { white-space: normal; min-width: 150px; }
+.rowActions { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+.rowActions :global(.button) { width: auto; white-space: nowrap; padding: 8px 12px; }
+.more summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; white-space: nowrap; }
+.more > div { display: flex; flex-wrap: wrap; gap: 8px; max-width: 300px; padding-top: 8px; }
+.accessBadge { display: inline-flex; padding: 6px 10px; border-radius: 999px; background: var(--soft); color: var(--navy); font-weight: 700; white-space: nowrap; }
+.summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; max-width: 360px; white-space: normal; }
+.packageFields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.packageFields > fieldset { grid-column: 1 / -1; min-width: 0; }
+.packageForm { min-width: 0; }
+.questionNav { display: flex; gap: 8px; flex-wrap: wrap; }
+.questionNav [aria-current] { background: var(--orange); color: #5a2a00; }
+@media (max-width: 639px) {
+  .filters { flex-basis: 100%; flex-direction: column; align-items: stretch; }
+  .filters label { flex-basis: auto; width: 100%; }
+  .packageFields { grid-template-columns: minmax(0, 1fr); }
+}
+
+.questionBuilder { min-width: 0; display: grid; gap: 16px; }
+.twoPanels { display: grid; grid-template-columns: minmax(0, 28fr) minmax(0, 72fr); gap: 24px; align-items: start; }
+.questionList, .questionEditor { min-width: 0; padding: 16px; border: 1px solid #dfe2e8; border-radius: 8px; background: #fff; }
+.questionList { display: grid; gap: 12px; }
+.questionList ol { list-style: none; padding: 0; margin: 0; display: grid; gap: 8px; }
+.questionList li > button { display: grid; text-align: left; width: 100%; min-height: 44px; gap: 6px; border: 1px solid #dfe2e8; background: #fff; border-radius: 6px; padding: 12px; overflow-wrap: anywhere; }
+.questionList [aria-current] { border-color: #f48220; background: #fff7ef; color: #5a2a00; }
+.questionBuilder input:not([type=radio]), .questionBuilder select { width: 100%; max-width: 100%; min-height: 44px; }
+.questionBuilder button, .questionBuilder summary, .answer label { min-height: 44px; }
+.questionBuilder summary { cursor: pointer; padding-block: 12px; }
+.questionBuilder audio { max-width: 100%; width: 100%; }
+.answer { min-width: 0; display: grid; gap: 8px; }
+.answer label { display: flex; align-items: center; gap: 8px; }
+.answer input { width: 20px; height: 20px; }
+.serverActions { position: sticky; bottom: 0; background: #fff; padding: 16px 0; border-top: 1px solid #dfe2e8; }
+.backToList { display: none; }
+:global(.admin-shell .admin-dialog):has(.questionBuilder) { width: min(1280px, calc(100vw - 48px)); max-width: none; }
+:global(.admin-dialog-content):has(> .questionBuilder) { display: block; }
+@media (max-width: 639px) {
+  .twoPanels { grid-template-columns: minmax(0, 1fr); }
+  .questionEditor { display: none; }
+  .editing .questionList { display: none; }
+  .editing .questionEditor { display: block; }
+  .backToList { display: inline-flex; }
+  :global(.admin-shell .admin-dialog):has(.questionBuilder) { width: calc(100vw - 16px); }
+}
+
+.studentPreview { min-width: 0; display: grid; gap: 16px; padding: 16px; border: 1px solid #dfe2e8; border-radius: 12px; background: #f9f9ff; }
+.studentPreview :global(.learning-question-card) { min-width: 0; }
+.studentPreview :global(.learning-question-card fieldset) { display: grid; gap: 12px; border: 0; padding: 0; margin: 20px 0 0; min-width: 0; }
+.studentPreview :global(.learning-question-card label) { display: flex; align-items: center; cursor: pointer; }
+.studentPreview :global(.reading-passage) { min-width: 0; overflow-wrap: anywhere; }
+
+.questionEditor .questionTitle { margin: 0; font-size: clamp(22px, 2vw, 28px); line-height: 1.35; font-weight: 800; }
+.answerGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.questionEditor .answer :global(.placement-text-editor) { min-width: 0; max-width: 100%; grid-template-columns: minmax(0, 1fr); }
+.questionEditor .answer :global(.placement-text-editor > [contenteditable]) { box-sizing: border-box; height: 140px; min-height: 0; max-height: 140px; min-width: 0; overflow-y: scroll; overflow-x: hidden; overflow-wrap: anywhere; word-break: break-word; scrollbar-width: thin; scrollbar-gutter: stable; }
+.questionEditor .answer :global(.placement-text-editor > [contenteditable])::-webkit-scrollbar { width: 6px; }
+.questionEditor .answer :global(.placement-text-editor > [contenteditable])::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 6px; }
+@media (max-width: 639px) {
+  .answerGrid { grid-template-columns: minmax(0, 1fr); }
+}

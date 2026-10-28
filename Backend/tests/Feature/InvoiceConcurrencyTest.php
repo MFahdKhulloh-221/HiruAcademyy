@@ -16,14 +16,20 @@ use Tests\TestCase;
 
 class InvoiceConcurrencyTest extends TestCase
 {
-    public function test_two_connections_activate_same_committed_invoice_exactly_once(): void
+    public static function activationCases(): array
+    {
+        return ['purchase replay' => [false, false], 'renewal replay' => [true, false], 'different paid renewals' => [true, true]];
+    }
+
+    #[\PHPUnit\Framework\Attributes\DataProvider('activationCases')]
+    public function test_two_connections_serialize_activation(bool $renewal, bool $different): void
     {
         DatabaseSafety::assertTarget(true);
         $this->assertSame(0, DB::transactionLevel());
         $token = (string) Str::uuid();
         $workers = [];
         $users = [];
-        $program = $offer = $invoice = null;
+        $program = $offer = $invoice = $second = $original = null;
         $workerCode = <<<'PHP'
 require 'vendor/autoload.php';
 $app = require 'bootstrap/app.php';
@@ -43,7 +49,7 @@ echo json_encode(['id' => $result->id, 'status' => $result->status, 'activated_a
 PHP;
 
         try {
-            DB::transaction(function () use ($token, &$users, &$program, &$offer, &$invoice) {
+            DB::transaction(function () use ($token, $renewal, $different, &$users, &$program, &$offer, &$invoice, &$second, &$original) {
                 foreach (['student', 'admin'] as $role) {
                     $user = User::create([
                         'name' => $role, 'email' => $role.'-'.$token.'@invoice.example.test',
@@ -54,24 +60,37 @@ PHP;
                     $user->save();
                 }
                 $program = Program::create([
-                    'code' => 'invoice-'.$token, 'slug' => 'invoice-'.$token, 'name' => 'Invoice concurrency',
+                    'code' => $renewal ? 'n5' : 'invoice-'.$token, 'slug' => 'invoice-'.$token, 'name' => 'Invoice concurrency',
                     'family' => 'jlpt', 'cumulative_rank' => 2, 'status' => 'active', 'sort_order' => 1,
                 ]);
                 $offer = ProgramOffer::create([
                     'program_id' => $program->id, 'plan_code' => 'lms', 'base_price' => 99000,
                     'currency' => 'IDR', 'duration_months' => 6, 'status' => 'active',
                 ]);
+                if ($renewal) {
+                    $original = AccessGrant::create(['user_id' => $users[0]->id, 'program_id' => $program->id, 'plan_code' => 'lms', 'status' => 'active', 'starts_at' => today()->subMonth(), 'ends_at' => today()->addMonth()])->fresh();
+                }
                 $service = app(InvoiceWorkflowService::class);
                 $invoice = $service->create($users[0], $offer);
                 foreach (['awaiting_payment', 'paid', 'verified'] as $status) {
                     $invoice = $service->transition($invoice, $status, $users[1]);
                 }
+                if ($different) {
+                    $second = $service->create($users[0], $offer);
+                    foreach (['awaiting_payment', 'paid', 'verified'] as $status) {
+                        $second = $service->transition($second, $status, $users[1]);
+                    }
+                }
             });
             $before = $invoice->fresh()->getAttributes();
             $start = today()->toDateString();
-            $end = today()->toImmutable()->addMonthsNoOverflow(6)->subDay()->toDateString();
+            $end = $renewal ? $original->ends_at->addMonthsNoOverflow(6)->toDateString() : today()->toImmutable()->addMonthsNoOverflow(6)->subDay()->toDateString();
             DB::beginTransaction();
-            Invoice::whereKey($invoice->id)->lockForUpdate()->firstOrFail();
+            if ($different) {
+                User::whereKey($users[0]->id)->lockForUpdate()->firstOrFail();
+            } else {
+                Invoice::whereKey($invoice->id)->lockForUpdate()->firstOrFail();
+            }
             $names = [];
             foreach ([1, 2] as $index) {
                 $name = 'invoice-'.$token.'-'.$index;
@@ -83,7 +102,7 @@ PHP;
                 $worker->setTimeout(20);
                 $worker->setInput(json_encode([
                     'connection' => DB::connection()->getConfig(), 'name' => $name,
-                    'invoice' => $invoice->id, 'admin' => $users[1]->id,
+                    'invoice' => $different && $index === 2 ? $second->id : $invoice->id, 'admin' => $users[1]->id,
                 ], JSON_THROW_ON_ERROR));
                 $workers[] = $worker;
                 $worker->start();
@@ -106,6 +125,14 @@ PHP;
             foreach ($workers as $worker) {
                 $this->assertSame(0, $worker->wait(), $worker->getErrorOutput());
                 $results[] = json_decode($worker->getOutput(), true, 512, JSON_THROW_ON_ERROR);
+            }
+            if ($different) {
+                $grants = AccessGrant::whereIn('source_invoice_id', [$invoice->id, $second->id])->orderBy('ends_at')->get();
+                $this->assertCount(2, $grants);
+                $this->assertSame($original->ends_at->addMonthsNoOverflow(6)->toDateString(), $grants[0]->ends_at->toDateString());
+                $this->assertSame($original->ends_at->addMonthsNoOverflow(6)->addMonthsNoOverflow(6)->toDateString(), $grants[1]->ends_at->toDateString());
+                $this->assertSame($original->getAttributes(), $original->fresh()->getAttributes());
+                return;
             }
             $this->assertSame($results[0], $results[1]);
             $this->assertSame($invoice->id, $results[0]['id']);
@@ -132,10 +159,17 @@ PHP;
                 DB::rollBack();
             }
             DatabaseSafety::assertTarget(true);
-            DB::transaction(function () use ($invoice, $offer, $program, $users) {
+            DB::transaction(function () use ($invoice, $second, $original, $offer, $program, $users) {
+                if ($second !== null) {
+                    AccessGrant::where('source_invoice_id', $second->id)->delete();
+                    Invoice::whereKey($second->id)->delete();
+                }
                 if ($invoice !== null) {
                     AccessGrant::where('source_invoice_id', $invoice->id)->delete();
                     Invoice::whereKey($invoice->id)->delete();
+                }
+                if ($original !== null) {
+                    $original->delete();
                 }
                 if ($offer !== null) {
                     ProgramOffer::whereKey($offer->id)->delete();

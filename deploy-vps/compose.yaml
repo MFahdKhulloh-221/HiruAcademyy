@@ -38,6 +38,7 @@ services:
       DB_PASSWORD: ${POSTGRES_PASSWORD}
       DB_SSLMODE: disable
       PORT: "10000"
+      RUN_MIGRATIONS: "false"
     command: ["sh", "-c", "php artisan storage:link && exec sh /var/www/html/render-start.sh"]
     volumes:
       - media_data:/var/www/html/storage/app/public

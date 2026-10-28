@@ -2,10 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { ApiError } from "@/lib/api";
+import { apiRequest, ApiError } from "@/lib/api";
 import { AttemptPersistence, readAttempt, startAttempt, type AttemptDomain, type ServerAttempt } from "@/lib/assessment-attempt";
 
-export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?: string) {
+export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?: string, resumeAudio = false) {
   const { user, loading } = useAuth();
   const identity = loading ? undefined : domain === "placement" ? `placement:${user?.id ?? "guest"}` : user?.id;
   const persistence = useRef<AttemptPersistence | null>(null);
@@ -13,7 +13,9 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
   const pending = useRef(false);
   const latestAnswers = useRef<Record<string, string>>({});
   const saveVersion = useRef(0);
-  const requestKey = JSON.stringify([identity, path, domain, scope]);
+  // ponytail: tab-session reference only; cross-device resume needs backend attempt discovery.
+  const resumeKey = resumeAudio && identity ? `audio-attempt:${identity}:${path}` : undefined;
+  const requestKey = JSON.stringify([identity, path, domain, scope, resumeAudio]);
   const [state, setState] = useState<{ requestKey: string; attempt?: ServerAttempt; answers: Record<string, string>; loadingAttempt: boolean; busy: boolean; error?: string }>({ requestKey: "", answers: {}, loadingAttempt: true, busy: false });
   const current = state.requestKey === requestKey && !loading ? state : undefined;
   const loadingAttempt = current?.loadingAttempt ?? true;
@@ -32,12 +34,35 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
       window.history.replaceState(null, "", url);
     }
     const params = new URLSearchParams(window.location.search);
-    const id = scope ? params.get(`mini_attempt_${scope}`) ?? (params.get("attempt_scope") === scope ? params.get("attempt") : null) : params.get("attempt");
-    if (identity && id && /^[1-9]\d*$/.test(id)) {
+    let remembered: string | null = null;
+    try { if (resumeKey) remembered = sessionStorage.getItem(resumeKey); } catch { /* Storage unavailable; explicit attempt URL still works. */ }
+    const id = scope ? params.get(`mini_attempt_${scope}`) ?? (params.get("attempt_scope") === scope ? params.get("attempt") : null) : params.get("attempt") ?? remembered;
+    const discoverPlacement = domain === "placement" && path === "/api/placement/attempts" && Boolean(user?.id) && !id;
+    if (identity && ((id && /^[1-9]\d*$/.test(id)) || discoverPlacement)) {
       setState({ requestKey, answers: {}, loadingAttempt: true, busy: false });
-      readAttempt(`${path}/${id}`, controller.signal).then(attempt => {
+      const load = discoverPlacement
+        ? apiRequest<{ data: ServerAttempt | null }>(`${path}/current`, { signal: controller.signal }).then(({ data }) => data ? readAttempt(`${path}/${data.id}`, controller.signal) : undefined)
+        : readAttempt(`${path}/${id}`, controller.signal);
+      load.then(attempt => {
         if (version !== generation.current || controller.signal.aborted) return;
+        if (!attempt) {
+          setState({ requestKey, answers: {}, loadingAttempt: false, busy: false });
+          return;
+        }
+        if (discoverPlacement) {
+          const url = new URL(window.location.href);
+          url.searchParams.set("attempt", String(attempt.id));
+          window.history.replaceState(null, "", url);
+        }
         if (scope && `${identity}/${path.split("/")[4]}/${attempt.chapter_id}/mini/${attempt.session}/${attempt.part}` !== scope) throw new ApiError(404);
+        if (resumeAudio && attempt.kind !== "audio") throw new ApiError(404);
+        if (resumeKey) {
+          try { sessionStorage.setItem(resumeKey, String(attempt.id)); } catch { /* URL remains usable without storage. */ }
+          const url = new URL(window.location.href);
+          url.searchParams.set("attempt", String(attempt.id));
+          url.searchParams.delete("start");
+          window.history.replaceState(null, "", url);
+        }
         persistence.current = new AttemptPersistence(attempt, `${path}/${attempt.id}`, domain);
         latestAnswers.current = attempt.answers;
         setState({ requestKey, attempt, answers: attempt.answers, loadingAttempt: false, busy: false });
@@ -48,7 +73,7 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
       setState({ requestKey, answers: {}, loadingAttempt: false, busy: false });
     }
     return () => { controller.abort(); if (generation.current === version) generation.current = version + 1; };
-  }, [path, domain, identity, scope, requestKey]);
+  }, [path, domain, identity, scope, requestKey, resumeAudio, resumeKey, user?.id]);
   async function run(action: () => Promise<ServerAttempt>, replaceAnswers = false) {
     const version = generation.current;
     setState(previous => ({ ...previous, requestKey, busy: true, error: undefined }));
@@ -73,7 +98,11 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
       persistence.current = new AttemptPersistence(attempt, `${path}/${attempt.id}`, domain);
       const url = new URL(window.location.href);
       url.searchParams.set("attempt", String(attempt.id));
-      if (domain === "tryout") {
+      if (resumeKey) {
+        try { sessionStorage.setItem(resumeKey, String(attempt.id)); } catch { /* URL remains usable without storage. */ }
+        url.searchParams.delete("start");
+      }
+      if ((domain === "tryout" || domain === "checkpoint")) {
         url.searchParams.delete("tryout_stage");
         url.searchParams.delete("tryout_question");
       }
@@ -111,7 +140,7 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
     return run(() => persistence.current!.save(latestAnswers.current));
   }
   async function synchronize() {
-    if (domain !== "tryout" || !persistence.current || !current || pending.current) return;
+    if ((domain !== "tryout" && domain !== "checkpoint") || !persistence.current || !current || pending.current) return;
     pending.current = true;
     const result = await run(() => persistence.current!.save(latestAnswers.current));
     pending.current = false;
@@ -125,14 +154,14 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
     return result;
   }
   async function submit() {
-    if (!persistence.current || !current || (domain !== "tryout" && current.busy) || pending.current) return;
+    if (!persistence.current || !current || ((domain !== "tryout" && domain !== "checkpoint") && current.busy) || pending.current) return;
     pending.current = true;
     const result = await run(() => persistence.current!.submit(latestAnswers.current));
     pending.current = false;
     return result;
   }
   async function expire() {
-    if (domain !== "tryout" || !persistence.current || !current) return;
+    if ((domain !== "tryout" && domain !== "checkpoint") || !persistence.current || !current) return;
     pending.current = true;
     const result = await run(() => persistence.current!.expire());
     pending.current = false;

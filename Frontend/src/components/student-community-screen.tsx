@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import "./student-community.css";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { LuArrowLeft, LuMessagesSquare, LuSearch } from "react-icons/lu";
 import { useAuth } from "@/components/auth-provider";
@@ -293,24 +294,25 @@ export function StudentCommunityScreen({ membership }: { membership: Membership 
         )}
       </div>
 
-      <section className="community-access-grid" style={{ margin: "20px 0", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "14px" }}>
+      {!topicsReq.data && !topicsReq.error && <LoadingSkeleton variant="cards" label="Memuat kategori…" />}
+      {topicsReq.error && <p role="alert">{topicsReq.error} <button type="button" onClick={topicsReq.retry}>Coba Lagi Kategori</button></p>}
+      <section className="community-access-grid community-category-menu" aria-label="Kategori diskusi">
+        <button type="button" aria-pressed={selectedTopicSlug === "all"} onClick={() => setSelectedTopicSlug("all")}>
+          <strong>Semua Diskusi</strong>
+          <span>Lihat seluruh kategori diskusi.</span>
+        </button>
         {(topicsReq.data ?? []).map(topic => {
           const isSelected = selectedTopicSlug === topic.slug;
           return (
-            <article
+            <button
+              type="button"
               key={topic.id}
-              onClick={() => setSelectedTopicSlug(isSelected ? "all" : topic.slug)}
-              style={{
-                padding: "16px 20px",
-                borderRadius: "14px",
-                border: isSelected ? "2px solid var(--orange)" : "1px solid var(--line)",
-                background: isSelected ? "#fff7ef" : "#fff",
-                cursor: "pointer",
-              }}
+              aria-pressed={isSelected}
+              onClick={() => setSelectedTopicSlug(topic.slug)}
             >
-              <strong style={{ fontSize: "15px", display: "block", marginBottom: "4px" }}>{topic.title}</strong>
-              <p style={{ margin: 0, fontSize: "12px", color: "var(--muted)" }}>{topic.description}</p>
-            </article>
+              <strong>{topic.title}</strong>
+              <span>{topic.description}</span>
+            </button>
           );
         })}
       </section>
@@ -320,11 +322,12 @@ export function StudentCommunityScreen({ membership }: { membership: Membership 
           <p className="dash-kicker" style={{ margin: 0 }}>DISKUSI TERBARU</p>
           <small style={{ color: "var(--muted)" }}>Aktivitas diskusi pembelajar aktif.</small>
         </div>
-        <label className="library-search" style={{ minWidth: "280px" }}>
+        <label className="library-search community-search">
           <span aria-hidden="true"><LuSearch /></span>
           <input
             value={search}
             onChange={e => setSearch(e.target.value)}
+            aria-label="Cari diskusi"
             placeholder="Cari diskusi atau topik…"
           />
         </label>

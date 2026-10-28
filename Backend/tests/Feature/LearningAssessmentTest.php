@@ -423,7 +423,7 @@ class LearningAssessmentTest extends TestCase
         $this->getJson($url)->assertNotFound();
         $this->chapter->update(['status' => 'published']);
         $program->update(['status' => 'inactive']);
-        $this->getJson($url)->assertNotFound();
+        $this->getJson($url)->assertOk();
         $program->update(['status' => 'active']);
         $foreignBase = '/api/student/programs/'.Program::where('code', 'n4')->firstOrFail()->id.'/chapters/'.$this->chapter->id;
         $this->getJson($foreignBase.'/progress')->assertNotFound();

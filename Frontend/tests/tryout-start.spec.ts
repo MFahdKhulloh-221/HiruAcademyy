@@ -16,7 +16,7 @@ async function mockTryOut(page: Page, answered = 0, duration: number | null = nu
     if (method === "OPTIONS") return route.fulfill({ status: 204, headers });
     if (path === "/sanctum/csrf-cookie") return route.fulfill({ status: 204, headers: { ...headers, "set-cookie": "XSRF-TOKEN=testing; Path=/" } });
     if (path === "/api/me") return reply({ id: 71, name: "Student", email: "practice@example.test", whatsapp: "081234567890", role: "student", account_status: "active" });
-    if (path === "/api/public/programs") return reply([{ id: 5, code: "n5", name: "JLPT N5", family: "jlpt" }]);
+    if (path === "/api/student/dashboard") return reply({ programs: [{ id: 5, code: "n5", name: "JLPT N5", family: "jlpt" }], access: { learning: { n5: "full" }, replay_levels: [], source_grants: [{ plan_code: "lms", program_code: "n5" }] }, chapters: [] });
     if (path === "/api/student/access") return reply({ learning: { n5: "full" }, replay_levels: [], source_grants: [{ plan_code: "lms", program_code: "n5" }] });
     const detail = { duration_minutes: duration === null ? null : Math.ceil(duration / 60), id: 2, level: "N5", title: "Server Try Out", max_score: 180, sessions: Object.fromEntries(assessmentSessions.map((session, index) => [session, assessmentSessionLabels[index]])) };
     if (path === "/api/student/try-outs") return reply([detail]);
@@ -133,3 +133,67 @@ for (const status of ['completed', 'expired', 'in_progress']) {
     expect(mock.calls.starts).toBe(0);
   });
 }
+for (const width of [1440, 768, 390]) {
+  test(`timer deadline countdown refresh suspended tab and expiry ${width}`, async ({ page, context }) => {
+    await page.setViewportSize({ width, height: 1000 });
+    await page.clock.install({ time: new Date('2026-10-11T00:00:00Z') });
+    await page.clock.pauseAt(new Date('2026-10-11T00:00:00Z'));
+    const mock = await mockTryOut(page, 1, 600);
+    await page.goto('/tryout?tryout=2&attempt=9');
+    const timer = page.getByRole('timer');
+    await expect.poll(async () => { await page.clock.runFor(1); return timer.count(); }).toBe(1);
+    const seconds = async () => {
+      const [minutes, seconds] = (await timer.locator('strong').innerText()).split(':').map(Number);
+      return minutes * 60 + seconds;
+    };
+    const initialSeconds = await seconds();
+    expect(initialSeconds).toBeGreaterThanOrEqual(599);
+    expect(initialSeconds).toBeLessThanOrEqual(600);
+    await page.clock.runFor(5000);
+    await expect(timer.locator('strong')).toHaveText('09:55');
+    await page.getByRole('button', { name: 'Selanjutnya', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Question 2', exact: true })).toBeVisible();
+    await expect(timer.locator('strong')).toHaveText('09:55');
+    await page.getByRole('button', { name: 'Sebelumnya', exact: true }).click();
+    await expect(timer.locator('strong')).toHaveText('09:55');
+    await page.reload();
+    await expect.poll(async () => { await page.clock.runFor(1); return timer.count(); }).toBe(1);
+    await expect(timer.locator('strong')).toHaveText('09:55');
+    const other = await context.newPage();
+    await other.bringToFront();
+    // Simulate a throttled/suspended interval: one tick after 60 seconds, not 60 ticks.
+    await page.clock.fastForward(60000);
+    await page.bringToFront();
+    await other.close();
+    await expect(timer.locator('strong')).toHaveText('08:55');
+    expect(mock.calls.starts).toBe(0);
+    await expect(page.getByText('Backend explanation', { exact: true })).toHaveCount(0);
+    await timer.scrollIntoViewIfNeeded();
+    await expect(timer).toBeInViewport();
+    const layout = await timer.evaluate(el => {
+      const rect = el.getBoundingClientRect();
+      const title = el.parentElement!.querySelector('h1')!.getBoundingClientRect();
+      return { readable: parseFloat(getComputedStyle(el.querySelector('strong')!).fontSize) >= 16, clear: rect.right <= title.left || rect.left >= title.right || rect.bottom <= title.top || rect.top >= title.bottom, unobscured: el.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2)) };
+    });
+    expect(layout).toEqual({ readable: true, clear: true, unobscured: true });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.clock.fastForward(533000);
+    await expect(timer.locator('strong')).toHaveText('00:02');
+    await page.clock.runFor(2000);
+    await expect(page.getByRole('heading', { name: 'Hasil Server Try Out', exact: true })).toBeVisible();
+    expect(mock.getServer().status).toBe('completed');
+    expect(mock.calls.submits).toBe(0);
+    expect(mock.calls.starts).toBe(0);
+  });
+}
+
+test('timer expired attempt on open uses backend result without a new start', async ({ page }) => {
+  await page.clock.install({ time: new Date('2026-10-11T00:11:00Z') });
+  const mock = await mockTryOut(page, 1, 600);
+  await page.goto('/tryout?tryout=2&attempt=9');
+  await expect(page.getByRole('heading', { name: 'Hasil Server Try Out', exact: true })).toBeVisible();
+  await expect(page.getByRole('timer')).toHaveCount(0);
+  expect(mock.calls.starts).toBe(0);
+  expect(mock.calls.submits).toBe(0);
+  expect(mock.getServer().status).toBe('completed');
+});

@@ -7,12 +7,14 @@ import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { PublicPage } from "@/components/public-shell";
 import { useAuth, type RegisterPayload } from "@/components/auth-provider";
 import { ApiError } from "@/lib/api";
+import { commercialSelection } from "@/lib/commercial-api";
 
 function RegisterForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const placement = searchParams.get("placement");
   const planContext = searchParams.get("plan");
+  const selection = commercialSelection(searchParams);
 
   const [visible, setVisible] = useState(false);
   const defaultTarget = placement && ["N1", "N2", "N3", "N4", "N5"].includes(placement) ? placement : "N4";
@@ -42,7 +44,10 @@ function RegisterForm() {
       password_confirmation: password,
       target_jlpt: targetJlpt,
     };
-    const destination = plan === "Free Member" ? "/dashboard?membership=free" : `/checkout?level=${targetJlpt.toLowerCase()}&plan=${plan === "Belajar Mandiri" ? "lms" : "sensei"}`;
+    const checkout = new URLSearchParams({ program: selection.level || (searchParams.get("program") ?? searchParams.get("level") ?? targetJlpt), plan: plan === "Belajar Mandiri" ? "lms" : "sensei" });
+    const referral = String(data.get("referral") ?? "").trim();
+    if (referral) checkout.set("referral", referral);
+    const destination = plan === "Free Member" ? "/dashboard?membership=free" : `/checkout?${checkout}`;
     pending.current = true;
     setBusy(true);
     setError("");

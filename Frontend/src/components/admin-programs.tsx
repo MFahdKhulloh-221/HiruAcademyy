@@ -34,18 +34,19 @@ export function AdminPrograms() {
   function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft) return;
-    const { name, description, sort_order, status, slug, id } = draft;
+    const { name, description, sort_order, status, id } = draft;
+    const base = name.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 210) || "program";
+    const slug = `${base}-${crypto.randomUUID()}`;
     void mutate(`/api/admin/programs${id ? `/${id}` : ""}`, id ? "PATCH" : "POST", { name, description, sort_order, ...(id ? { status } : { slug }) });
   }
 
   return <section>
-    <div className="admin-page-actions"><button type="button" className="button button-primary" disabled={busy || loading || Boolean(error)} onClick={() => { setMessage(""); setDraft({ name: "", slug: "", description: "", status: "draft", sort_order: Math.min(32767, Math.max(0, ...rows.map(row => row.sort_order)) + 1) }); }}>Tambah Program</button></div>
+    <div className="admin-journey-actions"><button type="button" className="button button-primary" disabled={busy || loading || Boolean(error)} onClick={() => { setMessage(""); setDraft({ name: "", slug: "", description: "", status: "draft", sort_order: Math.min(32767, Math.max(0, ...rows.map(row => row.sort_order)) + 1) }); }}>+ Tambah Program</button></div>
     {error && <p role="alert">{error} <button type="button" onClick={reload}>Coba lagi</button></p>}
     {message && <p role="alert">{message}</p>}
     <AdminDataTable caption="Daftar Program" loading={loading} rows={rows} rowKey={row => String(row.id)} columns={[
-      { key: "name", header: "Nama", cell: row => row.name },
-      { key: "slug", header: "Slug", cell: row => row.slug },
-      { key: "description", header: "Deskripsi", cell: row => row.description ?? "" },
+      { key: "name", header: "Nama Program", cell: row => row.name },
+      { key: "description", header: "Deskripsi Singkat", cell: row => row.description ?? "" },
       { key: "order", header: "Urutan", cell: row => row.sort_order },
       { key: "status", header: "Status", cell: row => <AdminStatusBadge status={row.status === "active" ? "Aktif" : row.status === "inactive" ? "Nonaktif" : "Draft"} /> },
     ]} actions={{ cell: row => <div className="admin-page-actions">
@@ -56,12 +57,12 @@ export function AdminPrograms() {
     <AdminDialog open={Boolean(draft)} title={draft?.id ? "Edit Program" : "Tambah Program"} close={() => { if (!busy) setDraft(null); }}>
       {draft && <form className="admin-prototype-form" onSubmit={save}>
         <label className="admin-field">Nama program<input required maxLength={255} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} /></label>
-        <label className="admin-field">Slug<input required readOnly={Boolean(draft.id)} maxLength={255} pattern="[a-z0-9]+(-[a-z0-9]+)*" value={draft.slug} onChange={event => setDraft({ ...draft, slug: event.target.value })} /><small>Slug tetap setelah disimpan agar URL lama tidak berubah.</small></label>
         <label className="admin-field">Deskripsi / informasi program<textarea maxLength={10000} value={draft.description ?? ""} onChange={event => setDraft({ ...draft, description: event.target.value })} /></label>
         <label className="admin-field">Urutan<input required type="number" min={0} max={32767} step={1} value={draft.sort_order} onChange={event => setDraft({ ...draft, sort_order: Number(event.target.value) })} /></label>
         <label className="admin-field">Status<select disabled={!draft.id} value={draft.status} onChange={event => setDraft({ ...draft, status: event.target.value as Program["status"] })}><option value="draft">Draft</option><option value="active">Aktif</option><option value="inactive">Nonaktif</option></select></label>
         <p>Program baru disimpan sebagai Draft. Aktivasi tidak memberikan akses berbayar.</p>
         {message && <p role="alert">{message}</p>}
+        <button type="button" className="button" disabled={busy} onClick={() => setDraft(null)}>Batal</button>
         <button type="submit" className="button button-primary" disabled={busy}>Simpan</button>
       </form>}
     </AdminDialog>

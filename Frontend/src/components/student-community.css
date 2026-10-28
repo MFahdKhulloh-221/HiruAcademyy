@@ -1,0 +1,31 @@
+.community-access-grid.community-category-menu {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
+  margin: 20px 0;
+  gap: 14px;
+}
+.community-category-menu > button {
+  min-width: 0;
+  min-height: 44px;
+  padding: 16px 20px;
+  border: 2px solid var(--line);
+  border-radius: 14px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+.community-category-menu > button[aria-pressed="true"] {
+  border-color: #954900;
+  background: var(--soft);
+}
+.community-category-menu > button:focus-visible {
+  outline: 3px solid #954900;
+  outline-offset: 3px;
+}
+.community-category-menu strong { font-size: 15px; }
+.community-category-menu span { color: var(--muted); font-size: 12px; }
+.community-search { width: min(100%, 360px); min-width: 0; }
+.community-search input { min-width: 0; }
+.community-list article > div:first-child { min-width: 0; overflow-wrap: anywhere; }

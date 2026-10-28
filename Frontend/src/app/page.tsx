@@ -11,7 +11,7 @@ import { PublicPage } from "@/components/public-shell";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { SenseiGrid } from "@/components/sensei-grid";
 import { TestimonialCard } from "@/components/testimonial-card";
-import { usePublishedLanding } from "@/lib/website-store";
+import { usePublishedLandingRequest } from "@/lib/website-store";
 import { contentMedia, offerPrice, useContent, type PublicOffer, type PublicProgram, type ShowcaseContent, type TestimonialContent } from "@/lib/public-content-api";
 
 type IconName = "arrow" | "book" | "check" | "compass" | "layers" | "play" | "sparkle" | "target" | "users";
@@ -65,7 +65,7 @@ function ArrowLink({ href, children, dark = false }: { href: string; children: R
 }
 
 export default function Home() {
-  const landing = usePublishedLanding();
+  const { landing, loading: heroLoading, error: heroError, retry: retryHero } = usePublishedLandingRequest();
   const testimonialContent = useContent<TestimonialContent>("/api/testimonials?landing=true");
   const showcase = useContent<ShowcaseContent>("/api/showcase");
   const pricing = useContent<PublicOffer>("/api/public/offers");
@@ -78,7 +78,7 @@ export default function Home() {
     "Placement test, pembelajaran, flashcard, latihan, try out, komunitas, dan kelas bersama Sensei tersedia dalam satu pengalaman belajar yang konsisten.";
   const currentOffers = offers.map(offer => {
     const available = pricing.data.filter(item => item.plan_code === offer.id && programs.data.some(program => program.family === "jlpt" && program.code.toLowerCase() === item.program.code.toLowerCase())).sort((a, b) => a.effective_price - b.effective_price);
-    return { ...offer, pricing: available[0], price: offer.id === "free" ? offer.price : pricing.loading ? "Memuat harga…" : pricing.error ? "Harga gagal dimuat" : offerPrice(available[0]).split("/")[0], period: offer.id === "free" ? offer.period : available[0] ? `/${available[0].duration_months} bulan` : "" };
+    return { ...offer, href: available[0] ? `/program?level=${encodeURIComponent(available[0].program.code)}&plan=${encodeURIComponent(available[0].plan_code)}` : offer.href, pricing: available[0], price: offer.id === "free" ? offer.price : pricing.loading ? "Memuat harga…" : pricing.error ? "Harga gagal dimuat" : offerPrice(available[0]).split("/")[0], period: offer.id === "free" ? offer.period : available[0] ? `/${available[0].duration_months} bulan` : "" };
   });
   const previews = showcase.data.map(item => ({ key: item.key, label: item.label, imageSrc: contentMedia(item.image_src) }));
 
@@ -86,6 +86,8 @@ export default function Home() {
     <PublicPage>
       <main id="top" data-landing-motion>
         <LandingMotion />
+        {heroLoading && <p className="container" role="status">Memuat Hero…</p>}
+        {heroError && <div className="container"><p role="alert">Hero gagal dimuat. Teks awal ditampilkan. {heroError}</p><button type="button" className="button button-secondary" onClick={retryHero}>Coba lagi Hero</button></div>}
         <section className="hero" data-reveal><div className="hero-orb hero-orb-one" /><div className="hero-orb hero-orb-two" /><div className="container hero-grid"><div className="hero-copy"><p className="eyebrow"><Icon name="sparkle" width="17" height="17" /> {hero.eyebrow || "LIVE CLASS + LMS DALAM SATU ALUR BELAJAR"}</p><h1>{hero.heading && hero.heading.includes("Dasar sampai Siap JLPT") ? (<>{hero.heading.split("Dasar sampai Siap JLPT")[0]}<span>Dasar sampai Siap JLPT</span>{hero.heading.split("Dasar sampai Siap JLPT")[1]}</>) : (hero.heading || <>Belajar Bahasa Jepang Terarah dari <span>Dasar sampai Siap JLPT</span></>)}</h1><p className="hero-lead">{heroSupport}</p><div className="hero-actions"><ArrowLink href={hero.primaryCtaPath || "/register"}>{hero.primaryCtaLabel || "Coba Gratis"}</ArrowLink><a className="text-link" href={hero.secondaryCtaPath || "#program"}><Icon name="play" width="21" height="21" /> {hero.secondaryCtaLabel || "Lihat Program"}</a></div></div><div className="hero-visual" aria-label="Ilustrasi perjalanan belajar bahasa Jepang"><div className="sun" aria-hidden="true" /><div className="cloud cloud-one" /><div className="cloud cloud-two" /><div className="learning-card card-kanji"><small>Hari ini</small><strong><ruby>学<rt>まな</rt></ruby>ぶ</strong><span>belajar</span></div><div className="learning-card card-progress"><span className="mini-icon"><Icon name="layers" width="19" height="19" /></span><div><small>Perjalananmu</small><strong>Terus bertumbuh</strong></div><div className="progress"><i /></div></div><div className="torii" aria-hidden="true"><i /><b /><span /><em /></div><div className="hill hill-back" /><div className="hill hill-front" /><div className="floating-note note-one">あ</div><div className="floating-note note-two">夢</div></div></div></section>
 
         <aside className="proof-strip" aria-label="Pencapaian HIRU Academy" data-reveal><div className="container proof-strip-grid">{proofItems.map((item, index) => <div className="proof-item reveal-item" key={item.value} style={{ "--reveal-index": index } as React.CSSProperties}><span><Icon name={item.icon} width="24" height="24" /></span><p><strong {...(item.label ? { "data-counter": item.value.replace(/\D/g, ""), "data-suffix": item.value.replace(/\d/g, "") } : {})}>{item.value}</strong>{item.label && <small>{item.label}</small>}</p></div>)}</div></aside>
@@ -98,9 +100,10 @@ export default function Home() {
               <p>{landing.pricing?.support || "Pilih cara belajar yang sesuai dengan kebutuhanmu."}</p>
             </div>
             {pricing.error && <div role="alert">{pricing.error} <button type="button" onClick={pricing.reload}>Coba lagi</button></div>}
+            {programs.error && <div role="alert">{programs.error} <button type="button" onClick={programs.reload}>Coba lagi program</button></div>}
             {pricing.loading || programs.loading ? <LoadingSkeleton variant="cards" label="Memuat harga…" /> : <div className="pricing-grid">
               {currentOffers.map((offer, index) => (
-                <LandingPriceCard key={offer.id} offer={offer} price={offer.id === "free" ? 0 : offer.pricing?.effective_price ?? null} normalPrice={offer.pricing?.base_price} discountPercent={offer.pricing?.discount_percent} months={offer.pricing?.duration_months ?? ""} priceText={pricing.error || programs.error ? "Harga gagal dimuat" : undefined} index={index} />
+                <LandingPriceCard key={offer.id} offer={offer} price={offer.id === "free" ? 0 : offer.pricing?.effective_price ?? null} normalPrice={offer.pricing?.base_price} promotion={offer.pricing?.promotion} unavailable={offer.id !== "free" && (!offer.pricing || Boolean(pricing.error || programs.error))} discountPercent={offer.pricing?.discount_percent} months={offer.pricing?.duration_months ?? ""} priceText={pricing.error || programs.error ? "Harga gagal dimuat" : undefined} index={index} />
               ))}
             </div>}
           </div>

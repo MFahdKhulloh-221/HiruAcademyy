@@ -2398,6 +2398,55 @@ rt { color: var(--secondary); }
   margin: 0;
 }
 
+.renewal-owned-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr));
+  gap: 16px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.renewal-owned-card {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  background: #fff;
+  overflow-wrap: anywhere;
+}
+
+.renewal-owned-card h3 {
+  margin: 0 0 6px;
+  font-size: 16px;
+  color: #0f172a;
+}
+
+.renewal-owned-card p,
+.renewal-owned-card dt,
+.renewal-owned-note {
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.renewal-owned-card p { margin: 0 0 16px; }
+.renewal-owned-card dl { display: grid; gap: 8px; margin: 0; }
+.renewal-owned-card dl > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
+.renewal-owned-card dd { margin: 0; font-size: 13px; font-weight: 600; color: #0f172a; }
+.renewal-owned-note { margin: 16px 0 0; }
+
+.renewal-referral { margin-top: 24px; }
+.renewal-referral label { display: block; margin-bottom: 8px; }
+.renewal-referral label span { font-weight: 400; color: #475569; }
+.renewal-referral input { width: 100%; min-height: 44px; }
+
+.renewal-program-card:focus-visible,
+.renewal-plan-card:focus-visible {
+  outline: 3px solid #954900;
+  outline-offset: 4px;
+}
+
 /* 2. Step Sections */
 .renewal-step-section {
   margin-bottom: 40px;

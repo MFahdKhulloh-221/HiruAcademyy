@@ -18,6 +18,13 @@ class PublicPlacementController extends Controller
         return response()->json(['data' => $this->placement->publicPayload($this->placement->published())]);
     }
 
+    public function current(Request $request): JsonResponse
+    {
+        $attempt = $this->placement->current($request);
+
+        return response()->json(['data' => $attempt ? app(MediaService::class)->payload($this->placement->attemptPayload($attempt)) : null]);
+    }
+
     public function start(Request $request): JsonResponse
     {
         return response()->json(['data' => app(MediaService::class)->payload($this->placement->attemptPayload($this->placement->start($request)))], 201);

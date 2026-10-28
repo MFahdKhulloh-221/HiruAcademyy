@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ReactNode } from "react";
 import { useLearningRequest } from "@/components/learning-hooks";
 import { LeaderboardRows, LeaderboardRules } from "@/components/student-leaderboard-screen";
 import { studentGamification, studentLeaderboard } from "@/lib/learning-api";
@@ -53,9 +53,11 @@ function Glyph({ name }: { name: keyof typeof glyphs }) {
 export function StudentDashboard({
   data,
   previewEnabled,
+  practiceRecommendations,
 }: {
   data: DashboardData;
   previewEnabled: boolean;
+  practiceRecommendations?: ReactNode;
 }) {
   const { user: currentUser } = useAuth();
   const name = currentUser?.name ?? "";
@@ -123,6 +125,7 @@ export function StudentDashboard({
                 </div>
               </div>
             </section>
+            {practiceRecommendations}
             <section className="dashboard-material-grid" aria-label="Progres materi">
               <article className="dashboard-material-card"><span className="dashboard-material-icon" aria-hidden="true"><LuRoute /></span><p className="dash-kicker">PROGRES MATERI</p><strong>{config.level}</strong><small>Journey aktif</small></article>
               <article className="dashboard-material-card"><span className="dashboard-material-icon" aria-hidden="true"><LuBookOpen /></span><p className="dash-kicker">MODUL SELESAI</p><strong>{config.continue.detail}</strong><small>Materi telah dipelajari</small></article>

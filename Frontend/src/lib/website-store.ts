@@ -1,5 +1,7 @@
 "use client";
 
+import { useCallback, useEffect, useState } from "react";
+import { fetchPublishedLandingHero, type LandingHero } from "@/lib/landing-hero-api";
 import { contentMedia, useContent, type ArticleContent, type TestimonialContent } from "@/lib/public-content-api";
 import {
   LANDING_SECTION_ORDER,
@@ -357,11 +359,30 @@ export function readPublishedWebsite(now?: Date | string | number): PublishedWeb
 }
 
 export function usePublishedWebsite(): PublishedWebsite {
-  return { landing: toPublishedLanding(initialLandingContent), campaigns: [], articles: usePublishedArticles(), testimonials: usePublishedTestimonials(), featuredTestimonials: usePublishedTestimonials({ featuredOnly: true }), announcements: [] };
+  return { landing: usePublishedLanding(), campaigns: [], articles: usePublishedArticles(), testimonials: usePublishedTestimonials(), featuredTestimonials: usePublishedTestimonials({ featuredOnly: true }), announcements: [] };
+}
+
+export function usePublishedLandingRequest() {
+  const [state, setState] = useState<{ hero: LandingHero | null; loading: boolean; error: string }>({ hero: null, loading: true, error: "" });
+  const [version, setVersion] = useState(0);
+  const retry = useCallback(() => {
+    setState(current => ({ ...current, loading: true, error: "" }));
+    setVersion(current => current + 1);
+  }, []);
+  useEffect(() => {
+    const controller = new AbortController();
+    fetchPublishedLandingHero(controller.signal).then(hero => {
+      if (!controller.signal.aborted) setState({ hero, loading: false, error: "" });
+    }).catch(cause => {
+      if (!controller.signal.aborted) setState(current => ({ ...current, loading: false, error: cause instanceof Error ? cause.message : "Hero gagal dimuat." }));
+    });
+    return () => controller.abort();
+  }, [version]);
+  return { landing: { ...toPublishedLanding(initialLandingContent), hero: state.hero ?? initialLandingContent.hero }, loading: state.loading, error: state.error, retry };
 }
 
 export function usePublishedLanding(): PublishedLanding {
-  return toPublishedLanding(initialLandingContent);
+  return usePublishedLandingRequest().landing;
 }
 
 export function usePublishedCampaigns(options?: {

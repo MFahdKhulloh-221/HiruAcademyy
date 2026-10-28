@@ -1,0 +1,107 @@
+import { expect, test } from "./canonical-fixture";
+
+for (const width of [1440, 768, 390]) test(`Clean Classic profile ${width}`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 1000 });
+  let user = { id: 901, name: "Sakura Tanaka", email: "sakura@example.test", whatsapp: "6281234567890", country: "Indonesia", target_jlpt: "N5", role: "student", account_status: "active", avatar_resolved_url: null as string | null };
+  const writes: Record<string, unknown>[] = [];
+  let fail = 0;
+  let passwordCalls = 0;
+  await page.route("**/api/me", async route => {
+    if (route.request().method() === "PATCH") {
+      const body = route.request().postDataJSON(); writes.push(body);
+      if (fail) return route.fulfill({ status: fail, json: { message: "Perubahan belum dapat disimpan.", errors: { whatsapp: ["Nomor tidak valid."] } } });
+      user = { ...user, ...body };
+    }
+    await route.fulfill({ json: { data: user } });
+  });
+  await page.route("**/api/me/password", async route => {
+    passwordCalls++;
+    const body = route.request().postDataJSON();
+    expect(Object.keys(body).sort()).toEqual(["current_password", "password", "password_confirmation"]);
+    if (body.current_password !== "correct-password") return route.fulfill({ status: 422, json: { message: "Kata sandi saat ini salah.", errors: { current_password: ["Kata sandi saat ini salah."] } } });
+    return route.fulfill({ status: 204 });
+  });
+  let avatarFail = false;
+  await page.route("**/api/student/profile/avatar", async route => {
+    if (avatarFail) return route.fulfill({ status: 413, json: { message: "Too large" } });
+    user.avatar_resolved_url = route.request().method() === "POST" ? "/profile-fixture.png" : null;
+    await route.fulfill({ status: 204 });
+  });
+  await page.route("**/profile-fixture.png", route => route.fulfill({ path: "tests/fixtures/sample.png", contentType: "image/png" }));
+  await page.goto("/profile");
+  await expect(page.getByRole("heading", { name: "Profil", exact: true })).toBeVisible();
+  await expect(page.getByText("Sakura Tanaka", { exact: true })).toHaveCount(1);
+  await expect(page.getByText("sakura@example.test", { exact: true })).toHaveCount(1);
+  await expect(page.getByRole("region", { name: "Keanggotaan", exact: true })).toHaveCount(1);
+  await expect(page.getByRole("link", { name: "Sertifikat", exact: true }).last()).toHaveAttribute("href", "/certificate");
+  await expect(page.getByRole("navigation", { name: "Akses Cepat" }).getByRole("link", { name: /Program Affiliate/ })).toHaveAttribute("href", "/affiliate");
+  await expect(page.getByRole("link", { name: "Perpanjang Membership", exact: true })).toHaveAttribute("href", "/renewal");
+  await expect(page.getByRole("button", { name: "Buka Pengaturan", exact: true })).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("tabpanel")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Ganti Foto", exact: true })).toHaveCount(1);
+  if (width < 1024) await page.getByRole("button", { name: "Buka navigasi", exact: true }).click();
+  await expect(page.getByRole("link", { name: "Profil Saya", exact: true })).toHaveCount(1);
+  await expect(page.getByRole("link", { name: "Profil Saya", exact: true })).toHaveAttribute("aria-current", "page");
+  await expect(page.getByRole("link", { name: "Pengaturan", exact: true })).toHaveCount(0);
+  await page.getByRole("link", { name: "Profil Saya", exact: true }).click();
+  await page.getByRole("button", { name: "Ubah Profil", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Data Pribadi", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByLabel("Email", { exact: true })).toHaveAttribute("readonly", "");
+  await page.getByLabel("Nama Lengkap", { exact: true }).fill("Sakura Updated");
+  for (const status of [403, 422, 503]) {
+    fail = status;
+    await page.getByRole("button", { name: "Simpan Perubahan", exact: true }).click();
+    await expect(page.getByRole("tabpanel").getByRole("alert")).toBeVisible();
+    await expect(page.getByLabel("Nama Lengkap", { exact: true })).toHaveValue("Sakura Updated");
+    await expect(page.getByRole("tabpanel").getByRole("status")).toHaveCount(0);
+  }
+  fail = 0;
+  await page.getByLabel("Negara", { exact: true }).fill("Japan");
+  await page.getByRole("button", { name: "Simpan Perubahan", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Profil berhasil" })).toBeVisible();
+  expect(writes.at(-1)).not.toHaveProperty("target_jlpt");
+  await page.reload();
+  await expect(page.getByText("Sakura Updated", { exact: true })).toHaveCount(1);
+  await page.getByRole("button", { name: "Buka Pengaturan", exact: true }).click();
+  await expect(page.getByLabel("Negara", { exact: true })).toHaveValue("Japan");
+  await page.getByRole("tab", { name: "Preferensi Belajar", exact: true }).click();
+  await expect(page.getByLabel("Nama Lengkap", { exact: true })).toHaveCount(0);
+  await page.getByLabel("Target JLPT", { exact: true }).selectOption("N2");
+  await page.getByRole("button", { name: "Simpan Preferensi", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Preferensi berhasil" })).toBeVisible();
+  expect(writes.at(-1)).toEqual({ target_jlpt: "N2" });
+  await page.reload();
+  await page.getByRole("button", { name: "Buka Pengaturan", exact: true }).click();
+  await page.getByRole("tab", { name: "Preferensi Belajar", exact: true }).click();
+  await expect(page.getByLabel("Target JLPT", { exact: true })).toHaveValue("N2");
+  await page.getByRole("tab", { name: "Keamanan", exact: true }).click();
+  await page.getByLabel("Kata Sandi Saat Ini", { exact: true }).fill("wrong-password");
+  await page.getByLabel("Kata Sandi Baru", { exact: true }).fill("new-password");
+  await page.getByLabel("Konfirmasi Kata Sandi Baru", { exact: true }).fill("mismatch-password");
+  await page.getByRole("button", { name: "Perbarui Kata Sandi", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "tidak cocok" })).toBeVisible();
+  expect(passwordCalls).toBe(0);
+  await page.getByLabel("Konfirmasi Kata Sandi Baru", { exact: true }).fill("new-password");
+  await page.getByRole("button", { name: "Perbarui Kata Sandi", exact: true }).click();
+  await expect(page.getByRole("alert").filter({ hasText: "saat ini salah" })).toBeVisible();
+  await expect(page.getByLabel("Kata Sandi Baru", { exact: true })).toHaveValue("new-password");
+  await page.getByLabel("Kata Sandi Saat Ini", { exact: true }).fill("correct-password");
+  await page.getByRole("button", { name: "Perbarui Kata Sandi", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Kata sandi berhasil" })).toBeVisible();
+  await expect(page.getByLabel("Kata Sandi Baru", { exact: true })).toHaveValue("");
+  await page.locator("#profile-photo").setInputFiles({ name: "bad.txt", mimeType: "text/plain", buffer: Buffer.from("bad") });
+  await expect(page.getByRole("alert").filter({ hasText: "format JPEG" })).toBeVisible();
+  avatarFail = true;
+  await page.locator("#profile-photo").setInputFiles("tests/fixtures/sample.png");
+  await expect(page.getByRole("alert").filter({ hasText: "terlalu besar" })).toBeVisible();
+  avatarFail = false;
+  await page.locator("#profile-photo").setInputFiles("tests/fixtures/sample.png");
+  await expect(page.locator(".profile-identity img")).toHaveAttribute("src", /profile-fixture.png$/);
+  await page.getByRole("button", { name: "Hapus Foto", exact: true }).click();
+  await expect(page.locator(".profile-identity img")).toHaveCount(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.getByRole("button", { name: "Ubah Profil", exact: true }).click();
+  fail = 401;
+  await page.getByRole("button", { name: "Simpan Perubahan", exact: true }).click();
+  await expect(page).toHaveURL(/\/login$/);
+});

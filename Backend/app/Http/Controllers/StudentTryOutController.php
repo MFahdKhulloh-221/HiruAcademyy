@@ -15,13 +15,12 @@ class StudentTryOutController extends Controller
     {
         abort_unless($request->user()?->role === 'student' && $request->user()?->account_status === 'active', 403);
         $items = TryOut::where('status', 'published')
-            ->whereHas('program', fn ($query) => $query->where('status', 'active')->where('family', 'jlpt')->whereIn('code', ['n5', 'n4', 'n3', 'n2', 'n1']))
+            ->whereHas('program', fn ($query) => $access->scopePrograms($query, $request->user())->where('family', 'jlpt')->whereIn('code', ['n5', 'n4', 'n3', 'n2', 'n1']))
             ->with('program')
             ->orderBy('sort_order')->orderBy('id')->get()
-            ->filter(fn ($tryOut) => $access->canAccessChapter($request->user(), $tryOut->program->code, 1))
             ->values();
 
-        return response()->json(['data' => $items->map(fn ($tryOut) => $content->payload($tryOut))]);
+        return response()->json(['data' => $items->map(fn ($tryOut) => $content->payload($tryOut) + ['can_access' => $attempts->canAccess($request->user(), $tryOut)])]);
     }
 
     public function show(Request $request, TryOut $tryOut, TryOutAttemptService $attempts, TryOutService $content)

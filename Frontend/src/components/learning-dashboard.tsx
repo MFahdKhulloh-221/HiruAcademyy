@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+import { practiceActivities } from "@/lib/practice-catalog";
 import { StudentLoading } from "@/components/loading-skeleton";
 import { StudentDashboard } from "@/components/student-dashboard";
 import { useAuth } from "@/components/auth-provider";
@@ -25,5 +27,6 @@ export function LearningDashboard() {
   data.config.continue.progress = `${percent}%`;
   data.config.continue.progressPercent = percent;
   data.config.continue.detail = `${chapters.reduce((sum, item) => sum + (item.progress.activities.module?.completed ?? 0), 0)} modul`;
-  return <StudentDashboard data={data} previewEnabled={false} />;
+  const recommendations = practiceActivities(request.data).filter(item => item.program.id === next?.program.id && !item.activity.complete);
+  return <StudentDashboard data={data} previewEnabled={false} practiceRecommendations={<section aria-label="Rekomendasi latihan"><h2>Rekomendasi Latihan</h2>{recommendations.length ? <ul>{recommendations.map(item => <li key={item.id}><Link className="button button-secondary" href={item.href}>{item.program.name} ? {item.chapter.title} ? {item.kind === "audio" ? "Audio" : "Reading"} ({item.activity.completed}/{item.activity.total})</Link></li>)}</ul> : <p role="status">Tidak ada latihan belum selesai yang tersedia untuk program aktif.</p>}</section>} />;
 }

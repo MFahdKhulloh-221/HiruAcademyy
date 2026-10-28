@@ -38,8 +38,6 @@ class PublicContentService
         'community' => 'Komunitas',
     ];
 
-    public const CATEGORIES = ['Tips Belajar', 'Grammar / Bunpou', 'Listening / Choukai', 'JLPT'];
-
     public function model(string $resource): string
     {
         abort_unless(isset(self::RESOURCES[$resource]), 404);
@@ -55,10 +53,13 @@ class PublicContentService
     private function saveContent(string $resource, array $input, ?Model $model): Model
     {
         $class = $this->model($resource);
-        if ($resource === 'testimonials' && $model?->exists) {
+        if (in_array($resource, ['testimonials', 'blog-articles'], true) && $model?->exists) {
             $model = $class::query()->lockForUpdate()->findOrFail($model->getKey());
         }
         $model ??= new $class;
+        if ($model instanceof BlogArticle && ! $model->exists && ! array_key_exists('author', $input)) {
+            $input['author'] = $model->author;
+        }
         if ($resource === 'testimonials' && $model->source !== 'student') {
             if (array_key_exists('video_title', $input)) {
                 if (array_key_exists('title', $input) && $input['title'] !== $input['video_title']) {
@@ -124,7 +125,7 @@ class PublicContentService
                     }
                 }],
                 'thumbnail' => [...$optional, $media],
-                'category' => [$required, 'required', Rule::in(self::CATEGORIES)],
+                'category' => [...$string, app(BlogCatalogService::class)->articleRule('category', $model)],
                 'seo_title' => [...$optional, 'max:255'],
                 'meta_description' => $optional,
                 'featured' => $boolean,
@@ -134,7 +135,7 @@ class PublicContentService
                         $fail('Use a real ISO 8601 datetime with UTC offset, or a UTC calendar date.');
                     }
                 }],
-                'author' => ['sometimes', 'required', Rule::in(['Hiru Academy'])],
+                'author' => [...$string, app(BlogCatalogService::class)->articleRule('author', $model)],
             ],
             'certificate-templates' => [
                 'program' => $string,

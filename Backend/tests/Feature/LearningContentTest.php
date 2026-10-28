@@ -390,15 +390,15 @@ class LearningContentTest extends TestCase
         $this->getJson($this->detailUrl($draft))->assertNotFound();
     }
 
-    public function test_inactive_and_missing_programs_and_chapters_are_not_found_even_with_grant(): void
+    public function test_inactive_program_remains_accessible_with_grant_and_missing_content_is_not_found(): void
     {
         $chapter = $this->chapter('n4');
         $draft = $this->chapter('n4', 2, ['status' => 'draft']);
         $this->grant('n4');
         $this->actingAs($this->student)->getJson($this->detailUrl($draft))->assertNotFound();
         $this->program('n4')->update(['status' => 'inactive']);
-        $this->getJson($this->listUrl('n4'))->assertNotFound();
-        $this->getJson($this->detailUrl($chapter))->assertNotFound();
+        $this->getJson($this->listUrl('n4'))->assertOk();
+        $this->getJson($this->detailUrl($chapter))->assertOk();
         $this->getJson('/api/student/programs/0/chapters')->assertNotFound();
         $this->getJson('/api/student/chapters/0')->assertNotFound();
     }

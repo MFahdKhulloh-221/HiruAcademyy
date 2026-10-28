@@ -18,7 +18,7 @@ class LearningLibraryService
 
         $modules = LearningModule::query()->where('status', 'published')
             ->whereHas('chapter', fn ($query) => $query->where('status', 'published')
-                ->whereHas('program', fn ($program) => $program->where('status', 'active')))
+                ->whereHas('program', fn ($program) => $this->policy->scopePrograms($program, $user)))
             ->with('chapter.program')->orderBy('sort_order')->orderBy('id')->get();
 
         foreach ($modules as $module) {
@@ -31,19 +31,19 @@ class LearningLibraryService
                 'category' => $type,
                 'type' => $type,
                 'title' => $module->title,
-                'description' => $module->description ?: "Modul {$type} untuk Chapter {$module->chapter->chapter_number}.",
+                'description' => ($canAccess ? $module->description : null) ?: "Modul {$type} untuk Chapter {$module->chapter->chapter_number}.",
                 'level' => $levelName,
                 'program' => $module->chapter->program->only(['id', 'code', 'name', 'family']),
                 'chapter' => $module->chapter->only(['id', 'chapter_number', 'title']),
-                'file_url' => $module->file_url,
-                'file_url_resolved_url' => $media->url($module->file_url),
+                'file_url' => $canAccess ? $module->file_url : null,
+                'file_url_resolved_url' => $canAccess ? $media->url($module->file_url) : null,
                 'href' => '/learn/'.($module->chapter->program->code === 'ssw-food' ? 'ssw-pengolahan-makanan' : $module->chapter->program->code)."/chapter-{$module->chapter->chapter_number}/".($module->module_type === 'kanji' ? 'kanji' : 'grammar'),
                 'locked' => ! $canAccess,
             ];
         }
 
         $flashcardChapters = Chapter::query()->where('status', 'published')
-            ->whereHas('program', fn ($q) => $q->where('status', 'active'))
+            ->whereHas('program', fn ($q) => $this->policy->scopePrograms($q, $user))
             ->whereHas('flashcards', fn ($q) => $q->where('status', 'published'))
             ->with(['program', 'flashcards' => fn ($q) => $q->where('status', 'published')])
             ->orderBy('sort_order')->orderBy('chapter_number')->get();
@@ -67,7 +67,7 @@ class LearningLibraryService
         }
 
         $audioChapters = Chapter::query()->where('status', 'published')
-            ->whereHas('program', fn ($q) => $q->where('status', 'active'))
+            ->whereHas('program', fn ($q) => $this->policy->scopePrograms($q, $user))
             ->whereHas('audioQuestions', fn ($q) => $q->where('status', 'published'))
             ->with('program')
             ->orderBy('sort_order')->orderBy('chapter_number')->get();
@@ -92,7 +92,7 @@ class LearningLibraryService
 
         $passages = ReadingPassage::query()->where('status', 'published')
             ->whereHas('chapter', fn ($query) => $query->where('status', 'published')
-                ->whereHas('program', fn ($program) => $program->where('status', 'active')))
+                ->whereHas('program', fn ($program) => $this->policy->scopePrograms($program, $user)))
             ->with('chapter.program')->orderBy('id')->get();
 
         foreach ($passages as $passage) {

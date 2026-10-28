@@ -133,8 +133,15 @@ test("Scenario G: library follows module projection and replay videos manage you
     await route.fulfill({ json: { data: videos } });
   });
   await page.goto("/admin/kurikulum-materi");
-  await page.getByRole("tab", { name: "Perpustakaan Materi" }).click();
+  await page.getByRole("navigation", { name: "Journey / Kurikulum & Materi" }).getByRole("link", { name: "Perpustakaan Materi", exact: true }).click();
   await expect(page.getByText("Perpustakaan Materi mengikuti modul published pada chapter.")).toBeVisible();
+  await expect(page.locator(".library-tab-content").getByRole("link", { name: "Modul", exact: true })).toHaveAttribute("href", "/admin/modul");
+  await page.getByRole("navigation", { name: "Journey / Kurikulum & Materi" }).getByRole("link", { name: "Replay Rekaman", exact: true }).click();
+  await page.getByRole("button", { name: "+ Tambah Replay", exact: true }).click();
+  const replayDialog = page.getByRole("dialog");
+  await expect(replayDialog.getByLabel("Judul Sesi Replay", { exact: true })).toBeVisible();
+  await replayDialog.getByRole("button", { name: "Batal", exact: true }).click();
+  await expect(replayDialog).toHaveCount(0);
   await page.goto("/admin/kelas-jadwal");
   await page.getByRole("tab", { name: "Replay" }).click();
   await expect(page.getByRole("table").getByText("N5 Replay Playlist")).toBeVisible();

@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import Link from "next/link";
+import "./reading-layout.css";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { useAuth } from "@/components/auth-provider";
 import { BackendAssessmentRunner } from "@/components/backend-assessment-runner";
@@ -32,7 +34,10 @@ export function ChapterAssessment({ level, chapterSlug, kind, context, resolvedC
   const { program, chapter, progress } = request.data;
   if (kind === "mini" && (!["n5", "n4", "n3", "n2"].includes(program.code) || progress?.mini_eligible === false || !progress?.mini_unlocked)) return <section className="learning-question-page"><h1>Mini Checkpoint</h1><MiniLockedDialog access={chapter.access} progress={progress} chapterHref={`/learn/${level}/${chapterSlug}`} /></section>;
   if (kind === "mini") return <MiniChapterAssessment key={`${program.id}/${chapter.id}`} programId={program.id} chapter={chapter} />;
-  return <BackendAssessmentRunner key={`${program.id}/${chapter.id}/${kind}`} path={chapterAttemptPath(program.id, chapter.id)} title={kind === "audio" ? "Audio" : "Reading"} startBody={{ kind }} autoStart={autoStart} />;
+  return <>
+    {kind === "audio" && context && <Link className="button button-secondary" href={`/learn/${level}/${chapterSlug}`}>Kembali ke Aktivitas Chapter</Link>}
+    <BackendAssessmentRunner key={`${program.id}/${chapter.id}/${kind}`} path={chapterAttemptPath(program.id, chapter.id)} title={kind === "audio" ? "Audio" : "Reading"} className={kind === "reading" ? "learning-question-page reading-assessment" : undefined} startBody={{ kind }} autoStart={autoStart} />
+  </>;
 }
 
 function MiniChapterAssessment({ programId, chapter }: { programId: number; chapter: ChapterContext["chapter"] }) {

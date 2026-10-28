@@ -47,7 +47,7 @@ class TryOutAssessmentTest extends TestCase
         $this->seed(ProgramSeeder::class);
         $this->student = $this->user('student');
         $this->admin = $this->user('admin');
-        $this->tryOut = app(TryOutService::class)->save(['program_id' => Program::where('code', 'n5')->firstOrFail()->id, 'title' => 'Try Out fixture']);
+        $this->tryOut = app(TryOutService::class)->save(['program_id' => Program::where('code', 'n5')->firstOrFail()->id, 'title' => 'Try Out fixture', 'access_type' => 'free']);
         $this->base = '/api/student/try-outs/'.$this->tryOut->id;
         $this->adminBase = '/api/admin/try-outs/'.$this->tryOut->id;
         $this->actingAs($this->student);

@@ -44,7 +44,7 @@ class PublicContentController extends Controller
     public function blog(Request $request): JsonResponse
     {
         $filters = $request->validate([
-            'category' => ['sometimes', 'required', Rule::in(PublicContentService::CATEGORIES)],
+            'category' => ['sometimes', 'required', 'string', 'max:255'],
             'featured' => ['sometimes', 'required', Rule::in(['true', 'false', '1', '0'])],
         ]);
         $query = $this->content->articles();

@@ -31,6 +31,46 @@ function learningHarness(data) {
   return { ...context.exports, calls };
 }
 
+test("learning catalog preserves student programs and entitlements without public catalog reads", async () => {
+  const programs = [
+    { id: 5, code: "n5", name: "Active N5", family: "jlpt" },
+    { id: 4, code: "n4", name: "Entitled inactive N4", family: "jlpt" },
+  ];
+  const access = { learning: { n5: "preview", n4: "full" }, source_grants: [{ plan_code: "lms", program_code: "n4" }], replay_levels: [] };
+  const api = learningHarness({ programs, access });
+  const signal = new AbortController().signal;
+  const catalog = await api.learningCatalog(signal);
+  assert.equal(api.calls.length, 1);
+  assert.equal(api.calls[0].path, "/api/student/dashboard");
+  assert.equal(api.calls[0].options.signal, signal);
+  assert.equal(catalog.programs, programs);
+  assert.equal(catalog.access, access);
+  const empty = learningHarness({ programs: [], access });
+  assert.equal((await empty.learningCatalog()).programs.length, 0);
+});
+
+test("replay catalog resolves owned inactive programs through student dashboard", async () => {
+  const programs = [{ id: 4, code: "n4", name: "Entitled inactive N4", family: "jlpt" }];
+  const access = { learning: { n4: "full" }, source_grants: [], replay_levels: ["n4"] };
+  const learning = learningHarness({ programs, access });
+  const playlists = [{ id: 9, program_id: 4, title: "Owned replay" }];
+  const calls = [];
+  const context = vm.createContext({ exports: {}, require: path => path === "@/lib/learning-api" ? learning : {
+    apiRequest: async (path, options) => { calls.push({ path, options }); return { data: playlists }; },
+  } });
+  const source = ts.transpileModule(readFileSync(new URL("../src/lib/schedule-replay-api.ts", import.meta.url), "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
+  vm.runInContext(source, context);
+  const signal = new AbortController().signal;
+  const result = await context.exports.studentReplays(signal);
+  assert.equal(result.playlists, playlists);
+  assert.equal(result.programs.find(program => program.id === playlists[0].program_id)?.code, "n4");
+  assert.equal(result.access, access);
+  assert.deepEqual(calls.map(call => call.path), ["/api/student/replays"]);
+  assert.equal(calls[0].options.signal, signal);
+  assert.deepEqual(learning.calls.map(call => call.path), ["/api/student/dashboard"]);
+  assert.equal(learning.calls[0].options.signal, signal);
+});
+
 test("dashboard aggregate preserves canonical order, next chapter, weighted progress and module total without fanout", async () => {
   const programs = [{ id: 5, code: "n5", name: "JLPT N5", family: "jlpt" }, { id: 4, code: "n4", name: "JLPT N4", family: "jlpt" }];
   const access = { learning: { n5: "full", n4: "preview" }, source_grants: [], replay_levels: [] };

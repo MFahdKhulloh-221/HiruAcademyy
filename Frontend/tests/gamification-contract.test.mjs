@@ -33,6 +33,7 @@ test("leaderboard keeps top twenty and exactly one outside self, filters scope",
   const context = vm.createContext({ exports: {}, React, require: path => {
     if (path === "react") return React;
     if (path === "react-icons/lu") return { LuInfo: () => null };
+    if (path === "@/components/loading-skeleton") return { LoadingSkeleton: ({ label }) => React.createElement("div", { role: "status" }, label) };
     if (path.endsWith("student-avatar")) return { StudentAvatar: ({ name }) => React.createElement("span", null, name) };
     if (path.endsWith("learning-api")) return { studentLeaderboard: scope => { requestedScope = scope; } };
     if (path.endsWith("learning-hooks")) return { useLearningRequest: load => { load(); return { data, loading: false }; } };

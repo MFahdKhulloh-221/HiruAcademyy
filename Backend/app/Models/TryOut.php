@@ -8,7 +8,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TryOut extends Model
 {
-    protected $fillable = ['program_id', 'title', 'status', 'total_passing_score', 'duration_minutes', 'max_score', 'sort_order', 'session_passing_scores'];
+    protected $fillable = ['access_type', 'program_id', 'title', 'status', 'total_passing_score', 'duration_minutes', 'max_score', 'sort_order', 'session_passing_scores'];
 
     protected function casts(): array
     {

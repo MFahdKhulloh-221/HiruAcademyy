@@ -29,6 +29,7 @@ export type JourneyChapter = {
   progress: number;
   components: ProgressComponent[];
   checkpointUnlocked: boolean;
+  checkpointLabel?: string;
   href?: string;
 };
 

@@ -45,6 +45,11 @@ class Chapter extends Model
         return $this->hasMany(ReadingPassage::class)->orderBy('sort_order')->orderBy('id');
     }
 
+    public function checkpointQuestions(): HasMany
+    {
+        return $this->hasMany(CheckpointQuestion::class)->orderBy('sort_order')->orderBy('id');
+    }
+
     public function miniCheckpointQuestions(): HasMany
     {
         return $this->hasMany(MiniCheckpointQuestion::class)->orderBy('sort_order')->orderBy('id');

@@ -244,3 +244,21 @@
   .admin-shell .admin-dialog:has(.admin-price-editor) { width: calc(100vw - 16px); max-height: calc(100dvh - 16px); }
   .admin-shell .admin-price-card-preview .landing-price-card { padding: 28px 20px; }
 }
+
+/* Journey builder: filters left, create action right, table scroll stays local. */
+.admin-shell .admin-journey-toolbar { display: flex; flex-wrap: wrap; align-items: end; gap: 16px; margin-bottom: 20px; }
+.admin-shell .admin-journey-filters { display: flex; flex-wrap: wrap; gap: 12px; min-width: 0; }
+.admin-shell .admin-journey-filters .admin-field { min-width: 180px; max-width: 100%; }
+.admin-shell .admin-journey-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 10px; margin-left: auto; margin-bottom: 16px; }
+.admin-shell .admin-journey-toolbar .admin-journey-actions { margin-bottom: 0; }
+.admin-shell .admin-tabs:is([aria-label="Journey / Kurikulum & Materi"], [aria-label="Menu Kurikulum & Materi"]) { flex-wrap: wrap; overflow-x: visible; }
+.admin-shell .admin-tabs a { display: inline-flex; align-items: center; min-height: 44px; padding: 0 15px; border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--ink); white-space: nowrap; }
+.admin-shell .admin-tabs a.active { background: var(--orange); color: #5a2a00; }
+/* Journey tables keep accessible names without repeating page titles below filters. */
+.admin-shell .curriculum-admin-page .admin-data-table caption { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+@media (max-width: 639px) {
+  .admin-shell .admin-journey-filters, .admin-shell .admin-journey-filters .admin-field { width: 100%; }
+  .admin-shell .admin-journey-toolbar .admin-journey-actions { width: 100%; }
+  .admin-shell .admin-journey-filters select { width: 100%; min-width: 0; }
+  .admin-shell .admin-tabs a { white-space: normal; }
+}

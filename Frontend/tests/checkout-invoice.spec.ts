@@ -26,7 +26,7 @@ for (const fail of [false, true]) {
     });
     await page.goto("/checkout?level=N4&plan=lms");
     await expect(page.locator(".checkout-before ol li")).toHaveText([
-      "Pastikan level JLPT dan paket pembelajaran yang Anda pilih sudah sesuai.",
+      "Pastikan program dan paket pembelajaran yang Anda pilih sudah sesuai.",
       "Periksa kembali harga dan masa berlaku paket sebelum melanjutkan pembayaran.",
       "Akses paket pembelajaran akan diaktifkan setelah pembayaran dikonfirmasi oleh Admin HiruAcademy.",
       "Harap membaca Syarat dan Ketentuan serta Kebijakan Privasi sebelum menyelesaikan pembelian.",
