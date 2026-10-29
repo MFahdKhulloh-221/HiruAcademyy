@@ -16,6 +16,7 @@ use App\Http\Controllers\AdminSettingsController;
 use App\Http\Controllers\AdminTryOutController;
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\CommunityChatController;
 use App\Http\Controllers\CommunityController;
 use App\Http\Controllers\EffectiveAccessController;
 use App\Http\Controllers\InvoiceController;
@@ -138,6 +139,8 @@ Route::prefix('api')->middleware('throttle:api')->group(function () {
         Route::post('promotions', [PromotionController::class, 'store']);
         Route::patch('promotions/{promotion}', [PromotionController::class, 'update']);
         Route::delete('promotions/{promotion}', [PromotionController::class, 'destroy']);
+        Route::get('community/moderation', [CommunityChatController::class, 'moderationIndex']);
+        Route::patch('community/reports/{report}', [CommunityChatController::class, 'handleReport'])->whereNumber('report');
         Route::patch('community/threads/{thread}', [CommunityController::class, 'adminUpdateThread']);
         Route::patch('community/replies/{reply}', [CommunityController::class, 'adminUpdateReply']);
     });
@@ -230,6 +233,12 @@ Route::prefix('api')->middleware('throttle:api')->group(function () {
 
     Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('community/topics', [CommunityController::class, 'topics']);
+        Route::get('community/topics/{topic}/room', [CommunityChatController::class, 'room'])->whereNumber('topic');
+        Route::get('community/rooms/{room}/messages', [CommunityChatController::class, 'messages'])->whereNumber('room');
+        Route::post('community/rooms/{room}/messages', [CommunityChatController::class, 'store'])->whereNumber('room');
+        Route::patch('community/messages/{message}', [CommunityChatController::class, 'moderate'])->whereNumber('message');
+        Route::delete('community/messages/{message}', [CommunityChatController::class, 'destroy'])->whereNumber('message');
+        Route::post('community/messages/{message}/reports', [CommunityChatController::class, 'report'])->whereNumber('message');
         Route::get('community/threads', [CommunityController::class, 'threads']);
         Route::get('community/threads/{thread}', [CommunityController::class, 'show'])->whereNumber('thread');
         Route::post('community/threads', [CommunityController::class, 'storeThread']);

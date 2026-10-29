@@ -1,0 +1,124 @@
+import { expect, test, type BrowserContext, type Page } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { resolve } from "node:path";
+
+let fixtures: {
+  tag: string; emails: Record<string, string>; password: string; topics: number[]; member_id: number; thread_id: number;
+};
+test.beforeAll(() => {
+  const path = resolve(__dirname, "..", process.env.HIRU_HTTP_FIXTURES ?? "test-results/community-http-fixtures.json");
+  fixtures = JSON.parse(readFileSync(path, "utf8").replace(/^\uFEFF/, ""));
+});
+const api = "http://localhost:8049";
+async function write(context: BrowserContext, path: string, data: unknown, method = "POST") {
+  const cookie = (await context.cookies()).find(item => item.name === "XSRF-TOKEN");
+  expect(cookie).toBeDefined();
+  return context.request.fetch(api + path, { method, data, headers: { Accept: "application/json", Origin: "http://localhost:3039", "X-XSRF-TOKEN": decodeURIComponent(cookie!.value) } });
+}
+async function login(page: Page, kind: string) {
+  await page.goto("/login");
+  await page.getByPlaceholder("email atau nomor WhatsApp").fill(fixtures.emails[kind]);
+  await page.locator('input[name="password"]').fill(fixtures.password);
+  const response = page.waitForResponse(response => response.url() === api + "/api/auth/login" && response.request().method() === "POST");
+  await page.getByRole("button", { name: "Masuk", exact: true }).click();
+  expect((await response).status()).toBe(200);
+  const topicsLoaded = page.waitForResponse(response => response.url() === api + "/api/community/topics" && response.status() === 200);
+  await page.goto("/community");
+  await topicsLoaded;
+  await expect(page.getByRole("button", { name: new RegExp(`HTTP Kategori 1 ${fixtures.tag}`) })).toBeVisible();
+}
+
+test("real HTTP Sanctum chat persistence isolation authorization moderation and archive", async ({ page, browser }) => {
+  test.setTimeout(240000);
+  await login(page, "member");
+  const menu = page.getByRole("region", { name: "Kategori diskusi" });
+  for (const number of [1, 2, 3, 4]) await expect(menu.getByRole("button", { name: new RegExp(`HTTP Kategori ${number} ${fixtures.tag}`) })).toBeVisible();
+  await menu.getByRole("button", { name: new RegExp(`HTTP Kategori 1 ${fixtures.tag}`) }).click();
+  const roomResponse = await page.context().request.get(`${api}/api/community/topics/${fixtures.topics[0]}/room`);
+  expect(roomResponse.status()).toBe(200);
+  const room = (await roomResponse.json()).data;
+  expect(room.topic_id).toBe(fixtures.topics[0]);
+  const content = "B3 HTTP " + randomUUID();
+  await page.getByRole("textbox", { name: "Pesan", exact: true }).fill(content);
+  await expect(page.getByRole("button", { name: "Kirim", exact: true })).toBeEnabled();
+  const sent = page.waitForResponse(response => response.url() === `${api}/api/community/rooms/${room.id}/messages` && response.request().method() === "POST");
+  await page.getByRole("button", { name: "Kirim", exact: true }).click();
+  const response = await sent;
+  expect(response.status()).toBe(201);
+  const saved = (await response.json()).data;
+  expect(saved.author.id).toBe(fixtures.member_id);
+  expect(saved.room_id).toBe(room.id);
+  await expect(page.locator(".community-bubble-own").filter({ hasText: content })).toHaveCount(1);
+  const retry = await write(page.context(), `/api/community/rooms/${room.id}/messages`, { client_message_id: saved.client_message_id, content });
+  expect(retry.status()).toBe(200);
+  expect((await retry.json()).data.id).toBe(saved.id);
+  expect((await write(page.context(), `/api/community/rooms/${room.id}/messages`, { client_message_id: saved.client_message_id, content: "Conflicting payload" })).status()).toBe(409);
+  const invalid = await write(page.context(), `/api/community/rooms/${room.id}/messages`, { client_message_id: randomUUID(), content: " " });
+  expect(invalid.status()).toBe(422);
+  expect((await invalid.json()).errors.content).toBeDefined();
+  const history = await page.context().request.get(`${api}/api/community/rooms/${room.id}/messages?after=0&limit=1`);
+  const historyBody = await history.json();
+  expect(history.status()).toBe(200);
+  expect(historyBody.meta.requires_history_refresh).toBe(true);
+  expect(historyBody.data[0].id).toBe(saved.id);
+  const older = await page.context().request.get(`${api}/api/community/rooms/${room.id}/messages?before=${saved.id}`);
+  expect((await older.json()).data).toEqual([]);
+  expect((await page.context().request.get(`${api}/api/community/topics/99999999/room`)).status()).toBe(404);
+  await page.reload();
+  await menu.getByRole("button", { name: new RegExp(`HTTP Kategori 1 ${fixtures.tag}`) }).click();
+  await expect(page.getByText(content, { exact: true })).toBeVisible();
+  await menu.getByRole("button", { name: new RegExp(`HTTP Kategori 2 ${fixtures.tag}`) }).click();
+  await expect(page.getByText("Belum ada pesan. Mulai percakapan di ruang ini.")).toBeVisible();
+  await expect(page.getByText(content, { exact: true })).toHaveCount(0);
+  const other = await browser.newContext();
+  const otherPage = await other.newPage();
+  const free = await browser.newContext();
+  const freePage = await free.newPage();
+  const admin = await browser.newContext();
+  const guest = await browser.newContext();
+  try {
+    await login(otherPage, "other");
+    await otherPage.getByRole("button", { name: new RegExp(`HTTP Kategori 1 ${fixtures.tag}`) }).click();
+    await expect(otherPage.locator(".community-bubble-other").filter({ hasText: content })).toHaveCount(1);
+    await login(freePage, "free");
+    await freePage.getByRole("button", { name: new RegExp(`HTTP Kategori 1 ${fixtures.tag}`) }).click();
+    await expect(freePage.getByText(content, { exact: true })).toBeVisible();
+    await expect(freePage.getByRole("textbox", { name: "Pesan", exact: true })).toHaveCount(0);
+    expect((await write(free, `/api/community/rooms/${room.id}/messages`, { client_message_id: randomUUID(), content: "Forbidden free" })).status()).toBe(403);
+    expect((await guest.request.get(`${api}/api/community/rooms/${room.id}/messages`, { headers: { Accept: "application/json" } })).status()).toBe(401);
+    const bubble = otherPage.locator("article").filter({ hasText: content });
+    await bubble.getByRole("button", { name: "Laporkan", exact: true }).click();
+    await bubble.getByLabel("Alasan laporan").fill("HTTP integration review");
+    await bubble.getByRole("button", { name: "Kirim laporan", exact: true }).click();
+    await expect(bubble.getByText("Laporan tersimpan.")).toBeVisible();
+    await admin.request.get(api + "/sanctum/csrf-cookie");
+    expect((await write(admin, "/api/auth/login", { identity: fixtures.emails.admin, password: fixtures.password })).status()).toBe(200);
+    const adminPage = await admin.newPage();
+    await adminPage.goto("/admin/komunitas");
+    await adminPage.getByLabel("Daftar", { exact: true }).selectOption("reports");
+    const review = adminPage.locator("article").filter({ hasText: content });
+    await expect(review).toContainText("HTTP integration review");
+    const refreshed = () => adminPage.waitForResponse(response => response.url().includes("/api/admin/community/moderation?view=reports") && response.status() === 200);
+    adminPage.once("dialog", dialog => dialog.accept());
+    await Promise.all([refreshed(), review.getByRole("button", { name: "Sembunyikan pesan", exact: true }).click()]);
+    await expect(review).toContainText("Status pesan: hidden");
+    await expect(otherPage.getByText(content, { exact: true })).toHaveCount(0, { timeout: 12000 });
+    await expect(freePage.getByText(content, { exact: true })).toHaveCount(0, { timeout: 12000 });
+    adminPage.once("dialog", dialog => dialog.accept());
+    await Promise.all([refreshed(), review.getByRole("button", { name: "Pulihkan pesan", exact: true }).click()]);
+    await expect(otherPage.getByText(content, { exact: true })).toBeVisible({ timeout: 12000 });
+    adminPage.once("dialog", dialog => dialog.accept());
+    await Promise.all([refreshed(), review.getByRole("button", { name: "Tandai ditangani", exact: true }).click()]);
+    await expect(review).toContainText("Status laporan: handled");
+    adminPage.once("dialog", dialog => dialog.accept());
+    await Promise.all([refreshed(), review.getByRole("button", { name: "Hapus pesan", exact: true }).click()]);
+    await expect(review).toContainText("Riwayat audit dipertahankan");
+    await expect(otherPage.getByText(content, { exact: true })).toHaveCount(0, { timeout: 12000 });
+    expect((await write(page.context(), `/api/community/rooms/${room.id}/messages`, { client_message_id: saved.client_message_id, content })).status()).toBe(404);
+    await page.getByRole("button", { name: "Arsip Diskusi Lama", exact: true }).click();
+    await page.locator("article").filter({ has: page.getByRole("heading", { name: `HTTP Arsip Lama ${fixtures.tag}`, exact: true }) }).getByRole("button", { name: "Buka", exact: true }).click();
+    await expect(page.getByText("Isi arsip dipertahankan", { exact: true })).toBeVisible();
+    await expect(page.getByText("Balasan arsip dipertahankan", { exact: true })).toBeVisible();
+  } finally { await Promise.all([other.close(), free.close(), admin.close(), guest.close()]); }
+});

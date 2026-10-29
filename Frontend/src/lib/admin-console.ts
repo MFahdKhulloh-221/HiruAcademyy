@@ -15,6 +15,7 @@ export const adminMenu: readonly MenuItem[] = [
   { label: "Replay Rekaman", href: "/admin/replay-rekaman", group: "PEMBELAJARAN" },
   { label: "Sertifikat", href: "/admin/sertifikat", group: "PEMBELAJARAN" },
   { label: "Notifikasi", href: "/admin/notifikasi", group: "PEMBELAJARAN" },
+  { label: "Moderasi Komunitas", href: "/admin/komunitas", group: "OPERASIONAL" },
   { label: "Pengguna & Akses", href: "/admin/pengguna-akses", group: "OPERASIONAL" },
   { label: "Invoice", href: "/admin/invoice", group: "OPERASIONAL" },
   { label: "Affiliate & Komisi", href: "/admin/affiliate-komisi", group: "OPERASIONAL" },

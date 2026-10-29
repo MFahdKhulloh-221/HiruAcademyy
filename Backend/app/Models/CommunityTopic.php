@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class CommunityTopic extends Model
 {
@@ -12,6 +13,11 @@ class CommunityTopic extends Model
     protected $casts = [
         'sort_order' => 'integer',
     ];
+
+    public function room(): HasOne
+    {
+        return $this->hasOne(CommunityRoom::class, 'topic_id');
+    }
 
     public function threads(): HasMany
     {

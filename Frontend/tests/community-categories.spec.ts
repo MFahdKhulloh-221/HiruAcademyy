@@ -14,11 +14,12 @@ for (const [width, plan] of [[1440, "free"], [768, "lms"], [390, "sensei"]] as c
     const queries: URLSearchParams[] = [];
     await page.route(/\/(api\/|sanctum\/csrf-cookie)/, async route => {
       const url = new URL(route.request().url());
-      const headers = { "access-control-allow-origin": "http://localhost:3000", "access-control-allow-credentials": "true", "access-control-allow-methods": "GET, POST, OPTIONS", "access-control-allow-headers": "accept, content-type, x-xsrf-token" };
+      const headers = { "access-control-allow-origin": route.request().headers().origin ?? "http://localhost:3000", "access-control-allow-credentials": "true", "access-control-allow-methods": "GET, POST, OPTIONS", "access-control-allow-headers": "accept, content-type, x-xsrf-token" };
       const reply = (data: unknown) => route.fulfill({ headers, json: { data } });
       if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers });
       expect(route.request().method()).toBe("GET");
       if (url.pathname === "/api/me") return reply({ id: 9, name: "Siswa", email: "student@example.test", whatsapp: "628123456789", role: "student", account_status: "active" });
+      if (url.pathname === "/api/student/dashboard") return reply({ programs: [], access: { learning: {}, replay_levels: [], source_grants: plan === "free" ? [] : [{ plan_code: plan, program_code: "n5" }] } });
       if (url.pathname === "/api/public/programs") return reply([]);
       if (url.pathname === "/api/student/access") return reply({ learning: {}, replay_levels: [], source_grants: plan === "free" ? [] : [{ plan_code: plan, program_code: "n5" }] });
       if (url.pathname === "/api/community/topics") {
@@ -35,6 +36,7 @@ for (const [width, plan] of [[1440, "free"], [768, "lms"], [390, "sensei"]] as c
       return reply([]);
     });
     await page.goto("/community");
+    await page.getByRole("button", { name: "Arsip Diskusi Lama", exact: true }).click();
     await expect(page.getByRole("button", { name: "Coba Lagi Kategori" })).toBeVisible();
     topicFailure = false;
     await page.getByRole("button", { name: "Coba Lagi Kategori" }).click();

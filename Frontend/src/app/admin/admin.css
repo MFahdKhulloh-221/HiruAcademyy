@@ -262,3 +262,12 @@
   .admin-shell .admin-journey-filters select { width: 100%; min-width: 0; }
   .admin-shell .admin-tabs a { white-space: normal; }
 }
+.community-moderation { max-width: 1200px; width: 100%; min-width: 0; }
+.community-moderation > div:first-of-type { padding: 16px; background: #fff; border: 1px solid #e5e7eb; border-radius: 16px; }
+.community-moderation label { display: flex; flex-direction: column; gap: 6px; font-weight: 600; flex: 1 1 180px; min-width: 0; }
+.community-moderation select { min-height: 44px; width: 100%; border: 1px solid #cbd5e1; border-radius: 10px; padding: 8px; background: #fff; }
+.community-moderation article { background: #fff; border-radius: 16px; box-shadow: 0 3px 14px #0f172a08; }
+.community-moderation article h2 { font-size: 18px; }
+.community-moderation article button, .community-moderation nav button { margin: 4px; padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 10px; background: #fff; cursor: pointer; }
+.community-moderation button:disabled { opacity: .5; cursor: not-allowed; }
+.community-moderation :focus-visible { outline: 3px solid #954900; outline-offset: 3px; }
