@@ -59,6 +59,14 @@ class StudentTryOutController extends Controller
         return response()->json(['data' => $attempts->payload($attempts->submit($request->user(), $tryOut, $attempt, $data['revision']))]);
     }
 
+    public function abandon(Request $request, TryOut $tryOut, TryOutAttempt $attempt, TryOutAttemptService $attempts, TryOutService $content)
+    {
+        $content->validateInput($request->all(), []);
+        $attempts->abandon($request->user(), $tryOut, $attempt);
+
+        return response()->noContent();
+    }
+
     public function review(Request $request, TryOut $tryOut, TryOutAttempt $attempt, TryOutAttemptService $attempts, TryOutService $content)
     {
         $attempts->authorize($request->user(), $tryOut, $attempt);

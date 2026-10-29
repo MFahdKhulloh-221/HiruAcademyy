@@ -1,0 +1,54 @@
+import { expect, test } from "./canonical-fixture";
+
+test("standalone placement controller preserves selection, undo, editor ownership and busy state", async ({ page }) => {
+  await page.route("**/api/admin/placement-configs", route => route.fulfill({ json: { data: [{ id: 7, title: "Placement", intro_heading: "Intro", duration_minutes: 7, description: "Desc", status: "draft" }] } }));
+  await page.route("**/api/admin/placement-questions**", route => route.fulfill({ json: { data: [] } }));
+  await page.goto("/admin/placement-hasil");
+  await page.getByRole("combobox", { name: "Kategori kelompok", exact: true }).selectOption("Moji・Goi");
+  await page.getByRole("button", { name: "+ Tambah Soal", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  const prompt = dialog.getByRole("textbox", { name: "Pertanyaan", exact: true });
+  const option = dialog.getByRole("textbox", { name: "Pilihan A", exact: true });
+  await expect(dialog.getByRole("toolbar")).toHaveCount(6);
+  const promptEditor = dialog.locator(".placement-text-editor").filter({ has: page.getByRole("textbox", { name: "Pertanyaan", exact: true }) });
+  const toolbar = promptEditor.getByRole("toolbar");
+  await prompt.fill("日本語");
+  await expect(prompt).toHaveText("日本語");
+  await prompt.press("Control+a");
+  const bold = toolbar.getByRole("button", { name: "bold", exact: true });
+  await expect(bold).toHaveAttribute("aria-pressed", /true|false/);
+  // Admin field CSS may inherit bold; normalize before testing an explicit toggle.
+  if (await bold.getAttribute("aria-pressed") === "true") await bold.click();
+  await expect(bold).toHaveAttribute("aria-pressed", "false");
+  const beforeBold = await prompt.innerHTML();
+  await bold.click();
+  await expect(bold).toHaveAttribute("aria-pressed", "true");
+  const afterBold = await prompt.innerHTML();
+  expect(afterBold).not.toBe(beforeBold);
+  await prompt.press("Control+z");
+  await expect.poll(() => prompt.innerHTML()).toBe(beforeBold);
+  await prompt.press("Control+y");
+  await expect.poll(() => prompt.innerHTML()).toBe(afterBold);
+  let release!: () => void;
+  const pending = new Promise<void>(resolve => { release = resolve; });
+  await page.route("**/api/furigana", async route => { await pending; await route.fulfill({ json: { reading: "にほんご" } }); });
+  await toolbar.getByRole("button", { name: /Furigana/ }).click();
+  await expect(dialog.getByRole("group", { name: "Edit Furigana" })).toBeVisible();
+  await option.fill("Other editor");
+  release();
+  const optionEditor = dialog.locator(".placement-text-editor").filter({ has: page.getByRole("textbox", { name: "Pilihan A", exact: true }) });
+  await expect(optionEditor.getByRole("toolbar")).toContainText("Aktif: Pilihan A");
+  await expect(toolbar).toContainText("Aktif: Pertanyaan");
+  await expect(promptEditor.getByRole("button", { name: "Terapkan", exact: true })).toBeEnabled();
+  await promptEditor.getByRole("button", { name: "Terapkan", exact: true }).click();
+  await expect(prompt.locator("ruby")).toHaveText("日本語にほんご");
+  await expect(dialog.getByRole("group", { name: "Edit Furigana" })).toHaveCount(0);
+  await expect(option).toHaveText("Other editor");
+  await expect(option.locator("ruby")).toHaveCount(0);
+  await option.evaluate(element => {
+    const fieldset = element.closest("fieldset");
+    if (!fieldset) throw new Error("Expected editor fieldset");
+    fieldset.disabled = true;
+  });
+  await expect(option).toHaveAttribute("contenteditable", "false");
+});

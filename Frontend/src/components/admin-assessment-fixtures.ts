@@ -8,6 +8,7 @@ export const miniAssessmentContexts = ["DASAR", "N5", "N4", "N3", "N2", "SSW"] a
 export const tryoutAssessmentContexts = ["N5", "N4", "N3", "N2", "N1"] as const;
 export type AdminAssessmentKind = "mini" | "tryout";
 export type AdminAssessmentQuestion = {
+  passageId?: string | null;
   id: string;
   section: string;
   type: "Multiple choice" | "Audio" | "Reading";
@@ -25,6 +26,8 @@ export type AdminAssessmentQuestion = {
   status: "Draft" | "Published";
 };
 export type AdminAssessment = {
+  studioRevision?: string;
+  passages?: { id: string; title: string; body: string }[];
   accessType?: "free" | "membership";
   id: string;
   kind: AdminAssessmentKind;
@@ -51,7 +54,7 @@ export function orderedAssessmentQuestions(item: AdminAssessment) {
   return sections.flatMap((section) => sorted.filter((question) => question.section === section)).concat(sorted.filter((question) => !sections.includes(question.section)));
 }
 export function copyAssessment(item: AdminAssessment): AdminAssessment {
-  return { ...item, questions: item.questions.map((question) => ({ ...question, answers: [...question.answers], japanese: question.japanese ? { ...question.japanese } : undefined })) };
+  return { ...item, passages: item.passages?.map(passage => ({ ...passage })), questions: item.questions.map((question) => ({ ...question, answers: [...question.answers], japanese: question.japanese ? { ...question.japanese } : undefined })) };
 }
 function adaptQuestion(question: AssessmentQuestion, section: string, index: number): AdminAssessmentQuestion {
   return { id: question.id, section, type: section === jlptTryoutSessions[2] ? "Reading" : section === jlptTryoutSessions[3] ? "Audio" : "Multiple choice", prompt: question.prompt, japanese: question.japanese ? { ...question.japanese } : undefined, instruction: "", answers: question.options.map((option) => option.label), correctAnswer: question.options.findIndex((option) => option.id === question.correctOptionId), explanation: question.explanation, passage: "", file: null, order: String(index + 1), status: "Published" };
@@ -91,7 +94,7 @@ export function assessmentError(item: AdminAssessment) {
     if (item.sessionPassingScores != null && (Object.keys(item.sessionPassingScores).length !== assessmentSessions.length || assessmentSessions.some(session => !Number.isSafeInteger(item.sessionPassingScores?.[session]) || item.sessionPassingScores![session] < 0))) return "Passing score per sesi harus berupa bilangan bulat nonnegatif.";
     if (item.status === "Published") {
       const published = item.questions.filter(question => question.status === "Published");
-      if (published.reduce((total, question) => total + (question.pointValue ?? 0), 0) !== Number(item.maxScore)) return "Point value harus sesuai skor maksimal.";
+      if (published.reduce((total, question) => total + (question.pointValue ?? 0), 0) !== Number(item.maxScore)) return `Total poin soal Published saat ini: ${published.reduce((total, question) => total + (question.pointValue ?? 0), 0)} dari ${item.maxScore}. Lengkapi poin sebelum mempublikasikan Try Out.`;
       if (item.sessionPassingScores && assessmentSessions.some((session, index) => item.sessionPassingScores![session] > published.filter(question => question.section === jlptTryoutSessions[index]).reduce((total, question) => total + (question.pointValue ?? 0), 0))) return "Passing score per sesi harus antara 0 dan skor maksimal sesi.";
     }
   }
@@ -103,7 +106,7 @@ export function assessmentError(item: AdminAssessment) {
     if (item.kind === "mini" && (!item.duration || item.passingScore === "")) return "OPEN: isi durasi dan passing score sebelum publish.";
     if (!item.questions.some((question) => question.status === "Published")) return "Tambahkan soal Published sebelum publish.";
     if (item.kind === "tryout" && assessmentSections(item).some((section) => !item.questions.some((question) => question.section === section && question.status === "Published"))) return "Setiap sesi membutuhkan soal Published.";
-    if (item.questions.some((question) => question.status === "Published" && ((question.type === "Audio" && !question.file && !question.audioUrl?.trim()) || (question.type === "Reading" && !question.passage.trim())))) return "OPEN: lengkapi file audio dan teks bacaan sebelum publish.";
+    if (item.questions.some((question) => question.status === "Published" && ((question.type === "Audio" && !question.file && !question.audioUrl?.trim()) || (question.type === "Reading" && !question.passageId && !question.passage.trim())))) return "OPEN: lengkapi file audio dan teks bacaan sebelum publish.";
   }
   return "";
 }

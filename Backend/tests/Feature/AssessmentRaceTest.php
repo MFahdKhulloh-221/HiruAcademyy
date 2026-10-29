@@ -93,8 +93,20 @@ class AssessmentRaceTest extends TestCase
             if (! Schema::hasColumn('try_out_attempts', 'expires_at')) {
                 (require database_path('migrations/2026_10_11_000001_add_try_out_duration_and_attempt_deadline.php'))->up();
             }
+            if (! Schema::hasColumn('try_outs', 'max_score')) {
+                (require database_path('migrations/2026_10_20_000002_add_try_out_builder_configuration.php'))->up();
+            }
+            if (! Schema::hasColumn('try_outs', 'access_type')) {
+                (require database_path('migrations/2026_10_28_000003_add_access_type_to_try_outs.php'))->up();
+            }
+            if (! Schema::hasColumn('try_out_attempts', 'abandoned_at')) {
+                (require database_path('migrations/2026_10_29_000032_add_try_out_attempt_abandonment.php'))->up();
+            }
+            if (! Schema::hasTable('try_out_passages')) {
+                (require database_path('migrations/2026_10_29_000033_add_try_out_shared_passages.php'))->up();
+            }
             $content = app(TryOutService::class);
-            $this->tryOut = $content->save(['program_id' => $program->id, 'title' => 'Race '.bin2hex(random_bytes(8))]);
+            $this->tryOut = $content->save(['program_id' => $program->id, 'title' => 'Race '.bin2hex(random_bytes(8)), 'access_type' => 'free']);
             foreach (array_keys(TryOutService::SESSIONS) as $session) {
                 $content->saveQuestion($this->tryOut, ['session' => $session, 'question' => 'Race question', 'options' => $options, 'correct_option' => 'B', 'point_value' => 45, 'status' => 'published', 'audio_url' => $session === 'audio' ? 'https://example.test/race.mp3' : null]);
             }
@@ -149,11 +161,20 @@ $f = json_decode(getenv('RACE_FIXTURE'), true, 512, JSON_THROW_ON_ERROR);
 $user = App\Models\User::findOrFail($f['user']);
 $save = getenv('RACE_OPERATION') === 'save';
 try {
+    if (isset($f['studio'])) {
+        $service = app(App\Services\TryOutService::class);
+        $service->saveStudio(App\Models\TryOut::findOrFail($f['parent']), $f['studio']);
+        echo json_encode(['http' => 200], JSON_THROW_ON_ERROR);
+        return;
+    }
     if ($f['kind'] === 'try_out') {
         $service = app(App\Services\TryOutAttemptService::class);
         $parent = App\Models\TryOut::findOrFail($f['parent']);
         $attempt = App\Models\TryOutAttempt::findOrFail($f['id']);
-        if (getenv('RACE_OPERATION') === 'refresh') {
+        if (getenv('RACE_OPERATION') === 'abandon') {
+            $service->abandon($user, $parent, $attempt);
+            $result = $attempt->fresh();
+        } elseif (getenv('RACE_OPERATION') === 'refresh') {
             $result = $service->refresh($user, $parent, $attempt);
         } else {
             $result = $save ? $service->save($user, $parent, $attempt, [array_key_first($f['answers']) => 'A'], $f['revision'] - 1, false) : $service->submit($user, $parent, $attempt, $f['revision']);
@@ -254,6 +275,96 @@ PHP;
                     $worker->stop();
                 }
             }
+        }
+    }
+
+    public function test_studio_concurrent_save_and_delete_reject_stale_writes(): void
+    {
+        $fixture = $this->fixture('try_out', false);
+        $service = app(TryOutService::class);
+        $passage = \App\Models\TryOutPassage::create(['try_out_id' => $this->tryOut->id, 'title' => 'Race passage', 'body' => '<p>Original</p>']);
+        $reading = $this->tryOut->questions()->where('session', 'reading')->firstOrFail();
+        $reading->update(['passage_id' => $passage->id, 'reading_passage' => null]);
+        $snapshot = app(TryOutAttemptService::class)->start($this->student, $this->tryOut->fresh());
+        $original = $snapshot->grading_snapshot;
+        foreach ([false, true] as $delete) {
+            $body = ['revision' => $service->studioRevision($this->tryOut), 'settings' => ['status' => 'draft'],
+                'passages' => [['id' => (string) $passage->id, 'title' => 'Race passage', 'body' => $delete ? '<p>Saved again</p>' : '<p>Saved</p>']],
+                'questions' => $this->tryOut->questions()->orderBy('id')->get()->map(function ($q) use ($service) {
+                    $content = $service->adminQuestion($q);
+                    unset($content['id'], $content['try_out_id'], $content['audio_url_resolved_url']);
+                    return ['id' => (string) $q->id, 'content' => $content];
+                })->all(), 'deleted_question_ids' => [], 'deleted_passage_ids' => []];
+            $other = $body;
+            $other['passages'][0]['body'] = '<p>Other</p>';
+            if ($delete) {
+                $other['passages'] = [];
+                $other['questions'] = array_values(array_filter($other['questions'], fn ($q) => $q['id'] !== (string) $reading->id));
+                $other['deleted_question_ids'] = [$reading->id];
+                $other['deleted_passage_ids'] = [$passage->id];
+            }
+            $names = ['studio_'.bin2hex(random_bytes(8)), 'studio_'.bin2hex(random_bytes(8))];
+            $workers = [$this->worker($fixture + ['studio' => $body], 'studio', $names[0]), $this->worker($fixture + ['studio' => $other], 'studio', $names[1])];
+            DB::beginTransaction();
+            DB::table('try_outs')->where('id', $this->tryOut->id)->lockForUpdate()->first();
+            try {
+                foreach ($workers as $worker) $worker->start();
+                $deadline = microtime(true) + 12;
+                do {
+                    DB::select('SELECT pg_stat_clear_snapshot()');
+                    $blocked = DB::select("SELECT application_name FROM pg_stat_activity WHERE datname = current_database() AND application_name IN (?, ?) AND wait_event_type = 'Lock'", $names);
+                    if (count($blocked) === 2) break;
+                    usleep(20000);
+                } while (microtime(true) < $deadline);
+                $this->assertCount(2, $blocked);
+                DB::commit();
+                $codes = [];
+                foreach ($workers as $worker) {
+                    $this->assertSame(0, $worker->wait(), $worker->getErrorOutput());
+                    $codes[] = json_decode($worker->getOutput(), true, 512, JSON_THROW_ON_ERROR)['http'];
+                }
+                sort($codes);
+                $this->assertSame([200, 409], $codes);
+                $this->assertSame($original, $snapshot->fresh()->grading_snapshot);
+                $this->assertSame(0, DB::table('try_out_questions')->where('try_out_id', $this->tryOut->id)->whereNotNull('passage_id')->whereNotIn('passage_id', DB::table('try_out_passages')->select('id'))->count());
+                $this->assertSame($this->tryOut->questions()->count(), $this->tryOut->questions()->distinct()->count('id'));
+                if (! $delete) $passage->refresh();
+            } finally {
+                while (DB::transactionLevel() > 0) DB::rollBack();
+                foreach ($workers as $worker) if ($worker->isRunning()) $worker->stop();
+            }
+        }
+    }
+
+    public function test_try_out_abandon_collides_with_stale_autosave(): void
+    {
+        $fixture = $this->fixture('try_out', false);
+        $names = ['exit_'.bin2hex(random_bytes(8)), 'exit_'.bin2hex(random_bytes(8))];
+        $workers = [$this->worker($fixture, 'abandon', $names[0]), $this->worker($fixture, 'save', $names[1])];
+        DB::beginTransaction();
+        DB::table('try_out_attempts')->where('id', $fixture['id'])->lockForUpdate()->first();
+        try {
+            foreach ($workers as $worker) $worker->start();
+            $deadline = microtime(true) + 12;
+            do {
+                DB::select('SELECT pg_stat_clear_snapshot()');
+                $blocked = DB::select("SELECT application_name FROM pg_stat_activity WHERE datname = current_database() AND application_name IN (?, ?) AND wait_event_type = 'Lock'", $names);
+                if (count($blocked) === 2) break;
+                usleep(20000);
+            } while (microtime(true) < $deadline);
+            $this->assertCount(2, $blocked);
+            DB::commit();
+            foreach ($workers as $worker) $this->assertSame(0, $worker->wait(), $worker->getErrorOutput());
+            $this->assertSame(200, json_decode($workers[0]->getOutput(), true)['http']);
+            $this->assertSame(409, json_decode($workers[1]->getOutput(), true)['http']);
+            $attempt = TryOutAttempt::findOrFail($fixture['id']);
+            $this->assertNotNull($attempt->abandoned_at);
+            $this->assertSame($fixture['answers'], $attempt->answers);
+            $this->assertSame($fixture['revision'] + 1, $attempt->revision);
+            $this->assertNull($attempt->result_snapshot);
+        } finally {
+            while (DB::transactionLevel() > 0) DB::rollBack();
+            foreach ($workers as $worker) if ($worker->isRunning()) $worker->stop();
         }
     }
 

@@ -167,9 +167,32 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
     pending.current = false;
     return result;
   }
+  async function abandon() {
+    if (domain !== "tryout" || !current?.attempt || pending.current) return false;
+    pending.current = true;
+    const version = generation.current;
+    setState(previous => ({ ...previous, busy: true, error: undefined }));
+    try {
+      await apiRequest(`${path}/${current.attempt.id}/abandon`, { method: "POST" });
+      if (version !== generation.current) return false;
+      saveVersion.current++;
+      persistence.current = null;
+      latestAnswers.current = {};
+      setState({ requestKey, answers: {}, loadingAttempt: false, busy: false });
+      const url = new URL(window.location.href);
+      for (const key of ["attempt", "tryout_stage", "tryout_question"]) url.searchParams.delete(key);
+      window.history.replaceState(null, "", url);
+      return true;
+    } catch (error) {
+      if (version === generation.current) setState(previous => ({ ...previous, busy: false, error: error instanceof Error ? error.message : new ApiError(0).message }));
+      return false;
+    } finally {
+      if (version === generation.current) pending.current = false;
+    }
+  }
   async function review() {
     if (current?.attempt?.status !== "completed") return;
     return run(() => readAttempt(`${path}/${current.attempt!.id}/review`));
   }
-  return { attempt: current?.attempt, answers: current?.answers ?? {}, loadingAttempt, busy: current?.busy ?? false, submitting: pending.current && Boolean(current?.busy), error: current?.error, start, answer, retrySave, synchronize, finishSession, submit, expire, review };
+  return { attempt: current?.attempt, answers: current?.answers ?? {}, loadingAttempt, busy: current?.busy ?? false, submitting: pending.current && Boolean(current?.busy), error: current?.error, start, answer, retrySave, synchronize, finishSession, submit, expire, abandon, review };
 }

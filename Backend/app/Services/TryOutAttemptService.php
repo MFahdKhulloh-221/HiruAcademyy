@@ -43,14 +43,28 @@ class TryOutAttemptService
             $grading = [];
             foreach (array_keys(TryOutService::SESSIONS) as $session) {
                 foreach ($parent->questions()->where('status', 'published')->where('session', $session)->orderBy('sort_order')->orderBy('id')->get() as $question) {
-                    $questions[] = $question->only(['id', 'session', 'question', 'options', 'reading_passage', 'audio_url', 'instruction', 'japanese']);
+                    $questions[] = $question->only(['id', 'passage_id', 'session', 'question', 'options', 'reading_passage', 'audio_url', 'instruction', 'japanese']);
                     $grading[$question->id] = $question->only(['correct_option', 'explanation', 'point_value']);
                 }
             }
 
             $startedAt = now();
 
-            return TryOutAttempt::create(['user_id' => $user->id, 'try_out_id' => $parent->id, 'status' => 'in_progress', 'content_snapshot' => $questions, 'grading_snapshot' => ['questions' => $grading, 'total_passing_score' => $parent->total_passing_score, 'max_score' => $parent->max_score, 'session_passing_scores' => $parent->session_passing_scores], 'answers' => [], 'completed_sessions' => [], 'current_session' => 0, 'revision' => 0, 'started_at' => $startedAt, 'expires_at' => $parent->duration_minutes === null ? null : $startedAt->copy()->addMinutes($parent->duration_minutes)])->fresh();
+            return TryOutAttempt::create(['user_id' => $user->id, 'try_out_id' => $parent->id, 'status' => 'in_progress', 'content_snapshot' => $questions, 'grading_snapshot' => ['passages' => \App\Models\TryOutPassage::where('try_out_id', $parent->id)->get(['id', 'title', 'body'])->keyBy('id')->toArray(), 'questions' => $grading, 'total_passing_score' => $parent->total_passing_score, 'max_score' => $parent->max_score, 'session_passing_scores' => $parent->session_passing_scores], 'answers' => [], 'completed_sessions' => [], 'current_session' => 0, 'revision' => 0, 'started_at' => $startedAt, 'expires_at' => $parent->duration_minutes === null ? null : $startedAt->copy()->addMinutes($parent->duration_minutes)])->fresh();
+        }, 3);
+    }
+
+    public function abandon(User $user, TryOut $tryOut, TryOutAttempt $attempt): void
+    {
+        DB::transaction(function () use ($user, $tryOut, $attempt) {
+            app(GamificationService::class)->lock($user);
+            $locked = TryOutAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+            $this->authorize($user, $tryOut, $locked);
+            if ($locked->abandoned_at !== null) {
+                return;
+            }
+            abort_unless($locked->status === 'in_progress', 409, 'Try out attempt is already finished.');
+            $locked->update(['abandoned_at' => now(), 'revision' => $locked->revision + 1]);
         }, 3);
     }
 
@@ -60,6 +74,7 @@ class TryOutAttemptService
             app(GamificationService::class)->lock($user);
             $locked = TryOutAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
             $this->authorize($user, $tryOut, $locked);
+            abort_if($locked->abandoned_at !== null, 409, 'Try out attempt was abandoned.');
             if ($this->expired($locked)) {
                 return $this->finalize($user, $tryOut, $locked);
             }
@@ -91,6 +106,7 @@ class TryOutAttemptService
             app(GamificationService::class)->lock($user);
             $locked = TryOutAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
             $this->authorize($user, $tryOut, $locked);
+            abort_if($locked->abandoned_at !== null, 409, 'Try out attempt was abandoned.');
             if ($locked->status === 'completed') {
                 return $locked;
             }
@@ -113,6 +129,7 @@ class TryOutAttemptService
             app(GamificationService::class)->lock($user);
             $locked = TryOutAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
             $this->authorize($user, $tryOut, $locked);
+            abort_if($locked->abandoned_at !== null, 409, 'Try out attempt was abandoned.');
 
             return $this->expired($locked) ? $this->finalize($user, $tryOut, $locked) : $locked;
         }, 3);
@@ -176,6 +193,9 @@ class TryOutAttemptService
                 continue;
             }
             $item = array_intersect_key($question, array_flip(['id', 'session', 'question', 'reading_passage', 'audio_url', 'instruction', 'japanese']));
+            if (isset($question['passage_id'])) {
+                $item['passage'] = $attempt->grading_snapshot['passages'][$question['passage_id']] ?? null;
+            }
             $item['options'] = array_intersect_key($question['options'], array_flip(['A', 'B', 'C', 'D']));
             if ($review) {
                 $item += array_intersect_key($grade, array_flip(['correct_option', 'explanation', 'point_value']));
@@ -189,7 +209,7 @@ class TryOutAttemptService
     public function history(User $user, TryOut $tryOut): array
     {
         $this->authorize($user, $tryOut, new TryOutAttempt(['user_id' => $user->id, 'try_out_id' => $tryOut->id]));
-        $attempts = TryOutAttempt::where('user_id', $user->id)->where('try_out_id', $tryOut->id)->orderByDesc('id')->get();
+        $attempts = TryOutAttempt::where('user_id', $user->id)->where('try_out_id', $tryOut->id)->whereNull('abandoned_at')->orderByDesc('id')->get();
         $best = null;
         $history = [];
         foreach ($attempts as $attempt) {

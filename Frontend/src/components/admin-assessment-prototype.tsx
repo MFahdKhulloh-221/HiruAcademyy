@@ -1,6 +1,8 @@
 "use client";
 
-import { useCallback, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { FiSave } from "react-icons/fi";
+import { useEditorNavigation } from "@/components/admin-editor-navigation";
 import { useContent } from "@/lib/public-content-api";
 import { useLearningRequest } from "@/components/learning-hooks";
 import { loadAdminTryOuts, saveAdminTryOut, deleteAdminTryOut, setAdminTryOutStatus, publishAdminTryOutQuestions, adminTryOutError } from "@/lib/admin-tryout-api";
@@ -11,6 +13,15 @@ import tryoutStyles from "./admin-tryout-builder.module.css";
 import { AdminQuestionWorkspace } from "@/components/admin-question-workspace";
 import { assessmentSessions } from "@/lib/assessment-attempt";
 import { assessmentError, assessmentSections, copyAssessment, miniAssessmentContexts, tryoutAssessmentContexts, type AdminAssessment, type AdminAssessmentKind, type AdminAssessmentQuestion } from "@/components/admin-assessment-fixtures";
+
+function StudioNavigationGuard({ dirty, saving, discard }: { dirty: boolean; saving: boolean; discard: () => void }) {
+  const setGuard = useEditorNavigation()?.setGuard;
+  useEffect(() => {
+    setGuard?.({ dirty, saving, discard });
+    return () => setGuard?.(null);
+  }, [setGuard, dirty, saving, discard]);
+  return null;
+}
 
 function AssessmentWorkspace({ kind, navigation }: { kind: AdminAssessmentKind; navigation?: ReactNode }) {
   const mini = kind === "mini";
@@ -24,9 +35,9 @@ function AssessmentWorkspace({ kind, navigation }: { kind: AdminAssessmentKind; 
   const [questionDirty, setQuestionDirty] = useState(false);
   const [packageForm, setPackageForm] = useState(true);
   const targetSelect = useRef<HTMLSelectElement>(null);
-  const load = useCallback((signal: AbortSignal) => mini ? Promise.resolve([]) : loadAdminTryOuts(signal), [mini]);
-  const request = useLearningRequest(load, `admin-${kind}`);
   const [savedRows, setRows] = useState<AdminAssessment[] | null>(null);
+  const load = useCallback((signal: AbortSignal) => mini ? Promise.resolve([]) : loadAdminTryOuts(signal).then(data => { if (!signal.aborted) setRows(data); return data; }), [mini, setRows]);
+  const request = useLearningRequest(load, `admin-${kind}`);
   const rows = savedRows ?? request.data ?? [];
   const [draft, setDraft] = useState<AdminAssessment | null>(null);
   const [questionDraft, setQuestionDraft] = useState<AdminAssessmentQuestion | null>(null);
@@ -58,10 +69,17 @@ function AssessmentWorkspace({ kind, navigation }: { kind: AdminAssessmentKind; 
     setPackageForm(true); setDraft(copyAssessment(item)); setError(""); setQuestionDraft(null);
   }
   async function persist(next: AdminAssessment) {
+    if (!request.data && !savedRows) { setError("Data awal belum berhasil dimuat. Coba Lagi sebelum menyimpan."); return; }
     const issue = assessmentError(next);
     if (issue) { setError(issue); return; }
     if (!beginWrite("save", next.id)) return;
-    try { setRows(await saveAdminTryOut(next, rows.find(row => row.id === next.id))); closeEditor(); setMessage("Try Out berhasil disimpan."); }
+    try {
+      const saved = await saveAdminTryOut(next, rows.find(row => row.id === next.id));
+      setRows(saved);
+      if (!packageForm) { setDraft(copyAssessment(saved.find(row => row.id === next.id) ?? saved.find(row => row.title === next.title && row.context === next.context)!)); setQuestionDirty(false); }
+      else { const created = saved.find(row => row.id === next.id) ?? saved.find(row => row.title === next.title && row.context === next.context); if (created) { setDraft(copyAssessment(created)); setPackageForm(false); } }
+      setMessage("Try Out berhasil disimpan.");
+    }
     catch (cause) { setError(adminTryOutError(cause)); }
     finally { endWrite(); }
   }
@@ -70,6 +88,12 @@ function AssessmentWorkspace({ kind, navigation }: { kind: AdminAssessmentKind; 
     if (draft) await persist(draft);
   }
   const packageDirty = Boolean(draft && JSON.stringify(draft) !== JSON.stringify(rows.find(row => row.id === draft.id)));
+  useEffect(() => {
+    if (!packageDirty && !questionDirty) return;
+    const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); };
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
+  }, [packageDirty, questionDirty]);
   function requestClose() {
     if (busyRef.current) return;
     if (packageDirty || questionDirty) { setConfirmClose(true); return; }
@@ -95,7 +119,7 @@ function AssessmentWorkspace({ kind, navigation }: { kind: AdminAssessmentKind; 
       const persistedIds = new Set(item.questions.map(question => question.id));
       const published = (row: AdminAssessment): AdminAssessment => ({ ...row, questions: row.questions.map(question => persistedIds.has(question.id) ? { ...question, status: "Published" } : question) });
       setRows(current => (current ?? rows).map(row => row.id === item.id ? published(row) : row));
-      setMessage(`${result.published_count} soal Published.`);
+      setMessage(`${item.questions.length} soal Published (${result.published_count} baru dipublikasikan).`);
     } catch (cause) { const detail = adminTryOutError(cause); setError(detail); setMessage(detail); }
     finally { endWrite(); }
   }
@@ -108,10 +132,15 @@ function AssessmentWorkspace({ kind, navigation }: { kind: AdminAssessmentKind; 
     const item = rows.find(row => row.id === questionTarget) ?? rows.find(row => !context || row.context === context);
     if (item) manageQuestions(item); else setTab("Bank Soal");
   }
-  const questionBuilder = draft && !packageForm ? <AdminTryoutQuestionBuilder draft={draft} initialQuestion={questionDraft} onDirtyChange={setQuestionDirty} busy={busy} error={error} onChange={setDraft} onSave={persist} onClose={requestClose} onDelete={async question => { if (/^\d+$/.test(question.id)) { if (!beginWrite("delete", question.id)) return; try { setRows(await deleteAdminTryOut(draft.id, question)); } finally { endWrite(); } } setDraft({ ...draft, questions: draft.questions.filter(item => item.id !== question.id) }); }} /> : null;
+  const questionBuilder = draft && !packageForm ? <AdminTryoutQuestionBuilder saveStatus={packageDirty || questionDirty ? "Perubahan belum disimpan" : message || "Semua perubahan tersimpan"} draft={draft} initialQuestion={questionDraft} onDirtyChange={setQuestionDirty} busy={busy} error={error} onChange={setDraft} onSave={persist} onClose={requestClose} onDelete={async question => { if (/^\d+$/.test(question.id)) { if (!beginWrite("delete", question.id)) return; try { setRows(await deleteAdminTryOut(draft.id, question)); } finally { endWrite(); } } setDraft({ ...draft, questions: draft.questions.filter(item => item.id !== question.id) }); }} /> : null;
+  if (questionBuilder) return <AdminShell current="/admin/try-out" hideTopbar><main className={`${tryoutStyles.workspace} ${tryoutStyles.studio}`}>
+    <StudioNavigationGuard dirty={packageDirty || questionDirty} saving={busy} discard={closeEditor} />
+    {questionBuilder}
+    <AdminDialog open={confirmClose} title="Tutup builder?" close={() => setConfirmClose(false)} actions={<><button type="button" className="button" onClick={() => setConfirmClose(false)}>Lanjut Mengedit</button><button type="button" className="button button-primary" onClick={() => { setConfirmClose(false); closeEditor(); }}>Buang Perubahan dan Tutup</button></>}><p>Perubahan belum disimpan ke backend.</p></AdminDialog>
+  </main></AdminShell>;
   return <AdminShell current={mini ? "/admin/mini-checkpoint" : "/admin/try-out"}><main className={`admin-public-prototype admin-assessment-prototype ${tryoutStyles.workspace}`}>{navigation}
-    <AdminPageHeader title={title} actions={<button className="button button-primary" type="button" onClick={() => edit({ id: crypto.randomUUID(), kind, title: "", context: context || contexts[0] || "", chapter: mini ? chapter : "", session: mini ? "1" : "", part: mini ? "1" : "", duration: "", maxScore: mini ? "100" : "180", passingScore: "", order: String(rows.reduce((max, row) => Math.max(max, Number(row.order)), 0) + 1), status: "Draft", questions: [] })}>+ Tambah {title}</button>} />
-    {mini && <p role="status">OPEN: konfigurasi sesi, part, timer Mini belum tersedia di backend.</p>}{request.error && <p role="alert">{request.error}</p>}<p role="status">{message}</p>
+    <AdminPageHeader title={title} description="Kelola simulasi ujian dan bank soal HiruAcademy." actions={<button className="button button-primary" type="button" disabled={!request.data && !savedRows} onClick={() => edit({ id: crypto.randomUUID(), kind, title: "", context: context || contexts[0] || "", chapter: mini ? chapter : "", session: mini ? "1" : "", part: mini ? "1" : "", duration: "", maxScore: mini ? "100" : "180", passingScore: "", order: String(rows.reduce((max, row) => Math.max(max, Number(row.order)), 0) + 1), status: "Draft", questions: [] })}>+ Buat {title}</button>} />
+    {mini && <p role="status">OPEN: konfigurasi sesi, part, timer Mini belum tersedia di backend.</p>}{request.error && <p role="alert">Data Try Out gagal dimuat. {request.error} <button type="button" onClick={request.retry}>Coba Lagi</button></p>}<p role="status">{message}</p>
     <AdminTabs tabs={["Daftar Try Out", "Bank Soal"]} active={tab} onChange={value => { if (value === "Bank Soal") openBank(); else if (draft && !packageForm && (packageDirty || questionDirty)) requestClose(); else { closeEditor(); setTab(value); } }} label="Tampilan Try Out" />
     {catalog.error && <p role="alert">{catalog.error} <button type="button" onClick={catalog.reload}>Coba Lagi</button></p>}
     <AdminSection><div className={tryoutStyles.toolbar}>
@@ -121,7 +150,7 @@ function AssessmentWorkspace({ kind, navigation }: { kind: AdminAssessmentKind; 
         <label className="admin-field">Status<select aria-label="Status" value={status} onChange={event => setStatus(event.target.value)}><option value="">Semua</option><option>Draft</option><option>Published</option></select></label>
         <label className="admin-field">Cari judul<input type="search" aria-label={`Cari ${title}`} placeholder="Cari judul..." value={search} onChange={event => setSearch(event.target.value)} /></label>
       </div>
-    </div>{tab === "Bank Soal" ? <>{draft && !packageForm && <h2>{draft.title} / {programName(draft.context)}</h2>}{questionBuilder ?? <p>Pilih Try Out untuk mengelola soal.</p>}</> : <AdminDataTable loading={request.loading && !request.data && !savedRows} caption="Daftar Try Out" empty="Belum ada Try Out sesuai filter." rows={visible} rowKey={(row) => row.id} columns={[
+    </div>{tab === "Bank Soal" ? <>{draft && !packageForm && <h2>{draft.title} / {programName(draft.context)}</h2>}<p>Pilih Try Out untuk mengelola soal.</p></> : <AdminDataTable loading={request.loading && !request.data && !savedRows} caption="Daftar Try Out" empty={request.error ? "Data gagal dimuat. Gunakan Coba Lagi." : "Belum ada Try Out sesuai filter."} rows={visible} rowKey={(row) => row.id} columns={[
       { key: "title", header: "Judul", cell: (row) => row.title },
       { key: "context", header: "Program", cell: (row) => `${programName(row.context)}${mini ? ` • ${row.chapter} • Sesi ${row.session} • Part ${row.part}` : ""}` },
       { key: "questions", header: "Jumlah Soal", cell: (row) => `${row.questions.length} soal • ${row.questions.filter(question => question.status === "Draft").length} Draft • ${row.questions.filter(question => question.status === "Published").length} Published` },
@@ -129,26 +158,25 @@ function AssessmentWorkspace({ kind, navigation }: { kind: AdminAssessmentKind; 
       { key: "duration", header: "Durasi", cell: (row) => row.duration ? `${row.duration} menit` : "Belum diatur" },
       { key: "passing", header: "Nilai Lulus", cell: (row) => row.passingScore || "Belum diatur" },
       { key: "status", header: "Status", cell: (row) => <AdminStatusBadge status={row.status} /> },
-    ]} actions={{ cell: (row) => <div className={tryoutStyles.rowActions}><button className="button" type="button" onClick={() => { setQuestionTarget(row.id); manageQuestions(row); }}>Kelola Soal</button><button className="button" type="button" onClick={() => edit(row)}>Edit</button><details className={tryoutStyles.more}><summary>Tindakan lain</summary><div><button className="button" type="button" onClick={() => setView(row.id)}>Lihat</button><button className="button" type="button" disabled={busy || Boolean(draft)} aria-busy={pending?.action === "questions" && pending.id === row.id} onClick={() => publishQuestions(row)}>{pending?.action === "questions" && pending.id === row.id ? "Mempublikasikan Semua Soal…" : "Publish Semua Soal"}</button><button className="button" type="button" disabled={busy || Boolean(draft)} aria-busy={pending?.action === "status" && pending.id === row.id} onClick={() => toggleAssessment(row)}>{pending?.action === "status" && pending.id === row.id ? row.status === "Draft" ? "Mempublikasikan…" : "Mengubah ke Draft…" : row.status === "Draft" ? "Publish" : "Draft"}</button><button className="button" type="button" onClick={() => setDeleting({ id: row.id, question: false, label: row.title })}>Hapus</button></div></details></div> }} />}</AdminSection>
-    <AdminDialog open={Boolean(draft) && packageForm && !deleting} title={`${rows.some(row => row.id === draft?.id) ? "Edit" : "Tambah"} ${title}`} close={requestClose}>{draft && <>
-      <form className={`admin-prototype-form ${tryoutStyles.packageForm}`} noValidate onSubmit={save}>
-        {packageForm && <div className={tryoutStyles.packageFields}>
-        <label className="admin-field">Judul<input required placeholder={mini ? "Contoh: Mini Checkpoint Chapter 1" : "Contoh: Try Out JLPT N4"} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
+    ]} actions={{ cell: (row) => <div className={tryoutStyles.rowActions}><button className="button" type="button" onClick={() => { setQuestionTarget(row.id); manageQuestions(row); }}>Buka Builder</button><details className={tryoutStyles.more}><summary>Tindakan lain</summary><div><button className="button" type="button" onClick={() => edit(row)}>Detail</button><button className="button" type="button" onClick={() => setView(row.id)}>Preview</button><button className="button" type="button" disabled={busy || Boolean(draft)} aria-busy={pending?.action === "questions" && pending.id === row.id} onClick={() => publishQuestions(row)}>{pending?.action === "questions" && pending.id === row.id ? "Mempublikasikan Semua Soal…" : "Publish Semua Soal"}</button><button className="button" type="button" disabled={busy || Boolean(draft)} aria-busy={pending?.action === "status" && pending.id === row.id} onClick={() => toggleAssessment(row)}>{pending?.action === "status" && pending.id === row.id ? row.status === "Draft" ? "Mempublikasikan…" : "Mengubah ke Draft…" : row.status === "Draft" ? "Publish" : "Kembalikan ke Draft"}</button><button className="button" type="button" onClick={() => setDeleting({ id: row.id, question: false, label: row.title })}>Hapus</button></div></details></div> }} />}</AdminSection>
+    <AdminDialog open={Boolean(draft) && packageForm && !deleting} title={`${rows.some(row => row.id === draft?.id) ? "Edit" : "Tambah"} ${title}`} close={requestClose} className={tryoutStyles.packageDialog} actions={draft && <><button className="button" type="button" onClick={requestClose}>Batal</button>{rows.some(row => row.id === draft.id) && <button type="button" className="button" onClick={() => setPackageForm(false)}>Kelola Soal</button>}<button className="button button-primary" type="submit" form="tryout-settings" disabled={busy} aria-busy={pending?.action === "save" && pending.id === draft.id}><FiSave aria-hidden="true" />{pending?.action === "save" && pending.id === draft.id ? `Menyimpan ${title}?` : rows.some(row => row.id === draft.id) ? `Simpan ${title}` : "Buat & Buka Builder"}</button></>}>{draft && <>
+      <form id="tryout-settings" className={tryoutStyles.packageForm} noValidate onSubmit={save}>
+        {packageForm && <><section className={tryoutStyles.packageFields} aria-label="Informasi Dasar">
+        <h3 className={tryoutStyles.formHeading}>Informasi Dasar</h3><label className="admin-field">Judul<input required placeholder={mini ? "Contoh: Mini Checkpoint Chapter 1" : "Contoh: Try Out JLPT N4"} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
         <label className="admin-field">Program<select value={draft.context} onChange={(event) => { setDraft({ ...draft, context: event.target.value }); }} >{contexts.map((value) => <option key={value} value={value}>{programName(value)}</option>)}</select></label>
         {mini && <><label className="admin-field">Chapter<input required placeholder="Contoh: Chapter 1" value={draft.chapter} onChange={(event) => setDraft({ ...draft, chapter: event.target.value })} /></label><label className="admin-field">Sesi<input placeholder="Contoh: 1" type="number" min="1" step="1" value={draft.session} onChange={(event) => setDraft({ ...draft, session: event.target.value })} /></label><label className="admin-field">Part<select value={draft.part} onChange={(event) => setDraft({ ...draft, part: event.target.value })}><option>1</option><option>2</option></select></label></>}
         {!mini && <label className="admin-field">Akses Try Out<select aria-label="Akses Try Out" value={draft.accessType ?? "membership"} onChange={event => setDraft({ ...draft, accessType: event.target.value as "free" | "membership" })}><option value="free">Gratis</option><option value="membership">Memerlukan Membership</option></select></label>}
-        <label className="admin-field">Durasi (menit)<input placeholder={mini ? "Contoh: 15" : undefined} type="number" min="1" max={mini ? undefined : 2147483647} step="1" value={draft.duration} onChange={(event) => setDraft({ ...draft, duration: event.target.value })} /></label>
+        </section><section className={tryoutStyles.packageFields} aria-label="Pengaturan Ujian"><h3 className={tryoutStyles.formHeading}>Pengaturan Ujian</h3><label className="admin-field">Durasi (menit)<input placeholder={mini ? "Contoh: 15" : undefined} type="number" min="1" max={mini ? undefined : 2147483647} step="1" value={draft.duration} onChange={(event) => setDraft({ ...draft, duration: event.target.value })} /></label>
         <label className="admin-field">Skor maksimal<input placeholder={mini ? "Contoh: 100" : "Contoh: 180"} type="number" min="1" step="1" value={draft.maxScore} onChange={(event) => setDraft({ ...draft, maxScore: event.target.value })} /></label>
         <label className="admin-field">{mini ? "Nilai minimum lulus" : "Nilai minimum lulus keseluruhan"}<input placeholder="Contoh: 0" type="number" min="0" max={draft.maxScore} step={mini ? "any" : "1"} value={draft.passingScore} onChange={(event) => setDraft({ ...draft, passingScore: event.target.value })} /></label>
-        {!mini && <fieldset><legend>Nilai minimum lulus per bagian</legend>{assessmentSessions.map((session, index) => <label className="admin-field" key={session}>{assessmentSections(draft)[index]}<input type="number" min="0" step="1" placeholder="Masukkan nilai minimum lulus" value={draft.sessionPassingScores?.[session] ?? ""} onChange={event => setDraft({ ...draft, sessionPassingScores: { ...draft.sessionPassingScores, [session]: event.target.value === "" ? Number.NaN : Number(event.target.value) } })} /></label>)}<p>Isi nilai minimum untuk setiap bagian, atau kosongkan seluruhnya untuk memakai ketentuan penilaian bawaan.</p></fieldset>}
+        {!mini && <fieldset className={tryoutStyles.sectionPassingFields}><legend>Nilai minimum lulus per bagian</legend>{assessmentSessions.map((session, index) => <label className="admin-field" key={session}>{assessmentSections(draft)[index]}<input type="number" min="0" step="1" placeholder="Masukkan nilai minimum lulus" value={draft.sessionPassingScores?.[session] ?? ""} onChange={event => setDraft({ ...draft, sessionPassingScores: { ...draft.sessionPassingScores, [session]: event.target.value === "" ? Number.NaN : Number(event.target.value) } })} /></label>)}<p>Isi nilai minimum untuk setiap bagian, atau kosongkan seluruhnya untuk memakai ketentuan penilaian bawaan.</p></fieldset>}
         <label className="admin-field">Urutan<input placeholder="Contoh: 1" type="number" min={mini ? "1" : "0"} step="1" value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })} /></label>
         <label className="admin-field">Status<select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as AdminAssessment["status"] })}><option>Draft</option><option>Published</option></select></label>
-        </div>}
+        </section></>}
         <p>{draft.questions.length} soal • {assessmentSections(draft).length} sesi</p>
-        {error && <p role="alert">{error}</p>}<div className="admin-page-actions"><button className="button" type="button" onClick={requestClose}>Batal</button><button className="button button-primary" type="submit" disabled={busy} aria-busy={pending?.action === "save" && pending.id === draft.id}>{pending?.action === "save" && pending.id === draft.id ? `Menyimpan ${title}…` : `Simpan ${title}`}</button></div>
+        {error && <p role="alert">{error}</p>}
       </form>
-      <button type="button" className="button" onClick={() => setPackageForm(false)}>Kelola Soal</button>
-      </>}</AdminDialog>
+       </>}</AdminDialog>
     <AdminDialog open={confirmClose} title="Tutup builder?" close={() => setConfirmClose(false)} actions={<><button type="button" className="button" onClick={() => setConfirmClose(false)}>Lanjut Mengedit</button><button type="button" className="button button-primary" onClick={() => { setConfirmClose(false); closeEditor(); }}>Buang Perubahan dan Tutup</button></>}><p>Perubahan Try Out belum disimpan. Tutup tanpa menyimpan?</p></AdminDialog>
     <AdminDialog open={Boolean(viewItem)} title={`Detail ${title}`} close={closeView}>{viewItem && <AdminAssessmentPreview key={viewItem.id} assessment={viewItem} />}</AdminDialog>
     <AdminDialog open={Boolean(deleting)} title={`Hapus ${deleting?.question ? "Soal" : title}?`} close={closeDelete} actions={<><button className="button" type="button" onClick={closeDelete}>Batal</button><button className="button button-primary" type="button" onClick={async () => { if (!deleting || !beginWrite("delete", deleting.id)) return; try { if (deleting.question && draft) { const question = draft.questions.find(question => question.id === deleting.id); if (question && /^\d+$/.test(question.id)) setRows(await deleteAdminTryOut(draft.id, question)); setDraft({ ...draft, questions: draft.questions.filter(question => question.id !== deleting.id) }); } else setRows(await deleteAdminTryOut(deleting.id)); closeDelete(); } catch (cause) { setMessage(adminTryOutError(cause)); } finally { endWrite(); } }}>Hapus</button></>}><p>Hapus {deleting?.label} dari sesi ini? Halaman siswa tidak berubah.</p></AdminDialog>

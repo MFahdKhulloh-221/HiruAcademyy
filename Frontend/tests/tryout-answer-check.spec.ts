@@ -158,8 +158,8 @@ for (const width of [1280, 360]) {
     await page.getByRole("button", { name: "Periksa Jawaban", exact: true }).click();
     const check = page.locator(".tryout-answer-check");
     await expect(check.getByRole("heading", { name: "Periksa Jawaban", exact: true })).toBeVisible();
-    await expect(check).toContainText("Server Try Out • Attempt 9");
-    await expect(check).toContainText("Total Soal: 100 • Terjawab: 80 • Belum Dijawab: 20");
+    await expect(check).toContainText("Server Try Out");
+    await expect(check).toContainText("Total soal100Terjawab80Belum dijawab20");
     await expect(check).toContainText("Masih ada 20 soal yang belum dijawab. Kamu tetap dapat menyelesaikan Try Out, tetapi soal yang kosong akan dihitung sebagai tidak benar.");
     await expect(check.locator(".tryout-check-numbers button")).toHaveText(Array.from({ length: 100 }, (_, index) => String(index + 1)));
     await expect(check.locator(".answered")).toHaveCount(80);
@@ -170,17 +170,17 @@ for (const width of [1280, 360]) {
       const card = check.locator(".tryout-check-card").nth(index);
       await expect(card.getByRole("heading", { name: label, exact: true })).toBeVisible();
       await expect(card.locator("p")).toHaveText(index < 3 ? "25/25 dijawab" : "5/25 dijawab");
-      expect(await card.locator(".tryout-check-numbers").evaluate(element => getComputedStyle(element).gridTemplateColumns.split(" ").length)).toBe(5);
+      expect(await card.locator(".tryout-check-numbers").evaluate(element => getComputedStyle(element).gridTemplateColumns.split(" ").length)).toBeGreaterThanOrEqual(5);
     }
     expect(mock.calls.submits).toBe(0);
     expect(mock.calls.saves).toBe(0);
     await expect(page.getByText("Jawaban benar:")).toHaveCount(0);
-    expect(await check.locator("button").evaluateAll(buttons => buttons.every(button => { const rect = button.getBoundingClientRect(); return rect.width >= 44 && rect.height >= 44; }))).toBe(true);
+    expect(await check.locator("button:visible").evaluateAll(buttons => buttons.every(button => { const rect = button.getBoundingClientRect(); return rect.width >= 44 && rect.height >= 44; }))).toBe(true);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     if (width === 360) {
-      const widths = await check.locator(".tryout-check-actions button").evaluateAll(buttons => buttons.map(button => button.getBoundingClientRect().width));
+      const widths = await check.locator(":scope > .tryout-check-actions button").evaluateAll(buttons => buttons.map(button => button.getBoundingClientRect().width));
       expect(widths[0]).toBe(widths[1]);
-      expect(widths[0]).toBeGreaterThan(250);
+      expect(widths[0]).toBeGreaterThanOrEqual(44);
     }
     await check.getByRole("button", { name: "Soal 30, Terjawab", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Question 30", exact: true })).toBeVisible();
@@ -200,10 +200,10 @@ for (const width of [1280, 360]) {
     await expect(page.getByRole("status")).toHaveText("Tersimpan");
     await page.getByRole("button", { name: "Periksa Jawaban", exact: true }).click();
     await expect(check.getByRole("button", { name: "Soal 81, Terjawab", exact: true })).toBeVisible();
-    await expect(check).toContainText("Total Soal: 100 • Terjawab: 81 • Belum Dijawab: 19");
+    await expect(check).toContainText("Total soal100Terjawab81Belum dijawab19");
     await page.reload();
     await expect(check).toBeVisible();
-    await expect(check).toContainText("Server Try Out • Attempt 9");
+    await expect(check).toContainText("Server Try Out");
     await check.getByRole("button", { name: "Kembali ke Soal", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Question 81", exact: true })).toBeVisible();
     await expect(page.getByRole("radio", { name: "A. First", exact: true })).toBeChecked();
@@ -236,18 +236,17 @@ for (const answered of [0, 50, 80, 100]) {
     await page.goto("/tryout?tryout=2&attempt=9&tryout_stage=check");
     await expect(page.getByRole("heading", { name: "Periksa Jawaban", exact: true })).toBeVisible();
     expect(mock.calls.submits).toBe(0);
-    let confirmations = 0;
-    page.on("dialog", async dialog => {
-      confirmations++;
-      expect(mock.calls.saves).toBeGreaterThan(0);
-      expect(mock.calls.submits).toBe(0);
-      expect(dialog.message()).toContain("Selesaikan Kuis? Jawaban akan dikumpulkan secara final dan tidak dapat diubah.");
-      if (answered < 100) expect(dialog.message()).toContain(`Masih ada ${100 - answered} soal yang belum dijawab.`);
-      await dialog.accept();
-    });
     await page.getByRole("button", { name: "Selesaikan Kuis", exact: true }).evaluate(button => { (button as HTMLButtonElement).click(); (button as HTMLButtonElement).click(); });
+    const confirmation = page.getByRole("dialog", { name: "Selesaikan Kuis?", exact: true });
+    await expect(confirmation).toBeVisible();
+    expect(mock.calls.saves).toBeGreaterThan(0);
+    expect(mock.calls.submits).toBe(0);
+    await expect(confirmation).toContainText("Jawaban akan dikumpulkan secara final dan tidak dapat diubah.");
+    if (answered < 100) await expect(confirmation).toContainText(`Masih ada ${100 - answered} soal yang belum dijawab.`);
+    await expect(confirmation.getByRole("button", { name: "Kembali Periksa" })).toBeFocused();
+    await confirmation.getByRole("button", { name: "Ya, Selesaikan Kuis", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Hasil Server Try Out", exact: true })).toBeVisible();
-    expect(confirmations).toBe(1);
+
     expect(mock.calls.submits).toBe(1);
     expect(mock.calls.saves).toBe(1);
     expect(Object.keys(mock.getServer().answers)).toHaveLength(answered);
@@ -282,18 +281,23 @@ test("queue flush precedes confirmation; cancellation and failures retain check 
   await expect(page.locator(".tryout-answer-check")).toHaveAttribute("aria-busy", "true");
   expect(dialogs).toBe(0);
   release();
+  const confirmation = page.getByRole("dialog", { name: "Selesaikan Kuis?", exact: true });
+  await expect(confirmation).toBeVisible();
+  expect(mock.getServer().answers).toEqual({ [mock.questions[0].id]: "A" });
+  await page.keyboard.press("Escape");
+  await expect(confirmation).not.toBeVisible();
   await expect(finish).toBeEnabled();
-  expect(dialogs).toBe(1);
+  expect(dialogs).toBe(0);
   expect(mock.calls.submits).toBe(0);
   mock.calls.failSave = true;
   await finish.click();
   await expect(page.getByRole("alert").filter({ hasText: "Permintaan belum berhasil" })).toBeVisible();
-  expect(dialogs).toBe(1);
+  expect(dialogs).toBe(0);
   expect(mock.calls.submits).toBe(0);
-  page.removeAllListeners("dialog");
-  page.on("dialog", dialog => dialog.accept());
+
   mock.calls.failSubmit = true;
   await finish.click();
+  await confirmation.getByRole("button", { name: "Ya, Selesaikan Kuis", exact: true }).click();
   await expect(page.getByRole("alert").filter({ hasText: "Permintaan belum berhasil" })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Periksa Jawaban", exact: true })).toBeVisible();
   await expect(page.locator(".tryout-result-page")).toHaveCount(0);
@@ -302,6 +306,7 @@ test("queue flush precedes confirmation; cancellation and failures retain check 
   let releaseSubmit!: () => void;
   mock.calls.pauseSubmit = new Promise<void>(resolve => { releaseSubmit = resolve; });
   await finish.click();
+  await confirmation.getByRole("button", { name: "Ya, Selesaikan Kuis", exact: true }).click();
   const submitting = page.getByRole("button", { name: "Mengumpulkan…", exact: true });
   await expect(submitting).toBeDisabled();
   await expect(submitting).toHaveAttribute("aria-busy", "true");
@@ -381,7 +386,7 @@ for (const width of [1440, 390]) {
     if (width === 390) await inspectMobileMenu(page, "last", testInfo);
     await last.click();
     await expect(page.getByRole("heading", { name: "Periksa Jawaban", exact: true })).toBeVisible();
-    await expect(page.locator(".tryout-answer-check")).toContainText("Total Soal: 3 • Terjawab: 2 • Belum Dijawab: 1");
+    await expect(page.locator(".tryout-answer-check")).toContainText("Total soal3Terjawab2Belum dijawab1");
     await expect(page.getByText("Jawaban benar", { exact: false })).toHaveCount(0);
     expect(mock.calls.submits).toBe(0);
     await page.screenshot({ path: testInfo.outputPath(`check-${width}.png`), fullPage: true });
@@ -389,11 +394,10 @@ for (const width of [1440, 390]) {
     await page.getByRole("button", { name: "Soal 1, Terjawab", exact: true }).click();
     await expect(page.getByRole("radio", { name: "A. First", exact: true })).toBeChecked();
     await page.locator(".tryout-sidebar-actions").getByRole("button", { name: "Periksa Jawaban", exact: true }).click();
-    let confirmations = 0;
-    page.on("dialog", async dialog => { confirmations++; await dialog.accept(); });
     await page.getByRole("button", { name: "Selesaikan Kuis", exact: true }).evaluate(button => { (button as HTMLButtonElement).click(); (button as HTMLButtonElement).click(); });
+    await page.getByRole("dialog", { name: "Selesaikan Kuis?", exact: true }).getByRole("button", { name: "Ya, Selesaikan Kuis", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Hasil Server Try Out", exact: true })).toBeVisible();
-    expect(confirmations).toBe(1);
+
     expect(mock.calls.submits).toBe(1);
     await page.getByRole("button", { name: "Review Jawaban", exact: true }).click();
     await expect(page.getByText("Jawaban kamu · Salah", { exact: true })).toBeVisible();

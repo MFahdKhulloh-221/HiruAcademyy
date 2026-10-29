@@ -112,6 +112,7 @@ Route::prefix('api')->middleware('throttle:api')->group(function () {
             Route::post('/', [AdminTryOutController::class, 'store']);
             Route::get('{tryOut}', [AdminTryOutController::class, 'show']);
             Route::patch('{tryOut}', [AdminTryOutController::class, 'update']);
+            Route::put('{tryOut}/studio', [AdminTryOutController::class, 'studio']);
             Route::delete('{tryOut}', [AdminTryOutController::class, 'destroy']);
             Route::post('{tryOut}/questions', [AdminTryOutController::class, 'storeQuestion']);
             Route::post('{tryOut}/questions/publish', [AdminTryOutController::class, 'publishQuestions']);
@@ -188,6 +189,7 @@ Route::prefix('api')->middleware('throttle:api')->group(function () {
             Route::post('{tryOut}/attempts', [StudentTryOutController::class, 'start']);
             Route::get('{tryOut}/attempts/{attempt}', [StudentTryOutController::class, 'attempt']);
             Route::put('{tryOut}/attempts/{attempt}/answers', [StudentTryOutController::class, 'save']);
+            Route::post('{tryOut}/attempts/{attempt}/abandon', [StudentTryOutController::class, 'abandon']);
             Route::post('{tryOut}/attempts/{attempt}/submit', [StudentTryOutController::class, 'submit']);
             Route::get('{tryOut}/attempts/{attempt}/review', [StudentTryOutController::class, 'review']);
         });

@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Program;
 use App\Models\TryOut;
 use App\Models\TryOutQuestion;
+use App\Models\TryOutPassage;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -91,6 +92,7 @@ class TryOutService
             'explanation' => ['nullable', 'string'],
             'point_value' => ['required', 'integer', 'min:1', 'max:180'],
             'reading_passage' => ['nullable', 'string'],
+            'passage_id' => ['sometimes', 'nullable', 'integer'],
             'audio_url' => ['nullable', 'string', app(MediaService::class)->rule('audio')],
             'sort_order' => ['sometimes', 'required', 'integer', 'min:0', 'max:2147483647'],
             'status' => ['sometimes', 'required', Rule::in(['draft', 'published'])],
@@ -109,6 +111,12 @@ class TryOutService
     private function assertQuestion(TryOutQuestion $question): void
     {
         Validator::make($question->only(array_keys($this->questionRules())), $this->questionRules())->validate();
+        if ($question->passage_id !== null && ($question->session !== 'reading' || ! TryOutPassage::whereKey($question->passage_id)->where('try_out_id', $question->try_out_id)->exists())) {
+            throw ValidationException::withMessages(['passage_id' => 'Reading passage must belong to this Try Out.']);
+        }
+        if ($question->passage_id !== null && $question->reading_passage !== null) {
+            throw ValidationException::withMessages(['reading_passage' => 'Shared passage cannot also have an inline passage.']);
+        }
         if ($question->status === 'published' && $question->session === 'audio' && ! $question->audio_url) {
             throw ValidationException::withMessages(['audio_url' => 'Published Audio question requires an audio URL.']);
         }
@@ -223,11 +231,77 @@ class TryOutService
 
     public function payload(TryOut $tryOut): array
     {
-        return ['access_type' => $tryOut->access_type ?? 'membership', 'id' => $tryOut->id, 'program_id' => $tryOut->program_id, 'level' => strtoupper($tryOut->program->code), 'title' => $tryOut->title, 'status' => $tryOut->status, 'max_score' => $tryOut->max_score, 'sort_order' => $tryOut->sort_order, 'session_passing_scores' => $tryOut->session_passing_scores, 'section_passing_score' => $tryOut->session_passing_scores === null ? 19 : null, 'section_passing_score_basis' => $tryOut->session_passing_scores === null ? 'correct_answers' : 'points', 'total_passing_score' => $tryOut->total_passing_score, 'duration_minutes' => $tryOut->duration_minutes, 'sessions' => self::SESSIONS];
+        return ['access_type' => $tryOut->access_type ?? 'membership', 'id' => $tryOut->id, 'program_id' => $tryOut->program_id, 'level' => strtoupper($tryOut->program->code), 'title' => $tryOut->title, 'status' => $tryOut->status, 'max_score' => $tryOut->max_score, 'sort_order' => $tryOut->sort_order, 'session_passing_scores' => $tryOut->session_passing_scores, 'section_passing_score' => $tryOut->session_passing_scores === null ? 19 : null, 'section_passing_score_basis' => $tryOut->session_passing_scores === null ? 'correct_answers' : 'points', 'total_passing_score' => $tryOut->total_passing_score, 'duration_minutes' => $tryOut->duration_minutes, 'question_count' => $tryOut->questions()->count(), 'published_question_count' => $tryOut->questions()->where('status', 'published')->count(), 'sessions' => self::SESSIONS];
+    }
+
+    public function studioRevision(TryOut $tryOut): string
+    {
+        return hash('sha256', json_encode([
+            $tryOut->fresh()->getAttributes(),
+            TryOutPassage::where('try_out_id', $tryOut->id)->orderBy('id')->get()->map->getAttributes()->all(),
+            $tryOut->questions()->orderBy('id')->get()->map->getAttributes()->all(),
+        ], JSON_THROW_ON_ERROR));
+    }
+
+    public function saveStudio(TryOut $tryOut, array $input): TryOut
+    {
+        $data = $this->validateInput($input, [
+            'revision' => ['required', 'string', 'size:64'],
+            'settings' => ['required', 'array'],
+            'passages' => ['present', 'array'],
+            'passages.*.id' => ['required', 'string', 'distinct'],
+            'passages.*.title' => ['required', 'string', 'max:255'],
+            'passages.*.body' => ['required', 'string'],
+            'questions' => ['present', 'array'],
+            'questions.*.id' => ['required', 'string', 'distinct'],
+            'questions.*.content' => ['required', 'array'],
+            'deleted_question_ids' => ['present', 'array'],
+            'deleted_question_ids.*' => ['integer', 'distinct'],
+            'deleted_passage_ids' => ['present', 'array'],
+            'deleted_passage_ids.*' => ['integer', 'distinct'],
+        ]);
+
+        return app(MediaService::class)->locked(function () use ($tryOut, $data) {
+            $parent = TryOut::whereKey($tryOut->id)->lockForUpdate()->firstOrFail();
+            abort_unless(hash_equals($this->studioRevision($parent), $data['revision']), 409, 'Try Out berubah. Muat ulang sebelum menyimpan; perubahan lokal belum disimpan.');
+            $status = $data['settings']['status'] ?? $parent->status;
+            $parent = $this->save(array_replace($data['settings'], ['status' => 'draft']), $parent);
+            $ids = [];
+            foreach ($data['passages'] as $passage) {
+                $model = ctype_digit($passage['id'])
+                    ? TryOutPassage::where('try_out_id', $parent->id)->whereKey($passage['id'])->firstOrFail()
+                    : new TryOutPassage(['try_out_id' => $parent->id]);
+                $model->fill(['title' => $passage['title'], 'body' => PlacementRichText::sanitize($passage['body'])])->save();
+                $ids[$passage['id']] = $model->id;
+            }
+            foreach ($data['questions'] as $question) {
+                $content = $question['content'];
+                if (isset($content['passage_id'])) {
+                    if (! isset($ids[(string) $content['passage_id']])) {
+                        throw ValidationException::withMessages(['passage_id' => 'Unknown passage.']);
+                    }
+                    $content['passage_id'] = $ids[(string) $content['passage_id']];
+                }
+                $model = ctype_digit($question['id']) ? $parent->questions()->whereKey($question['id'])->firstOrFail() : null;
+                $this->saveQuestion($parent, $content, $model);
+            }
+            foreach ($data['deleted_question_ids'] as $id) {
+                $parent->questions()->whereKey($id)->firstOrFail()->delete();
+            }
+            foreach ($data['deleted_passage_ids'] as $id) {
+                $passage = TryOutPassage::where('try_out_id', $parent->id)->whereKey($id)->firstOrFail();
+                if ($parent->questions()->where('passage_id', $id)->exists()) {
+                    throw ValidationException::withMessages(['passages' => 'Remove linked questions before deleting passage.']);
+                }
+                $passage->delete();
+            }
+
+            return $this->save(['status' => $status], $parent);
+        });
     }
 
     public function adminQuestion(TryOutQuestion $question): array
     {
-        return app(MediaService::class)->payload($question->only(['id', 'try_out_id', 'session', 'question', 'options', 'correct_option', 'explanation', 'point_value', 'reading_passage', 'audio_url', 'sort_order', 'status', 'instruction', 'japanese']));
+        return app(MediaService::class)->payload($question->only(['id', 'try_out_id', 'passage_id', 'session', 'question', 'options', 'correct_option', 'explanation', 'point_value', 'reading_passage', 'audio_url', 'sort_order', 'status', 'instruction', 'japanese']));
     }
 }

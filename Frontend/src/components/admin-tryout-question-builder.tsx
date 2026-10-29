@@ -1,113 +1,160 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
+import { FiSave, FiPlus, FiBookOpen, FiChevronLeft, FiChevronRight, FiChevronDown, FiSearch, FiCopy, FiTrash2, FiArrowUp, FiArrowDown, FiCheckCircle, FiAlertCircle } from "react-icons/fi";
 import { AdminMediaUpload } from "@/components/admin-media-upload";
-import { AdminDialog, AdminTabs } from "@/components/admin-primitives";
-import { PlacementRichText, PlacementTextEditor } from "@/components/placement-rich-text";
-import { assessmentLetters, assessmentQuestionError, orderedAssessmentQuestions, type AdminAssessment, type AdminAssessmentQuestion } from "@/components/admin-assessment-fixtures";
+import { AdminDialog, AdminTabs, AdminStatusBadge } from "@/components/admin-primitives";
+import { PlacementRichText, PlacementTextEditor, PlacementEditorProvider, PlacementEditorToolbar } from "@/components/placement-rich-text";
+import { assessmentLetters, assessmentQuestionError, assessmentSections, orderedAssessmentQuestions, type AdminAssessment, type AdminAssessmentQuestion } from "@/components/admin-assessment-fixtures";
 import { placementText } from "@/lib/placement-rich-text";
-import { adminMediaUrl } from "@/lib/admin-media";
-import placement from "./admin-placement-builder.module.css";
 import styles from "./admin-tryout-builder.module.css";
-import "./assessment-layout.css";
 
-const sections = ["Kosakata & Kanji", "Audio / Choukai", "Reading / Dokkai", "Tata Bahasa"];
-const labels = ["Kosakata & Kanji", "Choukai", "Dokkai", "Tata Bahasa"];
+const labels = ["Kosakata & Kanji", "Tata Bahasa", "Reading (Dokkai)", "Audio (Choukai)"];
 
-export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChange, busy, error, onChange, onSave, onClose, onDelete }: {
+export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChange, busy, error, onChange, onSave, onClose, saveStatus }: {
+  saveStatus: string;
   draft: AdminAssessment; initialQuestion: AdminAssessmentQuestion | null; busy: boolean; error: string;
   onChange: (draft: AdminAssessment) => void; onSave: (draft: AdminAssessment) => Promise<void>; onClose: () => void;
   onDirtyChange: (dirty: boolean) => void;
   onDelete: (question: AdminAssessmentQuestion) => Promise<void>;
 }) {
-  const [section, setSection] = useState(initialQuestion?.section ?? sections[0]);
-  const [active, setActive] = useState<AdminAssessmentQuestion | null>(initialQuestion ?? orderedAssessmentQuestions(draft)[0] ?? null);
-  const [baseline, setBaseline] = useState(JSON.stringify(initialQuestion ?? orderedAssessmentQuestions(draft)[0] ?? null));
-  const [working, setWorking] = useState<Record<string, AdminAssessmentQuestion>>({});
+  const sections = assessmentSections(draft);
+  const [session, setSession] = useState(() => Math.max(0, sections.indexOf(initialQuestion?.section ?? sections[0])));
+  const [activeId, setActiveId] = useState(initialQuestion?.id ?? orderedAssessmentQuestions(draft)[0]?.id ?? "");
   const [search, setSearch] = useState("");
-  const [page, setPage] = useState(1);
   const [preview, setPreview] = useState(false);
-  const [previewAnswer, setPreviewAnswer] = useState<number | null>(null);
+  const [groupForm, setGroupForm] = useState(false);
+  const [groupTitle, setGroupTitle] = useState("");
+  const [groupBody, setGroupBody] = useState("");
+  const [groupCount, setGroupCount] = useState("5");
   const [issue, setIssue] = useState("");
-  const [confirmation, setConfirmation] = useState<{ message: string; resolve: (confirmed: boolean) => void } | null>(null);
-  function confirmAction(message: string): Promise<boolean> { return new Promise(resolve => setConfirmation({ message, resolve })); }
-  function answerConfirmation(confirmed: boolean) { confirmation?.resolve(confirmed); setConfirmation(null); }
-  const dirty = JSON.stringify(active) !== baseline;
-  const buffered = active ? { ...working, [active.id]: active } : working;
-  const questions = orderedAssessmentQuestions({ ...draft, questions: [...draft.questions.filter(question => !buffered[question.id]), ...Object.values(buffered)] }).filter(question => question.section === section);
-  const filtered = questions.filter((question, index) => String(index + 1).includes(search.trim()) || placementText(question.prompt).toLowerCase().includes(search.trim().toLowerCase()));
-  const pages = Math.max(1, Math.ceil(filtered.length / 10));
-  const currentPage = Math.min(page, pages);
-  useEffect(() => { onDirtyChange(dirty || Object.keys(working).length > 0); }, [dirty, working, onDirtyChange]);
-  function rememberQuestion() {
-    if (active && dirty) setWorking(current => ({ ...current, [active.id]: active }));
+  const [remove, setRemove] = useState<"question" | "group" | null>(null);
+  const questions = orderedAssessmentQuestions(draft).filter(question => question.section === sections[session]);
+  const active = questions.find(question => question.id === activeId);
+  const passage = draft.passages?.find(item => item.id === active?.passageId);
+  const linked = questions.filter(question => question.passageId === passage?.id && passage);
+  useEffect(() => { onDirtyChange(false); }, [onDirtyChange]);
+  function update(question: AdminAssessmentQuestion) {
+    onChange({ ...draft, questions: draft.questions.map(item => item.id === question.id ? question : item) });
   }
-  async function select(question: AdminAssessmentQuestion | null) {
-    rememberQuestion();
-    setActive(question ? { ...question, answers: [...question.answers] } : null);
-    setBaseline(JSON.stringify(draft.questions.find(item => item.id === question?.id) ?? null)); setIssue(""); setPreview(false);
+  function newQuestion(passageId?: string, offset = 0): AdminAssessmentQuestion {
+    return { id: crypto.randomUUID(), section: sections[session], type: session === 2 ? "Reading" : session === 3 ? "Audio" : "Multiple choice", prompt: "", answers: ["", "", "", ""], correctAnswer: -1, instruction: "", explanation: "", passage: "", passageId: passageId ?? null, file: null, order: String(questions.reduce((max, question) => Math.max(max, Number(question.order)), -1) + 1 + offset), status: "Draft" };
   }
-  function stage(): AdminAssessment | null {
-    if (!active) return draft;
-    if (!Number.isSafeInteger(active.pointValue)) { setIssue("Soal baru belum memiliki konfigurasi penilaian. Hubungi pengelola untuk melengkapinya sebelum menyimpan."); return null; }
-    const message = assessmentQuestionError({ ...active, prompt: placementText(active.prompt), answers: active.answers.map(placementText) }, draft);
-    if (message) { setIssue(message); return null; }
-    const merged = { ...working, [active.id]: active };
-    const next = { ...draft, questions: [...draft.questions.filter(question => !merged[question.id]), ...Object.values(merged)] };
-    setWorking({});
-    onChange(next); setBaseline(JSON.stringify(active)); setIssue(""); return next;
+  function add(passageId?: string) {
+    const question = newQuestion(passageId);
+    onChange({ ...draft, questions: [...draft.questions, question] });
+    setActiveId(question.id); setPreview(false); setSearch("");
   }
-  async function add() {
-    if (active) setWorking(current => ({ ...current, [active.id]: active }));
-    const question: AdminAssessmentQuestion = { id: crypto.randomUUID(), section, type: section === sections[1] ? "Audio" : section === sections[2] ? "Reading" : "Multiple choice", prompt: "", answers: ["", "", "", ""], correctAnswer: -1, instruction: "", explanation: "", passage: "", file: null, order: String(questions.reduce((max, question) => Math.max(max, Number(question.order)), -1) + 1), status: "Draft" };
-    setWorking(current => ({ ...current, ...(active ? { [active.id]: active } : {}), [question.id]: question }));
-    setSearch(""); setPage(Math.ceil((questions.length + 1) / 10)); setActive(question); setBaseline("null"); setPreview(false); setIssue("");
+  function addGroup() {
+    const count = Number(groupCount);
+    if (!groupTitle.trim() || !placementText(groupBody).trim() || !Number.isSafeInteger(count) || count < 1) { setIssue("Isi judul, bacaan, dan jumlah soal positif."); return; }
+    const group = { id: crypto.randomUUID(), title: groupTitle.trim(), body: groupBody };
+    const slots = Array.from({ length: count }, (_, index) => newQuestion(group.id, index));
+    onChange({ ...draft, passages: [...draft.passages ?? [], group], questions: [...draft.questions, ...slots] });
+    setActiveId(slots[0].id); setGroupForm(false); setGroupTitle(""); setGroupBody(""); setIssue(""); setPreview(false);
   }
-  const audio = adminMediaUrl(active?.audioUrl);
-  return <div className={styles.questionBuilder}>
-    <AdminTabs tabs={labels} active={labels[sections.indexOf(section)]} label="Bagian soal" onChange={label => { rememberQuestion(); setSection(sections[labels.indexOf(label)]); setSearch(""); setPage(1); setActive(null); setBaseline("null"); setPreview(false); }} />
-    <p role="status">Isi soal ditahan otomatis selama builder terbuka. Klik Simpan Try Out agar perubahan tersimpan permanen.</p>
+  function moveGroup(direction: number) {
+    if (!passage) return;
+    const blocks = questions.reduce<AdminAssessmentQuestion[][]>((items, question) => {
+      const previous = items.at(-1);
+      if (question.passageId && previous?.[0].passageId === question.passageId) previous.push(question);
+      else items.push([question]);
+      return items;
+    }, []);
+    const index = blocks.findIndex(block => block[0].passageId === passage.id);
+    const target = index + direction;
+    if (index < 0 || target < 0 || target >= blocks.length) return;
+    [blocks[index], blocks[target]] = [blocks[target], blocks[index]];
+    const reordered = blocks.flat().map((question, order) => ({ ...question, order: String(order) }));
+    onChange({ ...draft, questions: [...draft.questions.filter(question => question.section !== sections[session]), ...reordered] });
+  }
+  function moveQuestion(direction: number) {
+    if (!active) return;
+    const siblings = questions.filter(question => question.passageId === active.passageId);
+    const index = siblings.findIndex(question => question.id === active.id);
+    const target = siblings[index + direction];
+    if (!target) return;
+    const orders = questions.map(question => question.order);
+    const reordered = [...questions];
+    const from = reordered.indexOf(active), to = reordered.indexOf(target);
+    [reordered[from], reordered[to]] = [reordered[to], reordered[from]];
+    onChange({ ...draft, questions: [...draft.questions.filter(question => question.section !== sections[session]), ...reordered.map((question, index) => ({ ...question, order: orders[index] }))] });
+  }
+  const groupNumbers = linked.map(question => questions.indexOf(question) + 1);
+  const groupRange = groupNumbers.length ? `${groupNumbers[0]}–${groupNumbers.at(-1)}` : "";
+  const position = questions.findIndex(question => question.id === activeId);
+  const visible = questions.filter(question => placementText(question.prompt).toLowerCase().includes(search.toLowerCase()) || String(questions.indexOf(question) + 1) === search);
+  const questionNavigation = <nav className={styles.editorFooter} aria-label="Navigasi soal"><button type="button" className="button" disabled={position <= 0} onClick={() => setActiveId(questions[position - 1].id)} aria-label="Soal Sebelumnya"><FiChevronLeft aria-hidden="true" />Sebelumnya</button><span>Soal {position + 1} / {questions.length}</span><button type="button" className="button" disabled={position >= questions.length - 1} onClick={() => setActiveId(questions[position + 1].id)} aria-label="Soal Berikutnya">Berikutnya<FiChevronRight aria-hidden="true" /></button></nav>;
+  const groupMenu = <details className={styles.actionMenu}><summary>Aksi grup bacaan</summary><div className={styles.secondaryActions}>
+    <button type="button" className="button" disabled={busy} onClick={() => add(passage?.id)}><FiPlus aria-hidden="true" />Soal untuk Bacaan Ini</button>
+    <button type="button" className="button" disabled={busy} onClick={() => moveGroup(-1)}>Grup Sebelumnya</button>
+    <button type="button" className="button" disabled={busy} onClick={() => moveGroup(1)}>Grup Berikutnya</button>
+    <button type="button" className={`button ${styles.danger}`} disabled={busy} onClick={() => setRemove("group")}><FiTrash2 aria-hidden="true" />Hapus Grup</button>
+  </div></details>;
+  return <section className={styles.questionBuilder} aria-label="HIRU TRY OUT STUDIO">
+    <header className={styles.studioHeader}>
+      <h1>{draft.title}</h1>
+      <div className={styles.metadata}><span>JLPT {draft.context.toUpperCase().replace(/^JLPT\s*/, "")}</span><AdminStatusBadge status={draft.status} /></div>
+    </header>
     {(issue || error) && <p role="alert">{issue || error}</p>}
-    <div className={`${styles.twoPanels} ${active ? styles.editing : ""}`}>
-      <aside className={styles.questionList} aria-label="Daftar soal">
-        <label className="admin-field">Cari nomor atau isi soal<input type="search" value={search} onChange={event => { setSearch(event.target.value); setPage(1); }} /></label>
-        <button type="button" className="button button-primary" disabled={busy} onClick={add}>+ Tambah Soal</button>
-        <ol start={(currentPage - 1) * 10 + 1}>{filtered.slice((currentPage - 1) * 10, currentPage * 10).map(question => <li key={question.id}><button type="button" aria-current={active?.id === question.id ? "step" : undefined} onClick={() => select(question)}><strong>Soal {questions.findIndex(item => item.id === question.id) + 1}</strong><span className={styles.summary}>{placementText(question.prompt)}</span></button></li>)}</ol>
-        <p>{filtered.length} soal · Halaman {currentPage} / {pages}</p>
-        <div className={placement.actions}><button type="button" className="button" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)}>Sebelumnya</button><button type="button" className="button" disabled={currentPage >= pages} onClick={() => setPage(currentPage + 1)}>Berikutnya</button></div>
+    <AdminTabs tabs={labels} active={labels[session]} label="Sesi Try Out" onChange={label => { const next = labels.indexOf(label); setSession(next); setActiveId(orderedAssessmentQuestions(draft).find(question => question.section === sections[next])?.id ?? ""); setSearch(""); setPreview(false); }} />
+    <div className={styles.sessionContext}>
+      <div><h2>{labels[session]}</h2><p>{questions.length} soal{session === 2 && passage ? ` / ${passage.title} / Nomor ${groupRange}` : ""}</p></div>
+      <AdminTabs tabs={["Editor", "Pratinjau Siswa"]} active={preview ? "Pratinjau Siswa" : "Editor"} label="Mode editor" onChange={value => setPreview(value !== "Editor")} />
+    </div>
+    <div className={styles.studioPanels}>
+      <aside id="studio-navigator" className={styles.studioNavigator} aria-label="Navigator Konten">
+        <div className={styles.listHeading}><h2>{session === 2 ? "Struktur Reading" : "Daftar Soal"}</h2><span>{questions.length} soal</span></div>
+        <label className={`admin-field ${styles.searchField}`}><span><FiSearch aria-hidden="true" />Cari soal</span><input type="search" value={search} onChange={event => setSearch(event.target.value)} /></label>
+        <ol aria-label="Daftar pertanyaan">{visible.map((question, index) => <Fragment key={question.id}>
+          {question.passageId && visible[index - 1]?.passageId !== question.passageId && <li className={styles.navigatorGroup}><FiBookOpen aria-hidden="true" /><strong>{draft.passages?.find(item => item.id === question.passageId)?.title}</strong></li>}
+          <li data-passage={question.passageId || undefined}><button type="button" aria-current={activeId === question.id ? "step" : undefined} onClick={() => { setActiveId(question.id); setPreview(false); }}><strong className={styles.questionNumber}><span className={styles.srOnly}>Soal </span>{String(questions.indexOf(question) + 1).padStart(2, "0")}</strong><span className={styles.summary}>{placementText(question.prompt) || "Pertanyaan belum diisi"}</span><small>{assessmentQuestionError(question, draft) ? <FiAlertCircle aria-hidden="true" /> : <FiCheckCircle aria-hidden="true" />}{assessmentQuestionError(question, draft) ? "Belum lengkap" : "Lengkap"}</small></button></li>
+        </Fragment>)}</ol>
+        <div className={styles.navigatorActions}><button type="button" className="button" disabled={busy} onClick={() => add()}><FiPlus aria-hidden="true" />Tambah Soal</button>{session === 2 && <button type="button" className="button" disabled={busy} onClick={() => setGroupForm(true)}><FiBookOpen aria-hidden="true" />Tambah Grup Bacaan</button>}</div>
       </aside>
-      <section className={styles.questionEditor} aria-label="Editor soal">
-        {active ? <form className={`${placement.form} ${styles.form}`} onSubmit={event => { event.preventDefault(); stage(); }}>
-          <button type="button" className={`button ${styles.backToList}`} onClick={() => select(null)}>Kembali ke daftar soal</button>
-          <h3 className={styles.questionTitle}>Soal {Math.max(1, questions.findIndex(question => question.id === active.id) + 1)} - {section === sections[1] ? "Choukai" : section === sections[2] ? "Dokkai" : section}</h3>
-          <fieldset className={placement.fields} disabled={busy}>
-            {active.type === "Audio" && <div className={placement.media}><AdminMediaUpload kind="audio" onUploaded={audioUrl => setActive({ ...active, audioUrl, file: null })} /><label className="admin-field">URL audio<input value={active.audioUrl ?? ""} onChange={event => setActive({ ...active, audioUrl: event.target.value })} /></label>{audio && <audio controls src={audio} preload="metadata" />}</div>}
-            {active.type === "Reading" && <PlacementTextEditor label="Teks bacaan" value={active.passage} onChange={passage => setActive({ ...active, passage })} />}
-            <PlacementTextEditor label="Pertanyaan" value={active.prompt} onChange={prompt => setActive({ ...active, prompt })} />
-            <div className={styles.answerGrid}>{assessmentLetters.map((letter, index) => <div key={letter} className={styles.answer}><PlacementTextEditor label={`Pilihan ${letter}`} value={active.answers[index]} onChange={value => setActive({ ...active, answers: active.answers.map((answer, position) => position === index ? value : answer) })} /></div>)}</div>
-            <label className="admin-field">Jawaban benar<select value={active.correctAnswer} onChange={event => setActive({ ...active, correctAnswer: Number(event.target.value) })}><option value={-1}>Pilih jawaban benar</option>{assessmentLetters.map((letter, index) => <option key={letter} value={index}>{letter}</option>)}</select></label>
-            <details><summary>Penjelasan jawaban (opsional)</summary><PlacementTextEditor label="Penjelasan jawaban" value={active.explanation} onChange={explanation => setActive({ ...active, explanation })} /></details>
-
-          </fieldset>
-          <div className={placement.actions}><button type="button" className="button" onClick={() => { setPreviewAnswer(null); setPreview(!preview); }}>Pratinjau Siswa</button><button type="submit" className="button button-primary" disabled={busy}>Terapkan Perubahan Soal</button><button type="button" className="button" disabled={busy || !questions.some(question => question.id === active.id) || questions.findIndex(question => question.id === active.id) >= questions.length - 1} onClick={() => select(questions[questions.findIndex(question => question.id === active.id) + 1])}>Soal Berikutnya</button><button type="button" className="button" disabled={busy} onClick={async () => { if (!await confirmAction("Hapus soal ini? Soal yang sudah disimpan juga akan dihapus.")) return; try { await onDelete(active); setActive(null); setBaseline("null"); } catch (cause) { setIssue(cause instanceof Error ? cause.message : "Gagal menghapus soal."); } }}>Hapus Soal</button></div>
-          {preview && <section className={`tryout-runner-polished ${styles.studentPreview}`} aria-label="Pratinjau Siswa">
-            <header><h3>Pratinjau Siswa</h3><p>{draft.title}</p></header>
-            {active.type === "Reading" && <section className="reading-passage" aria-label="Teks bacaan" tabIndex={0}>{active.instruction && <p className="reading-instruction"><PlacementRichText value={active.instruction} /></p>}<PlacementRichText value={active.passage} /></section>}
-            <section className="learning-question-card">
-              <p className="dash-kicker"><span>{labels[sections.indexOf(section)]}</span><span>Soal {Math.max(1, questions.findIndex(question => question.id === active.id) + 1)}</span></p>
-              {audio && <audio controls src={audio} aria-label="Audio soal" />}
-              {active.type !== "Reading" && active.instruction && <p><PlacementRichText value={active.instruction} /></p>}
-              <h2><PlacementRichText value={active.prompt} /></h2>
-              {active.japanese?.text && <p lang="ja"><ruby>{active.japanese.text}{active.japanese.reading && <rt>{active.japanese.reading}</rt>}</ruby></p>}
-              <fieldset><legend className="sr-only">Pilihan jawaban pratinjau</legend>{active.answers.map((answer, index) => <label key={index} className={previewAnswer === index ? "selected" : ""}><input type="radio" name={`preview-answer-${active.id}`} checked={previewAnswer === index} onChange={() => setPreviewAnswer(index)} /><span className="tryout-option-letter">{assessmentLetters[index]}.</span><span className="tryout-option-text"><PlacementRichText value={answer} /></span></label>)}</fieldset>
+      <section className={styles.studioEditor} aria-label="Editor Konten">
+        {active ? preview ? <div className={styles.previewReading} aria-label="Pratinjau Siswa" role="region" key={active.id}>
+          {session === 2 && <section className={styles.passageEditor} aria-label="Teks bacaan"><span className={styles.eyebrow}>{passage ? "Bacaan Bersama" : "Teks Bacaan"}</span><h3>{passage?.title ?? "Teks Bacaan"}</h3><PlacementRichText value={passage?.body ?? active.passage} /></section>}
+          <section className={styles.questionCard}><span className={styles.eyebrow}>Pertanyaan</span><h3>Soal {position + 1} dari {questions.length}</h3>{active.instruction && <PlacementRichText value={active.instruction} />}{active.type === "Audio" && active.audioUrl && <audio controls src={active.audioUrl} />}<h3><PlacementRichText value={active.prompt} /></h3><fieldset className={styles.previewOptions}><legend>Pilihan jawaban pratinjau</legend>{active.answers.map((answer, index) => <label key={index}><input type="radio" name={`preview-${active.id}`} /><b>{assessmentLetters[index]}</b><PlacementRichText value={answer} /></label>)}</fieldset>{questionNavigation}</section>
+        </div> : <PlacementEditorProvider key={active.id}>
+          <div className={styles.editorStack}>
+            {session === 2 && <details open className={styles.passageEditor} key={passage?.id ?? active.id}><summary><span><span className={styles.eyebrow}>{passage ? "BACAAN BERSAMA" : "BACAAN MANDIRI"}</span><strong>{passage?.title ?? "Teks Bacaan"}</strong></span><FiChevronDown className={styles.passageChevron} aria-hidden="true" /></summary><fieldset className={styles.editorFields} disabled={busy}>
+              {passage ? <><label className="admin-field">Judul internal bacaan<input value={passage.title} onChange={event => onChange({ ...draft, passages: draft.passages?.map(item => item.id === passage.id ? { ...item, title: event.target.value } : item) })} /></label><PlacementTextEditor shared disabled={busy} label="Bacaan Bersama" value={passage.body} onChange={body => onChange({ ...draft, passages: draft.passages?.map(item => item.id === passage.id ? { ...item, body } : item) })} /><p className={styles.linkedHint}>Terhubung ke {linked.length} soal / Nomor {groupRange}.</p>{groupMenu}</> : <>{Boolean(draft.passages?.length) && <label className="admin-field">Hubungkan ke grup bacaan<select value="" onChange={event => update({ ...active, passageId: event.target.value || null, passage: "" })}><option value="">Tetap bacaan mandiri</option>{draft.passages?.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>}<p className={styles.linkedHint}>Bacaan ini hanya untuk soal aktif. Gunakan Tambah Grup Bacaan di navigator untuk membuat bacaan bersama beberapa soal.</p><PlacementTextEditor shared disabled={busy} label="Bacaan Mandiri" value={active.passage} onChange={body => update({ ...active, passage: body })} /></>}
+            </fieldset></details>}
+            {!groupForm && <div className={styles.sharedToolbar}><PlacementEditorToolbar disabled={busy} /></div>}
+            <section className={styles.questionCard} aria-label="Editor Pertanyaan">
+              <header className={styles.cardHeading}><div><span className={styles.eyebrow}>EDITOR PERTANYAAN</span><h3>Soal {position + 1} <small>dari {questions.length}</small></h3></div><details className={styles.actionMenu}><summary>Aksi soal</summary><div className={styles.secondaryActions}>
+                <button type="button" className="button" disabled={busy} onClick={() => moveQuestion(-1)}><FiArrowUp aria-hidden="true" />Naikkan Soal</button>
+                <button type="button" className="button" disabled={busy} onClick={() => moveQuestion(1)}><FiArrowDown aria-hidden="true" />Turunkan Soal</button>
+                <button type="button" className="button" disabled={busy} onClick={() => { const copy = { ...active, id: crypto.randomUUID(), order: String(questions.reduce((max, question) => Math.max(max, Number(question.order)), -1) + 1) }; onChange({ ...draft, questions: [...draft.questions, copy] }); setActiveId(copy.id); }}><FiCopy aria-hidden="true" />Duplikat Soal</button>
+                <button type="button" className={`button ${styles.danger}`} disabled={busy} onClick={() => setRemove("question")}><FiTrash2 aria-hidden="true" />Hapus Soal</button>
+              </div></details></header>
+              <fieldset className={styles.editorFields} disabled={busy}>
+                {active.type === "Audio" && <><AdminMediaUpload kind="audio" onUploaded={audioUrl => update({ ...active, audioUrl })} /><label className="admin-field">URL audio<input value={active.audioUrl ?? ""} onChange={event => update({ ...active, audioUrl: event.target.value })} /></label></>}
+                <PlacementTextEditor shared disabled={busy} label="Pertanyaan" value={active.prompt} onChange={prompt => update({ ...active, prompt })} />
+                <section className={styles.answerSection} aria-label="Pilihan Jawaban"><h3>Pilihan Jawaban</h3><div className={styles.studioGrid}>{active.answers.map((answer, index) => <div key={index} className={`${styles.studioAnswer} ${index === active.correctAnswer ? styles.correctAnswer : ""}`}><PlacementTextEditor shared disabled={busy} label={`Pilihan ${assessmentLetters[index]}`} value={answer} onChange={value => update({ ...active, answers: active.answers.map((answer, position) => index === position ? value : answer) })} /></div>)}</div></section>
+                <label className="admin-field">Kunci Jawaban<select aria-label="Jawaban Benar" value={active.correctAnswer} onChange={event => update({ ...active, correctAnswer: Number(event.target.value) })}><option value={-1}>Pilih kunci jawaban</option>{active.answers.map((_, index) => <option key={index} value={index}>{assessmentLetters[index]}</option>)}</select></label>
+                <PlacementTextEditor shared disabled={busy} label="Pembahasan" value={active.explanation} onChange={explanation => update({ ...active, explanation })} />
+                <details className={styles.settings}><summary>Pengaturan soal</summary><div className={styles.studioGrid}><label className="admin-field">Bobot poin<input type="number" min="1" max="180" step="1" value={active.pointValue ?? ""} onChange={event => update({ ...active, pointValue: event.target.value === "" ? undefined : Number(event.target.value) })} /></label><label className="admin-field">Status soal<select value={active.status} onChange={event => update({ ...active, status: event.target.value as AdminAssessmentQuestion["status"] })}><option>Draft</option><option>Published</option></select></label></div></details>
+              </fieldset>
+              {questionNavigation}
             </section>
-            <button type="button" className="button" onClick={() => setPreview(false)}>Tutup Pratinjau</button>
-          </section>}
-
-        </form> : <p>Pilih soal dari daftar atau tambah soal baru.</p>}
+          </div>
+        </PlacementEditorProvider> : <p>Pilih soal atau tambahkan konten untuk mulai mengedit.</p>}
       </section>
     </div>
-    <div className={`${placement.actions} ${styles.serverActions}`}><button type="button" className="button" disabled={busy} onClick={onClose}>Tutup Builder</button><button type="button" className="button button-primary" disabled={busy} onClick={async () => { const next = stage(); if (next) await onSave(next); }}>{busy ? "Menyimpan…" : "Simpan Try Out"}</button></div>
-    <AdminDialog open={Boolean(confirmation)} title="Konfirmasi" close={() => answerConfirmation(false)} actions={<><button type="button" className="button" onClick={() => answerConfirmation(false)}>Batal</button><button type="button" className="button button-primary" onClick={() => answerConfirmation(true)}>Lanjutkan</button></>}><p>{confirmation?.message}</p></AdminDialog>
-  </div>;
+    <footer className={styles.studioActions} aria-label="Aksi Studio"><p role="status">{saveStatus}</p><div><button type="button" className="button" disabled={busy} onClick={onClose}>Kembali ke Daftar</button><button type="button" className="button button-primary" disabled={busy} aria-busy={busy} onClick={() => void onSave(draft)}><FiSave aria-hidden="true" />{busy ? "Menyimpan..." : "Simpan Try Out"}</button></div></footer>
+    <AdminDialog open={groupForm} title="Grup Bacaan Reading" className={styles.packageDialog} close={() => setGroupForm(false)} actions={<><button className="button" type="button" onClick={() => setGroupForm(false)}>Kembali</button><button className="button button-primary" type="submit" form="tryout-reading-group" disabled={busy}>Buat Grup</button></>}>
+      <form id="tryout-reading-group" className={styles.groupForm} onSubmit={event => { event.preventDefault(); addGroup(); }}>
+        <p className={styles.linkedHint}>Satu bacaan bersama untuk beberapa soal Reading.</p>
+        <label className="admin-field">Judul internal bacaan<input required value={groupTitle} placeholder="Contoh: Bacaan A" onChange={event => setGroupTitle(event.target.value)} /></label>
+        <PlacementEditorProvider>
+          <div className={styles.groupText}><div className={styles.sharedToolbar}><PlacementEditorToolbar disabled={busy} /></div><PlacementTextEditor shared disabled={busy} label="Teks bacaan grup" value={groupBody} onChange={setGroupBody} /></div>
+        </PlacementEditorProvider>
+        <label className={`admin-field ${styles.groupCount}`}>Jumlah soal awal<input required type="number" min="1" step="1" value={groupCount} onChange={event => setGroupCount(event.target.value)} /><small className={styles.linkedHint}>Soal baru otomatis terhubung ke bacaan ini.</small></label>
+        {issue && <p role="alert">{issue}</p>}
+      </form>
+    </AdminDialog>
+    <AdminDialog open={remove !== null} title={remove === "group" ? "Hapus grup bacaan?" : "Hapus soal?"} close={() => setRemove(null)} actions={<><button type="button" className="button" onClick={() => setRemove(null)}>Kembali</button><button type="button" className="button button-primary" onClick={() => { onChange({ ...draft, passages: remove === "group" ? draft.passages?.filter(item => item.id !== passage?.id) : draft.passages, questions: draft.questions.filter(question => remove === "group" ? question.passageId !== passage?.id : question.id !== activeId) }); setActiveId(""); setRemove(null); }}>Hapus dari Editor</button></>}><p>{remove === "group" ? `${linked.length} soal terkait ikut dihapus. ` : ""}Perubahan permanen setelah Simpan Try Out. Attempt siswa yang sudah dimulai tetap memakai snapshot lama.</p></AdminDialog>
+  </section>;
 }

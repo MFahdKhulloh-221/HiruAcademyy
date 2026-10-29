@@ -44,6 +44,18 @@ class TryOutAssessmentTest extends TestCase
         if (! Schema::hasColumn('try_outs', 'max_score')) {
             (require database_path('migrations/2026_10_20_000002_add_try_out_builder_configuration.php'))->up();
         }
+        if (! Schema::hasColumn('try_outs', 'access_type')) {
+            (require database_path('migrations/2026_10_28_000003_add_access_type_to_try_outs.php'))->up();
+        }
+        if (! Schema::hasColumn('try_out_attempts', 'abandoned_at')) {
+            (require database_path('migrations/2026_10_29_000032_add_try_out_attempt_abandonment.php'))->up();
+        }
+        if (! Schema::hasTable('try_out_passages')) {
+            (require database_path('migrations/2026_10_29_000033_add_try_out_shared_passages.php'))->up();
+        }
+        if (! Schema::hasColumn('testimonials', 'video_thumbnail')) {
+            (require database_path('migrations/2026_10_13_000001_add_testimonial_types_and_channels.php'))->up();
+        }
         $this->seed(ProgramSeeder::class);
         $this->student = $this->user('student');
         $this->admin = $this->user('admin');
@@ -88,6 +100,107 @@ class TryOutAssessmentTest extends TestCase
     private function start(): array
     {
         return $this->postJson($this->base.'/attempts')->assertCreated()->json('data');
+    }
+
+    public function test_studio_shared_passage_roundtrip_snapshot_and_atomic_validation(): void
+    {
+        $this->publish();
+        $this->actingAs($this->admin);
+        $questions = $this->tryOut->questions()->get()->map(fn ($question) => [
+            'id' => (string) $question->id,
+            'content' => array_replace(app(TryOutService::class)->adminQuestion($question), []),
+        ])->all();
+        foreach ($questions as &$question) {
+            unset($question['content']['id'], $question['content']['try_out_id'], $question['content']['audio_url_resolved_url']);
+            if ($question['content']['session'] === 'reading') {
+                $question['content']['passage_id'] = 'new-passage';
+                $question['content']['reading_passage'] = null;
+            }
+        }
+        unset($question);
+        $reading = collect($questions)->firstWhere('content.session', 'reading');
+        for ($index = 1; $index < 5; $index++) {
+            $copy = $reading;
+            $copy['id'] = 'slot-'.$index;
+            $copy['content']['status'] = 'published';
+            $copy['content']['question'] = '<strong>Question '.$index.'</strong>';
+            $copy['content']['correct_option'] = ['A', 'B', 'C', 'D'][$index % 4];
+            $questions[] = $copy;
+        }
+        $body = ['revision' => app(TryOutService::class)->studioRevision($this->tryOut), 'settings' => ['status' => 'published', 'max_score' => 380], 'passages' => [['id' => 'new-passage', 'title' => 'Bacaan A', 'body' => '<p><u>??</u><ruby>?<rt>??</rt></ruby></p><script>alert(1)</script>']], 'questions' => $questions, 'deleted_question_ids' => [], 'deleted_passage_ids' => []];
+        $response = $this->putJson($this->adminBase.'/studio', $body)->assertOk();
+        $passage = $response->json('data.passages.0');
+        $this->assertStringContainsString('<ruby>', $passage['body']);
+        $this->assertStringNotContainsString('<script', $passage['body']);
+        $linked = collect($response->json('data.questions'))->where('session', 'reading');
+        $this->assertCount(5, $linked);
+        $this->assertSame([$passage['id']], $linked->pluck('passage_id')->unique()->values()->all());
+        $this->assertTrue($linked->every(fn ($question) => $question['reading_passage'] === null));
+        $this->getJson($this->adminBase)->assertJsonCount(1, 'data.passages');
+        // Published subset preserves original scoring and uses immutable passage snapshot.
+        $this->patchJson($this->adminBase, ['status' => 'published'])->assertOk();
+        app(TryOutService::class)->assertPublishable($this->tryOut->fresh());
+        $attempt = app(\App\Services\TryOutAttemptService::class)->start($this->student, $this->tryOut->fresh());
+        $this->assertArrayHasKey($passage['id'], $attempt->grading_snapshot['passages']);
+        \App\Models\TryOutPassage::findOrFail($passage['id'])->update(['body' => '<p>Changed</p>']);
+        $payload = app(\App\Services\TryOutAttemptService::class)->payload($attempt);
+        $studentReading = collect($payload['questions'])->firstWhere('session', 'reading');
+        $this->assertSame($passage['body'], $studentReading['passage']['body']);
+        $this->assertArrayNotHasKey('correct_option', $studentReading);
+        $invalid = $body;
+        $invalid['revision'] = app(TryOutService::class)->studioRevision($this->tryOut);
+        $invalid['passages'][0]['id'] = (string) $passage['id'];
+        $invalid['passages'][0]['body'] = '<p>Must roll back</p>';
+        $invalid['questions'][0]['content']['passage_id'] = 'missing';
+        $this->putJson($this->adminBase.'/studio', $invalid)->assertUnprocessable();
+        $this->assertSame('<p>Changed</p>', \App\Models\TryOutPassage::findOrFail($passage['id'])->body);
+        $before = $attempt->fresh()->grading_snapshot;
+        $current = $this->getJson($this->adminBase)->assertOk()->json('data');
+        $remaining = collect($current['questions'])->reject(fn ($q) => $q['id'] === $linked->first()['id'])->values();
+        $encode = function ($q, $order) {
+            $id = (string) $q['id'];
+            unset($q['id'], $q['try_out_id'], $q['audio_url_resolved_url']);
+            $q['sort_order'] = $order;
+            return ['id' => $id, 'content' => $q];
+        };
+        $edit = ['revision' => $current['studio_revision'], 'settings' => ['status' => 'draft'],
+            'passages' => [['id' => (string) $passage['id'], 'title' => $passage['title'], 'body' => '<p>Changed</p>']],
+            'questions' => $remaining->reverse()->values()->map($encode)->all(),
+            'deleted_question_ids' => [$linked->first()['id']], 'deleted_passage_ids' => []];
+        $saved = $this->putJson($this->adminBase.'/studio', $edit)->assertOk()->json('data');
+        $this->assertSame($remaining->reverse()->pluck('id')->values()->all(), array_column($saved['questions'], 'id'));
+        $edit['revision'] = $saved['studio_revision'];
+        $edit['passages'] = [];
+        $edit['questions'] = collect($saved['questions'])->reject(fn ($q) => $q['passage_id'] === $passage['id'])->values()->map($encode)->all();
+        $edit['deleted_question_ids'] = collect($saved['questions'])->where('passage_id', $passage['id'])->pluck('id')->all();
+        $edit['deleted_passage_ids'] = [$passage['id']];
+        $this->putJson($this->adminBase.'/studio', $edit)->assertOk()->assertJsonCount(0, 'data.passages')->assertJsonCount(3, 'data.questions');
+        $this->getJson($this->adminBase)->assertJsonCount(0, 'data.passages')->assertJsonCount(3, 'data.questions');
+        $this->assertSame($before, $attempt->fresh()->grading_snapshot);
+        $this->assertSame($passage['body'], collect(app(\App\Services\TryOutAttemptService::class)->payload($attempt)['questions'])->firstWhere('session', 'reading')['passage']['body']);
+
+    }
+
+    public function test_exit_abandons_only_owned_attempt_and_restart_is_empty(): void
+    {
+        $this->publish();
+        $attempt = $this->start();
+        $question = $attempt['questions'][0]['id'];
+        $this->putJson($this->base.'/attempts/'.$attempt['id'].'/answers', ['answers' => [$question => 'B'], 'revision' => 0])->assertOk();
+        $this->getJson($this->base.'/history')->assertJsonPath('data.attempts.0.id', $attempt['id']);
+        $other = $this->user('student');
+        $this->actingAs($other)->postJson($this->base.'/attempts/'.$attempt['id'].'/abandon')->assertNotFound();
+        $this->actingAs($this->student);
+        $this->postJson($this->base.'/attempts/'.$attempt['id'].'/abandon')->assertNoContent();
+        $this->postJson($this->base.'/attempts/'.$attempt['id'].'/abandon')->assertNoContent();
+        $this->getJson($this->base.'/attempts/'.$attempt['id'])->assertConflict();
+        $this->putJson($this->base.'/attempts/'.$attempt['id'].'/answers', ['answers' => [$question => 'A'], 'revision' => 1])->assertConflict();
+        $this->postJson($this->base.'/attempts/'.$attempt['id'].'/submit', ['revision' => 1])->assertConflict();
+        $this->getJson($this->base.'/history')->assertJsonPath('data.attempts', []);
+        $new = $this->start();
+        $this->assertNotSame($attempt['id'], $new['id']);
+        $this->assertEmpty($new['answers']);
+        $this->assertSame(0, $new['revision']);
     }
 
     private function finish(array $attempt, array $choices = ['B', 'B', 'B', 'B']): array

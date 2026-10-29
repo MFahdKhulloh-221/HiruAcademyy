@@ -32,6 +32,17 @@ export function PracticeScreen({ membership, resolvedCatalog }: { membership: Me
   const [category, setCategory] = useState<PracticeCat>("Semua");
   const [levelFilter, setLevelFilter] = useState<string>("all");
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      const params = new URLSearchParams(window.location.search);
+      const category = params.get("category");
+      const level = params.get("level");
+      if (category === "reading" || category === "audio") setCategory(category === "reading" ? "Reading" : "Audio");
+      if (level && /^(n[1-5]|dasar)$/.test(level)) setLevelFilter(level);
+    }, 0);
+    return () => window.clearTimeout(timer);
+  }, []);
+
   const load = useCallback(async (signal: AbortSignal) => {
     const dashboard = await learningDashboard(signal);
     const catalog = dashboard.catalog;

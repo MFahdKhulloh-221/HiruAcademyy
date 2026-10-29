@@ -1,15 +1,16 @@
 import type { ReactNode } from "react";
+import { AdminEditorNavigation } from "@/components/admin-editor-navigation";
 import { AdminNavigation } from "@/components/admin-navigation";
 import "@/app/admin/admin.css";
 
-export function AdminShell({ children, current }: { children: ReactNode; current: string }) {
+export function AdminShell({ children, current, hideTopbar = false }: { children: ReactNode; current: string; hideTopbar?: boolean }) {
   return (
-    <div className="admin-shell">
+    <AdminEditorNavigation><div className="admin-shell">
       <AdminNavigation current={current} />
       <div className="admin-main">
-        <header className="admin-topbar"><strong>Admin Console</strong><span>Pratinjau frontend</span></header>
+        {!hideTopbar && <header className="admin-topbar"><strong>Admin Console</strong><span>Pratinjau frontend</span></header>}
         {children}
       </div>
-    </div>
+    </div></AdminEditorNavigation>
   );
 }
