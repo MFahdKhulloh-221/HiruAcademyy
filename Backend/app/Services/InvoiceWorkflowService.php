@@ -18,8 +18,19 @@ class InvoiceWorkflowService
     public function create(User $user, ProgramOffer $offer, array $metadata = []): Invoice
     {
         return DB::transaction(function () use ($user, $offer, $metadata) {
+            $credits = app(ReferralCreditService::class);
+            $credits->policy(true);
             $student = User::whereKey($user->id)->lockForUpdate()->firstOrFail();
             $this->requireStudent($student);
+            if (! empty($metadata['credit_request_key'])) {
+                $existing = Invoice::where('user_id', $user->id)->where('credit_request_key', $metadata['credit_request_key'])->first();
+                if ($existing) {
+                    if ($existing->program_offer_id !== $offer->id || (bool) ($existing->credit_policy['requested_credit'] ?? false) !== (bool) ($metadata['use_credit'] ?? false) || ($existing->credit_policy['requested_referral'] ?? null) !== ($metadata['referral_code'] ?? null)) {
+                        throw ValidationException::withMessages(['credit_request_key' => 'Request key sudah dipakai untuk pesanan berbeda.']);
+                    }
+                    return $existing;
+                }
+            }
             $offer = ProgramOffer::whereKey($offer->id)->lockForUpdate()->firstOrFail();
             $program = Program::whereKey($offer->program_id)->lockForUpdate()->firstOrFail();
             if ($program->status !== 'active' || $offer->status !== 'active' || $offer->base_price === null) {
@@ -29,19 +40,22 @@ class InvoiceWorkflowService
                 ? $this->membership($student->id, $offer->program_id, $offer->plan_code)->first()
                 : null;
             $offer->load('promotions');
-            $pricing = $offer->pricing();
+            $pricing = $credits->price($student, $offer, $metadata);
+            $snapshot = $pricing['policy'] + ['requested_credit' => (bool) ($metadata['use_credit'] ?? false), 'requested_referral' => $metadata['referral_code'] ?? null];
 
             $invoice = Invoice::create([
                 'reference' => (string) Str::uuid(), 'user_id' => $student->id,
                 'program_offer_id' => $offer->id, 'program_id' => $offer->program_id, 'plan_code' => $offer->plan_code,
                 'status' => 'draft', 'base_price' => $pricing['base_price'],
                 'discount_percent' => $pricing['discount_percent'], 'discount_amount' => $pricing['discount_amount'],
-                'total_price' => $pricing['effective_price'], 'currency' => $offer->currency,
+                'total_price' => $pricing['total_price'], 'currency' => $offer->currency,
                 'duration_months' => $offer->duration_months,
                 'renewal_grant_id' => $renewal?->id,
+                'credit_request_key' => $metadata['credit_request_key'] ?? null, 'credit_policy' => $snapshot,
+                'referral_discount' => $pricing['referral_discount'], 'credit_discount' => $pricing['credit_discount'], 'promo_discount' => $pricing['promo_discount'],
                 'due_date' => $metadata['due_date'] ?? null, 'note' => $metadata['note'] ?? null,
             ])->fresh();
-            app(AffiliateService::class)->referral($invoice, $metadata['referral_code'] ?? null);
+            $credits->reserve($invoice, $pricing);
             app(NotificationService::class)->invoiceReminder($student, $invoice);
 
             return $invoice;
@@ -51,7 +65,10 @@ class InvoiceWorkflowService
     public function transition(Invoice $invoice, string $target, User $actor): Invoice
     {
         return DB::transaction(function () use ($invoice, $target, $actor) {
+            $credits = app(ReferralCreditService::class);
+            $credits->policy(true);
             $invoice = Invoice::whereKey($invoice->id)->lockForUpdate()->firstOrFail();
+            $credits->assertPayable($invoice);
             $actor = User::whereKey($actor->id)->lockForUpdate()->firstOrFail();
             abort_unless($actor->account_status === 'active', 403);
             abort_unless(in_array($actor->role, ['student', 'admin'], true), 403);
@@ -59,7 +76,7 @@ class InvoiceWorkflowService
                 abort_unless($invoice->user_id === $actor->id, 404);
                 abort_unless(in_array($target, ['awaiting_payment', 'paid'], true), 403);
             }
-            if ($invoice->status === 'active' && $target === 'active') {
+            if ($invoice->status === $target && in_array($target, ['verified', 'active'])) {
                 return $invoice;
             }
             if ((self::NEXT[$invoice->status] ?? null) !== $target) {
@@ -92,6 +109,7 @@ class InvoiceWorkflowService
                 ]);
             }
             $invoice->update(['status' => $target, $timestamp => now()]);
+            if ($target === 'verified') $credits->verified($invoice);
 
             return $invoice;
         });

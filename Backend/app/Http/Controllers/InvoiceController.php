@@ -33,6 +33,7 @@ class InvoiceController extends Controller
     {
         $rules = [
             'program_offer_id' => ['required', 'integer', 'exists:program_offers,id'],
+            'use_credit' => ['sometimes', 'boolean'], 'credit_request_key' => ['required', 'uuid'],
             'referral_code' => ['nullable', 'string', 'max:255'],
             'affiliate_id' => ['prohibited'], 'commission' => ['prohibited'], 'rate' => ['prohibited'], 'amount' => ['prohibited'],
             'due_date' => ['nullable', 'date_format:Y-m-d'], 'note' => ['nullable', 'string', 'max:5000'],

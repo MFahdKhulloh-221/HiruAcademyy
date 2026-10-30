@@ -1,0 +1,266 @@
+.program-journey.program-page {
+  padding: 40px 20px 80px;
+  background: #f9f9ff;
+}
+.program-journey .public-section {
+  width: min(1180px, 100%);
+  margin: 0 auto 56px;
+  padding: 0;
+}
+.program-journey .journey-section-heading { margin-bottom: 28px; }
+.program-journey .journey-step {
+  margin: 0 0 12px;
+  color: #954900;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+.program-journey .journey-section-heading h1,
+.program-journey .journey-section-heading h2 {
+  margin: 0;
+  color: var(--navy);
+  font-size: clamp(28px, 3vw, 40px);
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -.035em;
+  overflow-wrap: anywhere;
+}
+.program-journey .journey-section-heading > p:last-child:not(.journey-step) {
+  margin: 14px 0 0;
+  color: #595e70;
+  line-height: 1.7;
+}
+.program-journey .public-levels {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+.program-journey .public-levels > .public-level {
+  grid-column: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  min-width: 0;
+  padding: 24px;
+  border: 1px solid #e4e5ec;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 4px 16px rgb(32 39 51 / 4%);
+  cursor: default;
+  transition: transform 200ms ease, box-shadow 200ms ease, border-color 200ms ease;
+}
+.program-journey .public-level:hover {
+  transform: translateY(-3px);
+  border-color: #f48220;
+  box-shadow: 0 10px 24px rgb(32 39 51 / 8%);
+}
+.program-journey .public-level.selected {
+  border-color: #f48220;
+  box-shadow: 0 0 0 1px #f48220, 0 6px 20px rgb(244 130 32 / 8%);
+}
+.program-journey .journey-card-label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  color: #686d7c;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .06em;
+}
+.program-journey .journey-selected { display: inline-flex; align-items: center; gap: 4px; color: #954900; }
+.program-journey .public-level h2 {
+  margin: 0 0 8px;
+  padding-right: 80px;
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -.025em;
+  overflow-wrap: anywhere;
+}
+.program-journey .public-level .journey-level-title {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: nowrap;
+  gap: 12px;
+  padding-right: 0;
+  margin-top: 24px;
+}
+.program-journey .public-level .journey-level-title > span:first-child {
+  font-size: 30px;
+  font-weight: 800;
+  line-height: 1.2;
+  flex-shrink: 0;
+}
+.program-page.program-journey .public-levels .public-level .journey-level-title .journey-level-japanese {
+  color: #686d7c;
+  position: relative;
+  top: -6px;
+  font-family: "Noto Sans JP", "Yu Gothic", Meiryo, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: normal;
+  white-space: nowrap;
+}
+.program-journey .public-level h3 { margin: 0 0 10px; font-size: 16px; }
+.program-journey .public-level > p { margin: 0 0 24px; color: #595e70; font-size: 14px; line-height: 1.7; }
+.program-journey .public-level ul {
+  display: grid;
+  gap: 12px;
+  margin: auto 0 24px;
+  padding: 20px 0 0;
+  border-top: 1px solid #ededf3;
+  list-style: none;
+}
+.program-journey .public-level li { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.program-journey .public-level li svg { color: #954900; flex-shrink: 0; }
+.program-journey .public-level > .button { width: 100%; min-height: 46px; margin-top: auto; white-space: normal; }
+.program-journey .public-level.selected > .button { background: #f48220; border-color: #f48220; color: #5a2a00; }
+.program-journey .public-levels > .journey-placement { border-style: dashed; background: #fff; }
+.program-journey .journey-other-program { order: 1; }
+.program-journey .journey-compass { width: 40px; height: 40px; color: #f48220; }
+.program-page.program-journey :is(.public-levels, .pricing-grid, .journey-confirmation) :is(.public-level, .pricing-card, .program-summary-card) :is(h2, h3, p, li, span, strong, small, a, button) {
+  color: #000;
+}
+.program-journey .journey-placement h2 { font-size: 26px; }
+.program-journey .journey-placement > .button:hover {
+  background: #f48220;
+  border-color: #f48220;
+  color: #000;
+}
+.program-journey .pricing-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  padding-top: 16px;
+}
+.program-journey .pricing-card { display: flex; flex-direction: column; min-width: 0; height: 100%; }
+.program-journey .pricing-card-header { min-height: 0; }
+.program-page.program-journey .pricing-grid .pricing-card .pricing-card-header .pricing-subtitle {
+  color: #954900;
+}
+.program-journey .pricing-card-footer { margin-top: auto; padding-top: 24px; }
+.program-journey .pricing-cta-btn { min-height: 46px; white-space: normal; }
+.program-journey .pricing-card:hover { border-color: #f48220; }
+.program-journey .pricing-card.selected-pricing-card { border-color: #f48220; background: #fff; box-shadow: 0 0 0 1px #f48220; }
+.program-journey .summary-meta-card.price-highlight { background: #fff; }
+.program-journey .pricing-price-box { font-size: clamp(28px, 3vw, 40px); }
+.program-journey .program-summary-card { position: static; width: 100%; max-width: none; margin: 0; }
+.program-journey .summary-header-copy { min-width: 0; }
+.program-journey .summary-header h2 { overflow-wrap: anywhere; }
+.program-journey .button:focus-visible { outline: 3px solid #954900; outline-offset: 4px; }
+@media (min-width: 640px) and (max-width: 1023px) {
+  .program-journey .public-levels,
+  .program-journey .pricing-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 639px) {
+  .program-journey.program-page { padding: 28px 16px 48px; }
+  .program-journey .public-section { margin-bottom: 36px; }
+  .program-journey .public-levels,
+  .program-journey .pricing-grid { grid-template-columns: minmax(0, 1fr); gap: 20px; }
+  .program-journey .public-levels > .public-level { padding: 22px; }
+  .program-journey .summary-header { flex-wrap: wrap; }
+  .program-journey .summary-meta-grid { grid-template-columns: minmax(0, 1fr); }
+  .program-journey .summary-action-box .button { width: 100%; white-space: normal; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .program-journey .public-level { transition: none; }
+  .program-journey .public-level:hover { transform: none; }
+}
+
+.program-journey .public-level { position: relative; }
+.program-journey .journey-card-select {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  border-radius: inherit;
+  background: transparent;
+  cursor: pointer;
+}
+.program-journey .journey-card-select:focus-visible { outline: 3px solid #954900; outline-offset: 4px; }
+.program-journey .public-level > .button { position: relative; z-index: 1; }
+.program-journey .public-level .pricing-features li {
+  align-items: flex-start;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+}
+.program-journey .public-level .pricing-features li > span:not(.feature-check) {
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 1.5;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.program-journey .public-level.selected .feature-check { background: var(--orange); color: #5a2a00; }
+.program-journey #program-pricing,
+.program-journey #program-summary { scroll-margin-top: 100px; }
+
+.program-journey .compact-program-summary {
+  padding: 24px;
+  border: 1px solid #e4e5ec;
+  border-radius: 22px;
+  background: #fff;
+  box-shadow: 0 6px 24px rgb(32 39 51 / 5%);
+}
+.program-journey .compact-program-summary .summary-card-inner {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(0, 1fr);
+  align-items: stretch;
+  gap: 24px;
+}
+.program-journey .compact-program-summary .summary-program-info { min-width: 0; }
+.program-journey .compact-program-summary .summary-header { display: flex; align-items: center; gap: 14px; }
+.program-journey .compact-program-summary .summary-icon-box {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  border-radius: 14px;
+  background: #fff1e6;
+  color: #f48220;
+  font-size: 26px;
+}
+.program-journey .compact-program-summary .summary-header-copy h3 { margin: 0; font-size: 24px; font-weight: 800; line-height: 1.25; }
+.program-journey .compact-program-summary .summary-plan-name { margin: 4px 0 0; font-size: 15px; font-weight: 600; }
+.program-journey .compact-program-summary .summary-program-description { margin: 16px 0 20px; font-size: 14px; line-height: 1.65; }
+.program-journey .compact-program-summary .summary-meta-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 40px;
+  margin: 0;
+  padding-top: 16px;
+  border-top: 1px solid #ededf3;
+}
+.program-journey .compact-program-summary .summary-meta-grid dt { font-size: 10px; font-weight: 700; letter-spacing: .06em; color: #595e70; }
+.program-journey .compact-program-summary .summary-meta-grid dd { margin: 6px 0 0; font-size: 14px; font-weight: 600; }
+.program-journey .compact-program-summary .summary-checkout-panel {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid #f0e2d6;
+  border-radius: 16px;
+  background: #fffaf5;
+}
+.program-journey .compact-program-summary .summary-investment-label { margin: 0 0 10px; font-size: 11px; font-weight: 700; letter-spacing: .06em; }
+.program-journey .compact-program-summary .pricing-price-box { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; margin: 0; padding: 0; }
+.program-journey .compact-program-summary .pricing-discount-row { flex-basis: 100%; }
+.program-journey .compact-program-summary .pricing-amount { font-size: clamp(28px, 3vw, 36px); }
+.program-journey .compact-program-summary .summary-action-box { display: block; margin: 16px 0 0; padding: 0; }
+.program-journey .compact-program-summary .summary-cta { width: 100%; min-height: 46px; padding: 12px; white-space: normal; }
+@media (max-width: 1023px) {
+  .program-journey .compact-program-summary .summary-card-inner { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 20px; }
+}
+@media (max-width: 639px) {
+  .program-journey .compact-program-summary { padding: 20px; }
+  .program-journey .compact-program-summary .summary-card-inner { grid-template-columns: minmax(0, 1fr); }
+}

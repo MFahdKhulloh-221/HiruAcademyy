@@ -80,6 +80,7 @@ for (const width of [1440, 768, 390]) {
       await expect(summary(page)).toContainText(`${offer.duration_months} bulan`);
       if (program.family !== "jlpt") await expect(summary(page)).not.toContainText(/JLPT (SSW|INTERVIEW|Persiapan)/i);
     }
+    await expect(summary(page).getByRole("link", { name: "Lanjutkan ke Checkout" })).toHaveAttribute("href", "/checkout?program=interview&plan=lms");
     await page.getByRole("button", { name: "Pilih Kelas bersama Sensei", exact: true }).click();
     await expect(summary(page)).toContainText(formatProgramPrice(450000));
     await expect(summary(page)).toContainText("6 bulan");
@@ -149,6 +150,12 @@ test("active promo survives checkout and invoice retry without real transaction"
   api.failures.delete("/api/student/invoices");
   await page.getByRole("dialog").getByRole("button", { name: "Coba Lagi" }).click();
   await expect(page.getByRole("dialog")).toContainText("INVOICE BERHASIL DIBUAT");
+  for (const viewport of [{ width: 1440, height: 900 }, { width: 768, height: 900 }, { width: 390, height: 844 }]) {
+    await page.setViewportSize(viewport);
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByRole("link", { name: "Detail Pesanan" })).toBeInViewport();
+    expect(await dialog.locator(".admin-dialog-content").evaluate(node => node.scrollHeight <= node.clientHeight)).toBe(true);
+  }
   await expect(page.locator(".checkout-total")).toContainText(money(240000));
   await expect(page.locator(".checkout-summary")).toContainText(money(60000));
   expect(api.writes).toEqual([{ program_offer_id: 30 }]);
@@ -252,3 +259,38 @@ test("admin program and promo status changes persist into public projections", a
   expect(api.mutations).toEqual(["/api/admin/programs/3", "/api/admin/programs/3", "/api/admin/promotions/81"]);
   expect(api.writes).toEqual([]);
 });
+
+for (const width of [1440, 768, 390]) {
+  test(`journey grid, API-only offers and selection at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    const api = await catalogApi(page);
+    api.programs.push(...["n4", "n3", "n2"].map((code, index) => ({ id: index + 5, code, slug: code, name: `JLPT ${code.toUpperCase()}`, family: "jlpt", description: `Deskripsi ${code} dari API`, status: "active", sort_order: index + 5 })));
+    api.offers.push(...api.programs.filter(program => program.id >= 5).flatMap(program => ["lms", "sensei"].map((plan_code, index) => ({ id: program.id * 10 + index, program_id: program.id, plan_code, base_price: program.id * 100000 + index * 50000, currency: "IDR", duration_months: index + 2, status: "active" }))));
+    await page.goto("/program?level=N5&plan=lms");
+    await expect(page.getByRole("heading", { name: "Satu langkah lebih dekat ke Jepang." })).toBeVisible();
+    await expect(page.getByText("Pilih program belajarmu", { exact: true })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "Tes Level Gratis" })).toHaveAttribute("href", "/placement");
+    const cards = page.locator(".public-levels > article");
+    await expect(cards).toHaveCount(8);
+    const columns = await page.locator(".public-levels").evaluate(node => getComputedStyle(node).gridTemplateColumns.split(" ").length);
+    expect(columns).toBe(width >= 1024 ? 3 : width >= 640 ? 2 : 1);
+    await page.getByRole("button", { name: "Pilih JLPT N3", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Pilih JLPT N3", exact: true })).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator(".public-level.selected")).toHaveCount(1);
+    await expect(page.getByRole("heading", { name: "Pilih metode belajar ? JLPT N3" })).toBeVisible();
+    await expect(page.locator(".program-pricing-section .pricing-card")).toHaveCount(2);
+    await expect(page.locator(".program-pricing-section")).not.toContainText("Coba Gratis");
+    await page.getByRole("button", { name: "Pilih Kelas bersama Sensei", exact: true }).click();
+    await expect(summary(page)).toContainText(formatProgramPrice(650000));
+    await expect(summary(page)).toContainText("3 bulan");
+    await expect(summary(page).getByRole("link", { name: "Lanjutkan ke Checkout" })).toHaveAttribute("href", "/checkout?program=n3&plan=sensei");
+    api.offers.find(offer => offer.program_id === 5 && offer.plan_code === "sensei")!.status = "inactive";
+    await page.reload();
+    await page.getByRole("button", { name: "Pilih Kelas bersama Sensei", exact: true }).click();
+    await page.getByRole("button", { name: "Pilih JLPT N4", exact: true }).click();
+    await expect(summary(page)).toContainText("Belajar Mandiri");
+    await expect(page.locator(".program-pricing-section .pricing-card")).toHaveCount(1);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    expect(api.writes).toEqual([]);
+  });
+}

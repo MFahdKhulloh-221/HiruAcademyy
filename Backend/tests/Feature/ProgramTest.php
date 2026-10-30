@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Program;
+use App\Models\ProgramOffer;
 use App\Models\User;
 use Database\Seeders\ProgramSeeder;
 use Illuminate\Database\UniqueConstraintViolationException;
@@ -131,6 +132,69 @@ class ProgramTest extends TestCase
             $program = Program::where('code', $code)->firstOrFail();
             $this->assertSame($family, $program->family);
             $this->assertNull($program->cumulative_rank);
+        }
+    }
+
+    public function test_create_program_saves_draft_with_inactive_offer_for_each_plan(): void
+    {
+        $this->actingAs($this->createUser('admin'));
+        foreach (['lms', 'sensei'] as $plan) {
+            $response = $this->postJson('/api/admin/programs', [
+                'name' => 'Custom '.$plan, 'slug' => 'custom-'.$plan, 'sort_order' => 9,
+                'plan_code' => $plan, 'duration_months' => 7, 'base_price' => 123456,
+                'status' => 'active', 'currency' => 'USD',
+            ])->assertCreated()->assertJsonPath('data.status', 'draft');
+            $id = $response->json('data.id');
+            $this->assertDatabaseHas('program_offers', [
+                'program_id' => $id, 'plan_code' => $plan, 'duration_months' => 7,
+                'base_price' => 123456, 'currency' => 'IDR', 'status' => 'inactive',
+            ]);
+            $this->assertSame(1, ProgramOffer::where('program_id', $id)->count());
+            $offers = $this->getJson('/api/admin/offers')->assertOk()->json('data');
+            $this->assertContains('custom-'.$plan, array_column(array_column($offers, 'program'), 'code'));
+            $this->assertNotContains($id, array_column($this->getJson('/api/public/programs')->json('data'), 'id'));
+            $this->assertNotContains('custom-'.$plan, array_column(array_column($this->getJson('/api/public/offers')->assertOk()->json('data'), 'program'), 'code'));
+            $this->patchJson('/api/admin/programs/'.$id, ['status' => 'active'])->assertOk();
+            $this->assertSame('inactive', ProgramOffer::where('program_id', $id)->sole()->status);
+            $this->assertNotContains('custom-'.$plan, array_column(array_column($this->getJson('/api/public/offers')->assertOk()->json('data'), 'program'), 'code'));
+        }
+    }
+
+    public function test_create_program_requires_valid_offer_inputs_without_partial_program(): void
+    {
+        $this->actingAs($this->createUser('admin'));
+        $base = ['name' => 'Custom validation', 'slug' => 'custom-validation', 'sort_order' => 9];
+        $this->postJson('/api/admin/programs', $base)->assertUnprocessable()
+            ->assertJsonValidationErrors(['plan_code', 'duration_months', 'base_price']);
+        foreach ([['plan_code' => 'free'], ['duration_months' => 0], ['duration_months' => 32768], ['duration_months' => 1.5], ['base_price' => -1], ['base_price' => 2147483648], ['base_price' => null]] as $invalid) {
+            $this->postJson('/api/admin/programs', [...$base, 'plan_code' => 'lms', 'duration_months' => 1, 'base_price' => 0, ...$invalid])
+                ->assertUnprocessable()->assertJsonValidationErrors(array_keys($invalid));
+        }
+        $this->assertDatabaseMissing('programs', ['slug' => 'custom-validation']);
+    }
+
+    public function test_offer_failure_rolls_back_new_program(): void
+    {
+        $this->actingAs($this->createUser('admin'));
+        $events = ProgramOffer::getEventDispatcher();
+        ProgramOffer::setEventDispatcher(clone $events);
+        ProgramOffer::creating(function () {
+            throw new \RuntimeException('Offer write failed');
+        });
+        $this->withoutExceptionHandling();
+        try {
+            try {
+                $this->postJson('/api/admin/programs', [
+                    'name' => 'Rollback program', 'slug' => 'rollback-program', 'sort_order' => 9,
+                    'plan_code' => 'lms', 'duration_months' => 1, 'base_price' => 0,
+                ]);
+                $this->fail('Expected offer write failure.');
+            } catch (\RuntimeException $error) {
+                $this->assertSame('Offer write failed', $error->getMessage());
+            }
+            $this->assertDatabaseMissing('programs', ['slug' => 'rollback-program']);
+        } finally {
+            ProgramOffer::setEventDispatcher($events);
         }
     }
 

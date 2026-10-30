@@ -4,7 +4,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useLearningRequest } from "@/components/learning-hooks";
 import { commercialCode, commercialData, commercialId, commercialWrite, createCommercialDraft, InvoiceCreatedError, type CommercialInvoice, type Offer } from "@/lib/commercial-api";
 
-export type StudentAffiliateProjection = { affiliate: { id: number; name: string; code: string; status: string; rate: number | null } | null; code: string | null; totals: { pending: number; approved: number; paid: number } };
+export type AffiliateWithdrawal = { id: number; name?: string; affiliate_id: number; request_key: string; amount: number; fee: number; status: string; destination_masked: string; created_at: string; reason?: string; transfer_reference?: string };
+export type AffiliatePolicy = { enabled: boolean; withdrawals_enabled: boolean; minimum: number | null; fee: number | null; waiting_days: number | null; rate?: number | null };
+export type StudentAffiliateProjection = { affiliate: { id: number; name: string; code: string; status: string; rate: number | null } | null; code: string | null; totals: { pending: number; approved: number; paid: number; processing?: number }; referral_count?: number; policy?: AffiliatePolicy; history?: { id: number; created_at: string; program: string; buyer: string; transaction_status: string; amount: number; status: string }[]; withdrawals?: AffiliateWithdrawal[] };
 export function useCommercialAffiliate() {
   const load = useCallback(() => commercialData<StudentAffiliateProjection>("/api/student/affiliate"), []);
   return useLearningRequest(load, "student-affiliate");
@@ -23,12 +25,12 @@ export function useCommercialOrder(level: string, plan: "lms" | "sensei") {
   const [reloadVersion, setReloadVersion] = useState(0);
   useEffect(() => { let active = true; void Promise.resolve().then(() => { if (!active) return; setLoading(true); setError(""); return commercialData<Offer[]>("/api/public/offers").then(rows => { if (active) setOffers(rows); }).catch(error => { if (active) setError(error.message); }).finally(() => { if (active) setLoading(false); }); }); return () => { active = false; }; }, [reloadVersion]);
   const offer = offers.find(row => commercialCode(row.program.code) === commercialCode(level) && row.plan_code === plan && row.base_price !== null);
-  async function create(referral?: string) {
+  async function create(referral?: string, useCredit = false, requestKey?: string) {
     if (invoice) return invoice;
     if (inFlight.current || creationBlocked.current.has(selection)) return null;
     if (!offer) { setError("Program atau paket belum tersedia. Pilih program lain."); return null; }
     inFlight.current = true; setBusy(true); setError("");
-    try { const row = await createCommercialDraft({ level, plan, referral }); setCreated({ selection, invoice: row }); return row; }
+    try { const row = await createCommercialDraft({ level, plan, referral, useCredit, requestKey }); setCreated({ selection, invoice: row }); return row; }
     catch (error) { if (error instanceof InvoiceCreatedError) creationBlocked.current.add(selection); setError(error instanceof Error ? error.message : "Permintaan belum berhasil."); return null; }
     finally { inFlight.current = false; setBusy(false); }
   }

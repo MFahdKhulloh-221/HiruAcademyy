@@ -13,6 +13,7 @@ class Invoice extends Model
     protected function casts(): array
     {
         return [
+            'credit_policy' => 'array', 'credit_discount' => 'integer', 'referral_discount' => 'integer', 'promo_discount' => 'integer',
             'base_price' => 'integer', 'discount_percent' => 'float',
             'discount_amount' => 'integer', 'total_price' => 'integer', 'duration_months' => 'integer',
             'due_date' => 'immutable_date:Y-m-d', 'submitted_at' => 'immutable_datetime',

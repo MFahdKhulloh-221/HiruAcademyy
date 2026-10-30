@@ -3,11 +3,11 @@
 import { apiRequest } from "@/lib/api";
 
 export type Offer = { id?: number; program_id?: number; program: { id?: number; code: string; name: string; slug: string }; plan_code: "lms" | "sensei"; base_price: number | null; effective_price: number | null; discount_amount: number; discount_percent: number; duration_months: number; promotion?: { discount_percent: number; starts_at: string | null; ends_at: string | null } | null; status?: string; program_status?: string };
-export type CommercialInvoice = { renewal_grant_id?: number | null; id: number; user_id: number; program_id: number; program_code: string; plan_code: "lms" | "sensei"; base_price: number; discount_amount: number; total_price: number; duration_months?: number; status: string; created_at: string; due_date?: string; paid_at?: string; verified_at?: string; activated_at?: string; submitted_at?: string; note?: string; access_grant?: { starts_at: string; ends_at: string } };
+export type CommercialInvoice = { referral_discount?: number; credit_discount?: number; promo_discount?: number; renewal_grant_id?: number | null; id: number; user_id: number; program_id: number; program_code: string; plan_code: "lms" | "sensei"; base_price: number; discount_amount: number; total_price: number; duration_months?: number; status: string; created_at: string; due_date?: string; paid_at?: string; verified_at?: string; activated_at?: string; submitted_at?: string; note?: string; access_grant?: { starts_at: string; ends_at: string } };
 export type Identity = { id: number; name: string; email: string; whatsapp: string; role: "student" | "admin"; account_status: string; country?: string; target_jlpt?: string };
 export type EffectiveAccess = { learning: Record<string, "preview" | "full" | "none">; replay_levels: string[]; source_grants: { id: number; program_code: string; plan_code: "lms" | "sensei"; starts_at: string; ends_at: string }[] };
 export type ApiAffiliate = { id: number; user_id?: number; name: string; code: string; status: string; email?: string; whatsapp?: string; rate?: number | null; created_at: string };
-export type ApiCommission = { id: number; affiliate_id: number; invoice_id: number; amount: number; status: "pending" | "approved" | "paid" | "cancelled"; created_at: string; paid_at?: string; note?: string };
+export type ApiCommission = { hold_reason?: string | null; id: number; affiliate_id: number; invoice_id: number; amount: number; status: "pending" | "approved" | "paid" | "cancelled"; created_at: string; paid_at?: string; note?: string };
 export function commercialSelection(params: { get: (key: string) => string | null }) {
   const code = commercialCode(params.get("program") ?? params.get("level") ?? "");
   const plan = params.get("plan");
@@ -28,7 +28,7 @@ async function invoiceProjection<T>(path: string, data: T, signal?: AbortSignal)
 export async function commercialData<T>(path: string, signal?: AbortSignal): Promise<T> { return invoiceProjection(path, (await apiRequest<{ data: T }>(path, { signal })).data, signal); }
 export async function commercialWrite<T>(path: string, method: string, data?: unknown): Promise<T> { return invoiceProjection(path, (await apiRequest<{ data: T }>(path, { method, ...(data === undefined ? {} : { body: JSON.stringify(data) }) }))?.data); }
 export class InvoiceCreatedError extends Error {}
-export async function createCommercialDraft(order: { level: string; plan: "lms" | "sensei"; referral?: string }) {
+export async function createCommercialDraft(order: { level: string; plan: "lms" | "sensei"; referral?: string; useCredit?: boolean; requestKey?: string }) {
   const identity = await commercialData<Identity>("/api/me");
   if (identity.role !== "student") throw new Error("Pembelian hanya tersedia untuk akun siswa.");
   const offers = await commercialData<Offer[]>("/api/public/offers");
@@ -40,7 +40,7 @@ export async function createCommercialDraft(order: { level: string; plan: "lms" 
     programId = programs.find(program => commercialCode(program.code) === commercialCode(offer.program.code))?.id;
   }
   if (!Number.isSafeInteger(programId) || programId! < 1) throw new Error("Data program belum tersedia. Muat ulang halaman atau hubungi Admin.");
-  const invoice = (await apiRequest<{ data: CommercialInvoice }>("/api/student/invoices", { method: "POST", body: JSON.stringify({ program_offer_id: offer.id, ...(order.referral?.trim() ? { referral_code: order.referral.trim() } : {}) }) })).data;
+  const invoice = (await apiRequest<{ data: CommercialInvoice }>("/api/student/invoices", { method: "POST", body: JSON.stringify({ program_offer_id: offer.id, use_credit: order.useCredit ?? false, credit_request_key: order.requestKey ?? crypto.randomUUID(), ...(order.referral?.trim() ? { referral_code: order.referral.trim() } : {}) }) })).data;
   try {
     if (invoice?.program_id !== programId || invoice.plan_code !== offer.plan_code) throw new Error("Program invoice tidak sesuai pesanan.");
     return await invoiceProjection("/api/student/invoices", { ...invoice, program_code: offer.program.code });
@@ -48,7 +48,7 @@ export async function createCommercialDraft(order: { level: string; plan: "lms" 
     throw new InvoiceCreatedError("Invoice sudah diterima server, tetapi datanya tidak sesuai. Jangan membuat invoice ulang; periksa daftar invoice atau hubungi Admin.");
   }
 }
-export async function createCommercialInvoice(order: { level: string; plan: "lms" | "sensei"; referral?: string }) {
+export async function createCommercialInvoice(order: { level: string; plan: "lms" | "sensei"; referral?: string; useCredit?: boolean; requestKey?: string }) {
   const invoice = await createCommercialDraft(order);
   return commercialWrite<CommercialInvoice>(`/api/student/invoices/${invoice.id}/submit`, "POST");
 }
