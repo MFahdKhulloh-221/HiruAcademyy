@@ -34,9 +34,17 @@ class LandingHeroService
     {
         $data = Validator::make($input, [
             'revision' => ['required', 'integer', 'min:0', 'max:2147483646'],
-            'hero' => ['required', 'array:eyebrow,heading,support,primaryCtaLabel,primaryCtaPath,secondaryCtaLabel,secondaryCtaPath'],
+            'hero' => ['required', 'array:eyebrow,heading,support,primaryCtaLabel,primaryCtaPath,secondaryCtaLabel,secondaryCtaPath,slider'],
+            'hero.slider' => ['sometimes', 'required', 'array:autoplay,intervalMs,slides'],
         ])->validate();
         $hero = $this->validateHero($data['hero']);
+
+        if (array_key_exists('slider', $data['hero'])) {
+            return app(MediaService::class)->locked(function () use ($data, $hero) {
+                $hero['slider'] = app(HeroSliderConfiguration::class)->validate($data['hero']['slider']);
+                return $this->mutate((int) $data['revision'], $hero);
+            });
+        }
 
         return $this->mutate((int) $data['revision'], $hero);
     }
@@ -47,7 +55,7 @@ class LandingHeroService
             'revision' => ['required', 'integer', 'min:0', 'max:2147483646'],
         ])->validate();
 
-        return $this->mutate((int) $data['revision']);
+        return app(MediaService::class)->locked(fn () => $this->mutate((int) $data['revision']));
     }
 
     private function validateHero(array $hero): array
@@ -81,6 +89,9 @@ class LandingHeroService
                 throw ValidationException::withMessages(['hero' => 'Save a draft before publishing.']);
             }
             $state['published'] = $this->validateHero($state['draft']);
+            if (isset($state['draft']['slider'])) {
+                $state['published']['slider'] = app(HeroSliderConfiguration::class)->validate($state['draft']['slider'], true);
+            }
         } else {
             $state['draft'] = $hero;
         }

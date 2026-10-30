@@ -68,6 +68,11 @@
 @media (max-width: 639px) { .admin-shell .admin-prototype-search { width: 100%; } .admin-shell .admin-placement-preview { padding: 16px; } }
 .admin-shell .admin-public-prototype { max-width: 1240px; margin: 0 auto; padding: 40px 32px 80px; }
 .admin-shell .admin-public-prototype .admin-page-header, .admin-shell .admin-public-prototype .admin-section > header { display: flex; align-items: start; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+.admin-shell .landing-page-studio { height:calc(var(--studio-height, 100dvh) - 64px); min-height:0; display:flex; flex-direction:column; gap:12px; overflow:hidden; padding-block:12px; }
+.admin-shell .landing-page-studio .admin-page-header { margin:0; flex-shrink:0; }
+.admin-shell .landing-page-studio .admin-page-header h1 { font-weight:800; font-size:24px; line-height:1.2; }
+.admin-shell .landing-page-studio .admin-page-header p { margin:4px 0 0; font-size:12px; }
+@media(max-width:639px){.admin-shell .landing-page-studio{gap:8px;padding:8px;height:calc(var(--studio-height, 100dvh) - 64px)}.admin-shell .landing-page-studio .admin-page-header h1{font-size:18px}.admin-shell .landing-page-studio .admin-page-header p{display:none}}
 .admin-shell .admin-public-prototype .admin-page-header h1 { margin: 0; color: var(--navy); font-weight: 800; }
 .admin-shell .admin-public-prototype .admin-page-header { margin-bottom: 24px; }
 .admin-shell .admin-public-prototype .admin-section { margin-bottom: 28px; }

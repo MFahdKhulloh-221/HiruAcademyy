@@ -1,0 +1,14 @@
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const ts = require('typescript');
+const source = fs.readFileSync(require('node:path').join(__dirname, '../src/lib/headline-highlights.ts'), 'utf8');
+const moduleOutput = { exports: {} };
+new Function('exports', ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText)(moduleOutput.exports);
+const { colorHeadline, headlineParts } = moduleOutput.exports;
+let ranges = colorHeadline([], 2, 9, true);
+ranges = colorHeadline(ranges, 5, 12, true);
+assert.deepEqual(ranges, [{ start: 2, end: 12 }]);
+assert.deepEqual(colorHeadline(ranges, 4, 7, false), [{ start: 2, end: 4 }, { start: 7, end: 12 }]);
+assert.deepEqual(headlineParts('日😀Terarah', [{ start: 2, end: 9 }]).filter(p => p.orange), [{ text: 'Terarah', orange: true }]);
+assert.equal(headlineParts('<script>', []).map(p => p.text).join(''), '<script>');
+console.log('Headline selection, merge, reset, Unicode: PASS');

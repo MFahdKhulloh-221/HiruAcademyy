@@ -2,6 +2,7 @@ export type MenuItem = { label: string; href: string; group: string };
 
 export const adminMenu: readonly MenuItem[] = [
   { label: "Dashboard", href: "/admin", group: "DASHBOARD" },
+  { label: "Landing Page", href: "/admin/landing-page", group: "LANDING & PUBLIC" },
   { label: "Harga & Promo", href: "/admin/program-harga", group: "LANDING & PUBLIC" },
   { label: "Showcase", href: "/admin/showcase", group: "LANDING & PUBLIC" },
   { label: "Sensei", href: "/admin/sensei", group: "LANDING & PUBLIC" },

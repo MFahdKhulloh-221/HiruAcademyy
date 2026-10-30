@@ -378,7 +378,7 @@ export function usePublishedLandingRequest() {
     });
     return () => controller.abort();
   }, [version]);
-  return { landing: { ...toPublishedLanding(initialLandingContent), hero: state.hero ?? initialLandingContent.hero }, loading: state.loading, error: state.error, retry };
+  return { landing: { ...toPublishedLanding(initialLandingContent), hero: (state.hero ?? initialLandingContent.hero) as LandingHero }, loading: state.loading, error: state.error, retry };
 }
 
 export function usePublishedLanding(): PublishedLanding {

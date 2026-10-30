@@ -1,7 +1,8 @@
 import { apiRequest } from "@/lib/api";
 import type { LandingContent } from "@/lib/admin-website-store";
 
-export type LandingHero = LandingContent["hero"];
+import { isHeroSlider, type HeroSliderConfig } from "@/lib/hero-slider";
+export type LandingHero = LandingContent["hero"] & { slider?: HeroSliderConfig };
 export type LandingHeroState = { draft: LandingHero | null; published: LandingHero | null; revision: number };
 
 export function isInternalHeroPath(value: string): boolean {
@@ -12,7 +13,8 @@ export function isLandingHero(value: unknown): value is LandingHero {
   if (!value || typeof value !== "object") return false;
   const hero = value as Record<string, unknown>;
   return ["eyebrow", "heading", "support", "primaryCtaLabel", "primaryCtaPath", "secondaryCtaLabel", "secondaryCtaPath"].every(key => typeof hero[key] === "string" && hero[key].trim().length > 0)
-    && isInternalHeroPath(hero.primaryCtaPath as string) && isInternalHeroPath(hero.secondaryCtaPath as string);
+    && isInternalHeroPath(hero.primaryCtaPath as string) && isInternalHeroPath(hero.secondaryCtaPath as string)
+    && (hero.slider === undefined || isHeroSlider(hero.slider));
 }
 
 function readState(value: unknown): LandingHeroState {
@@ -29,7 +31,13 @@ export async function fetchLandingHero(signal?: AbortSignal) {
 
 export async function saveLandingHero(revision: number, hero: LandingHero) {
   if (!isLandingHero(hero)) throw new Error("Isi seluruh teks dan gunakan path internal untuk CTA.");
-  const response = await apiRequest<{ data: unknown }>("/api/admin/landing/hero/draft", { method: "PATCH", body: JSON.stringify({ revision, hero }) });
+  const clean = { ...hero, slider: hero.slider && { ...hero.slider, slides: hero.slider.slides.map(slide => {
+    const copy = { ...slide };
+    delete copy.desktopSrc_resolved_url;
+    delete copy.mobileSrc_resolved_url;
+    return copy;
+  }) } };
+  const response = await apiRequest<{ data: unknown }>("/api/admin/landing/hero/draft", { method: "PATCH", body: JSON.stringify({ revision, hero: clean }) });
   return readState(response.data);
 }
 

@@ -42,6 +42,8 @@ final class LandingHeroTest extends TestCase
         Facade::setFacadeApplication($container);
         Validator::swap(new Factory(new Translator(new ArrayLoader, 'en'), $container));
         DB::swap(Mockery::mock(DatabaseManager::class));
+        DB::shouldReceive('transaction')->andReturnUsing(fn ($operation) => $operation());
+        DB::shouldReceive('select')->with('SELECT pg_advisory_xact_lock(hashtext(?))', ['managed-media-references'])->andReturn([]);
         $responses = Mockery::mock(ResponseFactory::class);
         $responses->shouldReceive('json')->andReturnUsing(fn ($data) => new JsonResponse($data));
         $container->instance(ResponseFactory::class, $responses);

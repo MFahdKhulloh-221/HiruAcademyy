@@ -232,6 +232,9 @@ class MediaService
                 : $query->where($field, $path)->exists();
             abort_if($referenced, 409, 'Media is retained in Checkpoint content or an assessment snapshot.');
         }
+        if (DB::table('admin_settings')->where('section', 'landing_hero')->whereRaw('value::text LIKE ?', ['%'.$path.'%'])->exists()) {
+            abort(409, 'Media is still referenced by a draft or published Hero slide.');
+        }
         $disk = Storage::disk(config('media.disk'));
         if ($disk->exists($path) && ! $disk->delete($path)) {
             abort(503, 'Media deletion failed.');
