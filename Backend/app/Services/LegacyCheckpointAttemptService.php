@@ -15,7 +15,7 @@ class LegacyCheckpointAttemptService
     public function canAccess(User $user, CheckpointPackage $package): bool
     {
         return $this->access->canAccessProgram($user, $package->program)
-            && ($package->access_type === 'free' || $this->access->canAccessChapter($user, $package->program->code, 2));
+            && $this->access->canAccessChapter($user, $package->program->code, 2);
     }
 
     public function authorize(User $user, CheckpointPackage $package, ?CheckpointAttempt $attempt = null): void

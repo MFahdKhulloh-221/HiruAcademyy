@@ -41,6 +41,11 @@ class CheckpointStudioTest extends TestCase
         $this->putJson($base.'/'.$id.'/studio', $body)->assertConflict();
         $this->actingAs($student);
         $base = '/api/student/checkpoint-packages/'.$id;
+        $this->getJson($base.'?membership=sensei')->assertForbidden();
+        $this->postJson($base.'/attempts?membership=sensei')->assertUnprocessable();
+        $this->postJson($base.'/attempts')->assertForbidden();
+        DB::table('program_offers')->insertOrIgnore(['program_id' => $program->id, 'plan_code' => 'sensei', 'duration_months' => 1, 'status' => 'inactive']);
+        DB::table('access_grants')->insert(['user_id' => $student->id, 'program_id' => $program->id, 'plan_code' => 'sensei', 'starts_at' => now()->subDay(), 'ends_at' => now()->addDay(), 'status' => 'active', 'created_at' => now(), 'updated_at' => now()]);
         $this->getJson($base)->assertOk()->assertJsonPath('data.title', 'Checkpoint HTTP');
         $attempt = $this->postJson($base.'/attempts')->assertCreated()->json('data');
         $this->assertArrayNotHasKey('correct_option', $attempt['questions'][0]);

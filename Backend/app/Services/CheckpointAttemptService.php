@@ -19,6 +19,11 @@ class CheckpointAttemptService extends TryOutAttemptService
         parent::__construct($access, $content);
     }
 
+    public function canAccess(User $user, Model $tryOut): bool
+    {
+        return app(ChapterAccessPolicy::class)->canAccessChapter($user, $tryOut->program->code, 2);
+    }
+
     public function abandon(User $user, Model $tryOut, Model $attempt): void
     {
         if (isset($attempt->grading_snapshot['max_score'])) {
