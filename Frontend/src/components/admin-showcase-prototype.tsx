@@ -3,9 +3,10 @@
 import Image from "next/image";
 import { AdminMediaUpload } from "@/components/admin-media-upload";
 import { type FormEvent, useState } from "react";
-import { AdminDataTable, AdminDialog, AdminFilterToolbar, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge } from "@/components/admin-primitives";
+import { AdminDataTable, AdminDialog, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge } from "@/components/admin-primitives";
 import { adminMediaUrl as contentMedia } from "@/lib/admin-media";
 import { useAdminContent } from "@/lib/admin-content-api";
+import styles from "./admin-showcase.module.css";
 
 const approvedShowcase = [
   { key: "dashboard", label: "Dashboard" },
@@ -36,11 +37,23 @@ export function AdminShowcasePrototype() {
   }
   const image = (row: Showcase) => contentMedia(row.imageSrc) ? <Image unoptimized src={contentMedia(row.imageSrc)} alt={row.alt} width={860} height={480} className="lms-preview-img" /> : <span>No Image</span>;
   return <AdminShell current="/admin/showcase"><main className="admin-public-prototype">
-    <AdminPageHeader title="Showcase" actions={<button type="button" className="button button-primary" disabled={busy || loading} onClick={() => { const item = approvedShowcase.find(item => !rows.some(row => row.key === item.key)); if (!item) { setLimitReached(true); return; } setError(""); setDraft({ ...item, label: "", id: crypto.randomUUID(), imageSrc: "", alt: "", order: rows.length + 1, visible: false }); }}>Tambah Showcase</button>} />
+    <AdminPageHeader title="Showcase" />
     {loadError && <div role="alert">{loadError} <button type="button" onClick={reload}>Coba lagi</button></div>}<p role="status">{message}</p>
-    <AdminSection title="Showcase LMS"><AdminFilterToolbar><button type="button" className="button" onClick={() => setPreview("public")}>Pratinjau urutan tampil</button></AdminFilterToolbar><AdminDataTable loading={loading && !rows.length} caption="Gambar showcase" rows={[...rows].sort((a, b) => a.order - b.order)} rowKey={row => row.id} columns={[
+    <AdminSection title="Showcase LMS" actions={<div className="admin-page-actions"><button type="button" className="button button-primary" style={{ background: "#F48220", borderColor: "#F48220", color: "#5A2A00" }} onClick={() => setPreview("public")}>Pratinjau urutan tampil</button><button type="button" className="button button-primary" disabled={busy || loading} onClick={() => { const item = approvedShowcase.find(item => !rows.some(row => row.key === item.key)); if (!item) { setLimitReached(true); return; } setError(""); setDraft({ ...item, label: "", id: crypto.randomUUID(), imageSrc: "", alt: "", order: rows.length + 1, visible: false }); }}>Tambah Showcase</button></div>}><AdminDataTable loading={loading && !rows.length} caption="Gambar showcase" rows={[...rows].sort((a, b) => a.order - b.order)} rowKey={row => row.id} columns={[
       { key: "id", header: "Identifier (dikunci)", cell: row => row.key }, { key: "label", header: "Nama showcase", cell: row => row.label }, { key: "image", header: "Gambar", cell: row => image(row) }, { key: "alt", header: "Teks alternatif", cell: row => row.alt }, { key: "order", header: "Urutan", cell: row => row.order }, { key: "visible", header: "Status tampil", cell: row => <AdminStatusBadge status={row.visible ? "Aktif" : "Nonaktif"} /> }
-    ]} actions={{ cell: row => <div className="admin-page-actions"><button type="button" className="button" onClick={() => setPreview(row.id)}>Pratinjau</button><button type="button" className="button" disabled={busy} onClick={() => { setError(""); setDraft({ ...row }); }}>Edit gambar / tampilan</button><button type="button" className="button" disabled={busy} onClick={() => setDeleting(row)}>Hapus</button></div> }} /></AdminSection>
+    ]} actions={{ cell: row => <>
+      <button type="button" className={`button ${styles.trigger}`} popoverTarget={`showcase-actions-${row.id}`} aria-label={`Tindakan ${row.label}`} onClick={event => {
+        const box = event.currentTarget.getBoundingClientRect();
+        const menu = document.getElementById(`showcase-actions-${row.id}`);
+        menu?.style.setProperty("top", `${Math.max(8, Math.min(box.bottom + 4, window.innerHeight - 180))}px`);
+        menu?.style.setProperty("left", `${Math.max(8, Math.min(box.right - 180, window.innerWidth - 188))}px`);
+      }}><span aria-hidden="true">•••</span></button>
+      <div id={`showcase-actions-${row.id}`} popover="auto" className={styles.actionMenu} onClick={event => { if ((event.target as HTMLElement).closest("button")) event.currentTarget.hidePopover(); }}>
+        <button type="button" className="button" onClick={() => setPreview(row.id)}>Pratinjau</button>
+        <button type="button" className="button" disabled={busy} onClick={() => { setError(""); setDraft({ ...row }); }}>Edit</button>
+        <button type="button" className="button" disabled={busy} onClick={() => setDeleting(row)}>Hapus</button>
+      </div>
+    </> }} /></AdminSection>
     <AdminDialog open={Boolean(draft)} title="Edit gambar / tampilan" close={() => { if (!busy) setDraft(null); }}>{draft && <form className="admin-prototype-form" onSubmit={save}><label className="admin-field">Nama showcase<input required maxLength={255} value={draft.label} onChange={event => setDraft({ ...draft, label: event.target.value })} /></label><label className="admin-field">Gambar<input required placeholder="Contoh: https://example.com/images/dashboard.webp atau media/showcase/dashboard.webp" value={draft.imageSrc} onChange={event => setDraft({ ...draft, imageSrc: event.target.value })} /><small>URL HTTP/HTTPS atau referensi penyimpanan.</small></label><AdminMediaUpload kind="image" onUploaded={imageSrc => setDraft({ ...draft, imageSrc })} /><label className="admin-field">Teks alternatif<input required placeholder="Contoh: Tampilan dashboard siswa dengan ringkasan progres belajar" value={draft.alt} onChange={event => setDraft({ ...draft, alt: event.target.value })} /></label><label className="admin-field">Urutan<input placeholder="Contoh: 1" type="number" min="1" step="1" required value={draft.order} onChange={event => setDraft({ ...draft, order: Number(event.target.value) })} /></label><label className="admin-field">Status tampil<select value={draft.visible ? "visible" : "hidden"} onChange={event => setDraft({ ...draft, visible: event.target.value === "visible" })}><option value="visible">Tampil</option><option value="hidden">Tidak tampil</option></select></label>{error && <p role="alert">{error}</p>}<div className="admin-page-actions"><button type="button" className="button" disabled={busy} onClick={() => setDraft(null)}>Batal</button><button type="submit" className="button button-primary" disabled={busy}>Simpan showcase</button></div></form>}</AdminDialog>
     <AdminDialog open={limitReached} title="Batas Showcase Tercapai" close={() => setLimitReached(false)} actions={<button type="button" className="button button-primary" onClick={() => setLimitReached(false)}>Tutup</button>}><p>Semua 10 slot showcase sudah terisi. Anda dapat mengedit atau menghapus showcase yang ada untuk mengubah konten.</p></AdminDialog>
     <AdminDialog open={Boolean(preview)} title="Pratinjau showcase" close={() => setPreview(null)}>{rows.filter(row => preview === "public" ? row.visible : row.id === preview).sort((a, b) => a.order - b.order).map(row => <figure className="lms-preview admin-showcase-preview" key={row.id}><figcaption>{row.label}</figcaption><div className="lms-preview-image-wrap">{image(row)}</div></figure>)}{preview === "public" && !rows.some(row => row.visible) && <p>Belum ada showcase dengan status tampil.</p>}</AdminDialog>

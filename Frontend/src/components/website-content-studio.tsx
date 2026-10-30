@@ -169,7 +169,7 @@ const initialLandingSections: LandingSection[] = [
     badge: "INVESTASI BELAJAR",
     headline: "Pilih cara belajar yang paling sesuai",
     description:
-      "Pilih cara belajar, lalu tentukan level N5–N1 secara bebas. Harga dan akses mengikuti konfigurasi sistem.",
+      "Pilih cara belajar, lalu tentukan level N5–N1 secara bebas.",
     isVisible: true,
   },
   {

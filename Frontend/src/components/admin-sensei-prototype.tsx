@@ -8,6 +8,7 @@ import { AdminDataTable, AdminDialog, AdminPageHeader, AdminSection, AdminShell,
 import { adminMediaUrl as contentMedia } from "@/lib/admin-media";
 import { useAdminContent } from "@/lib/admin-content-api";
 import { AdminSenseiPreview } from "@/components/admin-profile-preview";
+import styles from "./admin-showcase.module.css";
 
 const levels = ["N5", "N4", "N3", "N2", "N1"];
 type Sensei = { id: string; name: string; role: string; bio: string; photo: string; photo_resolved_url?: string; expertise: string[]; active: boolean; order: number; level: string };
@@ -78,12 +79,20 @@ export function AdminSenseiPrototype() {
       { key: "level", header: "Level utama", cell: (row) => row.level || "—" },
       { key: "order", header: "Urutan", cell: (row) => row.order },
       { key: "status", header: "Status", cell: (row) => <AdminStatusBadge status={row.active ? "Aktif" : "Nonaktif"} /> },
-    ]} actions={{ cell: (row) => <div className="admin-page-actions">
+    ]} actions={{ cell: (row) => <>
+      <button type="button" className={`button ${styles.trigger}`} popoverTarget={`sensei-actions-${row.id}`} aria-label={`Tindakan ${row.name}`} onClick={event => {
+        const box = event.currentTarget.getBoundingClientRect();
+        const menu = document.getElementById(`sensei-actions-${row.id}`);
+        menu?.style.setProperty("top", `${Math.max(8, Math.min(box.bottom + 4, window.innerHeight - 230))}px`);
+        menu?.style.setProperty("left", `${Math.max(8, Math.min(box.right - 180, window.innerWidth - 188))}px`);
+      }}><span aria-hidden="true">•••</span></button>
+      <div id={`sensei-actions-${row.id}`} popover="auto" className={styles.actionMenu} onClick={event => { if ((event.target as HTMLElement).closest("button:not(:disabled)")) event.currentTarget.hidePopover(); }}>
       <button type="button" className="button" aria-label={`Lihat ${row.name}`} onClick={() => setView(row)}>Lihat</button>
       <button type="button" className="button" aria-label={`Edit ${row.name}`} onClick={() => { setError(""); setDraft({ ...row, expertise: row.expertise.join(", "), order: String(row.order) }); }}>Edit</button>
       <button type="button" className="button" aria-label={`${row.active ? "Nonaktifkan" : "Aktifkan"} ${row.name}`} disabled={busy} onClick={async () => { try { await mutate({ ...row, active: !row.active }); setMessage("Status Sensei disimpan."); } catch (error) { setMessage(error instanceof Error ? error.message : "Status gagal disimpan."); } }}>{row.active ? "Nonaktifkan" : "Aktifkan"}</button>
       <button type="button" className="button" aria-label={`Hapus ${row.name}`} onClick={() => setDeleting(row)}>Hapus</button>
-    </div> }} /></AdminSection>
+      </div>
+    </> }} /></AdminSection>
     <AdminDialog open={Boolean(draft)} title={rows.some((row) => row.id === draft?.id) ? "Edit Sensei" : "Tambah Sensei"} close={closeEditor}>
       {draft && <form className="admin-prototype-form" onSubmit={save} noValidate>
         <label className="admin-field">Nama<input placeholder="Contoh: Hilmy Sensei" value={draft.name} onChange={(event) => setDraft({ ...draft, name: event.target.value })} required /></label>

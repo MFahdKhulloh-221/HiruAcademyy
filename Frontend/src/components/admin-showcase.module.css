@@ -1,0 +1,6 @@
+.trigger { min-width: 44px; min-height: 44px; padding: 0 10px; white-space: nowrap; }
+.trigger span { font-size: 16px; line-height: 1; letter-spacing: 1px; overflow-wrap: normal; word-break: normal; }
+.actionMenu { position: fixed; inset: auto; width: 180px; max-width: calc(100vw - 16px); max-height: calc(100dvh - 16px); overflow-y: auto; margin: 0; padding: 8px; border: 1px solid var(--line); border-radius: 12px; background: white; color: var(--navy); box-shadow: 0 8px 28px #0002; }
+.actionMenu:popover-open { display: grid; gap: 4px; }
+.actionMenu button { width: 100%; min-height: 44px; justify-content: flex-start; text-align: left; }
+.trigger:focus-visible, .actionMenu button:focus-visible { outline: 2px solid var(--orange-dark); outline-offset: 3px; }

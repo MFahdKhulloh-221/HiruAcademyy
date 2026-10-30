@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { LuArrowUp, LuArrowDown } from "react-icons/lu";
 import { AdminDialog, AdminPageHeader, AdminShell } from "@/components/admin-primitives";
 import { StudentAvatar } from "@/components/student-avatar";
 import { AdminMediaUpload } from "@/components/admin-media-upload";
@@ -71,11 +72,11 @@ export function AdminTestimonialPrototype() {
   function edit(item: Item) { setError(""); setDraft({ ...item }); }
   return <AdminShell current="/admin/testimoni"><main className={styles.page}>
     <AdminPageHeader title="Kelola Testimoni" description={`${content.data.length} testimoni tersimpan`} actions={<button className="button button-primary" onClick={() => edit(empty)}>Tambah Testimoni</button>} />
-    <section className={styles.landing} aria-label="Testimoni Pilihan Landing Page"><h2>Testimoni Pilihan Landing Page</h2><p>Maksimal 6 testimoni teks. Video hanya tampil di halaman /testimoni.</p>{overLimit ? <p role="alert">Perlu penyesuaian: {selected.length} dipilih, maksimal 6. Lepas pilihan sampai tersisa maksimal enam. Penambahan dan pengurutan dinonaktifkan sementara.</p> : <p>{selected.length} dari 6 testimoni dipilih</p>}
+    <section className={styles.landing} aria-label="Testimoni Pilihan Landing Page"><div className={styles.landingHeader}><h2>Testimoni Pilihan Landing Page</h2><p>Maksimal 6 testimoni teks. Video hanya tampil di halaman /testimoni.</p>{overLimit ? <p role="alert">Perlu penyesuaian: {selected.length} dipilih, maksimal 6. Lepas pilihan sampai tersisa maksimal enam. Penambahan dan pengurutan dinonaktifkan sementara.</p> : <p>{selected.length} dari 6 testimoni dipilih</p>}</div>
       {!selected.length && <p>Belum ada pilihan Landing.</p>}
       <ol className={overLimit ? styles.reconcile : undefined} tabIndex={overLimit ? 0 : undefined} aria-label={overLimit ? "Penyesuaian pilihan Landing" : undefined}>{selected.map((item, index) => <li key={item.id} className={styles.landingItem}>
         <span aria-label={`Urutan ${index + 1}`}>{index + 1}.</span><div className={styles.owner}><StudentAvatar name={item.name} url={contentMedia(item.image, item.image_resolved_url)} className={styles.avatar} /><div><strong>{item.name}</strong><p>{item.context}</p></div></div><p className={styles.quote}>{item.title || item.quote}</p>
-        <div className={styles.actions}><button className="button" aria-label={`Naik ${item.name}`} disabled={busy || overLimit || index === 0} onClick={() => void mutate(item, { landing_position: index })}>Naik</button><button className="button" aria-label={`Turun ${item.name}`} disabled={busy || overLimit || index === selected.length - 1} onClick={() => void mutate(item, { landing_position: index + 2 })}>Turun</button><button className="button" disabled={busy} onClick={() => toggleLanding(item, false)}>Hapus dari Landing</button></div>
+        <div className={styles.actions}><button className="button" aria-label={`Naik ${item.name}`} disabled={busy || overLimit || index === 0} onClick={() => void mutate(item, { landing_position: index })}><LuArrowUp size={18} aria-hidden="true" /></button><button className="button" aria-label={`Turun ${item.name}`} disabled={busy || overLimit || index === selected.length - 1} onClick={() => void mutate(item, { landing_position: index + 2 })}><LuArrowDown size={18} aria-hidden="true" /></button><button className="button" disabled={busy} onClick={() => toggleLanding(item, false)}>Hapus dari Landing</button></div>
       </li>)}</ol>
     </section>
     <div className={styles.toolbar} aria-label="Filter testimoni">

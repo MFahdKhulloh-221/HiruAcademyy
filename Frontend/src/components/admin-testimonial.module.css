@@ -41,11 +41,13 @@
 @media (max-width: 1023px) { .list { --item-height: 224px; } .item { grid-template-columns: minmax(180px, 0.8fr) minmax(0, 1fr); } .item .actions { grid-column: 1 / -1; } .builder { grid-template-columns: minmax(0, 1fr); } }
 @media (max-width: 639px) { .list { --item-height: 260px; } .page { padding: 16px; } .item { grid-template-columns: minmax(0, 1fr); gap: 8px; } .item .actions { justify-content: flex-start; } }
 
-.landing { margin-top: 24px; padding: 16px; background: white; border: 1px solid var(--line); border-radius: 12px; }
+.landing { margin-top: 24px; padding: 0; }
+.landingHeader { padding: 20px; border: 1px solid var(--line); border-radius: 12px; background: white; }
+.landingHeader p { margin: 8px 0 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
 .landing h2 { margin: 0; font-size: 18px; }
 .landing > p { margin: 8px 0; color: var(--muted); }
-.landing ol { list-style: none; margin: 0; padding: 0; }
-.landingItem { display: grid; grid-template-columns: 20px minmax(160px, 1fr) minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.landing ol { display: grid; gap: 12px; list-style: none; margin: 16px 0 0; padding: 0; }
+.landingItem { display: grid; grid-template-columns: 20px minmax(160px, 1fr) minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 16px; border: 1px solid var(--line); border-radius: 12px; background: white; }
 .landingItem p { margin: 4px 0; font-size: 13px; overflow-wrap: anywhere; }
 .landingItem > * { min-width: 0; }
 .landingItem button { min-height: 44px; padding: 0 10px; font-size: 12px; }

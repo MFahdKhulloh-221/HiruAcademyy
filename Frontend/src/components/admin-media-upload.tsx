@@ -23,12 +23,12 @@ export function AdminMediaUpload({ kind, onUploaded, label, buttonLabel }: { kin
     form?.addEventListener("submit", block, true);
     return () => form?.removeEventListener("submit", block, true);
   }, []);
-  return <div className="admin-field">{label && !buttonLabel && <label htmlFor={inputId}>{label}</label>}{buttonLabel && <button type="button" className="button" disabled={busy} onClick={() => input.current?.click()}>{buttonLabel}</button>}<input hidden={Boolean(buttonLabel)} tabIndex={buttonLabel ? -1 : undefined} id={inputId} ref={input} aria-label={buttonLabel || (label ? undefined : `Upload ${kind}`)} type="file" accept={mediaAccept[kind]} disabled={busy} onChange={async event => {
+  return <div className="admin-field">{label && !buttonLabel && <label htmlFor={inputId}>{label}</label>}{buttonLabel && <button type="button" className="button" disabled={busy} onClick={() => input.current?.click()}>{buttonLabel}</button>}<input hidden={Boolean(buttonLabel)} tabIndex={buttonLabel ? -1 : undefined} id={inputId} ref={input} aria-label={buttonLabel || (label ? undefined : `Upload ${kind}`)} type="file" accept={mediaAccept[kind]} aria-describedby={error ? `${inputId}-error` : undefined} aria-invalid={Boolean(error)} disabled={busy} onChange={async event => {
     const file = event.target.files?.[0]; event.target.value = "";
     if (!file || uploading.current) return;
     uploading.current = true; setBusy(true); setError("");
     try { const media = await uploadAdminMedia(file, kind); onUploadedRef.current(media.path, media.url); }
-    catch (cause) { setError(cause instanceof Error ? cause.message : "Upload gagal."); }
+    catch (cause) { setError(kind === "image" && cause instanceof Error && cause.message.includes("format yang didukung") ? "Format gambar tidak didukung. Pilih JPEG, PNG, atau WebP yang tidak kosong." : cause instanceof Error ? cause.message : "Unggah gagal. Silakan coba lagi."); }
     finally { uploading.current = false; setBusy(false); }
-  }} />{busy && <p role="status">Mengunggah…</p>}{error && <p role="alert">{error}</p>}</div>;
+  }} />{busy && <p role="status">Mengunggah…</p>}{error && <p id={`${inputId}-error`} role="alert">{error}</p>}</div>;
 }

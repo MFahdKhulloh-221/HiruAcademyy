@@ -223,6 +223,15 @@ class MediaService
                 abort(409, 'Media is retained in an assessment snapshot.');
             }
         }
+        foreach (['checkpoint_studio_questions' => 'audio_url', 'checkpoint_package_questions' => 'audio_url', 'checkpoint_attempts' => 'content_snapshot'] as $table => $field) {
+            if (! \Illuminate\Support\Facades\Schema::hasTable($table)) continue;
+            DB::statement('LOCK TABLE '.$table.' IN SHARE ROW EXCLUSIVE MODE');
+            $query = DB::table($table);
+            $referenced = $field === 'content_snapshot'
+                ? $query->whereRaw('content_snapshot::text LIKE ?', ['%'.$path.'%'])->exists()
+                : $query->where($field, $path)->exists();
+            abort_if($referenced, 409, 'Media is retained in Checkpoint content or an assessment snapshot.');
+        }
         $disk = Storage::disk(config('media.disk'));
         if ($disk->exists($path) && ! $disk->delete($path)) {
             abort(503, 'Media deletion failed.');

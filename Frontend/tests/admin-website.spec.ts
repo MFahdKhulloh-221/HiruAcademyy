@@ -75,50 +75,39 @@ test("Scenario 2: promotion overlays N4 offer price without mutating base price"
   await expect(page.getByText(/Rp\s*79\.200/).first()).toBeVisible();
 });
 
-test("Scenario 3: Blog authoring -> Title, slug, summary, body blocks, SEO -> Draft hidden on '/blog' -> Publish -> visible on '/blog' -> open '/blog/article?slug=...' shows content", async ({
-  page,
-}) => {
-  await page.goto("/admin/blog-seo");
-  await page.getByRole("button", { name: "Tambah Artikel", exact: true }).click();
-  await expect(page.getByRole("dialog")).toBeVisible();
-
-  await page.getByRole("combobox", { name: "Kategori", exact: true }).selectOption({ label: "JLPT" });
-  await page.getByLabel("Judul Artikel").fill("Panduan Efektif Menembus JLPT N3");
-  await page.getByRole("textbox", { name: /^Excerpt/ }).fill("Langkah strategis memahami materi N3 dengan efisien dan terarah.");
-  await page.getByRole("textbox", { name: /^Isi Artikel/ }).fill("Kunci kelulusan JLPT N3 terletak pada penguasaan dokkai dan variasi pola tata bahasa.");
-  await page.getByRole("tab").filter({ hasText: "SEO" }).focus();
-  await page.keyboard.press("Enter");
-  await page.getByRole("textbox", { name: /^Slug/ }).fill("panduan-efektif-menembus-jlpt-n3");
-  await page.getByRole("textbox", { name: /^SEO Title/ }).fill("Panduan Efektif Menembus JLPT N3 - Hiru Academy");
-  await page
-    .getByLabel(/Meta Description/)
-    .fill("Pelajari panduan komprehensif menghadapi ujian JLPT N3 bersama Sensei.");
-  await page.getByRole("tab", { name: "Jadwal & Penulis", exact: true }).click();
-  await page.getByLabel("Nama Penulis / Kontributor").selectOption({ label: "Hiru Academy" });
-
-  await page.getByRole("button", { name: "Simpan Artikel", exact: true }).click();
-
-  await page.goto("/blog");
-  await expect(page.getByText("Panduan Efektif Menembus JLPT N3")).toHaveCount(0);
-
-  await page.goto("/admin/blog-seo");
-  const draftRow = page.getByRole("row").filter({ hasText: "Panduan Efektif Menembus JLPT N3" });
-  await expect(draftRow).toBeVisible();
-  await draftRow.getByRole("button", { name: "Publikasikan artikel Panduan Efektif Menembus JLPT N3", exact: true }).click();
-  await expect(draftRow).toContainText("Published");
-
-  await page.goto("/blog");
-  await expect(
-    page.getByRole("heading", { name: "Panduan Efektif Menembus JLPT N3" })
-  ).toBeVisible();
-
-  await page.goto("/blog/article?slug=panduan-efektif-menembus-jlpt-n3");
-  await expect(
-    page.getByRole("heading", { level: 1, name: "Panduan Efektif Menembus JLPT N3" })
-  ).toBeVisible();
-  await expect(
-    page.getByText("Kunci kelulusan JLPT N3 terletak pada penguasaan dokkai")
-  ).toBeVisible();
+test("Scenario 3: Blog Studio draft create/reopen and published metadata preservation", async ({ page }) => {
+  const rows: Record<string, unknown>[] = [];
+  await page.route("**/api/admin/blog-articles**", async route => {
+    const request = route.request();
+    if (request.method() === "POST") rows.push({ ...request.postDataJSON(), id: 30 });
+    if (request.method() === "PATCH") Object.assign(rows[0], request.postDataJSON());
+    await route.fulfill({ json: { data: request.method() === "GET" ? rows : rows[0] } });
+  });
+  await page.goto("/admin/blog-seo/editor");
+  await page.getByLabel("Judul artikel", { exact: true }).fill("Panduan Efektif Menembus JLPT N3");
+  await page.getByLabel("Ringkasan artikel", { exact: true }).fill("Langkah strategis N3.");
+  await page.getByLabel("Isi artikel", { exact: true }).fill("Kunci kelulusan JLPT N3 terletak pada penguasaan dokkai.");
+  await page.getByLabel("Kategori", { exact: true }).selectOption("JLPT");
+  await page.getByLabel("Penulis", { exact: true }).selectOption("Hiru Academy");
+  await page.getByRole("button", { name: "Simpan Draft", exact: true }).click();
+  await expect(page).toHaveURL(/\/admin\/blog-seo$/);
+  expect(rows[0]).toMatchObject({ published: false, slug: "panduan-efektif-menembus-jlpt-n3" });
+  await page.request.post("http://127.0.0.1:3412/fixtures/articles", { data: rows });
+  expect(await (await page.request.get("/blog")).text()).not.toContain(rows[0].title);
+  // Publication is server fixture state in B1, not a nonexistent UI control.
+  Object.assign(rows[0], { published: true, featured: true, seo_title: "Panduan N3 SEO", meta_description: "Deskripsi N3", published_at: "2026-01-01T03:00:00Z" });
+  await page.reload();
+  await page.getByRole("link", { name: "Panduan Efektif Menembus JLPT N3", exact: true }).click();
+  await expect(page.getByLabel("Isi artikel", { exact: true })).toHaveValue(String(rows[0].body));
+  await page.getByLabel("Ringkasan artikel", { exact: true }).fill("Ringkasan revisi");
+  await page.getByRole("button", { name: "Simpan Perubahan", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Tersimpan");
+  expect(rows[0]).toMatchObject({ published: true, featured: true, seo_title: "Panduan N3 SEO", meta_description: "Deskripsi N3", published_at: "2026-01-01T03:00:00Z", slug: "panduan-efektif-menembus-jlpt-n3" });
+  await page.request.post("http://127.0.0.1:3412/fixtures/articles", { data: rows });
+  expect(await (await page.request.get("/blog")).text()).toContain(rows[0].title);
+  const response = await page.request.get(`/blog/${rows[0].slug}`);
+  expect(response.status()).toBe(200);
+  for (const text of [rows[0].title, rows[0].body, "Panduan N3 SEO", "Deskripsi N3"]) expect(await response.text()).toContain(text);
 });
 
 test("Scenario 4: Testimonial -> Create -> Approve -> Featured -> Publish -> appears on Landing and '/testimoni'", async ({

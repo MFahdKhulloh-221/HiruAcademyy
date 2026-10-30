@@ -275,7 +275,7 @@ export const initialLandingContent: LandingContent = {
   pricing: {
     title: "Pilih cara belajar yang paling sesuai",
     support:
-      "Pilih cara belajar, lalu tentukan level N5–N1 secara bebas. Harga dan akses mengikuti konfigurasi sistem.",
+      "Pilih cara belajar, lalu tentukan level N5–N1 secara bebas.",
     visible: true,
   },
   flow: {
