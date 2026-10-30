@@ -183,7 +183,7 @@ export function StudentDashboard({
               return locked ? <button type="button" className="dashboard-quick-locked" key={action.title} aria-label={`${action.title}, akses terkunci`} onClick={() => setLockedFeature(action.title)}>{content}</button> : <Link href={action.href} key={action.title}>{content}</Link>;
             })}
           </section>
-          {lockedFeature && <div className="locked-modal"><button className="locked-modal-backdrop" type="button" aria-label="Tutup" onClick={() => setLockedFeature(null)} /><section role="dialog" aria-modal="true" aria-labelledby="dashboard-locked-title"><button className="locked-modal-close" type="button" aria-label="Tutup" onClick={() => setLockedFeature(null)}>×</button><p>{lockedFeature}</p><h2 id="dashboard-locked-title">Akses Terkunci</h2><p>Fitur ini belum termasuk dalam membershipmu.</p><div className="locked-modal-actions"><button type="button" onClick={() => setLockedFeature(null)}>Tutup</button><Link href={`/#program`}>Upgrade</Link></div></section></div>}
+          {lockedFeature && <div className="locked-modal"><button className="locked-modal-backdrop" type="button" aria-label="Tutup" onClick={() => setLockedFeature(null)} /><section role="dialog" aria-modal="true" aria-labelledby="dashboard-locked-title"><button className="locked-modal-close" type="button" aria-label="Tutup" onClick={() => setLockedFeature(null)}>×</button><p>{lockedFeature}</p><h2 id="dashboard-locked-title">Akses Terkunci</h2><p>Fitur ini belum termasuk dalam membershipmu.</p><div className="locked-modal-actions"><button type="button" onClick={() => setLockedFeature(null)}>Tutup</button><Link href="/membership">Upgrade</Link></div></section></div>}
 
         </main>
       </div>
