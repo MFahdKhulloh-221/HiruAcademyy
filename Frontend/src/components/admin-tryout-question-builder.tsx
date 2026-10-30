@@ -11,7 +11,10 @@ import styles from "./admin-tryout-builder.module.css";
 
 const labels = ["Kosakata & Kanji", "Tata Bahasa", "Reading (Dokkai)", "Audio (Choukai)"];
 
-export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChange, busy, error, onChange, onSave, onClose, saveStatus, navigation, bulkAction }: {
+export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChange, busy, error, onChange, onSave, onClose, saveStatus, navigation, bulkAction, readingOnly = false, studioTitle, saveLabel }: {
+  readingOnly?: boolean;
+  studioTitle?: string;
+  saveLabel?: string;
   navigation?: ReactNode;
   bulkAction?: ReactNode;
   saveStatus: string;
@@ -20,9 +23,9 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
   onDirtyChange: (dirty: boolean) => void;
   onDelete: (question: AdminAssessmentQuestion) => Promise<void>;
 }) {
-  const title = draft.kind === "checkpoint" ? "Checkpoint" : "Try Out";
+  const title = studioTitle ?? (draft.kind === "checkpoint" ? "Checkpoint" : "Try Out");
   const sections = assessmentSections(draft);
-  const [session, setSession] = useState(() => Math.max(0, sections.indexOf(initialQuestion?.section ?? sections[0])));
+  const [session, setSession] = useState(() => readingOnly ? 2 : Math.max(0, sections.indexOf(initialQuestion?.section ?? sections[0])));
   const [activeId, setActiveId] = useState(initialQuestion?.id ?? orderedAssessmentQuestions(draft)[0]?.id ?? "");
   const [search, setSearch] = useState("");
   const [preview, setPreview] = useState(false);
@@ -33,7 +36,7 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
   const [issue, setIssue] = useState("");
   const [remove, setRemove] = useState<"question" | "group" | null>(null);
   const questions = orderedAssessmentQuestions(draft).filter(question => question.section === sections[session]);
-  const active = questions.find(question => question.id === activeId);
+  const active = questions.find(question => question.id === activeId) ?? (readingOnly ? questions[0] : undefined);
   const passage = draft.passages?.find(item => item.id === active?.passageId);
   const linked = questions.filter(question => question.passageId === passage?.id && passage);
   useEffect(() => { onDirtyChange(false); }, [onDirtyChange]);
@@ -45,7 +48,11 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
   }
   function add(passageId?: string) {
     const question = newQuestion(passageId);
-    onChange({ ...draft, questions: [...draft.questions, question] });
+    if (readingOnly && !passageId) {
+      const group = { id: crypto.randomUUID(), title: "", body: "" };
+      question.passageId = group.id;
+      onChange({ ...draft, passages: [...draft.passages ?? [], group], questions: [...draft.questions, question] });
+    } else onChange({ ...draft, questions: [...draft.questions, question] });
     setActiveId(question.id); setPreview(false); setSearch("");
   }
   function addGroup() {
@@ -85,7 +92,7 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
   }
   const groupNumbers = linked.map(question => questions.indexOf(question) + 1);
   const groupRange = groupNumbers.length ? `${groupNumbers[0]}–${groupNumbers.at(-1)}` : "";
-  const position = questions.findIndex(question => question.id === activeId);
+  const position = questions.findIndex(question => question.id === active?.id);
   const visible = questions.filter(question => placementText(question.prompt).toLowerCase().includes(search.toLowerCase()) || String(questions.indexOf(question) + 1) === search);
   const questionNavigation = <nav className={styles.editorFooter} aria-label="Navigasi soal"><button type="button" className="button" disabled={position <= 0} onClick={() => setActiveId(questions[position - 1].id)} aria-label="Soal Sebelumnya"><FiChevronLeft aria-hidden="true" />Sebelumnya</button><span>Soal {position + 1} / {questions.length}</span><button type="button" className="button" disabled={position >= questions.length - 1} onClick={() => setActiveId(questions[position + 1].id)} aria-label="Soal Berikutnya">Berikutnya<FiChevronRight aria-hidden="true" /></button></nav>;
   const groupMenu = <details className={styles.actionMenu}><summary>Aksi grup bacaan</summary><div className={styles.secondaryActions}>
@@ -97,10 +104,10 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
   return <section className={styles.questionBuilder} aria-label={`HIRU ${title.toUpperCase()} STUDIO`}>
     <header className={styles.studioHeader}>
       <h1>{draft.title}</h1>
-      <div className={styles.metadata}><span>JLPT {draft.context.toUpperCase().replace(/^JLPT\s*/, "")}</span><AdminStatusBadge status={draft.status} /></div>
+      <div className={styles.metadata}><span>{readingOnly ? draft.context : `JLPT ${draft.context.toUpperCase().replace(/^JLPT\s*/, "")}`}</span>{!readingOnly && <AdminStatusBadge status={draft.status} />}</div>
     </header>
     {(issue || error) && <p role="alert">{issue || error}</p>}
-    <AdminTabs tabs={labels} active={labels[session]} label={`Sesi ${title}`} onChange={label => { const next = labels.indexOf(label); setSession(next); setActiveId(orderedAssessmentQuestions(draft).find(question => question.section === sections[next])?.id ?? ""); setSearch(""); setPreview(false); }} />
+    {!readingOnly && <AdminTabs tabs={labels} active={labels[session]} label={`Sesi ${title}`} onChange={label => { const next = labels.indexOf(label); setSession(next); setActiveId(orderedAssessmentQuestions(draft).find(question => question.section === sections[next])?.id ?? ""); setSearch(""); setPreview(false); }} />}
     <div className={styles.sessionContext}>
       <div><h2>{labels[session]}</h2><p>{questions.length} soal{session === 2 && passage ? ` / ${passage.title} / Nomor ${groupRange}` : ""}</p></div>
       <div className={styles.studioNavigation}>{navigation}<AdminTabs tabs={["Editor", "Pratinjau Siswa"]} active={preview ? "Pratinjau Siswa" : "Editor"} label="Mode editor" onChange={value => setPreview(value !== "Editor")} /></div>
@@ -111,7 +118,7 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
         <label className={`admin-field ${styles.searchField}`}><span><FiSearch aria-hidden="true" />Cari soal</span><input type="search" value={search} onChange={event => setSearch(event.target.value)} /></label>
         <ol aria-label="Daftar pertanyaan">{visible.map((question, index) => <Fragment key={question.id}>
           {question.passageId && visible[index - 1]?.passageId !== question.passageId && <li className={styles.navigatorGroup}><FiBookOpen aria-hidden="true" /><strong>{draft.passages?.find(item => item.id === question.passageId)?.title}</strong></li>}
-          <li data-passage={question.passageId || undefined}><button type="button" aria-current={activeId === question.id ? "step" : undefined} onClick={() => { setActiveId(question.id); setPreview(false); }}><strong className={styles.questionNumber}><span className={styles.srOnly}>Soal </span>{String(questions.indexOf(question) + 1).padStart(2, "0")}</strong><span className={styles.summary}>{placementText(question.prompt) || "Pertanyaan belum diisi"}</span><small>{assessmentQuestionError(question, draft) ? <FiAlertCircle aria-hidden="true" /> : <FiCheckCircle aria-hidden="true" />}{assessmentQuestionError(question, draft) ? "Belum lengkap" : "Lengkap"}</small></button></li>
+          <li data-passage={question.passageId || undefined}><button type="button" aria-current={active?.id === question.id ? "step" : undefined} onClick={() => { setActiveId(question.id); setPreview(false); }}><strong className={styles.questionNumber}><span className={styles.srOnly}>Soal </span>{String(questions.indexOf(question) + 1).padStart(2, "0")}</strong><span className={styles.summary}>{placementText(question.prompt) || "Pertanyaan belum diisi"}</span><small>{assessmentQuestionError(readingOnly ? { ...question, pointValue: 1 } : question, draft) ? <FiAlertCircle aria-hidden="true" /> : <FiCheckCircle aria-hidden="true" />}{assessmentQuestionError(readingOnly ? { ...question, pointValue: 1 } : question, draft) ? "Belum lengkap" : "Lengkap"}</small></button></li>
         </Fragment>)}</ol>
         <div className={styles.navigatorActions}><button type="button" className="button" disabled={busy} onClick={() => add()}><FiPlus aria-hidden="true" />Tambah Soal</button>{session === 2 && <button type="button" className="button" disabled={busy} onClick={() => setGroupForm(true)}><FiBookOpen aria-hidden="true" />Tambah Grup Bacaan</button>}</div>
       </aside>
@@ -138,7 +145,7 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
                 <section className={styles.answerSection} aria-label="Pilihan Jawaban"><h3>Pilihan Jawaban</h3><div className={styles.studioGrid}>{active.answers.map((answer, index) => <div key={index} className={`${styles.studioAnswer} ${index === active.correctAnswer ? styles.correctAnswer : ""}`}><PlacementTextEditor shared disabled={busy} label={`Pilihan ${assessmentLetters[index]}`} value={answer} onChange={value => update({ ...active, answers: active.answers.map((answer, position) => index === position ? value : answer) })} /></div>)}</div></section>
                 <label className="admin-field">Kunci Jawaban<select aria-label="Jawaban Benar" value={active.correctAnswer} onChange={event => update({ ...active, correctAnswer: Number(event.target.value) })}><option value={-1}>Pilih kunci jawaban</option>{active.answers.map((_, index) => <option key={index} value={index}>{assessmentLetters[index]}</option>)}</select></label>
                 <PlacementTextEditor shared disabled={busy} label="Pembahasan" value={active.explanation} onChange={explanation => update({ ...active, explanation })} />
-                <details className={styles.settings}><summary>Pengaturan soal</summary><div className={styles.studioGrid}><label className="admin-field">Bobot poin<input type="number" min="1" max="180" step="1" value={active.pointValue ?? ""} onChange={event => update({ ...active, pointValue: event.target.value === "" ? undefined : Number(event.target.value) })} /></label><label className="admin-field">Status soal<select value={active.status} onChange={event => update({ ...active, status: event.target.value as AdminAssessmentQuestion["status"] })}><option>Draft</option><option>Published</option></select></label></div></details>
+                <details className={styles.settings}><summary>Pengaturan soal</summary><div className={styles.studioGrid}>{!readingOnly && <label className="admin-field">Bobot poin<input type="number" min="1" max="180" step="1" value={active.pointValue ?? ""} onChange={event => update({ ...active, pointValue: event.target.value === "" ? undefined : Number(event.target.value) })} /></label>}<label className="admin-field">Status soal<select value={active.status} onChange={event => update({ ...active, status: event.target.value as AdminAssessmentQuestion["status"] })}><option>Draft</option><option>Published</option></select></label></div></details>
               </fieldset>
               {questionNavigation}
             </section>
@@ -146,7 +153,7 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
         </PlacementEditorProvider> : <p>Pilih soal atau tambahkan konten untuk mulai mengedit.</p>}
       </section>
     </div>
-    <footer className={styles.studioActions} aria-label="Aksi Studio"><p role="status">{saveStatus}</p><div>{bulkAction}<button type="button" className="button" disabled={busy} onClick={onClose}>Kembali ke Daftar</button><button type="button" className="button button-primary" disabled={busy} aria-busy={busy} onClick={() => void onSave(draft)}><FiSave aria-hidden="true" />{busy ? "Menyimpan..." : `Simpan ${title}`}</button></div></footer>
+    <footer className={styles.studioActions} aria-label="Aksi Studio"><p role="status">{saveStatus}</p><div>{bulkAction}<button type="button" className="button" disabled={busy} onClick={onClose}>Kembali ke Daftar</button><button type="button" className="button button-primary" disabled={busy} aria-busy={busy} onClick={() => void onSave(draft)}><FiSave aria-hidden="true" />{busy ? "Menyimpan..." : saveLabel ?? `Simpan ${title}`}</button></div></footer>
     <AdminDialog open={groupForm} title="Grup Bacaan Reading" className={styles.packageDialog} close={() => setGroupForm(false)} actions={<><button className="button" type="button" onClick={() => setGroupForm(false)}>Kembali</button><button className="button button-primary" type="submit" form="tryout-reading-group" disabled={busy}>Buat Grup</button></>}>
       <form id="tryout-reading-group" className={styles.groupForm} onSubmit={event => { event.preventDefault(); addGroup(); }}>
         <p className={styles.linkedHint}>Satu bacaan bersama untuk beberapa soal Reading.</p>
@@ -158,6 +165,6 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
         {issue && <p role="alert">{issue}</p>}
       </form>
     </AdminDialog>
-    <AdminDialog open={remove !== null} title={remove === "group" ? "Hapus grup bacaan?" : "Hapus soal?"} close={() => setRemove(null)} actions={<><button type="button" className="button" onClick={() => setRemove(null)}>Kembali</button><button type="button" className="button button-primary" onClick={() => { onChange({ ...draft, passages: remove === "group" ? draft.passages?.filter(item => item.id !== passage?.id) : draft.passages, questions: draft.questions.filter(question => remove === "group" ? question.passageId !== passage?.id : question.id !== activeId) }); setActiveId(""); setRemove(null); }}>Hapus dari Editor</button></>}><p>{remove === "group" ? `${linked.length} soal terkait ikut dihapus. ` : ""}Perubahan permanen setelah Simpan {title}. Attempt siswa yang sudah dimulai tetap memakai snapshot lama.</p></AdminDialog>
+    <AdminDialog open={remove !== null} title={remove === "group" ? "Hapus grup bacaan?" : "Hapus soal?"} close={() => setRemove(null)} actions={<><button type="button" className="button" onClick={() => setRemove(null)}>Kembali</button><button type="button" className="button button-primary" disabled={busy} onClick={() => { onChange({ ...draft, passages: remove === "group" ? draft.passages?.filter(item => item.id !== passage?.id) : draft.passages, questions: draft.questions.filter(question => remove === "group" ? question.passageId !== passage?.id : question.id !== active?.id) }); setActiveId(""); setRemove(null); }}>Hapus dari Editor</button></>}><p>{remove === "group" ? `${linked.length} soal terkait ikut dihapus. ` : ""}Perubahan permanen setelah Simpan {title}. {!readingOnly && "Attempt siswa yang sudah dimulai tetap memakai snapshot lama."}</p></AdminDialog>
   </section>;
 }

@@ -9,7 +9,7 @@
 .tryout-prestart .exam-start-notice { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
 .tryout-runner-polished .exam-reading-passage { margin-bottom: 16px; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: white; min-width: 0; }
 .tryout-runner-polished .exam-reading-passage > h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 18px; }
-.tryout-runner-polished .exam-reading-scroll { height: clamp(260px, 38dvh, 420px); overflow-y: scroll; scrollbar-width: thin; scrollbar-color: #aeb5c2 #f5f6f8; scrollbar-gutter: stable; padding: 14px; border-radius: 10px; background: #f5f6f8; font-family: 'Noto Sans JP', 'Yu Gothic', Meiryo, sans-serif; font-size: 18px; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tryout-runner-polished .exam-reading-scroll { max-height: clamp(180px, 30dvh, 340px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: #aeb5c2 #f5f6f8; scrollbar-gutter: stable; padding: 14px; border-radius: 10px; background: #f5f6f8; font-family: 'Noto Sans JP', 'Yu Gothic', Meiryo, sans-serif; font-size: 18px; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
 .tryout-runner-polished .exam-reading-scroll h3 { margin: 0 0 10px; font-size: 18px; }
 .tryout-runner-polished .learning-question-card.exam-reading-questions { max-height: none; overflow: visible; }
 .tryout-runner-polished :is(.exam-reading-scroll, .exam-reading-questions):focus-visible { outline: 2px solid #954900; outline-offset: 3px; }
@@ -1230,10 +1230,4 @@
 .tryout-placement-style .learning-question-card .tryout-option-text { flex: 1; }
 .tryout-placement-style .learning-question-actions { flex-wrap: wrap; margin-top: 16px; }
 
-@media (min-width:1024px) {
- .tryout-placement-style .tryout-shared-reading > main { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1fr); gap:20px; align-items:start; }
- .tryout-placement-style .tryout-shared-reading .exam-reading-passage { position:sticky; top:96px; min-width:0; }
- .tryout-placement-style .tryout-shared-reading .exam-reading-scroll { height:60dvh; }
- .tryout-placement-style .tryout-shared-reading .exam-reading-questions { margin:0; max-height:70dvh; overflow-y:auto; scrollbar-width:thin; }
- .tryout-placement-style .tryout-shared-reading .learning-question-actions { grid-column:1 / -1; }
-}
+.tryout-placement-style .tryout-shared-reading > main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
