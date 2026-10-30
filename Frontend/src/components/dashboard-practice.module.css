@@ -1,0 +1,33 @@
+.card { grid-template-rows: auto auto auto; align-content: start; }
+.card > :global(.lms-continue) { min-height: 0; background: #fff; }
+.card > :global(.lms-continue) :global(.continue-actions) { justify-content: flex-end; }
+.card > :global(.lms-continue) :global(.continue-button) { width: auto; margin-left: auto; margin-right: 0; }
+.card > :global(.lms-continue) :global(.lms-continue-main) { justify-content: flex-start; padding: 20px 24px 16px; }
+.panel { align-self: start; min-width: 0; margin: 0 20px 20px; padding: 18px; border: 1px solid #e1e4ec; border-radius: 14px; background: #fff; }
+.heading { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.heading svg { flex: 0 0 20px; color: #954900; }
+.panel .heading h2 { margin: 0; font-size: 14px; font-weight: 700; line-height: 1.5; }
+.panel ul { list-style: none; padding: 0; margin: 0; display: grid; gap: 12px; }
+.item { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-width: 0; }
+.item > div { min-width: 0; }
+.item strong { display: block; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
+.panel p { margin: 4px 0 0; color: #595e70; font-size: 12px; line-height: 1.7; overflow-wrap: anywhere; }
+.start { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; flex-shrink: 0; padding: 10px 14px; border: 1px solid #e5bc9a; border-radius: 10px; background: white; color: #954900; font-size: 12px; font-weight: 700; text-decoration: none; }
+.start:focus-visible { outline: 3px solid #954900; outline-offset: 3px; }
+@media (max-width: 639px) { .panel { margin: 0 16px 16px; } .item { flex-direction: column; align-items: stretch; gap: 10px; } .start { align-self: flex-start; } }
+
+.journeyPanels { display: grid; gap: 16px; padding: 0 20px 20px; min-width: 0; }
+.journeyPanels .panel { margin: 0; }
+.heading { flex-wrap: wrap; }
+.badge { margin-left: auto; padding: 4px 8px; border: 1px solid #e1e4ec; border-radius: 20px; background: #f4f5f9; color: #595e70; font-size: 11px; }
+.item { justify-content: flex-start; align-items: flex-start; }
+.item > svg { flex: 0 0 24px; width: 24px; height: 24px; color: #954900; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+.actions .start { order: 2; margin-left: auto; background: #f48220; color: #5a2a00; border-color: #f48220; }
+.shuffle { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; padding: 8px; border: 0; background: transparent; color: #954900; font: inherit; font-size: 12px; cursor: pointer; }
+.shuffle:focus-visible { outline: 3px solid #954900; outline-offset: 2px; }
+.mini { background: #f3f5fb; border-color: #dce2ee; }
+.mini progress { display: block; width: 100%; height: 10px; margin: 10px 0; accent-color: #954900; }
+.mini .start { margin-top: 12px; }
+@media (min-width: 1280px) { :global(.dashboard-shell .dashboard-bento):has(> .card) { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) minmax(0, 1fr); } }
+@media (max-width: 639px) { .journeyPanels { padding: 0 16px 16px; } .actions { flex-direction: column; align-items: stretch; } .actions .start { align-self: stretch; margin-left: 0; } }

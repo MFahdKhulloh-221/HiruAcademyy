@@ -65,7 +65,6 @@ function itemsFor(membership: Membership, current: StudentNavKey | null): NavIte
     ] },
     { label: "Komunitas", icon: LuMessagesSquare, entitlement: free ? "readOnly" : "available", implementation: "implemented", children: [
       { key: "community", label: "Diskusi Member", href: `/community${query}`, entitlement: free ? "readOnly" : "available" },
-      { key: "ask-sensei", label: "Tanya Sensei", href: `/ask-sensei${query}`, entitlement: sensei ? "available" : "locked" },
     ] },
     { label: "Progres", icon: LuTrendingUp, entitlement: "available", implementation: "implemented", children: [
       { key: "progress", label: "Ringkasan Progres", href: `/progress${query}`, entitlement: "available" },
@@ -77,7 +76,7 @@ function itemsFor(membership: Membership, current: StudentNavKey | null): NavIte
       { key: "profile", label: "Profil Saya", href: `/profile${query}`, entitlement: "available" },
       { key: "testimonial", label: "Testimoni Saya", href: `/profile/testimoni${query}`, entitlement: "available" },
       { key: "membership", label: "Membership", href: `/renewal${query}`, entitlement: "available" },
-      { key: "affiliate", label: "Affiliate", href: `/affiliate${query}`, entitlement: "available" },
+      { key: "affiliate", label: "Ajak Teman", href: `/affiliate${query}`, entitlement: "available" },
     ] },
   ];
   return items.map((item) => ({ ...item, active: item.key === current || item.children?.some((child) => child.key === current) }));
@@ -179,9 +178,9 @@ export function StudentNavigation({ membership }: { membership: Membership }) {
         const Icon = item.icon;
         if (item.children && item.entitlement !== "locked") {
           const open = item.active || expanded[item.label] === true;
-          return <div className="student-nav-group" key={item.label}><button className={`student-nav-item student-nav-parent state-${stateClass}`} type="button" aria-expanded={open} onClick={() => setExpanded((state) => ({ ...state, [item.label]: !open }))}><span aria-hidden="true"><Icon /></span>{item.label}<i className={open ? "open" : ""} aria-hidden="true">⌄</i></button>{open && <div className="student-submenu">{item.children.map((child) => { const active = child.key === current; return child.entitlement === "locked" ? <button className={`${active ? "active " : ""}locked`} type="button" aria-current={active ? "page" : undefined} onClick={(event) => openModal(child.label, "membershipLock", event.currentTarget)} key={child.key}><span>{child.label}</span><LuLockKeyhole aria-hidden="true" /></button> : <Link className={active ? "active" : ""} href={child.href} aria-current={active ? "page" : undefined} onClick={() => { setMobileOpen(false); if (child.key === "practice") window.dispatchEvent(new CustomEvent("hiru:practice-list")); }} key={child.key}>{child.label}</Link>; })}</div>}</div>;
+          return <div className="student-nav-group" key={item.label}><button className={`student-nav-item student-nav-parent state-${stateClass}`} type="button" aria-expanded={open} onClick={() => setExpanded((state) => ({ ...state, [item.label]: !open }))}><span aria-hidden="true"><Icon /></span>{item.label}<i className={open ? "open" : ""} aria-hidden="true">⌄</i></button>{open && <div className="student-submenu">{item.children.map((child) => { const active = child.key === current; return child.entitlement === "locked" ? <button className={`${active ? "active " : ""}locked`} type="button" aria-current={active ? "page" : undefined} onClick={(event) => openModal(child.label, "membershipLock", event.currentTarget)} key={child.key}><span>{child.label}</span><LuLockKeyhole aria-hidden="true" /></button> : <a className={active ? "active" : ""} href={child.href} aria-current={active ? "page" : undefined} onClick={() => setMobileOpen(false)} key={child.key}>{child.label}</a>; })}</div>}</div>;
         }
-        if (item.entitlement !== "locked" && item.implementation === "implemented" && item.href) return <Link className={`student-nav-item state-${stateClass}`} href={item.href} aria-current={item.active ? "page" : undefined} onClick={() => setMobileOpen(false)} key={item.label}><span aria-hidden="true"><Icon /></span>{item.label}</Link>;
+        if (item.entitlement !== "locked" && item.implementation === "implemented" && item.href) return <a className={`student-nav-item state-${stateClass}`} href={item.href} aria-current={item.active ? "page" : undefined} onClick={() => setMobileOpen(false)} key={item.label}><span aria-hidden="true"><Icon /></span>{item.label}</a>;
         const variant = item.entitlement === "locked" ? "membershipLock" : "notImplemented";
         return <button className={`student-nav-item state-${stateClass}${feedback === item.label ? " locked-feedback" : ""}`} type="button" onClick={(event) => openModal(item.label, variant, event.currentTarget)} key={item.label}><span aria-hidden="true"><Icon /></span>{item.label}{item.entitlement === "locked" && <i aria-hidden="true"><LuLockKeyhole /></i>}</button>;
       })}</nav>

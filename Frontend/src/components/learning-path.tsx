@@ -59,11 +59,11 @@ export function LearningPath() {
     <section className="section bg-slate-50/60 py-20 md:py-24" id="cara-belajar">
       <div className="container">
         {/* Section Header */}
-        <div className="text-center max-w-3xl mx-auto mb-12 md:mb-16">
-          <h2 className="text-3xl md:text-4xl font-extrabold text-slate-900 tracking-tight">
+        <div className="landing-section-heading text-center max-w-3xl mx-auto mb-12 md:mb-16">
+          <h2>
             Belajar Terarah dari Menentukan Level hingga Mencapai Target
           </h2>
-          <p className="mt-4 text-base md:text-lg text-slate-500 leading-relaxed">
+          <p>
             Mulai dari mengetahui kemampuan awal, mempelajari materi secara
             bertahap, hingga mengukur kesiapan menghadapi JLPT—semuanya tersedia
             dalam satu alur belajar yang terstruktur.

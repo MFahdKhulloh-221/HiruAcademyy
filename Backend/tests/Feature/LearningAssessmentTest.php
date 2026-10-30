@@ -74,6 +74,26 @@ class LearningAssessmentTest extends TestCase
         $this->postJson($this->base.'/completions', ['type' => 'flashcard'])->assertOk();
     }
 
+    public function test_practice_deadline_survives_save_and_refresh_and_rejects_late_answers(): void
+    {
+        $this->audio();
+        $this->travelTo(CarbonImmutable::parse('2026-10-29T03:00:00Z'));
+        try {
+            $attempt = $this->start('audio');
+            $url = $this->base.'/attempts/'.$attempt['id'];
+            $this->assertSame('2026-10-29T03:20:00.000000Z', $attempt['expires_at']);
+            $id = $attempt['questions'][0]['id'];
+            $this->putJson($url.'/answers', ['answers' => [$id => 'B'], 'revision' => 0])->assertOk()->assertJsonPath('data.expires_at', $attempt['expires_at']);
+            $this->getJson($url)->assertOk()->assertJsonPath('data.expires_at', $attempt['expires_at']);
+            $this->travelTo(CarbonImmutable::parse('2026-10-29T03:20:00Z'));
+            $this->putJson($url.'/answers', ['answers' => [$id => 'A'], 'revision' => 1])->assertOk()->assertJsonPath('data.status', 'completed')->assertJsonPath('data.result.correct', 1);
+            $this->postJson($url.'/submit', ['answers' => [$id => 'A'], 'revision' => 1])->assertOk()->assertJsonPath('data.result.correct', 1);
+            $this->getJson($url)->assertOk()->assertJsonPath('data.result.correct', 1);
+        } finally {
+            $this->travelBack();
+        }
+    }
+
     public function test_mini_groups_validation_snapshot_deadline_and_expiry_on_every_endpoint(): void
     {
         $this->withoutMiddleware(ThrottleRequests::class);

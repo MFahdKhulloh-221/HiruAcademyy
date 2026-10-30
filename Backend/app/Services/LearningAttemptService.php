@@ -218,10 +218,18 @@ class LearningAttemptService
         return $configuration + ['started_at' => $started->toISOString(), 'expires_at' => $started->copy()->addMinutes($configuration['duration_minutes'])->toISOString()];
     }
 
+    private function practiceTiming(LearningAttempt $attempt): array
+    {
+        // ponytail: fixed 20-minute practice limit; replace with snapshotted admin duration when builder exists.
+        $started = $attempt->created_at->copy()->utc();
+
+        return ['duration_minutes' => 20, 'started_at' => $started->toISOString(), 'expires_at' => $started->copy()->addMinutes(20)->toISOString()];
+    }
+
     private function expire(User $user, Program $program, Chapter $chapter, LearningAttempt $attempt): LearningAttempt
     {
-        if ($attempt->kind === 'mini') {
-            $timing = $this->miniTiming($attempt);
+        if (in_array($attempt->kind, ['mini', 'audio', 'reading'], true)) {
+            $timing = $attempt->kind === 'mini' ? $this->miniTiming($attempt) : $this->practiceTiming($attempt);
             if ($attempt->status !== 'completed' && now()->utc()->greaterThanOrEqualTo($timing['expires_at'])) {
                 $this->validateAnswers($attempt, $attempt->answers);
 
@@ -263,6 +271,6 @@ class LearningAttemptService
             $questions[] = app(MediaService::class)->payload($item);
         }
 
-        return ['id' => $attempt->id, 'chapter_id' => $attempt->chapter_id, 'kind' => $attempt->kind, 'status' => $attempt->status, 'revision' => $attempt->revision, 'questions' => $questions, 'answers' => $attempt->answers, 'result' => $attempt->status === 'completed' ? array_intersect_key($attempt->result_snapshot, array_flip(['correct', 'wrong', 'unanswered', 'total', 'percentage', 'passed', 'passing_score'])) : null, 'submitted_at' => $attempt->submitted_at?->toISOString()] + ($attempt->kind === 'mini' ? $this->miniTiming($attempt) + ['server_now' => now()->utc()->toISOString()] : []);
+        return ['id' => $attempt->id, 'chapter_id' => $attempt->chapter_id, 'kind' => $attempt->kind, 'status' => $attempt->status, 'revision' => $attempt->revision, 'questions' => $questions, 'answers' => $attempt->answers, 'result' => $attempt->status === 'completed' ? array_intersect_key($attempt->result_snapshot, array_flip(['correct', 'wrong', 'unanswered', 'total', 'percentage', 'passed', 'passing_score'])) : null, 'submitted_at' => $attempt->submitted_at?->toISOString()] + ($attempt->kind === 'mini' ? $this->miniTiming($attempt) : $this->practiceTiming($attempt)) + ['server_now' => now()->utc()->toISOString()];
     }
 }

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import practiceStyles from "./dashboard-practice.module.css";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { useCallback, useState, type ReactNode } from "react";
 import { useLearningRequest } from "@/components/learning-hooks";
@@ -109,13 +110,13 @@ export function StudentDashboard({
 
           {/* 2. Continue Journey & Progress */}
           <div className="dashboard-bento">
-            <div className="dashboard-bento-left">
+            <div className={`dashboard-bento-left${practiceRecommendations ? ` ${practiceStyles.card}` : ""}`}>
             <section className="lms-continue sensei-continue">
               <div className="lms-continue-main">
                 <p className="dash-kicker">{config.continue.label}</p>
                 <h2>{config.continue.title}</h2>
                 <p>{config.continue.description}</p>
-                <div className="continue-actions continue-actions-centered">
+                <div className={practiceRecommendations ? "continue-actions" : "continue-actions continue-actions-centered"}>
                   <Link className="continue-button" href={config.continue.primaryHref}>
                     {config.continue.primary}{" "}
                     <b aria-hidden="true">

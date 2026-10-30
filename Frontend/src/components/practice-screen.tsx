@@ -31,7 +31,6 @@ export function PracticeScreen({ membership, resolvedCatalog }: { membership: Me
   }, []);
   const [category, setCategory] = useState<PracticeCat>("Semua");
   const [levelFilter, setLevelFilter] = useState<string>("all");
-
   useEffect(() => {
     const timer = window.setTimeout(() => {
       const params = new URLSearchParams(window.location.search);
@@ -104,7 +103,7 @@ export function PracticeScreen({ membership, resolvedCatalog }: { membership: Me
 
         {selected ? (
           <>
-            <button type="button" className="practice-back" onClick={() => {
+            {selected.kind !== "audio" && <button type="button" className="practice-back" onClick={() => {
               setSelected(undefined);
               catalog.retry();
               const url = new URL(window.location.href);
@@ -112,7 +111,7 @@ export function PracticeScreen({ membership, resolvedCatalog }: { membership: Me
               window.history.replaceState(null, "", url);
             }}>
               Kembali ke Daftar Latihan
-            </button>
+            </button>}
             <ChapterAssessment {...selected} autoStart />
           </>
         ) : (

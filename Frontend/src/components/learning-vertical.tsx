@@ -7,7 +7,7 @@ import { LearningShell } from "@/components/learning-shell";
 import { FlashcardSession } from "@/components/flashcard-session";
 import { MiniLockedDialog } from "@/components/mini-locked-dialog";
 import { loadChapterContext, useLearningRequest } from "@/components/learning-hooks";
-import { LuBookMarked, LuBookOpen, LuLayers3, LuLockKeyhole, LuPlay, LuVolume2 } from "react-icons/lu";
+import { LuBookMarked, LuBookOpen, LuCircleCheck, LuClipboardCheck, LuLayers3, LuLockKeyhole, LuPlay, LuVolume2 } from "react-icons/lu";
 import { learningCompletion, learningMembership, learningVideo, safeLearningUrl, type ChapterProgress } from "@/lib/learning-api";
 
 export function LearningVertical({ kind, level, chapter }: { kind: "learning" | "video" | "grammar" | "kanji" | "flashcards"; level: string; chapter: string }) {
@@ -71,7 +71,7 @@ function CanonicalLearning({ context, kind, level, chapterSlug }: { context: Awa
         </article>;
       })}
         {program.family === "jlpt" && chapter.mini_checkpoint?.exists && <article className={`learning-activity-card activity-${progress.mini_completed ? "completed" : progress.mini_unlocked ? "current" : "locked"}`}>
-          <div className="learning-activity-top"><span className="learning-activity-icon"><LuLockKeyhole aria-hidden="true" /></span><span className="learning-activity-status" role="status">{progress.mini_completed ? "Selesai" : progress.mini_unlocked ? "Belum dimulai" : "Terkunci"}</span></div>
+          <div className="learning-activity-top"><span className="learning-activity-icon">{progress.mini_completed ? <LuCircleCheck aria-hidden="true" /> : progress.mini_unlocked ? <LuClipboardCheck aria-hidden="true" /> : <LuLockKeyhole aria-hidden="true" />}</span><span className="learning-activity-status" role="status">{progress.mini_completed ? "Selesai" : progress.mini_unlocked ? "Belum dimulai" : "Terkunci"}</span></div>
           <h3>Mini Checkpoint Chapter {chapter.chapter_number}</h3><p>{progress.mini_unlocked ? "Uji pemahaman materi chapter." : "Selesaikan seluruh aktivitas chapter untuk membuka Mini Checkpoint."}</p>
           {progress.mini_completed ? <Link className="activity-action-button" href={`${base}/checkpoint`}>Lihat Mini Checkpoint</Link> : progress.mini_unlocked ? <Link className="activity-action-button" href={`${base}/checkpoint`}>Mulai Mini Checkpoint</Link> : <MiniLockedDialog access={chapter.access} progress={progress} chapterHref={base} className="activity-action-button" />}
         </article>}
