@@ -1,139 +1,142 @@
 "use client";
 
-import { type FormEvent, useCallback, useState } from "react";
+import Link from "next/link";
+import { useAuth } from "./auth-provider";
+import { useEditorNavigation } from "./admin-editor-navigation";
+import { useBlogRecovery } from "./admin-blog-recovery";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { AdminShell, AdminDialog } from "@/components/admin-primitives";
 import { AdminMediaUpload } from "@/components/admin-media-upload";
-import { AdminDataTable, AdminDialog, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge, AdminTabs } from "@/components/admin-primitives";
-import { AdminBlogArticlePreview, AdminBlogCardPreview, BlogThumbnail, type Article } from "@/components/admin-blog-preview";
-import { useAdminContent } from "@/lib/admin-content-api";
+import { BlogThumbnail, type Article } from "@/components/admin-blog-preview";
 import { AdminBlogCatalog, type BlogCatalogEntry } from "@/components/admin-blog-catalog";
+import { BlogArticleBody } from "@/components/blog-article-body";
+import { useAdminContent } from "@/lib/admin-content-api";
+import styles from "./admin-blog-studio.module.css";
+import "@/app/blog/editorial.css";
+import { AdminBlogBlockEditor } from "./admin-blog-block-editor";
+import { readEditableBody, validateEditableBody } from "@/lib/blog-block-editor";
 
-const tabs = ["Konten Artikel", "Pengaturan SEO & Pratinjau", "Jadwal & Penulis"];
-const emptyArticle: Omit<Article, "id"> = { title: "", slug: "", excerpt: "", body: "", thumbnail: "", category: "", seoTitle: "", metaDescription: "", featured: false, published: false, publishedAt: "", author: "" };
-function catalogOptions(entries: BlogCatalogEntry[], original?: string) {
-  const names = entries.filter(entry => entry.active).map(entry => entry.name);
-  if (original && !names.includes(original)) names.push(original);
-  return names;
+const empty: Article = { id: "", title: "", slug: "", excerpt: "", body: "", thumbnail: "", category: "", author: "", seoTitle: "", metaDescription: "", featured: false, published: false, publishedAt: "" };
+function status(article: Article) {
+  return !article.published ? "Draft" : article.publishedAt && Date.parse(article.publishedAt) > Date.now() ? "Terjadwal" : "Terbit";
 }
-function slugFromTitle(title: string) { return title.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, ""); }
-function publicationDate(value: string) {
-  if (!value) return "";
-  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
-  const fixture = /^(\d{1,2}) Agustus (\d{4})$/.exec(value);
-  if (fixture) return `${fixture[2]}-08-${fixture[1].padStart(2, "0")}`;
-  const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return "";
-  const parts = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit" }).formatToParts(date);
-  return ["year", "month", "day"].map((type) => parts.find((part) => part.type === type)?.value).join("-");
+function date(value: string) {
+  return value && Number.isFinite(Date.parse(value)) ? new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", dateStyle: "medium" }).format(new Date(value)) : "—";
 }
-function displayPublicationDate(value: string) {
-  const date = publicationDate(value);
-  const timestamp = new Date(`${date}T00:00:00+07:00`);
-  return date && Number.isFinite(timestamp.getTime()) ? new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", day: "numeric", month: "long", year: "numeric" }).format(timestamp) : "—";
+function options(entries: BlogCatalogEntry[], original: string) {
+  return [...new Set([...entries.filter(entry => entry.active).map(entry => entry.name), ...(original ? [original] : [])])];
 }
-
-function articleError(article: Article, rows: Article[], categories: BlogCatalogEntry[], authors: BlogCatalogEntry[]) {
-  const original = rows.find(row => row.id === article.id);
-  if (!article.title.trim()) return "Judul artikel wajib diisi.";
-  if (!article.body.trim()) return "Isi artikel wajib diisi.";
-  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(article.slug.trim())) return "Slug wajib diisi dengan huruf kecil, angka, dan tanda hubung, tanpa spasi.";
-  if (rows.some((row) => row.id !== article.id && row.slug === article.slug.trim())) return "Slug sudah digunakan. Pilih slug lain.";
-  if (!catalogOptions(categories, original?.category).includes(article.category)) return "Pilih kategori artikel yang tersedia.";
-  if (!catalogOptions(authors, original?.author).includes(article.author)) return "Pilih penulis artikel yang tersedia.";
-  if (article.publishedAt && /^\d{4}-\d{2}-\d{2}$/.test(article.publishedAt)) {
-    const date = new Date(`${article.publishedAt}T00:00:00Z`);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(article.publishedAt) || !Number.isFinite(date.getTime()) || date.toISOString().slice(0, 10) !== article.publishedAt) return "Tanggal publikasi tidak valid. Pilih tanggal yang benar.";
-  }
-  return "";
+function uniqueSlug(title: string, rows: Article[]) {
+  const base = title.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 240).replace(/-+$/, "");
+  if (!base) return "";
+  let slug = base;
+  for (let suffix = 2; rows.some(article => article.slug === slug); suffix++) slug = `${base}-${suffix}`;
+  return slug;
 }
 
-export function AdminBlogPrototype() {
-  const { rows, loading, loadError, busy, mutate, reload } = useAdminContent<Article>("blog-articles");
+export function AdminBlogPrototype({ editorId }: { editorId?: string }) {
+  const content = useAdminContent<Article>("blog-articles");
   const categories = useAdminContent<BlogCatalogEntry>("blog-categories");
-  const contributors = useAdminContent<BlogCatalogEntry>("blog-contributors");
-  const catalogsUnavailable = categories.loading || contributors.loading || Boolean(categories.loadError || contributors.loadError);
-  const [draft, setDraft] = useState<Article | null>(null);
-  const [view, setView] = useState<Article | null>(null);
+  const authors = useAdminContent<BlogCatalogEntry>("blog-contributors");
+  const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState("Semua");
+  const [category, setCategory] = useState("");
+  const [page, setPage] = useState(1);
+  const [settings, setSettings] = useState(false);
+  const [preview, setPreview] = useState<Article | null>(null);
   const [deleting, setDeleting] = useState<Article | null>(null);
-  const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-  const [activeTab, setActiveTab] = useState(tabs[0]);
-  const closeEditor = useCallback(() => { setDraft(null); setError(""); }, []);
-  const closeView = useCallback(() => setView(null), []);
-  const closeDelete = useCallback(() => setDeleting(null), []);
-
-  async function save(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!draft) return;
-    if (catalogsUnavailable) { setError("Tunggu kategori dan kontributor selesai dimuat, atau coba muat ulang."); return; }
-    const invalid = articleError(draft, rows, categories.rows, contributors.rows);
-    if (invalid) { setError(invalid); return; }
-    const next: Article = { ...draft, title: draft.title.trim(), slug: draft.slug.trim(), excerpt: draft.excerpt.trim(), body: draft.body.trim(), thumbnail: draft.thumbnail.trim(), seoTitle: draft.seoTitle.trim(), metaDescription: draft.metaDescription.trim(), publishedAt: draft.publishedAt.trim() };
-    try { await mutate(next); closeEditor(); setMessage("Artikel disimpan."); } catch (error) { setError(error instanceof Error ? error.message : "Artikel gagal disimpan."); }
-  }
-
-  async function toggle(row: Article) {
-    if (!row.published && catalogsUnavailable) { setMessage("Tunggu kategori dan kontributor selesai dimuat, atau coba muat ulang."); return; }
-    const invalid = row.published ? "" : articleError(row, rows, categories.rows, contributors.rows);
-    if (invalid) { setMessage(invalid); return; }
-    try { await mutate({ ...row, published: !row.published }); setMessage("Status publikasi disimpan."); } catch (error) { setMessage(error instanceof Error ? error.message : "Publikasi gagal."); }
-  }
-
-  return <AdminShell current="/admin/blog-seo"><main className="admin-public-prototype">
-    <AdminPageHeader title="Blog" actions={<button type="button" className="button button-primary" onClick={() => { setError(""); setActiveTab(tabs[0]); setDraft({ ...emptyArticle, id: crypto.randomUUID() }); }}>Tambah Artikel</button>} />
-    {loadError && <div role="alert">{loadError} <button type="button" onClick={reload}>Coba lagi</button></div>}
-    <p role="status">{message}</p>
-    <AdminSection title="Artikel"><AdminDataTable loading={loading && !rows.length} caption="Daftar Artikel Blog" rows={rows} rowKey={(row) => row.id} columns={[
-      { key: "thumbnail", header: "Thumbnail", cell: (row) => <div className="admin-blog-table-thumb"><BlogThumbnail key={row.thumbnail} src={row.thumbnail} title={row.title} /></div> },
-      { key: "title", header: "Judul", cell: (row) => row.title },
-      { key: "slug", header: "Slug", cell: (row) => row.slug },
-      { key: "category", header: "Kategori", cell: (row) => row.category },
-      { key: "featured", header: "Featured", cell: (row) => row.featured ? "Ya" : "Tidak" },
-      { key: "status", header: "Status", cell: (row) => <AdminStatusBadge status={row.published ? "Published" : "Draft"} /> },
-      { key: "date", header: "Tanggal Publikasi", cell: (row) => displayPublicationDate(row.publishedAt) },
-    ]} actions={{ cell: (row) => <div className="admin-page-actions">
-      <button type="button" className="button" aria-label={`Lihat artikel ${row.title}`} onClick={() => setView(row)}>Lihat</button>
-      <button type="button" className="button" aria-label={`Edit artikel ${row.title}`} onClick={() => { setError(""); setActiveTab(tabs[0]); setDraft({ ...row }); }}>Edit</button>
-      <button type="button" className="button" aria-label={`${row.published ? "Jadikan Draft" : "Publikasikan"} artikel ${row.title}`} onClick={() => toggle(row)}>{row.published ? "Jadikan Draft" : "Publikasikan"}</button>
-      <button type="button" className="button" aria-label={`Hapus artikel ${row.title}`} onClick={() => setDeleting(row)}>Hapus</button>
-    </div> }} /></AdminSection>
-    <AdminBlogCatalog label="Kategori" catalog={categories} onChanged={reload} />
-    <AdminBlogCatalog label="Kontributor" catalog={contributors} onChanged={reload} />
-    <AdminDialog open={Boolean(draft) && !view} title={rows.some((row) => row.id === draft?.id) ? "Edit Artikel" : "Tambah Artikel"} close={closeEditor}>
-      {draft && <form className="admin-prototype-form" onSubmit={save} noValidate>
-        {(categories.loading || contributors.loading) && <p role="status">Memuat kategori dan kontributor…</p>}
-        {categories.loadError && <p role="alert">{categories.loadError} <button type="button" onClick={categories.reload}>Muat Ulang Kategori</button></p>}
-        {contributors.loadError && <p role="alert">{contributors.loadError} <button type="button" onClick={contributors.reload}>Muat Ulang Kontributor</button></p>}
-        <AdminTabs label="Pengaturan Artikel" tabs={tabs} active={activeTab} onChange={setActiveTab}>
-          {activeTab === tabs[0] && <div className="admin-blog-content-fields">
-            <label className="admin-field">Thumbnail (opsional)<input placeholder="Contoh: https://example.com/images/jlpt-n4.webp atau media/blog/jlpt-n4.webp" value={draft.thumbnail} onChange={event => setDraft({ ...draft, thumbnail: event.target.value })} /><small>URL HTTP/HTTPS atau referensi penyimpanan.</small></label><AdminMediaUpload kind="image" onUploaded={thumbnail => setDraft({ ...draft, thumbnail })} />
-            <div className="blog-card-thumb admin-blog-upload-thumb"><BlogThumbnail key={draft.thumbnail} src={draft.thumbnail} title={draft.title} /></div>
-            <label className="admin-field">Kategori<select required disabled={categories.loading || Boolean(categories.loadError)} value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value })}><option value="">Pilih kategori</option>{catalogOptions(categories.rows, rows.find(row => row.id === draft.id)?.category).map(category => <option key={category} value={category}>{category}{categories.rows.some(entry => entry.name === category && entry.active) ? "" : " (nonaktif / sebelumnya)"}</option>)}</select></label>
-            <label className="admin-field">Judul Artikel<input placeholder="Contoh: 7 Tips Belajar JLPT N4 Secara Efektif" value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} required /></label>
-            <label className="admin-field">Excerpt (opsional)<textarea rows={3} placeholder="Contoh ringkasan singkat artikel: Pelajari 7 tips belajar JLPT N4, mulai dari jadwal harian, latihan kosakata, hingga simulasi ujian." value={draft.excerpt} onChange={(event) => setDraft({ ...draft, excerpt: event.target.value })} /></label>
-            <label className="admin-field">Isi Artikel<textarea rows={10} placeholder="Contoh: Mulailah belajar JLPT N4 dengan menetapkan target harian yang realistis." value={draft.body} onChange={(event) => setDraft({ ...draft, body: event.target.value })} required /><small>Teks biasa; HTML tidak dijalankan.</small></label>
-          </div>}
-          {activeTab === tabs[1] && <div className="admin-blog-seo-layout">
-            <div className="admin-blog-seo-fields">
-              <label className="admin-field">Slug<input placeholder="contoh: tips-belajar-jlpt-n4" value={draft.slug} onChange={(event) => setDraft({ ...draft, slug: event.target.value })} required /><small>Huruf kecil, angka, dan tanda hubung. Harus unik.</small></label>
-              <button type="button" className="button" onClick={() => setDraft({ ...draft, slug: slugFromTitle(draft.title) })}>Buat Slug dari Judul</button>
-              {rows.some((row) => row.id === draft.id && row.published && row.slug !== draft.slug.trim()) && <p role="status">Slug berubah untuk sesi ini; tautan publik tetap sama.</p>}
-              <label className="admin-field">SEO Title (opsional)<input placeholder="Contoh: Tips Belajar JLPT N4 secara Efektif" value={draft.seoTitle} onChange={(event) => setDraft({ ...draft, seoTitle: event.target.value })} /></label>
-              <label className="admin-field">Meta Description (opsional)<textarea rows={3} placeholder="Contoh: Panduan belajar JLPT N4 dengan strategi yang praktis dan terstruktur." value={draft.metaDescription} onChange={(event) => setDraft({ ...draft, metaDescription: event.target.value })} /></label>
-              <label className="admin-field">Featured<select value={draft.featured ? "yes" : "no"} onChange={(event) => setDraft({ ...draft, featured: event.target.value === "yes" })}><option value="no">Tidak</option><option value="yes">Ya</option></select></label>
-            </div>
-            <section className="admin-blog-live-preview" aria-label="Pratinjau Kartu Publik"><h3>Pratinjau Kartu Publik</h3><AdminBlogCardPreview article={draft} date={displayPublicationDate(draft.publishedAt)} open={() => setView({ ...draft })} /><button type="button" className="button" onClick={() => setView({ ...draft })}>Pratinjau Artikel</button></section>
-          </div>}
-          {activeTab === tabs[2] && <div className="admin-blog-publication-fields">
-            <label className="admin-field">Status<select value={draft.published ? "published" : "draft"} onChange={(event) => setDraft({ ...draft, published: event.target.value === "published" })}><option value="draft">Draft</option><option value="published">Published</option></select></label>
-            <label className="admin-field">Tanggal Publikasi (opsional)<input type="date" value={publicationDate(draft.publishedAt)} onChange={(event) => setDraft({ ...draft, publishedAt: event.target.value })} /><small>Artikel terbit setelah tanggal publikasi. Tanggal tanpa waktu menggunakan UTC.</small></label>
-            <label className="admin-field">Nama Penulis / Kontributor<select required disabled={contributors.loading || Boolean(contributors.loadError)} value={draft.author} onChange={(event) => setDraft({ ...draft, author: event.target.value })}><option value="">Pilih penulis / kontributor</option>{catalogOptions(contributors.rows, rows.find(row => row.id === draft.id)?.author).map(author => <option key={author} value={author}>{author}{contributors.rows.some(entry => entry.name === author && entry.active) ? "" : " (nonaktif / sebelumnya)"}</option>)}</select></label>
-          </div>}
-        </AdminTabs>
-        {error && <p role="alert">{error}</p>}
-        <div className="admin-page-actions"><button type="button" className="button" onClick={closeEditor}>Batal</button><button type="submit" disabled={busy || catalogsUnavailable} className="button button-primary">Simpan Artikel</button></div>
-      </form>}
-    </AdminDialog>
-    <AdminDialog open={Boolean(view)} title="Pratinjau Artikel" close={closeView}>{view && <AdminBlogArticlePreview article={view} date={displayPublicationDate(view.publishedAt)} />}</AdminDialog>
-    <AdminDialog open={Boolean(deleting)} title="Hapus Artikel?" close={closeDelete} actions={<><button type="button" className="button" onClick={closeDelete}>Batal</button><button type="button" className="button button-primary" disabled={busy} onClick={async () => { if (!deleting) return; try { await mutate(deleting, true); setDeleting(null); setMessage("Artikel dihapus."); } catch (error) { setMessage(error instanceof Error ? error.message : "Artikel gagal dihapus."); } }}>Hapus Artikel</button></>}><p>Hapus artikel {deleting?.title} dari sesi ini? Halaman publik tidak berubah.</p></AdminDialog>
+  const rows = [...content.rows].sort((a, b) => (Date.parse(b.publishedAt) || 0) - (Date.parse(a.publishedAt) || 0) || Number(b.id) - Number(a.id));
+  const visible = rows.filter(article => article.title.toLocaleLowerCase("id-ID").includes(query.toLocaleLowerCase("id-ID")) && (filter === "Semua" || status(article) === filter) && (!category || article.category === category));
+  const pages = Math.max(1, Math.ceil(visible.length / 12));
+  const currentPage = Math.min(page, pages);
+  const original = editorId === "new" ? { ...empty, id: "new" } : content.rows.find(article => article.id === editorId);
+  return <AdminShell current="/admin/blog-seo"><main className={styles.studio}>
+    {content.loadError && <p role="alert">{content.loadError} <button type="button" onClick={content.reload}>Coba lagi</button></p>}
+    {editorId ? content.loading ? <p role="status">Memuat artikel…</p> : original ? <ArticleEditor key={editorId} original={original} rows={rows} categories={categories} authors={authors} content={content} /> : !content.loadError && <><h1>Artikel tidak ditemukan</h1><Link href="/admin/blog-seo">Kembali ke Artikel</Link></> : <>
+      <header className={styles.header}><div><p className={styles.eyebrow}>HIRU CONTENT STUDIO</p><h1>Kelola Artikel</h1><p>Tulis, atur, dan terbitkan artikel HiruAcademy.</p></div><div className={styles.actions}><button type="button" className="button" onClick={() => setSettings(!settings)}>Pengaturan Blog</button><Link className="button button-primary" href="/admin/blog-seo/editor">+ Tulis Artikel</Link></div></header>
+      <p role="status">{message}</p>
+      {settings && <section className={styles.panel}><h2>Pengaturan Blog</h2><AdminBlogCatalog label="Kategori" catalog={categories} onChanged={content.reload} /><AdminBlogCatalog label="Kontributor" catalog={authors} onChanged={content.reload} /></section>}
+      <section className={styles.panel} aria-label="Daftar artikel"><div className={styles.filters}><label>Cari judul artikel<input type="search" value={query} onChange={event => { setQuery(event.target.value); setPage(1); }} placeholder="Cari judul artikel…" /></label><label htmlFor="studio-filter-category">Kategori<select id="studio-filter-category" aria-label="Kategori" value={category} onChange={event => { setCategory(event.target.value); setPage(1); }}><option value="">Semua kategori</option>{[...new Set(rows.map(article => article.category))].map(name => <option key={name}>{name}</option>)}</select></label></div><div className={styles.tabs} aria-label="Status artikel">{["Semua", "Draft", "Terjadwal", "Terbit"].map(name => <button type="button" aria-pressed={filter === name} key={name} onClick={() => { setFilter(name); setPage(1); }}>{name}</button>)}</div>
+      {content.loading && <p role="status">Memuat artikel…</p>}
+      <div className={styles.tableWrap}><table><caption>Artikel · tanggal terbaru</caption><thead><tr><th scope="col">Artikel</th><th scope="col">Kategori / Penulis</th><th scope="col">Status</th><th scope="col">Tanggal terbit</th><th scope="col">Tindakan</th></tr></thead><tbody>{visible.slice((currentPage - 1) * 12, currentPage * 12).map(article => <tr key={article.id}><td><div className={styles.articleTitle}><div className={styles.thumb}><BlogThumbnail src={article.thumbnail} title={article.title} /></div><Link href={`/admin/blog-seo/editor?id=${article.id}`}>{article.title}</Link></div></td><td data-label="Kategori / Penulis">{article.category}<small>{article.author}</small></td><td data-label="Status"><span className={styles.badge}>{status(article)}</span></td><td data-label="Tanggal">{date(article.publishedAt)}</td><td data-label="Tindakan"><details className={styles.menu}><summary aria-label={`Tindakan ${article.title}`}>•••</summary><div><Link href={`/admin/blog-seo/editor?id=${article.id}`}>Edit</Link><button type="button" onClick={() => setPreview(article)}>Pratinjau</button>{status(article) === "Terbit" && <Link href={`/blog/${article.slug}`} target="_blank" rel="noopener noreferrer">Lihat di Website</Link>}<button type="button" onClick={() => setDeleting(article)}>Hapus</button></div></details></td></tr>)}</tbody></table></div>
+      {!content.loading && !content.loadError && !visible.length && <p>Belum ada artikel yang sesuai.</p>}
+      {pages > 1 && <nav className={styles.actions} aria-label="Halaman daftar artikel"><button type="button" disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)}>Sebelumnya</button><span>{currentPage} / {pages}</span><button type="button" disabled={currentPage === pages} onClick={() => setPage(currentPage + 1)}>Berikutnya</button></nav>}</section>
+    </>}
+    <AdminDialog open={Boolean(preview)} title="Pratinjau artikel tersimpan" close={() => setPreview(null)}>{preview && <article><p>{preview.category} · {preview.author} · {date(preview.publishedAt)}</p><h1>{preview.title}</h1><p>{preview.excerpt}</p><BlogArticleBody body={preview.body} /></article>}</AdminDialog>
+    <AdminDialog open={Boolean(deleting)} title="Hapus artikel?" close={() => { if (!content.busy) setDeleting(null); }} actions={<><button type="button" className="button" disabled={content.busy} onClick={() => setDeleting(null)}>Batal</button><button type="button" className="button button-primary" disabled={content.busy} onClick={async () => { if (!deleting) return; try { await content.mutate(deleting, true); setDeleting(null); setMessage("Artikel berhasil dihapus."); } catch (error) { setMessage(error instanceof Error ? error.message : "Gagal menghapus artikel."); } }}>Hapus artikel</button></>}><p>Hapus “{deleting?.title}”? Artikel akan dihapus dari penyimpanan dan tidak tersedia di website. Media tidak dihapus.</p></AdminDialog>
   </main></AdminShell>;
+}
+
+type Catalog = ReturnType<typeof useAdminContent<BlogCatalogEntry>>;
+type Content = ReturnType<typeof useAdminContent<Article>>;
+function ArticleEditor({ original, rows, categories, authors, content }: { original: Article; rows: Article[]; categories: Catalog; authors: Catalog; content: Content }) {
+  const router = useRouter();
+  const [draft, setDraft] = useState(original);
+  const [baseline, setBaseline] = useState(JSON.stringify(original));
+  const [saveState, setSaveState] = useState("Belum disimpan");
+  const [error, setError] = useState("");
+  const lock = useRef(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewMobile, setPreviewMobile] = useState(false);
+  const [showSchedule, setShowSchedule] = useState(false);
+  const [schedule, setSchedule] = useState("");
+  const dirty = JSON.stringify(draft) !== baseline;
+  const { user } = useAuth();
+  const navigation = useEditorNavigation();
+  const recovery = useBlogRecovery(user?.id, original, draft, baseline, dirty);
+  const isNew = original.id === "new";
+  const editableBody = readEditableBody(original.body) !== null;
+  const unavailable = categories.loading || authors.loading || Boolean(categories.loadError || authors.loadError);
+  useEffect(() => {
+    if (!dirty && !content.busy) return;
+    const beforeUnload = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
+    window.addEventListener("beforeunload", beforeUnload);
+    return () => window.removeEventListener("beforeunload", beforeUnload);
+  }, [dirty, content.busy]);
+  const setNavigationGuard = navigation?.setGuard;
+  useEffect(() => {
+    setNavigationGuard?.({ dirty: dirty || Boolean(recovery.candidate), saving: content.busy, discard: recovery.clear });
+    return () => setNavigationGuard?.(null);
+  }, [dirty, content.busy, setNavigationGuard, recovery.clear, recovery.candidate]);
+  function update<K extends keyof Article>(key: K, value: Article[K]) { setDraft(previous => ({ ...previous, [key]: value })); setSaveState("Belum disimpan"); }
+  async function save(event: React.FormEvent<HTMLFormElement>, action: "save" | "publish" | "draft" | "schedule" = "save") {
+    event.preventDefault();
+    if (lock.current) return;
+    setError("");
+    if (unavailable) { setError("Kategori dan penulis belum tersedia. Muat ulang sebelum menyimpan."); return; }
+    if (!draft.title.trim() || !draft.body.trim()) { setError("Judul dan isi artikel wajib diisi sesuai aturan penyimpanan saat ini."); return; }
+    if (!options(categories.rows, original.category).includes(draft.category) || !options(authors.rows, original.author).includes(draft.author)) { setError("Pilih kategori dan penulis yang tersedia."); return; }
+    if (draft.body !== original.body || isNew) { const problem = validateEditableBody(draft.body); if (problem) { setError(problem); return; } }
+    const slug = isNew ? uniqueSlug(draft.title, rows) : original.slug;
+    if (!slug) { setError("Judul memerlukan huruf Latin atau angka untuk membuat alamat artikel."); return; }
+    if (action === "schedule" && (!schedule || !Number.isFinite(Date.parse(`${schedule}+07:00`)) || Date.parse(`${schedule}+07:00`) <= Date.now())) { setError("Pilih jadwal mendatang dalam waktu Asia/Jakarta."); return; }
+    const next = { ...draft, slug,
+      seoTitle: isNew && !draft.seoTitle ? draft.title : draft.seoTitle,
+      metaDescription: isNew && !draft.metaDescription ? draft.excerpt : draft.metaDescription,
+      ...(action === "publish" ? { published: true, publishedAt: new Date().toISOString() } : action === "draft" ? { published: false } : action === "schedule" ? { published: true, publishedAt: new Date(`${schedule}+07:00`).toISOString() } : {}),
+    };
+    lock.current = true; setSaveState("Menyimpan");
+    try {
+      await content.mutate(next);
+      recovery.clear(); setDraft(next); setBaseline(JSON.stringify(next)); setSaveState("Tersimpan");
+      if (isNew) router.push("/admin/blog-seo");
+    } catch (cause) { setSaveState("Gagal menyimpan"); setError(cause instanceof Error ? cause.message : "Artikel gagal disimpan."); }
+    finally { lock.current = false; }
+  }
+  return <form onSubmit={event => { const action = (event.nativeEvent as SubmitEvent).submitter?.getAttribute("value"); void save(event, action === "publish" || action === "draft" || action === "schedule" ? action : "save"); }} className={styles.editor} noValidate>
+    <header className={styles.header}><div><Link href="/admin/blog-seo" onNavigate={event => { if (navigation) { event.preventDefault(); navigation.request(() => router.push("/admin/blog-seo")); } }}>← Kembali ke Artikel</Link><h1>{isNew ? "Tulis Artikel" : "Edit Artikel"}</h1></div><button type="submit" className="button button-primary" disabled={content.busy || unavailable || Boolean(recovery.candidate)}>{content.busy ? "Menyimpan…" : original.published ? "Simpan Perubahan" : "Simpan Draft"}</button></header>
+
+    {showSchedule && <fieldset id="studio-schedule" className={styles.schedulePanel} disabled={content.busy || Boolean(recovery.candidate)}><legend>Jadwalkan untuk Nanti</legend><label>Tanggal dan waktu terbit<input type="datetime-local" required aria-required="true" value={schedule} onChange={event => setSchedule(event.target.value)} aria-describedby="studio-schedule-help" /></label><p id="studio-schedule-help">Artikel akan terbit otomatis sesuai jadwal yang dipilih. Waktu menggunakan WIB (Asia/Jakarta).</p><button type="submit" name="action" value="schedule" className="button" disabled={unavailable}>Jadwalkan Artikel</button></fieldset>}
+    <AdminDialog open={previewOpen} className={styles.previewDialog} title="Pratinjau artikel" close={() => setPreviewOpen(false)}><div className={styles.previewControls}><p>Pratinjau tulisan saat ini. Tidak mengubah status publikasi.</p><div className={styles.actions}><button type="button" className="button" aria-pressed={!previewMobile} onClick={() => setPreviewMobile(false)}>Desktop</button><button type="button" className="button" aria-pressed={previewMobile} onClick={() => setPreviewMobile(true)}>Mobile</button></div></div><div className={`${styles.previewCanvas} ${previewMobile ? styles.previewMobile : ""}`}><div className="editorial-blog"><div className="editorial-container"><header className="editorial-article-header"><p className="kicker">{draft.category}</p><h1>{draft.title || "Judul artikel"}</h1>{draft.excerpt && <p className="editorial-deck">{draft.excerpt}</p>}<p className="editorial-byline">{draft.author}{draft.publishedAt && <> ? {date(draft.publishedAt)}</>}</p></header><article className="editorial-article"><div className="editorial-thumbnail"><BlogThumbnail key={draft.thumbnail} src={draft.thumbnail || "/brand/hiru-atas.png"} title={draft.title || "Artikel"} full /></div><BlogArticleBody body={draft.body} /></article></div></div></div></AdminDialog>
+    {error && <p id="studio-save-error" role="alert">{error}</p>}
+    {recovery.warning && <p role="alert">{recovery.warning}</p>}
+    {recovery.candidate && <section aria-label="Pemulihan tulisan"><h2>Tulisan belum tersimpan ditemukan</h2><p>Snapshot sementara browser, bukan draft tersimpan di server. Pilih pulihkan atau abaikan sebelum mengedit.</p>{recovery.candidate.stale && <p role="alert">Artikel server sudah berbeda. URL, SEO, status publikasi, dan isi berformat lama dari server tetap dipertahankan.</p>}<button type="button" className="button" onClick={() => { const saved = recovery.candidate!.draft; setDraft({ ...original, title: saved.title, excerpt: saved.excerpt, body: editableBody && !recovery.candidate!.stale ? saved.body : original.body, category: saved.category, author: saved.author, thumbnail: saved.thumbnail ?? "", ...(!recovery.candidate!.stale ? { seoTitle: saved.seoTitle, metaDescription: saved.metaDescription } : {}) }); setSaveState("Belum disimpan"); recovery.clear(); }}>Pulihkan Tulisan</button><button type="button" className="button" onClick={recovery.clear}>Abaikan</button></section>}
+    <fieldset aria-describedby={error ? "studio-save-error" : undefined} disabled={content.busy || Boolean(recovery.candidate)} className={styles.editorGrid}><section className={styles.panel}><label>Judul artikel <small>Wajib</small><input aria-label="Judul artikel" required maxLength={255} value={draft.title} onChange={event => update("title", event.target.value)} placeholder="Contoh: Cara Belajar Bahasa Jepang dari Nol" /></label><label>Ringkasan artikel <small>Opsional</small><textarea aria-label="Ringkasan artikel" rows={3} value={draft.excerpt} onChange={event => update("excerpt", event.target.value)} /><small>Tulis 1–2 kalimat yang menjelaskan isi artikel. Ringkasan ini tampil di daftar Blog.</small></label>
+    <p className={styles.writingHint}>Judul, isi, kategori, dan penulis wajib diisi, termasuk saat menyimpan draft. Ringkasan dan gambar sampul boleh dikosongkan.</p><AdminBlogBlockEditor body={draft.body} onChange={body => update("body", body)} />
+    <div className={styles.editorStatus}><span className={styles.badge}>{status(draft)}</span> <span role="status" aria-live="polite">{saveState === "Tersimpan" && dirty ? "Belum disimpan" : saveState}</span></div>
+    <div className={styles.editorActions}><button type="button" className="button" title="Pratinjau Tulisan" aria-label="Pratinjau Tulisan" onClick={() => setPreviewOpen(true)}><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg><span className={styles.toolTip}>Pratinjau Tulisan</span></button><button type="submit" name="action" value="draft" className="button" disabled={content.busy || unavailable || Boolean(recovery.candidate)} title="Simpan sebagai Draft" aria-label="Simpan sebagai Draft"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M4 3h13l4 4v14H3V3h1Z"/><path d="M7 3v6h10V3M7 21v-8h10v8"/></svg><span className={styles.toolTip}>Simpan sebagai Draft</span></button><button type="submit" name="action" value="publish" className="button" disabled={content.busy || unavailable || Boolean(recovery.candidate)} title="Terbitkan Sekarang" aria-label="Terbitkan Sekarang"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m22 2-7 20-4-9-9-4 20-7ZM22 2 11 13"/></svg><span className={styles.toolTip}>Terbitkan Sekarang</span></button>{draft.published && <button type="submit" name="action" value="draft" className="button" disabled={content.busy || Boolean(recovery.candidate)} title="Kembalikan ke Draft" aria-label="Kembalikan ke Draft"><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="M9 4 4 9l5 5M4 9h10a6 6 0 0 1 0 12"/></svg><span className={styles.toolTip}>Kembalikan ke Draft</span></button>}<button type="button" className="button" title="Jadwalkan untuk Nanti" aria-label="Jadwalkan untuk Nanti" aria-expanded={showSchedule} aria-controls="studio-schedule" disabled={content.busy || Boolean(recovery.candidate)} onClick={() => setShowSchedule(!showSchedule)}><svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 11h18M12 14v3l2 1"/></svg><span className={styles.toolTip}>Jadwalkan untuk Nanti</span></button></div>
+    </section><aside className={styles.sidebar}><section className={styles.panel}><h2>Pengaturan artikel</h2><label htmlFor="studio-category">Kategori <small>Wajib</small><select id="studio-category" aria-label="Kategori" required disabled={unavailable} value={draft.category} onChange={event => update("category", event.target.value)}><option value="">Pilih kategori</option>{options(categories.rows, original.category).map(name => <option key={name}>{name}</option>)}</select></label><label htmlFor="studio-author">Penulis <small>Wajib</small><select id="studio-author" aria-label="Penulis" required disabled={unavailable} value={draft.author} onChange={event => update("author", event.target.value)}><option value="">Pilih penulis</option>{options(authors.rows, original.author).map(name => <option key={name}>{name}</option>)}</select></label>{categories.loadError && <p role="alert">{categories.loadError}<button type="button" onClick={categories.reload}>Muat ulang kategori</button></p>}{authors.loadError && <p role="alert">{authors.loadError}<button type="button" onClick={authors.reload}>Muat ulang penulis</button></p>}<details className={styles.googleSettings}><summary>Pengaturan Google (Opsional)</summary><p>Judul dan deskripsi untuk pencarian akan dibuat otomatis dari artikel. Bagian ini hanya perlu diubah jika Anda menginginkan tampilan berbeda.</p><label>Judul di Google (opsional)<input maxLength={255} value={draft.seoTitle} placeholder="Otomatis mengikuti judul artikel" onChange={event => update("seoTitle", event.target.value)} /></label><label>Deskripsi di Google (opsional)<textarea rows={3} value={draft.metaDescription} placeholder="Otomatis mengikuti ringkasan artikel" onChange={event => update("metaDescription", event.target.value)} /></label></details></section><section className={styles.panel}><h2>Gambar sampul <small>Opsional</small></h2><div className={styles.cover}><BlogThumbnail key={draft.thumbnail} src={draft.thumbnail} title={draft.title || "Artikel"} /></div><AdminMediaUpload buttonLabel={draft.thumbnail ? "Ganti Gambar" : "Unggah Gambar Sampul"} kind="image" label={draft.thumbnail ? "Ganti Gambar" : "Unggah Gambar Sampul"} onUploaded={thumbnail => update("thumbnail", thumbnail)} />{draft.thumbnail && <button type="button" className="button" onClick={() => update("thumbnail", "")}>Hapus Gambar</button>}<small>JPEG, PNG, atau WebP. Batas ukuran mengikuti validasi server. Tanpa gambar sampul, logo HiruAcademy digunakan di Blog.</small></section></aside></fieldset>
+  </form>;
 }

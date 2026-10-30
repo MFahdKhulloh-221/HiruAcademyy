@@ -1,9 +1,8 @@
 import { contentMedia } from "@/lib/public-content-api";
 
 export function blogThumbnailFallback(slug: string): string {
-  let hash = 0;
-  for (const character of slug) hash = (hash * 31 + character.charCodeAt(0)) >>> 0;
-  return `/blog/tamnel${hash % 4 + 1}.png`;
+  void slug; // Keep existing callers compatible; fallback no longer varies by slug.
+  return "/brand/hiru-atas.png";
 }
 
 export function blogThumbnailSource(thumbnail: string | null | undefined, slug: string, resolved?: string | null): string {

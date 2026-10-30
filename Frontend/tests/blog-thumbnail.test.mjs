@@ -13,13 +13,13 @@ function load(path, require) {
 const media = load("../src/lib/public-content-api.ts", () => ({}));
 const helper = load("../src/lib/blog-thumbnail.ts", () => media);
 
-test("slug mapping is stable and PNG copies match user originals", () => {
+test("brand fallback is stable and local PNG exists", () => {
   for (const slug of ["tips-belajar", "grammar", "jlpt-n4", "listening", ""]) {
     const fallback = helper.blogThumbnailFallback(slug);
-    assert.match(fallback, /^\/blog\/tamnel[1-4]\.png$/);
+    assert.equal(fallback, "/brand/hiru-atas.png");
     assert.equal(helper.blogThumbnailSource(null, slug), fallback);
     const asset = fallback.split("/").at(-1);
-    const copy = readFileSync(new URL(`../public/blog/${asset}`, import.meta.url));
+    const copy = readFileSync(new URL(`../public/brand/${asset}`, import.meta.url));
     assert.equal(copy.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
     const original = new URL(`../../assets/${asset}`, import.meta.url);
     if (existsSync(original)) assert.deepEqual(copy, readFileSync(original));
@@ -50,13 +50,12 @@ test("broken remote switches once to local; updated source renders again", () =>
   assert.equal(component({ article: { ...article, thumbnail: "https://cdn.example.test/new.png" } }).src, "https://cdn.example.test/new.png");
 });
 
-test("list, featured and both detail routes share renderer without changing filters", () => {
-  const list = read("../src/app/blog/page.tsx");
-  assert.match(list, /const thumbnail = .*<BlogThumbnail article=\{article\}/);
-  assert.match(list, /thumbnail\(featured\)/);
-  assert.match(list, /thumbnail\(article\)/);
-  assert.match(list, /article.category === category/);
-  assert.match(list, /includes\(query.trim\(\).toLocaleLowerCase\("id-ID"\)\)/);
-  assert.match(read("../src/app/blog/article/page.tsx"), /<BlogThumbnail article=\{article\}/);
-  assert.match(read("../src/app/blog/[slug]/page.tsx"), /<ArticleReader/);
+test("SSR catalog and detail retain shared thumbnail and interactive filters", () => {
+  assert.match(read("../src/app/blog/page.tsx"), /<BlogThumbnail article=\{featured\}/);
+  assert.match(read("../src/app/blog/[slug]/page.tsx"), /<BlogThumbnail article=\{article\}/);
+  const catalog = read("../src/components/blog-catalog.tsx");
+  assert.match(catalog, /<BlogThumbnail article=\{article\}/);
+  assert.match(catalog, /article.category === activeCategory/);
+  assert.match(catalog, /includes\(query.trim\(\).toLocaleLowerCase\("id-ID"\)\)/);
+  assert.match(read("../src/app/blog/article/page.tsx"), /permanentRedirect/);
 });

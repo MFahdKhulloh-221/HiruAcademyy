@@ -1,4 +1,3 @@
-import type { Locator } from "@playwright/test";
 import { expect, test, type Page } from "./canonical-fixture";
 
 type CatalogRow = { id: number; name: string; active: boolean };
@@ -78,10 +77,6 @@ async function expectNoOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
 }
 
-async function articleTab(dialog: Locator, name: string) {
-  await dialog.getByRole("tab", { name, exact: true }).click();
-}
-
 for (const catalog of [
   { label: "Kategori", singular: "kategori", existing: "Tips Belajar", key: "categories" as const },
   { label: "Kontributor", singular: "kontributor", existing: "Hiru Academy", key: "contributors" as const },
@@ -89,6 +84,7 @@ for (const catalog of [
   test(`blog catalog ${catalog.key}: create, rename, validation, active state and delete conflict`, async ({ page }) => {
     const state = await mockBlog(page);
     await page.goto("/admin/blog-seo");
+    await page.getByRole("button", { name: "Pengaturan Blog", exact: true }).click();
     await page.getByRole("button", { name: `Tambah ${catalog.label}`, exact: true }).click();
     const dialog = page.getByRole("dialog");
     const name = dialog.getByRole("textbox", { name: `Nama ${catalog.label}` });
@@ -131,32 +127,31 @@ for (const catalog of [
 test("blog catalog inactive values stay on edits, absent from new articles; legacy Hiru attribution survives", async ({ page }) => {
   const state = await mockBlog(page);
   await page.goto("/admin/blog-seo");
-  await page.getByRole("button", { name: "Tambah Artikel", exact: true }).click();
-  const create = page.getByRole("dialog");
-  await expect(create.getByRole("combobox", { name: "Kategori", exact: true }).getByRole("option", { name: "Kategori Arsip", exact: true })).toHaveCount(0);
-  await articleTab(create, "Jadwal & Penulis");
-  await expect(create.getByLabel("Nama Penulis / Kontributor").getByRole("option", { name: "Kontributor Arsip", exact: true })).toHaveCount(0);
-  await create.getByRole("button", { name: "Batal", exact: true }).click();
-  await page.getByRole("button", { name: "Edit artikel Artikel Arsip", exact: true }).click();
-  const edit = page.getByRole("dialog");
-  await expect(edit.getByRole("combobox", { name: "Kategori", exact: true })).toHaveValue("Kategori Arsip");
-  await edit.getByLabel("Judul Artikel", { exact: true }).fill("Artikel Arsip Diperbarui");
-  await articleTab(edit, "Jadwal & Penulis");
-  await expect(edit.getByLabel("Nama Penulis / Kontributor")).toHaveValue("Kontributor Arsip");
-  await edit.getByRole("button", { name: "Simpan Artikel", exact: true }).click();
-  await expect(edit).not.toBeVisible();
+    await page.getByRole("button", { name: "Pengaturan Blog", exact: true }).click();
+  await page.getByRole("link", { name: "+ Tulis Artikel" }).click();
+  await expect(page.getByRole("combobox", { name: "Kategori", exact: true }).getByRole("option", { name: "Kategori Arsip", exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Penulis", { exact: true }).getByRole("option", { name: "Kontributor Arsip", exact: true })).toHaveCount(0);
+  await page.getByRole("link", { name: /Kembali ke Artikel/ }).click();
+  await page.getByRole("link", { name: "Artikel Arsip", exact: true }).click();
+  await expect(page.getByLabel("Kategori", { exact: true })).toHaveValue("Kategori Arsip");
+  await page.getByLabel("Judul artikel", { exact: true }).fill("Artikel Arsip Diperbarui");
+  await expect(page.getByLabel("Penulis", { exact: true })).toHaveValue("Kontributor Arsip");
+  await page.getByRole("button", { name: "Simpan Draft", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Tersimpan");
   expect(state.articles.find(article => article.id === 10)).toMatchObject({ category: "Kategori Arsip", author: "Kontributor Arsip", title: "Artikel Arsip Diperbarui" });
-  await page.goto("/blog");
-  const card = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Artikel Lama Hiru", exact: true }) });
-  await expect(card).toContainText("Hiru Academy");
-  await card.getByRole("link", { name: "Baca Artikel", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Artikel Lama Hiru", exact: true })).toBeVisible();
-  await expect(page.locator("main")).toContainText("Hiru Academy");
+  await page.request.post("http://127.0.0.1:3412/fixtures/articles", { data: state.articles });
+  const html = await (await page.request.get("/blog")).text();
+  expect(html).toContain("Artikel Lama Hiru");
+  expect(html).toContain("Hiru Academy");
+  const detail = await page.request.get("/blog/artikel-lama-hiru");
+  expect(detail.status()).toBe(200);
+  expect(await detail.text()).toContain("Hiru Academy");
 });
 
 test("blog catalog used names cascade to public articles after category and contributor rename", async ({ page }) => {
   const state = await mockBlog(page);
   await page.goto("/admin/blog-seo");
+    await page.getByRole("button", { name: "Pengaturan Blog", exact: true }).click();
   for (const [label, original, renamed] of [["Kategori", "Tips Belajar", "Strategi Belajar"], ["Kontributor", "Hiru Academy", "Tim Hiru Academy"]]) {
     await page.getByRole("button", { name: `Edit ${label.toLowerCase()} ${original}`, exact: true }).click();
     const dialog = page.getByRole("dialog");
@@ -166,14 +161,13 @@ test("blog catalog used names cascade to public articles after category and cont
     await expect(page.getByRole("button", { name: `Edit ${label.toLowerCase()} ${renamed}`, exact: true })).toBeVisible();
   }
   expect(state.articles.find(article => article.id === 11)).toMatchObject({ category: "Strategi Belajar", author: "Tim Hiru Academy" });
-  await page.goto("/blog");
-  await page.getByRole("button", { name: "Strategi Belajar", exact: true }).click();
-  const card = page.getByRole("article").filter({ has: page.getByRole("heading", { name: "Artikel Lama Hiru", exact: true }) });
-  await expect(card).toContainText("Tim Hiru Academy");
-  await card.getByRole("link", { name: "Baca Artikel", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Artikel Lama Hiru", exact: true })).toBeVisible();
-  await expect(page.locator("main")).toContainText("Strategi Belajar");
-  await expect(page.locator("main")).toContainText("Tim Hiru Academy");
+  await page.request.post("http://127.0.0.1:3412/fixtures/articles", { data: state.articles });
+  const html = await (await page.request.get("/blog?category=Strategi%20Belajar")).text();
+  expect(html).toContain("Artikel Lama Hiru");
+  expect(html).toContain("Tim Hiru Academy");
+  const detail = await page.request.get("/blog/artikel-lama-hiru");
+  expect(detail.status()).toBe(200);
+  for (const text of ["Strategi Belajar", "Tim Hiru Academy"]) expect(await detail.text()).toContain(text);
 });
 
 test("blog catalog load503 retries and save503 keeps draft without false success", async ({ page }) => {
@@ -189,6 +183,7 @@ test("blog catalog load503 retries and save503 keeps draft without false success
     } else await route.fallback();
   });
   await page.goto("/admin/blog-seo");
+    await page.getByRole("button", { name: "Pengaturan Blog", exact: true }).click();
   await expect(page.getByRole("button", { name: "Tambah Kategori", exact: true })).toBeDisabled();
   const retry = page.getByRole("button", { name: "Muat Ulang Kategori", exact: true });
   await expect(retry).toBeVisible();
@@ -213,6 +208,7 @@ for (const width of [1440, 768, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     const state = await mockBlog(page);
     await page.goto("/admin/blog-seo");
+    await page.getByRole("button", { name: "Pengaturan Blog", exact: true }).click();
     for (const [label, value] of [["Kategori", "Budaya Jepang"], ["Kontributor", "Sensei Hana"]]) {
       await page.getByRole("button", { name: `Tambah ${label}`, exact: true }).click();
       const dialog = page.getByRole("dialog");
@@ -222,31 +218,31 @@ for (const width of [1440, 768, 390]) {
       await expect(dialog).not.toBeVisible();
     }
     await expectNoOverflow(page);
-    await page.getByRole("button", { name: "Tambah Artikel", exact: true }).click();
-    const editor = page.getByRole("dialog");
-    await editor.getByRole("combobox", { name: "Kategori", exact: true }).selectOption({ label: "Budaya Jepang" });
-    await editor.getByLabel("Judul Artikel", { exact: true }).fill(`Budaya Jepang ${width}`);
-    await editor.getByLabel("Isi Artikel", { exact: false }).fill("Panduan budaya Jepang dari kontributor baru.");
-    await articleTab(editor, "Pengaturan SEO & Pratinjau");
-    await editor.getByRole("button", { name: "Buat Slug dari Judul", exact: true }).click();
-    await articleTab(editor, "Jadwal & Penulis");
-    await editor.getByLabel("Nama Penulis / Kontributor").selectOption({ label: "Sensei Hana" });
-    await expectNoOverflow(page);
-    await editor.getByRole("button", { name: "Simpan Artikel", exact: true }).click();
-    await expect(editor).not.toBeVisible();
+    await page.getByRole("link", { name: "+ Tulis Artikel" }).click();
+    await page.getByLabel("Kategori", { exact: true }).selectOption("Budaya Jepang");
     const title = `Budaya Jepang ${width}`;
-    await page.getByRole("button", { name: `Publikasikan artikel ${title}`, exact: true }).click();
-    await expect(page.getByRole("button", { name: `Jadikan Draft artikel ${title}`, exact: true })).toBeVisible();
-    expect(state.articles.find(article => article.title === title)).toMatchObject({ category: "Budaya Jepang", author: "Sensei Hana", published: true });
-    await page.goto("/blog");
-    await page.getByRole("button", { name: "Budaya Jepang", exact: true }).click();
-    const card = page.getByRole("article").filter({ has: page.getByRole("heading", { name: title, exact: true }) });
-    await expect(card).toContainText("Sensei Hana");
+    await page.getByLabel("Judul artikel", { exact: true }).fill(title);
+    await page.getByLabel("Isi artikel", { exact: true }).fill("Panduan budaya Jepang dari kontributor baru.");
+    await page.getByLabel("Penulis", { exact: true }).selectOption("Sensei Hana");
     await expectNoOverflow(page);
-    await card.getByRole("link", { name: "Baca Artikel", exact: true }).click();
-    await expect(page.getByRole("heading", { name: title, exact: true })).toBeVisible();
-    await expect(page.locator("main")).toContainText("Budaya Jepang");
-    await expect(page.locator("main")).toContainText("Sensei Hana");
+    await page.getByRole("button", { name: "Simpan Draft", exact: true }).click();
+    await expect(page).toHaveURL(/\/admin\/blog-seo$/);
+    const created = state.articles.find(article => article.title === title)!;
+    expect(created).toMatchObject({ category: "Budaya Jepang", author: "Sensei Hana", published: false });
+    expect(created.slug).toBe(`budaya-jepang-${width}`);
+    await page.request.post("http://127.0.0.1:3412/fixtures/articles", { data: state.articles });
+    expect(await (await page.request.get("/blog")).text()).not.toContain(title);
+    // B1 has no publish control: fixture models server publication; public SSR contract stays covered.
+    created.published = true;
+    await page.request.post("http://127.0.0.1:3412/fixtures/articles", { data: state.articles });
+    const html = await (await page.request.get("/blog?category=Budaya%20Jepang")).text();
+    expect(html).toContain(title);
+    expect(html).toContain("Sensei Hana");
+    const detail = await page.request.get(`/blog/${created.slug}`);
+    expect(detail.status()).toBe(200);
+    for (const text of [title, "Budaya Jepang", "Sensei Hana"]) expect(await detail.text()).toContain(text);
+    await page.goto(`/blog/${created.slug}`);
+    await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
     await expectNoOverflow(page);
   });
 }

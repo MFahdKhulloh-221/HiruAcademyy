@@ -8,7 +8,7 @@ export type Article = { id: string; title: string; slug: string; excerpt: string
 
 export function BlogThumbnail({ src, title, full = false }: { src: string; title: string; full?: boolean }) {
   const [failed, setFailed] = useState(false);
-  return src && !failed ? <Image src={contentMedia(src)} alt={`Thumbnail ${title}`} width={full ? 792 : 364} height={full ? 340 : 200} unoptimized className="admin-blog-preview-image" onError={() => setFailed(true)} /> : <span>{failed ? "Gambar tidak dapat dimuat" : "No Image"}</span>;
+  return src && !failed ? <Image src={contentMedia(src)} alt={`Thumbnail ${title}`} width={full ? 792 : 364} height={full ? 340 : 200} unoptimized className="admin-blog-preview-image" onError={() => setFailed(true)} /> : <span>{failed ? "Gambar tidak dapat dimuat" : "Gambar belum ditambahkan"}</span>;
 }
 
 function ArticleMeta({ article, date }: { article: Article; date: string }) {
