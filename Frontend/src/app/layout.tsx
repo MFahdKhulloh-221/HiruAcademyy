@@ -10,6 +10,7 @@ const plusJakartaSans = Plus_Jakarta_Sans({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://hiruacademy.id"),
   title: {
     default: "HIRU Academy",
     template: "%s | HIRU Academy",
@@ -20,7 +21,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html lang="id" className={`${plusJakartaSans.variable} h-full antialiased`}>
-      <body className="flex min-h-full flex-col"><AuthProvider>{children}</AuthProvider></body>
+      <body className="flex min-h-full flex-col"><script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify([{ "@context": "https://schema.org", "@type": "Organization", "@id": "https://hiruacademy.id/#organization", name: "HIRU Academy", url: "https://hiruacademy.id" }, { "@context": "https://schema.org", "@type": "WebSite", "@id": "https://hiruacademy.id/#website", name: "HIRU Academy", url: "https://hiruacademy.id", inLanguage: "id-ID", publisher: { "@id": "https://hiruacademy.id/#organization" } }]) }} /><AuthProvider>{children}</AuthProvider></body>
     </html>
   );
 }

@@ -48,7 +48,13 @@
     ".next/playwright-3027/types/**/*.ts",
     ".next/playwright-3027/dev/types/**/*.ts",
     ".next/playwright-3028/types/**/*.ts",
-    ".next/playwright-3028/dev/types/**/*.ts"
+    ".next/playwright-3028/dev/types/**/*.ts",
+    ".next/playwright-3039/types/**/*.ts",
+    ".next/playwright-3039/dev/types/**/*.ts",
+    ".next/playwright-3411/types/**/*.ts",
+    ".next/playwright-3411/dev/types/**/*.ts",
+    ".next/playwright-3415/types/**/*.ts",
+    ".next/playwright-3415/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules"

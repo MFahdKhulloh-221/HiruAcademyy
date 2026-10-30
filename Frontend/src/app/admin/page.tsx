@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useState } from "react";
 import { useLearningRequest } from "@/components/learning-hooks";
-import { LuCalendar, LuClipboardCheck, LuExternalLink, LuFolder, LuNewspaper, LuReceipt, LuUsers } from "react-icons/lu";
+import { LuCalendar, LuClipboardCheck, LuFolder, LuNewspaper, LuReceipt, LuUsers } from "react-icons/lu";
 import { commercialData } from "@/lib/commercial-api";
 import { AdminShell } from "@/components/admin-shell";
 import { AdminBreadcrumb, AdminDataTable, AdminDialog, AdminPageHeader, AdminSection, AdminStatusBadge } from "@/components/admin-primitives";
@@ -35,7 +35,7 @@ export default function AdminDashboardPage() {
   const selected = users.find(row => row.id === selectedUser?.id) ?? null;
   return <AdminShell current="/admin"><main className="admin-page admin-dashboard">
     <AdminBreadcrumb items={[{ label: "Admin" }, { label: "Dashboard" }]} />
-    <AdminPageHeader title="Dashboard Admin" description="Pilih area pengelolaan dan tinjau status hak akses siswa." actions={<a className="admin-dashboard-preview" href="/" target="_blank" rel="noopener noreferrer">Pratinjau frontend<LuExternalLink size={18} aria-hidden="true" /></a>} />
+    <AdminPageHeader title="Dashboard Admin" description="Pilih area pengelolaan dan tinjau status hak akses siswa." />
     <AdminSection title="Menu Cepat" className="admin-dashboard-menu"><div className="admin-quick-actions">{quickActions.map((item) => <Link href={item.href} key={item.href} className={item.highlight ? "admin-quick-action-highlight" : undefined}><span className={`admin-quick-action-icon tone-${item.tone}`}><item.icon size={24} aria-hidden="true" /></span><strong>{item.label}</strong><span className="admin-quick-action-description">{item.detail}</span></Link>)}</div></AdminSection>
     {error && <p role="alert">{error}</p>}
     <AdminSection title="Daftar Pengguna dan Status Hak Akses">

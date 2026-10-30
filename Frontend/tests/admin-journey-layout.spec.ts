@@ -26,6 +26,9 @@ for (const width of [1440, 768, 390]) {
     await expect(dialog.getByLabel("Slug")).toHaveCount(0);
     await dialog.getByLabel("Nama program", { exact: true }).fill("JLPT N2");
     await dialog.getByLabel("Deskripsi / informasi program").fill("Tata bahasa kompleks");
+    await dialog.getByRole("combobox", { name: "Paket", exact: true }).selectOption("lms");
+    await dialog.getByLabel("Durasi (bulan)", { exact: true }).fill("3");
+    await dialog.getByLabel("Harga dasar (IDR)", { exact: true }).fill("150000");
     await dialog.getByRole("button", { name: "Simpan", exact: true }).click();
     await expect(dialog).toHaveCount(0);
     expect(writes[0].body.slug).toMatch(/^jlpt-n2-[a-f0-9-]+$/);

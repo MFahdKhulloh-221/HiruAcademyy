@@ -6,7 +6,7 @@ import { useState } from "react";
 import { ProfileScreen } from "@/components/profile-screen";
 import { StudentHeaderActions } from "@/components/student-header-actions";
 import { LuArrowLeft, LuAward, LuBookOpen, LuCircleCheck, LuGraduationCap, LuReceipt, LuShieldCheck } from "react-icons/lu";
-import { useAuth } from "@/components/auth-provider";
+import { StudentAffiliateScreen } from "@/components/student-affiliate-screen";
 import { StudentBreadcrumb } from "@/components/student-breadcrumb";
 import { StudentNavigation } from "@/components/student-navigation";
 import { StudentNotificationsScreen } from "@/components/student-notifications-screen";
@@ -16,7 +16,7 @@ import { StudentLeaderboardScreen } from "@/components/student-leaderboard-scree
 import { StudentCertificateCenter } from "@/components/certificate-detail-screen";
 import { LearningLibrary } from "@/components/learning-library";
 import { PracticeScreen } from "@/components/practice-screen";
-import { useCommercialAffiliate, useCommercialInvoice, useCommercialOrder } from "@/components/commercial-hooks";
+import { useCommercialInvoice, useCommercialOrder } from "@/components/commercial-hooks";
 import { commercialCode } from "@/lib/commercial-api";
 import { invoiceWhatsAppUrl } from "@/lib/admin-whatsapp";
 import type { LearningAccess, LearningProgram } from "@/lib/learning-api";
@@ -33,7 +33,7 @@ export function SupportingScreen(props: Props) {
   if (kind === "practice") return <PracticeScreen membership={membership} resolvedCatalog={props} />;
   return <div className="supporting-shell student-shell"><StudentNavigation membership={membership} /><main className={`supporting-main ${kind === "renewal" ? "renewal" : kind}-page`}>
     <StudentHeaderActions membership={membership} />
-    {kind === "notifications" ? <StudentNotificationsScreen /> : kind === "community" ? <StudentCommunityScreen membership={membership} /> : kind === "progress" ? <StudentProgressScreen membership={membership} /> : kind === "leaderboard" ? <StudentLeaderboardScreen /> : kind === "certificate" ? <StudentCertificateCenter /> : kind === "profile" ? <ProfileScreen access={props.access} programs={props.programs} /> : kind === "affiliate" ? <AffiliateScreen /> : kind === "renewal" ? <RenewalScreen {...props} /> : <EmptySupportingScreen kind={kind} />}
+    {kind === "notifications" ? <StudentNotificationsScreen /> : kind === "community" ? <StudentCommunityScreen membership={membership} /> : kind === "progress" ? <StudentProgressScreen membership={membership} /> : kind === "leaderboard" ? <StudentLeaderboardScreen /> : kind === "certificate" ? <StudentCertificateCenter /> : kind === "profile" ? <ProfileScreen access={props.access} programs={props.programs} /> : kind === "affiliate" ? <StudentAffiliateScreen /> : kind === "renewal" ? <RenewalScreen {...props} /> : <EmptySupportingScreen kind={kind} />}
   </main></div>;
 }
 
@@ -42,35 +42,6 @@ function EmptySupportingScreen({ kind }: { kind: SupportingKind }) {
   return <>{kind === "createPost" && <StudentBreadcrumb items={[{ label: "Diskusi Member", href: "/community" }, { label: "Buat Diskusi" }]} />}<header className="supporting-header"><p className="dash-kicker">{data.eyebrow}</p><h1>{data.title}</h1><p>{data.description}</p></header><section className="library-empty"><p role="status">OPEN: layanan ini belum tersedia. Belum ada data untuk ditampilkan.</p>{kind === "progress" && <Link className="button button-secondary" href="/journey">Perjalanan Level</Link>}</section></>;
 }
 
-
-function AffiliateScreen() {
-  const { user } = useAuth();
-  const { data, error, retry } = useCommercialAffiliate();
-  const code = data?.affiliate?.status === "active" ? data.code : null;
-  const copyKey = `${user?.id}/${code}`;
-  const [copy, setCopy] = useState<{ key: string; status: "busy" | "success" | "error" }>();
-  const copyStatus = copy?.key === copyKey ? copy.status : undefined;
-  async function copyCode() {
-    if (!code || copyStatus === "busy") return;
-    setCopy({ key: copyKey, status: "busy" });
-    try {
-      await navigator.clipboard.writeText(code);
-      setCopy({ key: copyKey, status: "success" });
-    } catch {
-      setCopy({ key: copyKey, status: "error" });
-    }
-  }
-  return <><header className="supporting-header"><p className="dash-kicker">PROGRAM AFILIASI &amp; REFERRAL</p><h1>Program Affiliate Hiru Academy</h1><p>Bagikan kode atau link affiliate. Teman mendapat diskon pendaftaran, dan kamu memperoleh komisi.</p></header>
-    {error && <p role="alert">{error} <button type="button" onClick={retry}>Coba Lagi</button></p>}{!data && !error && <LoadingSkeleton variant="stats" label="Memuat affiliate…" />}
-    {data && <><section className="affiliate-share-card"><div className="affiliate-code-box" style={{ minWidth: 0, overflowWrap: "anywhere" }}>
-      {data.affiliate && <><p>Pemilik Referral</p><h2>{data.affiliate.name}</h2><p>Status Affiliate: {data.affiliate.status === "active" ? "Aktif" : "Tidak aktif"}</p></>}
-      {code ? <><p>Kode Referral Aktif</p><div className="affiliate-input-row" style={{ flexWrap: "wrap", minWidth: 0 }}><code style={{ minWidth: 0, whiteSpace: "normal", overflowWrap: "anywhere" }}>{code}</code><button type="button" className="button button-primary" disabled={copyStatus === "busy"} onClick={() => void copyCode()}>Salin Kode Referral</button></div>
-        {copyStatus === "success" && <p role="status">Kode referral berhasil disalin.</p>}
-        {copyStatus === "error" && <p role="alert">Kode referral gagal disalin. Salin kode secara manual atau periksa izin clipboard browser.</p>}
-      </> : data.affiliate && <p role="status">Belum ada kode referral aktif.</p>}
-    </div></section><section className="profile-stats">{([ ["pending", "Komisi Belum Dicairkan"], ["approved", "Komisi valid"], ["paid", "Komisi Sudah Dicairkan"] ] as const).map(([key, label]) => <div key={key}><strong>{money(data.totals[key])}</strong><span>{label}</span></div>)}</section>{!data.affiliate && <section className="library-empty"><p>Belum ada data affiliate.</p></section>}</>}
-  </>;
-}
 
 function RenewalScreen({ membership, access, programs, targetProgram, breadcrumbCurrent, invoiceId }: Props) {
   const isFree = membership === "free";

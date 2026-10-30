@@ -38,7 +38,7 @@ class AppServiceProvider extends ServiceProvider
                 $programSeed = $event->command === 'db:seed'
                     && in_array($event->input->getOption('class'), ['ProgramSeeder', 'Database\\Seeders\\ProgramSeeder', 'ProgramOfferSeeder', 'Database\\Seeders\\ProgramOfferSeeder'], true);
                 $demoSeed = $this->app->environment('local') && $event->command === 'db:seed'
-                    && in_array($event->input->getOption('class'), ['TryOutN5DemoSeeder', 'Database\\Seeders\\TryOutN5DemoSeeder'], true);
+                    && in_array($event->input->getOption('class'), ['TryOutN5DemoSeeder', 'Database\\Seeders\\TryOutN5DemoSeeder', 'DemoQuestionsSeeder', 'Database\\Seeders\\DemoQuestionsSeeder'], true);
                 if (! $this->app->environment('testing') && ! $programSeed && ! $demoSeed && in_array($event->command, ['migrate:fresh', 'migrate:refresh', 'migrate:reset', 'migrate:rollback', 'db:wipe', 'db:seed'], true)) {
                     throw new \RuntimeException('Operasi destruktif diblokir pada database normal.');
                 }

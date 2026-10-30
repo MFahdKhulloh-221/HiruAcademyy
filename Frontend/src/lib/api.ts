@@ -89,7 +89,7 @@ async function request(path: string, options: RequestInit): Promise<Response> {
       const detail = Object.values(errors).flat().slice(0, 5).join(" ");
       throw new ApiError(response.status, errors, response.status === 403 && path === "/api/placement/attempts" && options.method === "POST" ? "Kamu sedang masuk sebagai Admin. Silakan keluar dari akun Admin terlebih dahulu untuk mengikuti Placement Test." : response.status === 409 ? "Jawaban atau sesi berubah. Muat ulang halaman untuk melanjutkan data yang tersimpan." : detail || undefined);
     }
-    throw new ApiError(response.status, errors);
+    throw new ApiError(response.status, errors, path === "/api/auth/register" && response.status >= 500 ? "Pendaftaran belum berhasil karena gangguan sistem. Silakan coba lagi nanti." : undefined);
   }
   return response;
 }

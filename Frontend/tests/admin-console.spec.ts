@@ -11,6 +11,43 @@ const menu = ["Dashboard", "Harga & Promo", "Showcase", "Sensei", "Testimoni", "
 const routes = ["/admin", "/admin/landing-page", "/admin/program-harga", "/admin/kurikulum-materi", "/admin/bank-soal", "/admin/placement-hasil", "/admin/pengguna-akses", "/admin/invoice", "/admin/affiliate-komisi", "/admin/pencairan-komisi", "/admin/testimoni", "/admin/blog-seo", "/admin/pengumuman", "/admin/sensei", "/admin/kelas-jadwal", "/admin/analitik", "/admin/pengaturan-integrasi"];
 const groups = ["DASHBOARD", "LANDING & PUBLIC", "PEMBELAJARAN", "OPERASIONAL"];
 
+test("sidebar retains menu scroll across admin navigation", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 650 });
+  await page.goto("/admin");
+  const nav = page.getByRole("navigation", { name: "Navigasi admin" });
+  await expect(nav).toBeVisible();
+  const target = nav.getByRole("link", { name: "Moderasi Komunitas", exact: true });
+  await target.scrollIntoViewIfNeeded();
+  const before = await nav.evaluate(element => element.scrollTop);
+  expect(before).toBeGreaterThan(0);
+  await target.click();
+  await expect(page).toHaveURL(/\/admin\/komunitas$/);
+  await expect.poll(() => nav.evaluate(element => element.scrollTop)).toBe(before);
+  await expect(target).toBeInViewport();
+});
+
+test("mobile sidebar reopens without jumping to first menu", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 700 });
+  await page.goto("/admin");
+  await page.getByRole("button", { name: "Buka navigasi admin" }).click();
+  const nav = page.getByRole("navigation", { name: "Navigasi admin" });
+  const target = nav.getByRole("link", { name: "Moderasi Komunitas", exact: true });
+  await target.scrollIntoViewIfNeeded();
+  const before = await nav.evaluate(element => element.scrollTop);
+  expect(before).toBeGreaterThan(0);
+  await target.click();
+  await expect(page).toHaveURL(/\/admin\/komunitas$/);
+  await page.getByRole("button", { name: "Buka navigasi admin" }).click();
+  await expect(target).toBeFocused();
+  await expect.poll(() => nav.evaluate(element => element.scrollTop)).toBe(before);
+  await expect(target).toBeInViewport();
+});
+
+test("sidebar marks query-link destination as current page", async ({ page }) => {
+  await page.goto("/admin/kurikulum-materi?tab=Program");
+  await expect(page.getByRole("navigation", { name: "Navigasi admin" }).getByRole("link", { name: "Journey / Program", exact: true })).toHaveAttribute("aria-current", "page");
+});
+
 test("sidebar groups 21 destinations and links back to site", async ({ page }) => {
   await page.goto("/admin");
   const nav = page.getByRole("navigation", { name: "Navigasi admin" });

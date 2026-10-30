@@ -8,7 +8,7 @@ export function AdminShell({ children, current, hideTopbar = false }: { children
     <AdminEditorNavigation><div className="admin-shell">
       <AdminNavigation current={current} />
       <div className="admin-main">
-        {!hideTopbar && <header className="admin-topbar"><strong>Admin Console</strong><span>Pratinjau frontend</span></header>}
+        {!hideTopbar && <header className="admin-topbar"><strong>Admin Console</strong></header>}
         {children}
       </div>
     </div></AdminEditorNavigation>
