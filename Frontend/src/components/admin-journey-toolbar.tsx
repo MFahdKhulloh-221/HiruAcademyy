@@ -23,8 +23,8 @@ export const journeyTabs = {
   "Mini Checkpoint": { href: journeyContentRoutes["Mini Checkpoint"], description: "Kelola soal, sesi, dan part Mini Checkpoint." },
 };
 
-export function AdminJourneyHeader({ tab }: { tab: keyof typeof journeyTabs }) {
-  return <><AdminPageHeader title={tab} description={journeyTabs[tab].description} /><AdminJourneyLinks current={journeyTabs[tab].href} /></>;
+export function AdminJourneyHeader({ tab, actions }: { tab: keyof typeof journeyTabs; actions?: ReactNode }) {
+  return <><AdminPageHeader title={tab} description={journeyTabs[tab].description} actions={actions} /><AdminJourneyLinks current={journeyTabs[tab].href} /></>;
 }
 
 export function AdminJourneyLinks({ current }: { current: string }) {
