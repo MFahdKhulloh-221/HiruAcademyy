@@ -36,8 +36,9 @@ export function AdminBlogCatalog({ label, catalog, onChanged }: {
     } catch (error) { setMessage(error instanceof Error ? error.message : `Status ${label.toLowerCase()} gagal disimpan.`); }
   }
 
-  return <AdminSection title={label === "Kategori" ? "Kategori Blog" : "Penulis / Kontributor"}>
-    <button type="button" className="button" disabled={busy || loading || Boolean(loadError)} onClick={() => { setError(""); setDraft({ id: crypto.randomUUID(), name: "", active: true }); }}>Tambah {label}</button>
+  return <AdminSection title={label === "Kategori" ? "Kategori Blog" : "Penulis / Kontributor"} actions={
+    <button type="button" className="button button-primary" disabled={busy || loading || Boolean(loadError)} onClick={() => { setError(""); setDraft({ id: crypto.randomUUID(), name: "", active: true }); }}>Tambah {label}</button>
+  }>
     {loadError && <p role="alert">{loadError} <button type="button" onClick={reload}>Muat Ulang {label}</button></p>}
     <p role="status">{message}</p>
     <AdminDataTable loading={loading} caption={`Daftar ${label} Blog`} rows={rows} rowKey={row => row.id} columns={[
