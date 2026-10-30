@@ -16,7 +16,6 @@ import styles from "./admin-placement-builder.module.css";
 
 const letters = ["A", "B", "C", "D"] as const;
 const categories = ["Bunpou", "Moji・Goi", "Dokkai", "Choukai"] as const;
-const levels = ["N5", "N4", "N3", "N2", "N1"] as const;
 const mediaTypes = ["Teks", "Gambar", "Audio", "Reading"] as const;
 type MediaType = typeof mediaTypes[number];
 type QuestionDraft = PlacementQuestion & { mediaType: MediaType; order: number };
@@ -27,7 +26,6 @@ function mediaType(question: PlacementQuestion): MediaType {
 
 function questionError(question: PlacementQuestion, kind = mediaType(question)) {
   if (!placementText(question.prompt).trim()) return "Pertanyaan wajib diisi.";
-  if (!levels.some(level => level === question.level)) return "Pilih level N5–N1.";
   if (!categories.some(category => category === question.category)) return "Pilih kategori yang tersedia.";
   if (question.answers.length !== 4 || question.answers.some(answer => !placementText(answer).trim())) return "Isi semua pilihan jawaban A–D.";
   if (!letters.some(letter => letter === question.correct)) return "Pilih jawaban benar.";
@@ -50,7 +48,10 @@ function PlacementEditor({ initial }: { initial: Awaited<ReturnType<typeof loadA
   const [configId, setConfigId] = useState(initial.config?.id);
   const [settings, setSettings] = useState(initial.settings);
   const [settingsDraft, setSettingsDraft] = useState<PlacementSettings | null>(null);
-  const [rows, setRows] = useState(initial.questions.map(placementQuestionView));
+  const [rows, setRows] = useState(initial.questions.map(question => ({ ...placementQuestionView(question), order: question.sort_order })));
+  const [bankCategory, setBankCategory] = useState("");
+  const groupCategory = categories.find(category => category === bankCategory);
+  const groupedRows = rows.filter(row => !categories.some(category => category === row.category) || !bankCategory || row.category === bankCategory);
   const [draft, setDraft] = useState<QuestionDraft | null>(null);
   const [deleting, setDeleting] = useState<PlacementQuestion | null>(null);
   const [busy, setBusy] = useState(false);
@@ -87,7 +88,7 @@ function PlacementEditor({ initial }: { initial: Awaited<ReturnType<typeof loadA
     try {
       await saveAdminPlacementQuestion(draft, configId, draft.order);
       const fresh = await loadAdminPlacement();
-      setRows(fresh.questions.map(placementQuestionView)); setDraft(null); setMessage("Soal disimpan.");
+      setRows(fresh.questions.map(question => ({ ...placementQuestionView(question), order: question.sort_order }))); setDraft(null); setMessage("Soal disimpan.");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Soal gagal disimpan. Muat ulang sebelum mencoba lagi jika koneksi terputus."); }
     finally { setBusy(false); }
   }
@@ -95,7 +96,8 @@ function PlacementEditor({ initial }: { initial: Awaited<ReturnType<typeof loadA
   function addQuestion() {
     setError(""); setMessage("");
     if (!configId) { setSettingsDraft(settings); setError("Simpan pengaturan tes terlebih dahulu, lalu tambah soal."); return; }
-    setDraft({ id: crypto.randomUUID(), prompt: "", answers: ["", "", "", ""], correct: "", category: "Bunpou", level: "N5", published: false, passage: null, explanation: "", imageUrl: "", audioUrl: "", mediaType: "Teks", order: Math.max(0, ...initial.questions.map(q => q.sort_order), rows.length) + 1 });
+    if (!groupCategory) { setError("Pilih kategori bank soal terlebih dahulu."); return; }
+    setDraft({ id: crypto.randomUUID(), prompt: "", answers: ["", "", "", ""], correct: "", category: groupCategory, level: null, published: false, passage: null, explanation: "", imageUrl: "", audioUrl: "", mediaType: "Teks", order: Math.max(0, ...rows.map(row => row.order)) + 1 });
   }
 
   const image = adminMediaUrl(draft?.imageUrl);
@@ -105,18 +107,30 @@ function PlacementEditor({ initial }: { initial: Awaited<ReturnType<typeof loadA
     <AdminPageHeader title="Placement Test" actions={<button type="button" className="button button-primary" onClick={() => { setError(""); setSettingsDraft({ ...settings }); }}><LuSettings aria-hidden="true" />Pengaturan Tes</button>} />
     {message && <p role="status">{message}</p>}
     <div className={styles.readinessRow}><section className={`${styles.summary} ${ready < 15 ? styles.warning : styles.ready}`} role="note" aria-label="Informasi kesiapan tes">{ready < 15 ? <LuTriangleAlert aria-hidden="true" /> : <LuCircleCheck aria-hidden="true" />}<p>{ready < 15 ? `Agar tes dapat tampil di halaman Placement Test, buat minimal 15 soal siap pakai. Saat ini ${ready} soal siap; tambahkan ${15 - ready} soal lagi.` : `${ready} soal siap. Semua soal aktif digunakan pada tes baru.`}</p></section>
-    <div className={styles.readinessActions}><button type="button" className="button button-primary" onClick={addQuestion}>+ Tambah Soal</button></div></div>
-    {!rows.length ? <AdminEmptyState title="Belum ada soal" description="Tambahkan soal pertama untuk memulai." /> : <ol className={styles.list} aria-label="Daftar soal Placement Test">{rows.map((row, index) => <li key={row.id} className={styles.card}>
-      <div className={styles.content}><div className={styles.meta}><strong>Soal {index + 1}</strong><span>{row.level ?? "Level belum diisi"}</span><span>{row.category}</span><AdminStatusBadge status={row.published ? "Published" : "Draft"} /></div><p className={styles.prompt}><PlacementRichText value={row.prompt} /></p>{questionError(row) && <small>Belum siap: {questionError(row)}</small>}</div>
-      <div className={styles.actions}><button type="button" className="button button-secondary" aria-label={`Edit soal ${index + 1}`} onClick={() => { setError(""); setDraft({ ...row, answers: [...row.answers], mediaType: mediaType(row), order: initial.questions.find(q => String(q.id) === row.id)?.sort_order ?? index + 1 }); }}>Edit</button><button type="button" className="button button-secondary" aria-label={`Hapus soal ${index + 1}`} onClick={() => { setError(""); setDeleting(row); }}>Hapus</button></div>
+    </div>
+    <section aria-label="Kelompok bank soal" className={`${styles.summary} ${styles.bank}`}>
+      <div className={styles.content}>
+        <h2>Bank Soal</h2>
+        <p>Pilih kategori sebelum menambah soal. Kategori soal mengikuti pilihan ini. Soal dengan kategori belum lengkap tetap ditampilkan untuk diperbaiki.</p>
+        <div className={styles.questionMeta}>
+          <label className="admin-field">Kategori kelompok<select value={bankCategory} onChange={event => setBankCategory(event.target.value)}><option value="">Semua kategori</option>{categories.map(category => <option key={category}>{category}</option>)}</select></label>
+        </div>
+        <div className={styles.bankFooter}><p>{groupCategory ? `Kategori: ${groupCategory}` : "Pilih kategori untuk menambah soal."} {groupedRows.length} soal ditampilkan.</p>
+        <button type="button" className="button button-primary" disabled={!groupCategory} onClick={addQuestion}>+ Tambah Soal</button></div>
+        {error && !draft && !settingsDraft && !deleting && <p role="alert">{error}</p>}
+      </div>
+    </section>
+    {!groupedRows.length ? <AdminEmptyState title="Belum ada soal" description="Pilih kelompok dan tambahkan soal pertama untuk memulai." /> : <ol className={styles.list} aria-label="Daftar soal Placement Test">{groupedRows.map((row, index) => <li key={row.id} className={styles.card}>
+      <div className={styles.content}><div className={styles.meta}><strong>Soal {index + 1}</strong><span>{row.category}</span><AdminStatusBadge status={row.published ? "Published" : "Draft"} /></div><p className={styles.prompt}><PlacementRichText value={row.prompt} /></p>{questionError(row) && <small>Belum siap: {questionError(row)}</small>}</div>
+      <div className={styles.actions}><button type="button" className="button button-secondary" aria-label={`Edit soal ${index + 1}`} onClick={() => { setError(""); setDraft({ ...row, answers: [...row.answers], mediaType: mediaType(row), order: row.order }); }}>Edit</button><button type="button" className="button button-secondary" aria-label={`Hapus soal ${index + 1}`} onClick={() => { setError(""); setDeleting(row); }}>Hapus</button></div>
     </li>)}</ol>}
 
     <AdminDialog open={Boolean(draft)} title={rows.some(row => row.id === draft?.id) ? "Edit Soal" : "Tambah Soal"} close={close}>
       {draft && <form className={`admin-prototype-form ${styles.form} ${styles.questionForm}`} onSubmit={saveQuestion}>
         <fieldset disabled={busy} className={styles.fields}>
           <div className={styles.questionMeta}>
-            <label className="admin-field">Level<select value={draft.level ?? ""} onChange={event => setDraft({ ...draft, level: levels.find(level => level === event.target.value) ?? null })} required><option value="">Pilih level</option>{levels.map(level => <option key={level}>{level}</option>)}</select></label>
-            <label className="admin-field">Kategori<select value={draft.category} onChange={event => setDraft({ ...draft, category: event.target.value })}>{categories.map(category => <option key={category}>{category}</option>)}</select></label>
+            <p role="note" aria-label="Metadata kelompok soal">Kategori soal: <strong>{draft.category}</strong>. Kategori tetap saat soal diedit.</p>
+            {!categories.some(category => category === draft.category) && <div><p>Kategori lama belum lengkap. Pilih kategori di bank soal, lalu terapkan sebelum menyimpan.</p><button type="button" className="button button-secondary" disabled={!groupCategory} onClick={() => { if (groupCategory) setDraft({ ...draft, category: groupCategory }); }}>Gunakan kategori bank terpilih</button></div>}
             <label className="admin-field">Jenis soal<select value={draft.mediaType} onChange={event => setDraft({ ...draft, mediaType: event.target.value as MediaType, image: undefined, audio: undefined, imageUrl: "", audioUrl: "", passage: null })}>{mediaTypes.map(kind => <option key={kind}>{kind}</option>)}</select></label>
           </div>
           {(draft.mediaType === "Gambar" || draft.mediaType === "Audio") && <div className={styles.media}>

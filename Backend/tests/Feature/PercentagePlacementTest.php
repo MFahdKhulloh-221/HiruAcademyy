@@ -56,6 +56,22 @@ class PercentagePlacementTest extends TestCase
         $this->assertSame(14, $config->questions()->count());
     }
 
+    public function test_questions_without_level_are_ready_and_keep_percentage_recommendation(): void
+    {
+        $config = $this->config(15);
+        $config->questions()->update(['level' => null]);
+        $this->getJson('/api/placement')->assertOk()->assertJsonPath('data.is_ready', true)->assertJsonPath('data.question_count', 15);
+        $attempt = $this->start();
+        $this->assertCount(15, $attempt['questions']);
+        $answers = array_fill_keys(array_column($attempt['questions'], 'id'), 'A');
+        foreach (array_slice($attempt['questions'], 0, 9) as $question) {
+            $answers[$question['id']] = 'B';
+        }
+        $this->postJson('/api/placement/attempts/'.$attempt['id'].'/submit', ['answers' => $answers, 'revision' => 0])
+            ->assertOk()->assertJsonPath('data.result.correct', 9)->assertJsonPath('data.result.wrong', 6)
+            ->assertJsonPath('data.result.percentage', 60)->assertJsonPath('data.result.recommendation_level', 'N3');
+    }
+
     public function test_percentages_thresholds_and_idempotency(): void
     {
         foreach ([[15, 15, 100, 'N1'], [15, 0, 0, 'N5'], [20, 16, 80, 'N2'], [25, 20, 80, 'N2'], [20, 4, 20, 'N5'], [20, 5, 25, 'N4'], [20, 9, 45, 'N4'], [20, 10, 50, 'N3'], [20, 13, 65, 'N3'], [20, 14, 70, 'N2'], [20, 17, 85, 'N1'], [101, 25, 2500 / 101, 'N5'], [101, 50, 5000 / 101, 'N4'], [101, 70, 7000 / 101, 'N3'], [101, 85, 8500 / 101, 'N2']] as [$total, $correct, $percentage, $level]) {

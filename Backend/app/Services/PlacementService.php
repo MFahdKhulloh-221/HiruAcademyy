@@ -468,7 +468,7 @@ class PlacementService
 
     private function validBank(PlacementConfig $config): Collection
     {
-        return $config->questions()->where('status', 'published')->whereIn('level', self::LEVELS)->orderBy('sort_order')->orderBy('id')->get()->filter(function ($q) {
+        return $config->questions()->where('status', 'published')->orderBy('sort_order')->orderBy('id')->get()->filter(function ($q) {
             return trim($q->prompt) !== '' && in_array($q->category, self::CATEGORIES, true)
                 && in_array($q->correct_option, ['A', 'B', 'C', 'D'], true)
                 && ($q->category !== 'Choukai' || (is_string($q->audio_url) && trim($q->audio_url) !== ''))

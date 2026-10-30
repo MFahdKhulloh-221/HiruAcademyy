@@ -6,32 +6,35 @@ import type { AdminAssessment, AdminAssessmentQuestion } from "@/components/admi
 export type AdminTryOut = AdminAssessment & { sessionPassingScores?: Record<string, number> | null };
 type Question = { passage_id?: number | null; instruction?: string | null; japanese?: AdminAssessmentQuestion["japanese"] | null; id: number; session: string; question: string; options: Record<string, string>; correct_option: string; explanation: string | null; reading_passage: string | null; audio_url: string | null; point_value: number; sort_order: number; status: string };
 type Assessment = { studio_revision?: string; passages?: { id: number; title: string; body: string }[]; access_type?: "free" | "membership"; max_score: number; sort_order: number; session_passing_scores: Record<string, number> | null; id: number; program_id: number; title: string; status: string; total_passing_score: number | null; duration_minutes?: number | null; questions?: Question[] };
-export async function loadAdminTryOuts(signal?: AbortSignal): Promise<AdminTryOut[]> {
-  const [catalog, programs] = await Promise.all([apiRequest<{ data: Assessment[] }>("/api/admin/try-outs", { signal }), apiRequest<{ data: { id: number; code: string }[] }>("/api/admin/programs", { signal })]);
+export function adminAssessmentApi(kind: "tryout" | "checkpoint" = "tryout") {
+const endpoint = kind === "checkpoint" ? "/api/admin/checkpoint-packages" : "/api/admin/try-outs";
+const title = kind === "checkpoint" ? "Checkpoint" : "Try Out";
+async function loadAdminTryOuts(signal?: AbortSignal): Promise<AdminTryOut[]> {
+  const [catalog, programs] = await Promise.all([apiRequest<{ data: Assessment[] }>(endpoint, { signal }), apiRequest<{ data: { id: number; code: string }[] }>("/api/admin/programs", { signal })]);
   return Promise.all(catalog.data.map(async item => {
-    const { data } = await apiRequest<{ data: Assessment }>(`/api/admin/try-outs/${item.id}`, { signal });
-    return { studioRevision: data.studio_revision, passages: (data.passages ?? []).map(passage => ({ ...passage, id: String(passage.id) })), accessType: data.access_type ?? "membership", id: String(data.id), kind: "tryout", title: data.title, context: programs.data.find(program => program.id === data.program_id)?.code.toUpperCase() ?? "", chapter: "", session: "", part: "", duration: data.duration_minutes == null ? "" : String(data.duration_minutes), sessionPassingScores: data.session_passing_scores, maxScore: String(data.max_score), passingScore: data.total_passing_score === null ? "" : String(data.total_passing_score), order: String(data.sort_order), status: data.status === "published" ? "Published" : "Draft", questions: (data.questions ?? []).map(question => ({ passageId: question.passage_id == null ? null : String(question.passage_id), id: String(question.id), section: assessmentSessionLabels[assessmentSessions.indexOf(question.session as typeof assessmentSessions[number])] ?? "", type: question.session === "audio" ? "Audio" : question.session === "reading" ? "Reading" : "Multiple choice", prompt: question.question, instruction: question.instruction ?? "", japanese: question.japanese ?? undefined, answers: ["A", "B", "C", "D"].map(option => question.options[option]), correctAnswer: ["A", "B", "C", "D"].indexOf(question.correct_option), explanation: question.explanation ?? "", passage: question.reading_passage ?? "", file: null, order: String(question.sort_order), status: question.status === "published" ? "Published" : "Draft", audioUrl: question.audio_url ?? "", pointValue: question.point_value })) };
+    const { data } = await apiRequest<{ data: Assessment }>(`${endpoint}/${item.id}`, { signal });
+    return { studioRevision: data.studio_revision, passages: (data.passages ?? []).map(passage => ({ ...passage, id: String(passage.id) })), accessType: data.access_type ?? "membership", id: String(data.id), kind, title: data.title, context: programs.data.find(program => program.id === data.program_id)?.code.toUpperCase() ?? "", chapter: "", session: "", part: "", duration: data.duration_minutes == null ? "" : String(data.duration_minutes), sessionPassingScores: data.session_passing_scores, maxScore: String(data.max_score), passingScore: data.total_passing_score === null ? "" : String(data.total_passing_score), order: String(data.sort_order), status: data.status === "published" ? "Published" : "Draft", questions: (data.questions ?? []).map(question => ({ passageId: question.passage_id == null ? null : String(question.passage_id), id: String(question.id), section: assessmentSessionLabels[assessmentSessions.indexOf(question.session as typeof assessmentSessions[number])] ?? "", type: question.session === "audio" ? "Audio" : question.session === "reading" ? "Reading" : "Multiple choice", prompt: question.question, instruction: question.instruction ?? "", japanese: question.japanese ?? undefined, answers: ["A", "B", "C", "D"].map(option => question.options[option]), correctAnswer: ["A", "B", "C", "D"].indexOf(question.correct_option), explanation: question.explanation ?? "", passage: question.reading_passage ?? "", file: null, order: String(question.sort_order), status: question.status === "published" ? "Published" : "Draft", audioUrl: question.audio_url ?? "", pointValue: question.point_value })) };
   }));
 }
 function questionPayload(question: AdminAssessmentQuestion) {
   return { passage_id: question.passageId ?? null, session: assessmentSessions[assessmentSessionLabels.indexOf(question.section as typeof assessmentSessionLabels[number])], question: question.prompt, instruction: question.instruction || null, japanese: question.japanese?.text ? question.japanese : null, options: Object.fromEntries(question.answers.map((answer, index) => [["A", "B", "C", "D"][index], answer])), correct_option: ["A", "B", "C", "D"][question.correctAnswer], explanation: question.explanation || null, reading_passage: question.passageId ? null : question.passage || null, audio_url: question.audioUrl || null, point_value: question.pointValue ?? 1, sort_order: Number(question.order), status: question.status.toLowerCase() };
 }
-export async function setAdminTryOutStatus(id: string, status: AdminAssessment["status"]) {
-  await apiRequest(`/api/admin/try-outs/${id}`, { method: "PATCH", body: JSON.stringify({ status: status.toLowerCase() }) });
+async function setAdminTryOutStatus(id: string, status: AdminAssessment["status"]) {
+  await apiRequest(`${endpoint}/${id}`, { method: "PATCH", body: JSON.stringify({ status: status.toLowerCase() }) });
 }
-export async function publishAdminTryOutQuestions(id: string) {
-  return (await apiRequest<{ data: { try_out_id: number; published_count: number } }>(`/api/admin/try-outs/${id}/questions/publish`, { method: "POST" })).data;
+async function publishAdminTryOutQuestions(id: string) {
+  return (await apiRequest<{ data: { try_out_id: number; published_count: number } }>(`${endpoint}/${id}/questions/publish`, { method: "POST" })).data;
 }
-export function adminTryOutError(cause: unknown) {
+function adminTryOutError(cause: unknown) {
   if (!(cause instanceof ApiError)) return cause instanceof Error ? cause.message : "Permintaan belum berhasil. Silakan coba lagi.";
   if (cause.status === 401 || cause.status === 419) return "Sesi berakhir. Silakan masuk kembali.";
   if (cause.status === 403) return "Akses admin diperlukan. Anda tidak diizinkan melakukan tindakan ini.";
   if (cause.status === 422) return [cause.message, ...Object.entries(cause.errors).flatMap(([field, messages]) => messages.map(message => `${field}: ${message}`))].join(" ");
   if (cause.status === 429) return "Terlalu banyak percobaan. Silakan coba lagi nanti.";
-  if (cause.status >= 500) return "Data Try Out belum dapat dimuat dari server. Silakan Coba Lagi; jika tetap gagal, periksa log backend dan migration lokal.";
+  if (cause.status >= 500) return `Data ${title} belum dapat dimuat dari server. Silakan Coba Lagi; jika tetap gagal, periksa log backend dan migration lokal.`;
   return cause.message;
 }
-export async function saveAdminTryOut(item: AdminTryOut, baseline?: AdminTryOut) {
+async function saveAdminTryOut(item: AdminTryOut, baseline?: AdminTryOut) {
   const { data: programs } = await apiRequest<{ data: { id: number; code: string }[] }>("/api/admin/programs");
   const program = programs.find(program => program.code.toUpperCase() === item.context);
   if (!program) throw new ApiError(422);
@@ -39,18 +42,22 @@ export async function saveAdminTryOut(item: AdminTryOut, baseline?: AdminTryOut)
   if (item.questions.some(question => !question.pointValue || !Number.isSafeInteger(question.pointValue))) throw new Error("Point value wajib diisi.");
   if (item.duration !== "" && (!Number.isSafeInteger(Number(item.duration)) || Number(item.duration) < 1 || Number(item.duration) > 2147483647)) throw new ApiError(422, { duration_minutes: ["Durasi harus berupa bilangan bulat positif."] });
   const existing = /^\d+$/.test(item.id);
-  const path = `/api/admin/try-outs${existing ? `/${item.id}` : ""}`;
+  const path = `${endpoint}${existing ? `/${item.id}` : ""}`;
   const settings = { access_type: item.accessType ?? "membership", program_id: program.id, title: item.title, max_score: Number(item.maxScore), sort_order: Number(item.order), ...(item.sessionPassingScores !== undefined ? { session_passing_scores: item.sessionPassingScores } : {}), status: item.status.toLowerCase(), duration_minutes: item.duration === "" ? null : Number(item.duration), total_passing_score: item.passingScore === "" ? null : Number(item.passingScore) };
   const id = existing ? item.id : String((await apiRequest<{ data: Assessment }>(path, { method: "POST", body: JSON.stringify({ ...settings, status: "draft" }) })).data.id);
-  const revision = existing ? baseline?.studioRevision ?? item.studioRevision : (await apiRequest<{ data: Assessment }>(`/api/admin/try-outs/${id}`)).data.studio_revision;
-  await apiRequest(`/api/admin/try-outs/${id}/studio`, { method: "PUT", body: JSON.stringify({
+  const revision = existing ? baseline?.studioRevision ?? item.studioRevision : (await apiRequest<{ data: Assessment }>(`${endpoint}/${id}`)).data.studio_revision;
+  await apiRequest(`${endpoint}/${id}/studio`, { method: "PUT", body: JSON.stringify({
     revision, settings, passages: item.passages ?? [], questions: item.questions.map(question => ({ id: question.id, content: questionPayload(question) })),
     deleted_question_ids: (baseline?.questions ?? []).filter(question => !item.questions.some(current => current.id === question.id)).map(question => Number(question.id)),
     deleted_passage_ids: (baseline?.passages ?? []).filter(passage => !item.passages?.some(current => current.id === passage.id)).map(passage => Number(passage.id)),
   }) });
   return loadAdminTryOuts();
 }
-export async function deleteAdminTryOut(id: string, question?: AdminAssessmentQuestion) {
-  await apiRequest(`/api/admin/try-outs/${id}${question ? `/questions/${question.id}` : ""}`, { method: "DELETE" });
+async function deleteAdminTryOut(id: string, question?: AdminAssessmentQuestion) {
+  await apiRequest(`${endpoint}/${id}${question ? `/questions/${question.id}` : ""}`, { method: "DELETE" });
   return loadAdminTryOuts();
 }
+
+return { loadAdminTryOuts, saveAdminTryOut, deleteAdminTryOut, setAdminTryOutStatus, publishAdminTryOutQuestions, adminTryOutError };
+}
+export const { loadAdminTryOuts, saveAdminTryOut, deleteAdminTryOut, setAdminTryOutStatus, publishAdminTryOutQuestions, adminTryOutError } = adminAssessmentApi();

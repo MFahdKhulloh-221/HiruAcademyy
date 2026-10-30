@@ -108,7 +108,7 @@ export default function PlacementPage() {
                 display: "block",
                 background: "#fff7ed",
                 color: "#9a3412",
-                border: "1.5px solid #fed7aa",
+                border: "1.5px solid var(--line)",
                 fontWeight: 500,
               }}
             >

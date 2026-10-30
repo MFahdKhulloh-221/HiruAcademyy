@@ -48,7 +48,9 @@ async function mockStudio(page: Page) {
 
 async function openStudio(page: Page) {
   await page.goto("/admin/try-out");
-  await page.getByRole("row").filter({ hasText: "Simulasi JLPT N5" }).getByRole("button", { name: "Buka Builder", exact: true }).click();
+  await page.getByRole("tab", { name: "Bank Soal", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Daftar Try Out", exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Bank Soal", exact: true })).toBeVisible();
   await expect(page.getByRole("region", { name: "HIRU TRY OUT STUDIO", exact: true })).toBeVisible();
 }
 
@@ -160,7 +162,9 @@ for (const width of [1440, 768, 390]) {
     await studio.getByRole("button", { name: "Kembali ke Daftar", exact: true }).click();
     await expect(page.locator(".admin-topbar")).toHaveCount(1);
     await page.reload();
-    await page.getByRole("row").filter({ hasText: "Simulasi JLPT N5" }).getByRole("button", { name: "Buka Builder", exact: true }).click();
+    await page.getByRole("tab", { name: "Bank Soal", exact: true }).click();
+  await expect(page.getByRole("tab", { name: "Daftar Try Out", exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Bank Soal", exact: true })).toBeVisible();
     await studio.getByRole("tab", { name: "Reading (Dokkai)", exact: true }).click();
     await expect(page.getByRole("textbox", { name: "Pilihan C", exact: true }).locator("ruby rt")).toHaveText("せんせい");
     await expect(page.getByRole("textbox", { name: "Bacaan Bersama", exact: true }).locator("b, strong")).toBeVisible();
@@ -243,19 +247,26 @@ test("studio navigation, reorder, duplicate, delete and unsaved close guard", as
   expect(api.item.questions.filter(question => question.session === "vocabulary_kanji").sort((a, b) => a.sort_order - b.sort_order).map(question => question.id)).toEqual([7001, 7000, 7002, 7003, 7004]);
 });
 
-test("standalone Checkpoint rich text keeps field-local toolbars", async ({ page }) => {
-  await page.route("**/api/admin/chapters", route => route.fulfill({ json: { data: [{ id: 9, program_id: 1, chapter_number: 1, title: "Chapter 1", status: "published" }] } }));
-  await page.route("**/api/admin/checkpoint-questions**", route => route.fulfill({ json: { data: [{ id: 1, chapter_id: 9, question: "Standalone question", options: { A: "First", B: "Second", C: "Third", D: "Fourth" }, correct_option: "A", explanation: "Explanation", status: "draft", sort_order: 0 }] } }));
-  await page.route("**/api/admin/checkpoint-packages", route => route.fulfill({ json: { data: [] } }));
-  await page.goto("/admin/checkpoint");
-  await page.getByRole("tab", { name: "Bank Soal", exact: true }).click();
-  await page.getByRole("combobox", { name: "Program", exact: true }).selectOption("1");
-  await page.getByRole("combobox", { name: "Chapter", exact: true }).selectOption("9");
-  await page.getByRole("button", { name: "Soal 1 Standalone question", exact: true }).click();
+test("package detail save closes dialog and confirms saved order", async ({ page }) => {
+  const api = await mockStudio(page);
+  await page.goto("/admin/try-out");
+  await page.getByRole("button", { name: "Detail", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByLabel("Urutan", { exact: false }).fill("2");
+  await dialog.getByRole("button", { name: "Simpan Try Out", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(page.getByRole("status")).toContainText("Try Out berhasil disimpan.");
+  expect(api.item.sort_order).toBe(2);
+});
+
+test("tryout studio rich text keeps field-local toolbars", async ({ page }) => {
+  const api = await mockStudio(page);
+  api.item.questions[0].question = "Standalone question";
+  await openStudio(page);
   await expect(page.getByRole("textbox", { name: "Pertanyaan", exact: true })).toHaveText("Standalone question");
   await formatField(page, "Pertanyaan", "bold", "b, strong");
   await formatField(page, "Pilihan A", "italic", "i, em");
-  await expect(page.getByRole("toolbar", { name: "Format Pertanyaan", exact: true })).toHaveCount(1);
+  await expect(page.getByRole("toolbar", { name: "Format Pertanyaan", exact: true })).toHaveCount(0);
   await expect(page.getByRole("toolbar", { name: "Format Pilihan A", exact: true })).toHaveCount(1);
   await expect(page.getByRole("textbox", { name: "Pertanyaan", exact: true }).locator("i, em")).toHaveCount(0);
 });

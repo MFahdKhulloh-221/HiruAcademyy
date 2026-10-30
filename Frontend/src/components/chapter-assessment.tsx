@@ -36,7 +36,7 @@ export function ChapterAssessment({ level, chapterSlug, kind, context, resolvedC
   if (kind === "mini") return <MiniChapterAssessment key={`${program.id}/${chapter.id}`} programId={program.id} chapter={chapter} />;
   return <>
     {kind === "audio" && context && <Link className="button button-secondary" href={`/learn/${level}/${chapterSlug}`}>Kembali ke Aktivitas Chapter</Link>}
-    <BackendAssessmentRunner key={`${program.id}/${chapter.id}/${kind}`} path={chapterAttemptPath(program.id, chapter.id)} title={kind === "audio" ? "Audio" : "Reading"} className={kind === "reading" ? "learning-question-page reading-assessment" : undefined} startBody={{ kind }} autoStart={autoStart} />
+    <BackendAssessmentRunner key={`${program.id}/${chapter.id}/${kind}`} path={chapterAttemptPath(program.id, chapter.id)} title={kind === "audio" ? "Audio" : "Reading"} className={kind === "reading" ? "learning-question-page reading-assessment" : undefined} startBody={{ kind }} autoStart={autoStart} readingContext={kind === "reading" ? { label: `${program.name} · ${chapter.title}`, href: `/learn/${level}/${chapterSlug}` } : undefined} />
   </>;
 }
 

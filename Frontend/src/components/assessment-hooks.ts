@@ -103,8 +103,8 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
         url.searchParams.delete("start");
       }
       if ((domain === "tryout" || domain === "checkpoint")) {
-        url.searchParams.delete("tryout_stage");
-        url.searchParams.delete("tryout_question");
+        url.searchParams.delete(`${domain}_stage`);
+        url.searchParams.delete(`${domain}_question`);
       }
       if (scope) {
         url.searchParams.set("attempt_scope", scope);
@@ -168,7 +168,7 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
     return result;
   }
   async function abandon() {
-    if (domain !== "tryout" || !current?.attempt || pending.current) return false;
+    if ((domain !== "tryout" && domain !== "checkpoint") || !current?.attempt || pending.current) return false;
     pending.current = true;
     const version = generation.current;
     setState(previous => ({ ...previous, busy: true, error: undefined }));
@@ -180,7 +180,7 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
       latestAnswers.current = {};
       setState({ requestKey, answers: {}, loadingAttempt: false, busy: false });
       const url = new URL(window.location.href);
-      for (const key of ["attempt", "tryout_stage", "tryout_question"]) url.searchParams.delete(key);
+      for (const key of ["attempt", `${domain}_stage`, `${domain}_question`]) url.searchParams.delete(key);
       window.history.replaceState(null, "", url);
       return true;
     } catch (error) {

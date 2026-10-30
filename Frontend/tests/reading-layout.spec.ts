@@ -1,14 +1,15 @@
 import { expect, test } from "@playwright/test";
 
-for (const [width, height] of [[1280, 720], [1366, 768], [1440, 900], [768, 1024], [390, 844]]) {
+for (const [width, height] of [[1280, 720], [1366, 768], [1440, 810], [768, 1024], [390, 844]]) {
   test(`reading layout and answers ${width}x${height}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height });
     let failed = true;
     let answers: Record<string, string> = {};
     let completed = false;
+    const startedAt = new Date(Date.now() - 65000).toISOString();
     const passage = "毎朝、図書館で日本語を勉強します。友達と本を読んで、新しい言葉を書きます。午後は家に帰ります。";
-    const questions = [1, 2].map(id => ({ id, question: `Pertanyaan Reading ${id}`, passage: { id: 7, title: "図書館の一日", body: `${passage}\n\n${passage.repeat(80)}` }, options: { A: "図書館で勉強します。", B: "家で休みます。", C: "友達と買い物に行きます。", D: "学校で働きます。" } }));
-    const attempt = () => ({ id: 9, chapter_id: 11, kind: "reading", status: completed ? "completed" : "in_progress", revision: 1, questions, answers, result: completed ? { correct: 2, wrong: 0, unanswered: 0, percentage: 100 } : null });
+    const questions = [1, 2].map(id => ({ id, question: `Pertanyaan Reading ${id}${id === 2 ? "\n" + passage.repeat(60) : ""}`, passage: { id: 7, title: "図書館の一日", body: `${passage}\n\n${passage.repeat(80)}` }, options: { A: "図書館で勉強します。", B: "家で休みます。", C: "友達と買い物に行きます。", D: "学校で働きます。" } }));
+    const attempt = () => ({ id: 9, started_at: startedAt, chapter_id: 11, kind: "reading", status: completed ? "completed" : "in_progress", revision: 1, questions, answers, result: completed ? { correct: 2, wrong: 0, unanswered: 0, percentage: 100 } : null });
     await page.route(/\/(api\/|sanctum\/csrf-cookie)/, async route => {
       const path = new URL(route.request().url()).pathname;
       const method = route.request().method();
@@ -27,6 +28,7 @@ for (const [width, height] of [[1280, 720], [1366, 768], [1440, 900], [768, 1024
         if (failed) return route.fulfill({ headers, status: 503, json: { message: "Unavailable" } });
         if (method === "PUT") answers = route.request().postDataJSON().answers;
         if (path.endsWith("/submit")) completed = true;
+        if (path.endsWith("/review")) return reply({ ...attempt(), questions: questions.map(q => ({ ...q, correct_option: "A" })) });
         return reply(attempt());
       }
       return reply([]);
@@ -37,45 +39,55 @@ for (const [width, height] of [[1280, 720], [1366, 768], [1440, 900], [768, 1024
     await page.reload();
     const runner = page.locator(".reading-assessment");
     await expect(runner.getByRole("heading", { name: "Pertanyaan Reading 1", exact: true })).toBeVisible();
-    const layout = await runner.evaluate(el => {
-      const h2 = el.querySelector('.learning-question-card h2')!;
-      const passage = el.querySelector('.reading-passage > p')!;
-      const labels = [...el.querySelectorAll('label')];
-      return { questionFont: parseFloat(getComputedStyle(h2).fontSize), passageFont: parseFloat(getComputedStyle(passage).fontSize), labels: labels.map(label => { const r = label.getBoundingClientRect(); return { height: r.height, width: r.width, fits: label.scrollWidth <= label.clientWidth }; }) };
+    const passagePanel = runner.locator(".reading-passage");
+    const body = runner.getByRole("region", { name: "Isi teks Reading", exact: true });
+    const questionCard = runner.locator(".learning-question-card");
+    const geometry = await runner.evaluate(el => {
+      const rect = (selector: string) => el.querySelector(selector)!.getBoundingClientRect();
+      const passage = rect('.reading-passage');
+      const card = rect('.learning-question-card');
+      const bar = rect('.learning-question-actions');
+      const next = rect('.learning-question-actions button:last-child');
+      const sidebar = rect('.learning-question-sidebar');
+      return { passageBottom: passage.bottom, cardTop: card.top, cardBottom: card.bottom, cardRight: card.right, barTop: bar.top, barRight: bar.right, nextRight: next.right, sidebarLeft: sidebar.left };
     });
-    expect(layout.passageFont).toBeGreaterThanOrEqual(16);
-    if (width >= 1024) {
-      expect(layout.passageFont).toBeLessThanOrEqual(20);
-      expect(layout.questionFont).toBeLessThanOrEqual(22);
-      expect(await runner.locator('.learning-question-head h1').evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBeLessThanOrEqual(30);
-      expect(await runner.getByRole('button', { name: 'Selanjutnya', exact: true }).evaluate(el => el.getBoundingClientRect().bottom)).toBeLessThanOrEqual(height);
+    expect(geometry.passageBottom).toBeLessThanOrEqual(geometry.cardTop);
+    expect(geometry.cardBottom).toBeLessThanOrEqual(geometry.barTop);
+    expect(Math.abs(geometry.nextRight - geometry.barRight)).toBeLessThanOrEqual(1);
+    if (width >= 1024) expect(geometry.sidebarLeft).toBeGreaterThanOrEqual(geometry.cardRight);
+    await expect(questionCard.getByRole('radio')).toHaveCount(4);
+    await expect(runner.getByRole('button', { name: 'Sebelumnya', exact: true })).toHaveCount(0);
+    expect(await body.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
+    expect(await body.evaluate(el => parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(16);
+    await body.evaluate(el => { el.scrollTop = 160; });
+    for (const label of await questionCard.locator('label').all()) {
+      expect(await label.evaluate(el => el.getBoundingClientRect().height)).toBeGreaterThanOrEqual(44);
+      expect(await label.evaluate(el => el.scrollWidth <= el.clientWidth)).toBe(true);
     }
-    for (const label of layout.labels) { expect(label.height).toBeGreaterThanOrEqual(44); expect(label.fits).toBe(true); }
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: testInfo.outputPath(`reading-${width}.png`), fullPage: true });
-    const passagePanel = runner.locator('.reading-passage');
-    const questionCard = runner.locator('.learning-question-card');
-    const passageBox = await passagePanel.boundingBox();
-    const questionBox = await questionCard.boundingBox();
-    expect(passageBox).not.toBeNull();
-    expect(questionBox).not.toBeNull();
-    if (width >= 1024) {
-      expect(passageBox!.x + passageBox!.width).toBeLessThanOrEqual(questionBox!.x);
-      expect(await passagePanel.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
-      await passagePanel.evaluate(el => { el.scrollTop = 160; });
-    } else {
-      expect(passageBox!.y + passageBox!.height).toBeLessThanOrEqual(questionBox!.y);
-    }
+    const timer = runner.getByRole('timer');
+    await expect(timer.locator('strong')).toHaveText(/\d{2}:\d{2}/);
+    const readSeconds = async () => { const [m, s] = (await timer.locator('strong').innerText()).split(':').map(Number); return m * 60 + s; };
+    const before = await readSeconds();
+    expect(before).toBeGreaterThanOrEqual(65);
     const passageNode = await passagePanel.elementHandle();
     const url = page.url();
     await runner.getByRole('radio', { name: 'A. 図書館で勉強します。', exact: true }).check();
     await expect(runner.getByRole('status')).toHaveText('Tersimpan');
-    await runner.getByRole('button', { name: 'Selanjutnya', exact: true }).click();
-    await expect(runner.getByRole('heading', { name: 'Pertanyaan Reading 2', exact: true })).toBeVisible();
+    await expect(runner.getByRole('button', { name: 'Soal 1', exact: true })).toHaveAttribute('title', 'Terjawab');
+    await runner.getByRole('button', { name: 'Soal Berikutnya', exact: true }).click();
+    const copy = runner.getByRole('region', { name: 'Isi pertanyaan', exact: true });
+    await expect(copy).toContainText('Pertanyaan Reading 2');
+    await expect(runner.getByRole('button', { name: 'Sebelumnya', exact: true })).toBeVisible();
+    expect(await copy.evaluate(el => el.scrollHeight > el.clientHeight)).toBe(true);
+    await copy.evaluate(el => { el.scrollTop = 100; });
+    expect(await copy.evaluate(el => el.scrollTop)).toBeGreaterThan(0);
+    expect(await readSeconds()).toBeGreaterThanOrEqual(before);
     expect(page.url()).toBe(url);
-    await expect(passagePanel).toHaveCount(1);
     expect(await passagePanel.evaluate((el, previous) => el === previous, passageNode)).toBe(true);
-    if (width >= 1024) expect(await passagePanel.evaluate(el => el.scrollTop)).toBe(160);
+    expect(await body.evaluate(el => el.scrollTop)).toBe(160);
+    await expect(runner.getByRole('button', { name: 'Kumpulkan Jawaban', exact: true })).toBeDisabled();
     await runner.getByRole('button', { name: 'Soal 1', exact: true }).click();
     await expect(runner.getByRole('radio', { name: 'A. 図書館で勉強します。', exact: true })).toBeChecked();
     await runner.getByRole('button', { name: 'Soal 2', exact: true }).click();
@@ -83,11 +95,21 @@ for (const [width, height] of [[1280, 720], [1366, 768], [1440, 900], [768, 1024
     await expect(runner.getByRole('radio', { name: 'A. 図書館で勉強します。', exact: true })).toBeChecked();
     await page.reload();
     await expect(page.getByRole('radio', { name: 'A. 図書館で勉強します。', exact: true })).toBeChecked();
-    await page.getByRole('button', { name: 'Selanjutnya', exact: true }).click();
+    expect(await readSeconds()).toBeGreaterThanOrEqual(before);
+    await page.getByRole('button', { name: 'Soal Berikutnya', exact: true }).click();
     await page.getByRole('radio', { name: 'B. 家で休みます。', exact: true }).check();
     await expect(page.getByRole('button', { name: 'Kumpulkan Jawaban', exact: true })).toBeEnabled();
     await page.getByRole('button', { name: 'Kumpulkan Jawaban', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Hasil Reading', exact: true })).toBeVisible();
-    await expect(page.locator('.checkpoint-recommendation')).toContainText(/belum|tidak.*tersedia/i);
+    await expect(page.locator('.daily-result-stats')).toContainText('Jawaban benar');
+    await expect(page.locator('.daily-result-stats dd')).toHaveText(['2', '0', '0']);
+    await expect(page.locator('.daily-result-score strong')).toHaveText('100');
+    expect(answers).toEqual({ '1': 'A', '2': 'B' });
+    await page.getByRole('button', { name: 'Review Jawaban', exact: true }).click();
+    await expect(page.locator('.answer-review')).toBeVisible();
+    await expect(page.locator('.reading-workspace')).toHaveCount(1);
+    await expect(page.getByRole('heading', { name: 'Teks Reading', exact: true })).toBeVisible();
+    await expect(page.getByRole('timer')).toHaveCount(0);
+    await expect(page.getByRole('radio', { name: /A\. 図書館で勉強します。/ })).toBeDisabled();
   });
 }

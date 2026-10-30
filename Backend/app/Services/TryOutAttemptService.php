@@ -5,18 +5,25 @@ namespace App\Services;
 use App\Models\TryOut;
 use App\Models\TryOutAttempt;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class TryOutAttemptService
 {
+    protected string $assessmentModel = TryOut::class;
+    protected string $attemptModel = TryOutAttempt::class;
+    protected string $passageModel = \App\Models\TryOutPassage::class;
+    protected string $parentKey = 'try_out_id';
+    protected string $awardPrefix = 'tryout';
+
     public function __construct(private ChapterAccessPolicy $access, private TryOutService $content) {}
 
-    public function authorize(User $user, TryOut $tryOut, ?TryOutAttempt $attempt = null): void
+    public function authorize(User $user, Model $tryOut, ?Model $attempt = null): void
     {
         abort_unless($user->role === 'student' && $user->account_status === 'active', 403);
         if ($attempt) {
-            abort_unless($attempt->user_id === $user->id && $attempt->try_out_id === $tryOut->id, 404);
+            abort_unless($attempt->user_id === $user->id && $attempt->{$this->parentKey} === $tryOut->id, 404);
         }
         $program = $tryOut->program()->firstOrFail();
         $tryOut->setRelation('program', $program);
@@ -27,16 +34,16 @@ class TryOutAttemptService
         }
     }
 
-    public function canAccess(User $user, TryOut $tryOut): bool
+    public function canAccess(User $user, Model $tryOut): bool
     {
         return $tryOut->access_type === 'free'
             || ($this->access->canAccessChapter($user, $tryOut->program->code, 2));
     }
 
-    public function start(User $user, TryOut $tryOut): TryOutAttempt
+    public function start(User $user, Model $tryOut): Model
     {
         return DB::transaction(function () use ($user, $tryOut) {
-            $parent = TryOut::whereKey($tryOut->id)->lockForUpdate()->firstOrFail();
+            $parent = $this->assessmentModel::whereKey($tryOut->id)->lockForUpdate()->firstOrFail();
             $this->authorize($user, $parent);
             $this->content->assertPublishable($parent);
             $questions = [];
@@ -50,15 +57,15 @@ class TryOutAttemptService
 
             $startedAt = now();
 
-            return TryOutAttempt::create(['user_id' => $user->id, 'try_out_id' => $parent->id, 'status' => 'in_progress', 'content_snapshot' => $questions, 'grading_snapshot' => ['passages' => \App\Models\TryOutPassage::where('try_out_id', $parent->id)->get(['id', 'title', 'body'])->keyBy('id')->toArray(), 'questions' => $grading, 'total_passing_score' => $parent->total_passing_score, 'max_score' => $parent->max_score, 'session_passing_scores' => $parent->session_passing_scores], 'answers' => [], 'completed_sessions' => [], 'current_session' => 0, 'revision' => 0, 'started_at' => $startedAt, 'expires_at' => $parent->duration_minutes === null ? null : $startedAt->copy()->addMinutes($parent->duration_minutes)])->fresh();
+            return $this->attemptModel::create(['user_id' => $user->id, $this->parentKey => $parent->id, 'status' => 'in_progress', 'content_snapshot' => $questions, 'grading_snapshot' => ['passages' => $this->passageModel::where($this->parentKey, $parent->id)->get(['id', 'title', 'body'])->keyBy('id')->toArray(), 'questions' => $grading, 'total_passing_score' => $parent->total_passing_score, 'max_score' => $parent->max_score, 'session_passing_scores' => $parent->session_passing_scores], 'answers' => [], 'completed_sessions' => [], 'current_session' => 0, 'revision' => 0, 'started_at' => $startedAt, 'expires_at' => $parent->duration_minutes === null ? null : $startedAt->copy()->addMinutes($parent->duration_minutes)])->fresh();
         }, 3);
     }
 
-    public function abandon(User $user, TryOut $tryOut, TryOutAttempt $attempt): void
+    public function abandon(User $user, Model $tryOut, Model $attempt): void
     {
         DB::transaction(function () use ($user, $tryOut, $attempt) {
             app(GamificationService::class)->lock($user);
-            $locked = TryOutAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+            $locked = $this->attemptModel::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
             $this->authorize($user, $tryOut, $locked);
             if ($locked->abandoned_at !== null) {
                 return;
@@ -68,11 +75,11 @@ class TryOutAttemptService
         }, 3);
     }
 
-    public function save(User $user, TryOut $tryOut, TryOutAttempt $attempt, array $answers, int $revision, bool $finishSession = false): TryOutAttempt
+    public function save(User $user, Model $tryOut, Model $attempt, array $answers, int $revision, bool $finishSession = false): Model
     {
         return DB::transaction(function () use ($user, $tryOut, $attempt, $answers, $revision, $finishSession) {
             app(GamificationService::class)->lock($user);
-            $locked = TryOutAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+            $locked = $this->attemptModel::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
             $this->authorize($user, $tryOut, $locked);
             abort_if($locked->abandoned_at !== null, 409, 'Try out attempt was abandoned.');
             if ($this->expired($locked)) {
@@ -100,11 +107,11 @@ class TryOutAttemptService
         }, 3);
     }
 
-    public function submit(User $user, TryOut $tryOut, TryOutAttempt $attempt, int $revision): TryOutAttempt
+    public function submit(User $user, Model $tryOut, Model $attempt, int $revision): Model
     {
         return DB::transaction(function () use ($user, $tryOut, $attempt, $revision) {
             app(GamificationService::class)->lock($user);
-            $locked = TryOutAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+            $locked = $this->attemptModel::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
             $this->authorize($user, $tryOut, $locked);
             abort_if($locked->abandoned_at !== null, 409, 'Try out attempt was abandoned.');
             if ($locked->status === 'completed') {
@@ -118,16 +125,16 @@ class TryOutAttemptService
         }, 3);
     }
 
-    private function expired(TryOutAttempt $attempt): bool
+    private function expired(Model $attempt): bool
     {
         return $attempt->status === 'in_progress' && $attempt->expires_at !== null && now()->greaterThanOrEqualTo($attempt->expires_at);
     }
 
-    public function refresh(User $user, TryOut $tryOut, TryOutAttempt $attempt): TryOutAttempt
+    public function refresh(User $user, Model $tryOut, Model $attempt): Model
     {
         return DB::transaction(function () use ($user, $tryOut, $attempt) {
             app(GamificationService::class)->lock($user);
-            $locked = TryOutAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
+            $locked = $this->attemptModel::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
             $this->authorize($user, $tryOut, $locked);
             abort_if($locked->abandoned_at !== null, 409, 'Try out attempt was abandoned.');
 
@@ -135,7 +142,7 @@ class TryOutAttemptService
         }, 3);
     }
 
-    private function finalize(User $user, TryOut $tryOut, TryOutAttempt $locked): TryOutAttempt
+    private function finalize(User $user, Model $tryOut, Model $locked): Model
     {
         $result = ['earned' => 0, 'max' => $locked->grading_snapshot['max_score'] ?? 180, 'correct' => 0, 'wrong' => 0, 'unanswered' => 0, 'sessions' => [], 'total_passing_score' => $locked->grading_snapshot['total_passing_score'], 'overall_pass' => null];
         foreach (TryOutService::SESSIONS as $session => $label) {
@@ -166,13 +173,13 @@ class TryOutAttemptService
         $locked->update(['result_snapshot' => $result, 'status' => 'completed', 'completed_sessions' => array_keys(TryOutService::SESSIONS), 'current_session' => 4, 'completed_at' => now(), 'revision' => $locked->revision + 1]);
 
         if (count($locked->answers ?? []) > 0) {
-            app(GamificationService::class)->award($user, 'tryout:'.$tryOut->id.':'.now('Asia/Jakarta')->toDateString(), 20);
+            app(GamificationService::class)->award($user, $this->awardPrefix.':'.$tryOut->id.':'.now('Asia/Jakarta')->toDateString(), 20);
         }
 
         return $locked->fresh();
     }
 
-    private function result(TryOutAttempt $attempt): ?array
+    private function result(Model $attempt): ?array
     {
         if ($attempt->status !== 'completed') {
             return null;
@@ -183,7 +190,7 @@ class TryOutAttemptService
         return $result;
     }
 
-    public function payload(TryOutAttempt $attempt, bool $review = false, bool $incorrectOnly = false): array
+    public function payload(Model $attempt, bool $review = false, bool $incorrectOnly = false): array
     {
         abort_if($review && $attempt->status !== 'completed', 403);
         $questions = [];
@@ -203,22 +210,22 @@ class TryOutAttemptService
             $questions[] = app(MediaService::class)->payload($item);
         }
 
-        return ['id' => $attempt->id, 'try_out_id' => $attempt->try_out_id, 'status' => $attempt->status, 'revision' => $attempt->revision, 'current_session' => $attempt->current_session, 'completed_sessions' => $attempt->completed_sessions, 'questions' => $questions, 'answers' => $attempt->answers, 'result' => $this->result($attempt), 'started_at' => $attempt->started_at->toISOString(), 'expires_at' => $attempt->expires_at?->toISOString(), 'server_now' => now()->toISOString(), 'completed_at' => $attempt->completed_at?->toISOString()];
+        return ['id' => $attempt->id, $this->parentKey => $attempt->{$this->parentKey}, 'status' => $attempt->status, 'revision' => $attempt->revision, 'current_session' => $attempt->current_session, 'completed_sessions' => $attempt->completed_sessions, 'questions' => $questions, 'answers' => $attempt->answers, 'result' => $this->result($attempt), 'started_at' => $attempt->started_at->toISOString(), 'expires_at' => $attempt->expires_at?->toISOString(), 'server_now' => now()->toISOString(), 'completed_at' => ($attempt->completed_at ?? $attempt->submitted_at)?->toISOString()];
     }
 
-    public function history(User $user, TryOut $tryOut): array
+    public function history(User $user, Model $tryOut): array
     {
-        $this->authorize($user, $tryOut, new TryOutAttempt(['user_id' => $user->id, 'try_out_id' => $tryOut->id]));
-        $attempts = TryOutAttempt::where('user_id', $user->id)->where('try_out_id', $tryOut->id)->whereNull('abandoned_at')->orderByDesc('id')->get();
+        $this->authorize($user, $tryOut, new $this->attemptModel(['user_id' => $user->id, $this->parentKey => $tryOut->id]));
+        $attempts = $this->attemptModel::where('user_id', $user->id)->where($this->parentKey, $tryOut->id)->whereNull('abandoned_at')->orderByDesc('id')->get();
         $best = null;
         $history = [];
         foreach ($attempts as $attempt) {
             $attempt = $this->refresh($user, $tryOut, $attempt);
-            $result = $this->result($attempt);
+            $result = $this->payload($attempt)['result'];
             if ($result !== null) {
                 $best = $best === null ? $result['earned'] : max($best, $result['earned']);
             }
-            $history[] = ['id' => $attempt->id, 'status' => $attempt->status, 'started_at' => $attempt->started_at->toISOString(), 'expires_at' => $attempt->expires_at?->toISOString(), 'server_now' => now()->toISOString(), 'completed_at' => $attempt->completed_at?->toISOString(), 'result' => $result];
+            $history[] = ['id' => $attempt->id, 'status' => $attempt->status, 'started_at' => $attempt->started_at->toISOString(), 'expires_at' => $attempt->expires_at?->toISOString(), 'server_now' => now()->toISOString(), 'completed_at' => ($attempt->completed_at ?? $attempt->submitted_at)?->toISOString(), 'result' => $result];
         }
 
         return ['attempts' => $history, 'best_score' => $best];

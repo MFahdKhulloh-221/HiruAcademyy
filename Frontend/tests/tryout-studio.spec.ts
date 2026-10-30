@@ -1,0 +1,205 @@
+import { test, expect } from './canonical-fixture';
+
+for (const width of [1440, 768, 390]) test(`studio shared reading ${width}`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 1000 });
+  let item = { studio_revision: 'a'.repeat(64), id: 7, title: 'Try Out N5 - Studio', program_id: 1, max_score: 180, sort_order: 0, status: 'draft', duration_minutes: 120, total_passing_score: null, session_passing_scores: null, passages: [] as { id: number; title: string; body: string }[], questions: [{ id: 70, session: 'vocabulary_kanji', question: '日本語', options: { A: '山', B: '川', C: '水', D: '火' }, correct_option: 'A', explanation: '', point_value: 1, sort_order: 0, status: 'published', reading_passage: null, passage_id: null as number | null }] };
+  let writes = 0;
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.route('**/api/furigana', route => route.fulfill({ json: { reading: '\u3084\u307e' } }));
+  await page.route('**/api/admin/programs', route => route.fulfill({ json: { data: [{ id: 1, code: 'n5', name: 'JLPT N5', family: 'jlpt', status: 'active' }] } }));
+  await page.route('**/api/admin/try-outs**', async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (route.request().method() === 'PUT') {
+      writes++;
+      const body = route.request().postDataJSON();
+      expect(body.revision).toBe(item.studio_revision);
+      const passages = body.passages.map((passage: { title: string; body: string }, index: number) => ({ ...passage, id: index + 1 }));
+      const questions = body.questions.map((question: { id: string; content: Record<string, unknown> }, index: number) => ({ ...question.content, id: /^\d+$/.test(question.id) ? Number(question.id) : 100 + index, passage_id: question.content.passage_id ? 1 : null }));
+      item = { ...item, ...body.settings, passages, questions };
+    }
+    await route.fulfill({ json: { data: path.endsWith('/try-outs') ? [item] : item } });
+  });
+  await page.goto('/admin/try-out');
+  await expect(page.getByRole('button', { name: 'Buka Builder' })).toBeVisible();
+  await page.screenshot({ path: `C:/Users/Tulo/AppData/Local/Temp/opencode/studio-list-${width}.png`, fullPage: true });
+  await page.getByRole('button', { name: 'Buka Builder' }).click();
+  await expect(page.getByRole('heading', { name: 'Try Out N5 - Studio' })).toBeVisible();
+  if (width === 1440) expect((await page.getByRole('heading', { name: 'Try Out N5 - Studio' }).locator('..').locator('..').boundingBox())!.height).toBeLessThan(150);
+  await page.screenshot({ path: `C:/Users/Tulo/AppData/Local/Temp/opencode/studio-vocabulary-${width}.png`, fullPage: true });
+  await page.getByRole('textbox', { name: 'Pilihan A', exact: true }).click();
+  await expect(page.getByRole('toolbar', { name: 'Format Pilihan A' })).toBeVisible();
+  await expect(page.getByRole('toolbar', { name: 'Format Pilihan B' })).toBeHidden();
+  const answerLayout = () => page.getByRole('textbox', { name: 'Pilihan A', exact: true }).evaluate(element => { const box = element.getBoundingClientRect(); return { x: box.x + window.scrollX, y: box.y + window.scrollY, width: box.width, height: box.height }; });
+  const answerBeforeBlur = await answerLayout();
+  await page.getByRole('textbox', { name: 'Pertanyaan', exact: true }).click();
+  await expect(page.getByRole('toolbar', { name: 'Format Pertanyaan', exact: true })).toBeVisible();
+  expect(await answerLayout()).toEqual(answerBeforeBlur);
+  await page.screenshot({ path: `C:/Users/Tulo/AppData/Local/Temp/opencode/studio-toolbar-${width}.png`, fullPage: true });
+  const prompt = page.getByRole('textbox', { name: 'Pertanyaan', exact: true });
+  const option = page.getByRole('textbox', { name: 'Pilihan A', exact: true });
+  expect(await option.evaluate(element => element.scrollHeight <= element.clientHeight)).toBe(true);
+  expect((await option.boundingBox())!.height).toBeLessThan(100);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  const editorWidth = (await page.getByRole('region', { name: 'Editor Pertanyaan', exact: true }).boundingBox())!.width;
+  expect((await prompt.boundingBox())!.width).toBeGreaterThan(editorWidth - 70);
+  await page.getByRole('button', { name: 'Sembunyikan Navigator', exact: true }).click();
+  await expect(page.getByRole('complementary', { name: 'Navigator Konten' })).toBeHidden();
+  await page.getByRole('button', { name: 'Tampilkan Navigator', exact: true }).click();
+  for (const name of ['Tata Bahasa', 'Audio (Choukai)', 'Kosakata & Kanji']) {
+    await page.getByRole('tab', { name, exact: true }).click();
+    await expect(page.getByRole('tab', { name, exact: true })).toHaveAttribute('aria-selected', 'true');
+  }
+  await page.getByRole('tab', { name: 'Reading (Dokkai)', exact: true }).click();
+  await page.getByText('Tambah Konten', { exact: true }).click();
+  await page.getByRole('button', { name: 'Tambah Grup Bacaan', exact: true }).click();
+  const dialog = page.getByRole('dialog');
+  await dialog.getByLabel('Judul internal bacaan').fill('Bacaan A');
+  await dialog.getByRole('textbox', { name: 'Teks bacaan grup' }).fill('山で勉強します。\n日本語を読みます。');
+  await expect(dialog.getByRole('textbox', { name: 'Teks bacaan grup' })).not.toBeEmpty();
+  await dialog.getByRole('button', { name: 'Buat Grup', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('complementary', { name: 'Navigator Konten' }).getByRole('button', { name: /^Soal/ })).toHaveCount(5);
+  await page.getByText('Penjelasan & pengaturan soal', { exact: true }).click();
+  for (let index = 0; index < 5; index++) {
+    await page.getByRole('textbox', { name: 'Pertanyaan', exact: true }).fill(`質問 ${index + 1}`);
+    for (const letter of ['A', 'B', 'C', 'D']) await page.getByRole('textbox', { name: `Pilihan ${letter}`, exact: true }).fill(`${letter} ${index}`);
+    await page.getByLabel('Jawaban Benar', { exact: true }).selectOption(String(index % 4));
+    await page.getByLabel('Bobot poin', { exact: true }).fill('1');
+    if (index < 4) await page.getByRole('button', { name: 'Soal Berikutnya', exact: true }).click();
+  }
+  for (const field of ['Teks bacaan bersama', 'Pertanyaan', 'Pilihan A', 'Pilihan B', 'Pilihan C', 'Pilihan D', 'Penjelasan Jawaban (Opsional)']) {
+    const editor = page.getByRole('textbox', { name: field, exact: true });
+    await editor.fill('\u5c71 text');
+    for (const command of ['bold', 'italic', 'underline']) {
+      await editor.evaluate(element => {
+        const range = document.createRange(); range.selectNodeContents(element);
+        const selection = window.getSelection()!; selection.removeAllRanges(); selection.addRange(range);
+        element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      });
+      await page.getByRole('toolbar', { name: `Format ${field}`, exact: true }).getByRole('button', { name: command, exact: true }).click();
+    }
+    await editor.evaluate(element => {
+      const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+      const node = walker.nextNode()!;
+      const range = document.createRange(); range.setStart(node, 0); range.setEnd(node, 1);
+      const selection = window.getSelection()!; selection.removeAllRanges(); selection.addRange(range);
+      element.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+    });
+    await page.getByRole('toolbar', { name: `Format ${field}`, exact: true }).getByRole('button', { name: /Furigana/ }).click();
+    await page.getByLabel('Bacaan Hiragana', { exact: true }).fill('\u3084\u307e');
+    await page.getByRole('button', { name: 'Terapkan', exact: true }).click();
+    await expect(editor.locator('ruby rt')).toHaveText('\u3084\u307e');
+    await expect(editor.locator('b, strong').first()).toBeAttached();
+    await expect(editor.locator('i, em').first()).toBeAttached();
+    await expect(editor.locator('u').first()).toBeAttached();
+  }
+  if (width < 1024) await page.getByRole('button', { name: 'Buka navigasi admin', exact: true }).click();
+  await page.getByRole('link', { name: 'Dashboard', exact: true }).click();
+  await expect(page.getByRole('dialog', { name: 'Perubahan belum disimpan' })).toBeVisible();
+  await page.getByRole('button', { name: 'Tetap Mengedit', exact: true }).click();
+  if (width < 1024) await page.locator('.admin-mobile-backdrop').click({ position: { x: width - 20, y: 100 } });
+  await expect(page.getByRole('region', { name: 'Bacaan Bersama', exact: true })).toBeVisible();
+  await expect(page.getByText('1 bacaan / 5 pertanyaan / Nomor 1-5', { exact: true })).toBeVisible();
+  await page.screenshot({ path: `C:/Users/Tulo/AppData/Local/Temp/opencode/studio-reading-${width}.png`, fullPage: true });
+  await page.getByRole('tab', { name: 'Pratinjau Siswa', exact: true }).click();
+  await expect(page.getByLabel('Teks bacaan', { exact: true })).toContainText('text');
+  await expect(page.getByRole('region', { name: 'Alat pertanyaan', exact: true })).toHaveCount(0);
+  expect(writes).toBe(0);
+  await page.screenshot({ path: `C:/Users/Tulo/AppData/Local/Temp/opencode/studio-preview-${width}.png`, fullPage: true });
+  await page.getByRole('button', { name: 'Simpan Try Out', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Try Out berhasil disimpan.' })).toBeVisible();
+  expect(errors).toEqual([]);
+  expect(item.passages[0].body).toContain('<ruby>');
+  expect(item.passages).toHaveLength(1);
+  expect(item.questions.filter(question => question.passage_id === 1)).toHaveLength(5);
+  await page.reload();
+  await page.getByRole('button', { name: 'Buka Builder' }).click();
+  await page.getByRole('tab', { name: 'Reading (Dokkai)', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: 'Teks bacaan bersama' })).toContainText('text');
+  await expect(page.getByRole('textbox', { name: 'Teks bacaan bersama' }).locator('ruby rt')).toHaveText('\u3084\u307e');
+  expect(item.questions.filter(question => question.passage_id === 1).map(question => question.correct_option)).toEqual(['A', 'B', 'C', 'D', 'A']);
+  await page.getByText('Tambah Konten', { exact: true }).click();
+  await page.getByRole('button', { name: 'Tambah Grup Bacaan', exact: true }).click();
+  await dialog.getByLabel('Judul internal bacaan').fill('Bacaan B');
+  await dialog.getByRole('textbox', { name: 'Teks bacaan grup' }).fill('Second passage');
+  await dialog.getByLabel('Jumlah soal awal').fill('1');
+  await expect(dialog.getByRole('textbox', { name: 'Teks bacaan grup' })).not.toBeEmpty();
+  await dialog.getByRole('button', { name: 'Buat Grup', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await page.getByText('Aksi grup bacaan', { exact: true }).click();
+  await page.getByRole('button', { name: 'Grup Sebelumnya', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Soal 1 dari 6', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Grup Berikutnya', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Soal 6 dari 6', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Hapus Grup', exact: true }).click();
+  await dialog.getByRole('button', { name: 'Hapus dari Editor', exact: true }).click();
+  await page.getByRole('button', { name: /^Soal 01/ }).click();
+  const originalIds = item.questions.map(question => question.id);
+  await page.getByText('Aksi soal', { exact: true }).click();
+  await page.getByRole('button', { name: 'Turunkan Soal', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Soal 2 dari 5', exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Hapus Soal', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Hapus dari Editor', exact: true }).click();
+  await expect(page.getByLabel('Jumlah soal', { exact: true })).toHaveText('4 soal');
+  await page.getByRole('button', { name: /^Soal 01/ }).click();
+  await page.getByRole('button', { name: 'Simpan Try Out', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Try Out berhasil disimpan.' })).toBeVisible();
+  expect(item.questions.filter(question => question.passage_id === 1)).toHaveLength(4);
+  expect(item.questions.every(question => originalIds.includes(question.id))).toBe(true);
+  expect(new Set(item.questions.map(question => question.id)).size).toBe(item.questions.length);
+  await page.getByText('Aksi grup bacaan', { exact: true }).click();
+  await page.getByRole('button', { name: 'Hapus Grup', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Kembali', exact: true }).click();
+  await expect(page.getByLabel('Jumlah soal', { exact: true })).toHaveText('4 soal');
+  await page.getByRole('button', { name: 'Hapus Grup', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Hapus dari Editor', exact: true }).click();
+  await page.getByRole('button', { name: 'Simpan Try Out', exact: true }).click();
+  await expect(page.getByRole('status').filter({ hasText: 'Try Out berhasil disimpan.' })).toBeVisible();
+  await page.reload();
+  await page.getByRole('button', { name: 'Buka Builder' }).click();
+  await page.getByRole('tab', { name: 'Reading (Dokkai)', exact: true }).click();
+  await expect(page.getByLabel('Jumlah soal', { exact: true })).toHaveText('0 soal');
+  expect(item.passages).toHaveLength(0);
+  expect(item.questions).toHaveLength(1);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+for (const width of [1440, 390]) test(`tryout settings single scroll ${width}`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 1000 });
+  let item: Record<string, unknown> | null = null;
+  let writes = 0;
+  await page.route('**/api/admin/programs', route => route.fulfill({ json: { data: [{ id: 1, code: 'n5', name: 'JLPT N5', family: 'jlpt', status: 'active' }] } }));
+  await page.route('**/api/admin/try-outs**', async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (route.request().method() === 'POST') item = { ...route.request().postDataJSON(), id: 8, studio_revision: 'b'.repeat(64), questions: [], passages: [] };
+    if (route.request().method() === 'PUT') { const body = route.request().postDataJSON(); item = { ...item, ...body.settings, questions: [], passages: [] }; writes++; }
+    await route.fulfill({ json: { data: path.endsWith('/try-outs') && route.request().method() === 'GET' ? item ? [item] : [] : item } });
+  });
+  await page.goto('/admin/try-out');
+  const create = page.getByRole('button', { name: '+ Buat Try Out', exact: true });
+  await expect(create).toBeEnabled();
+  await create.click();
+  let dialog = page.getByRole('dialog', { name: 'Tambah Try Out', exact: true });
+  await dialog.getByRole('button', { name: 'Tutup dialog', exact: true }).click();
+  await page.getByRole('button', { name: 'Buang Perubahan dan Tutup', exact: true }).click();
+  await create.click();
+  dialog = page.getByRole('dialog', { name: 'Tambah Try Out', exact: true });
+  await expect(dialog.getByRole('region', { name: 'Pengaturan Ujian', exact: true })).toBeVisible();
+  await expect(dialog.getByLabel('Urutan', { exact: true })).toBeVisible();
+  const scrollAreas = await dialog.evaluate(element => [...element.querySelectorAll('*')].filter(node => ['auto', 'scroll'].includes(getComputedStyle(node).overflowY)).map(node => node.className));
+  expect(scrollAreas).toEqual(['admin-dialog-content']);
+  const header = dialog.locator(':scope > header');
+  const footer = dialog.locator(':scope > footer');
+  const headerBefore = await header.boundingBox(); const footerBefore = await footer.boundingBox();
+  await dialog.locator('.admin-dialog-content').evaluate(element => { element.scrollTop = element.scrollHeight; });
+  expect(await header.boundingBox()).toEqual(headerBefore); expect(await footer.boundingBox()).toEqual(footerBefore);
+  await page.screenshot({ path: `C:/Users/Tulo/AppData/Local/Temp/opencode/tryout-modal-${width}.png`, fullPage: true });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await dialog.getByLabel('Judul', { exact: true }).fill('Try Out UI Test');
+  await dialog.getByLabel('Durasi (menit)', { exact: true }).fill('120');
+  await dialog.getByRole('button', { name: 'Buat & Buka Builder', exact: true }).click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByRole('heading', { name: 'Try Out UI Test', exact: true })).toBeVisible();
+  expect(writes).toBe(1);
+});

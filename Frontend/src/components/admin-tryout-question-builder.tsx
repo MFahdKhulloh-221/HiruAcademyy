@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { FiSave, FiPlus, FiBookOpen, FiChevronLeft, FiChevronRight, FiChevronDown, FiSearch, FiCopy, FiTrash2, FiArrowUp, FiArrowDown, FiCheckCircle, FiAlertCircle } from "react-icons/fi";
 import { AdminMediaUpload } from "@/components/admin-media-upload";
 import { AdminDialog, AdminTabs, AdminStatusBadge } from "@/components/admin-primitives";
@@ -11,13 +11,16 @@ import styles from "./admin-tryout-builder.module.css";
 
 const labels = ["Kosakata & Kanji", "Tata Bahasa", "Reading (Dokkai)", "Audio (Choukai)"];
 
-export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChange, busy, error, onChange, onSave, onClose, saveStatus }: {
+export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChange, busy, error, onChange, onSave, onClose, saveStatus, navigation, bulkAction }: {
+  navigation?: ReactNode;
+  bulkAction?: ReactNode;
   saveStatus: string;
   draft: AdminAssessment; initialQuestion: AdminAssessmentQuestion | null; busy: boolean; error: string;
   onChange: (draft: AdminAssessment) => void; onSave: (draft: AdminAssessment) => Promise<void>; onClose: () => void;
   onDirtyChange: (dirty: boolean) => void;
   onDelete: (question: AdminAssessmentQuestion) => Promise<void>;
 }) {
+  const title = draft.kind === "checkpoint" ? "Checkpoint" : "Try Out";
   const sections = assessmentSections(draft);
   const [session, setSession] = useState(() => Math.max(0, sections.indexOf(initialQuestion?.section ?? sections[0])));
   const [activeId, setActiveId] = useState(initialQuestion?.id ?? orderedAssessmentQuestions(draft)[0]?.id ?? "");
@@ -91,16 +94,16 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
     <button type="button" className="button" disabled={busy} onClick={() => moveGroup(1)}>Grup Berikutnya</button>
     <button type="button" className={`button ${styles.danger}`} disabled={busy} onClick={() => setRemove("group")}><FiTrash2 aria-hidden="true" />Hapus Grup</button>
   </div></details>;
-  return <section className={styles.questionBuilder} aria-label="HIRU TRY OUT STUDIO">
+  return <section className={styles.questionBuilder} aria-label={`HIRU ${title.toUpperCase()} STUDIO`}>
     <header className={styles.studioHeader}>
       <h1>{draft.title}</h1>
       <div className={styles.metadata}><span>JLPT {draft.context.toUpperCase().replace(/^JLPT\s*/, "")}</span><AdminStatusBadge status={draft.status} /></div>
     </header>
     {(issue || error) && <p role="alert">{issue || error}</p>}
-    <AdminTabs tabs={labels} active={labels[session]} label="Sesi Try Out" onChange={label => { const next = labels.indexOf(label); setSession(next); setActiveId(orderedAssessmentQuestions(draft).find(question => question.section === sections[next])?.id ?? ""); setSearch(""); setPreview(false); }} />
+    <AdminTabs tabs={labels} active={labels[session]} label={`Sesi ${title}`} onChange={label => { const next = labels.indexOf(label); setSession(next); setActiveId(orderedAssessmentQuestions(draft).find(question => question.section === sections[next])?.id ?? ""); setSearch(""); setPreview(false); }} />
     <div className={styles.sessionContext}>
       <div><h2>{labels[session]}</h2><p>{questions.length} soal{session === 2 && passage ? ` / ${passage.title} / Nomor ${groupRange}` : ""}</p></div>
-      <AdminTabs tabs={["Editor", "Pratinjau Siswa"]} active={preview ? "Pratinjau Siswa" : "Editor"} label="Mode editor" onChange={value => setPreview(value !== "Editor")} />
+      <div className={styles.studioNavigation}>{navigation}<AdminTabs tabs={["Editor", "Pratinjau Siswa"]} active={preview ? "Pratinjau Siswa" : "Editor"} label="Mode editor" onChange={value => setPreview(value !== "Editor")} /></div>
     </div>
     <div className={styles.studioPanels}>
       <aside id="studio-navigator" className={styles.studioNavigator} aria-label="Navigator Konten">
@@ -143,7 +146,7 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
         </PlacementEditorProvider> : <p>Pilih soal atau tambahkan konten untuk mulai mengedit.</p>}
       </section>
     </div>
-    <footer className={styles.studioActions} aria-label="Aksi Studio"><p role="status">{saveStatus}</p><div><button type="button" className="button" disabled={busy} onClick={onClose}>Kembali ke Daftar</button><button type="button" className="button button-primary" disabled={busy} aria-busy={busy} onClick={() => void onSave(draft)}><FiSave aria-hidden="true" />{busy ? "Menyimpan..." : "Simpan Try Out"}</button></div></footer>
+    <footer className={styles.studioActions} aria-label="Aksi Studio"><p role="status">{saveStatus}</p><div>{bulkAction}<button type="button" className="button" disabled={busy} onClick={onClose}>Kembali ke Daftar</button><button type="button" className="button button-primary" disabled={busy} aria-busy={busy} onClick={() => void onSave(draft)}><FiSave aria-hidden="true" />{busy ? "Menyimpan..." : `Simpan ${title}`}</button></div></footer>
     <AdminDialog open={groupForm} title="Grup Bacaan Reading" className={styles.packageDialog} close={() => setGroupForm(false)} actions={<><button className="button" type="button" onClick={() => setGroupForm(false)}>Kembali</button><button className="button button-primary" type="submit" form="tryout-reading-group" disabled={busy}>Buat Grup</button></>}>
       <form id="tryout-reading-group" className={styles.groupForm} onSubmit={event => { event.preventDefault(); addGroup(); }}>
         <p className={styles.linkedHint}>Satu bacaan bersama untuk beberapa soal Reading.</p>
@@ -155,6 +158,6 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
         {issue && <p role="alert">{issue}</p>}
       </form>
     </AdminDialog>
-    <AdminDialog open={remove !== null} title={remove === "group" ? "Hapus grup bacaan?" : "Hapus soal?"} close={() => setRemove(null)} actions={<><button type="button" className="button" onClick={() => setRemove(null)}>Kembali</button><button type="button" className="button button-primary" onClick={() => { onChange({ ...draft, passages: remove === "group" ? draft.passages?.filter(item => item.id !== passage?.id) : draft.passages, questions: draft.questions.filter(question => remove === "group" ? question.passageId !== passage?.id : question.id !== activeId) }); setActiveId(""); setRemove(null); }}>Hapus dari Editor</button></>}><p>{remove === "group" ? `${linked.length} soal terkait ikut dihapus. ` : ""}Perubahan permanen setelah Simpan Try Out. Attempt siswa yang sudah dimulai tetap memakai snapshot lama.</p></AdminDialog>
+    <AdminDialog open={remove !== null} title={remove === "group" ? "Hapus grup bacaan?" : "Hapus soal?"} close={() => setRemove(null)} actions={<><button type="button" className="button" onClick={() => setRemove(null)}>Kembali</button><button type="button" className="button button-primary" onClick={() => { onChange({ ...draft, passages: remove === "group" ? draft.passages?.filter(item => item.id !== passage?.id) : draft.passages, questions: draft.questions.filter(question => remove === "group" ? question.passageId !== passage?.id : question.id !== activeId) }); setActiveId(""); setRemove(null); }}>Hapus dari Editor</button></>}><p>{remove === "group" ? `${linked.length} soal terkait ikut dihapus. ` : ""}Perubahan permanen setelah Simpan {title}. Attempt siswa yang sudah dimulai tetap memakai snapshot lama.</p></AdminDialog>
   </section>;
 }

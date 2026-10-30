@@ -47,7 +47,7 @@ export class AttemptPersistence {
     if (this.submitting) return this.submitting;
     this.submitting = this.enqueue(async () => {
       const attempt = await this.refresh();
-      if (attempt.status !== "completed" || !attempt.result) throw new ApiError(200, {}, "Try Out: backend belum mengonfirmasi hasil selesai. Coba kembali untuk memeriksa attempt yang sama.");
+      if (attempt.status !== "completed" || !attempt.result) throw new ApiError(200, {}, `${this.domain === "checkpoint" ? "Checkpoint" : "Try Out"}: backend belum mengonfirmasi hasil selesai. Coba kembali untuk memeriksa attempt yang sama.`);
       return attempt;
     }).finally(() => { this.submitting = null; });
     return this.submitting;
@@ -61,7 +61,7 @@ export class AttemptPersistence {
   private async write(suffix: string, body: object, method: string) {
     const request_started_at = performance.now();
     const response = await this.request<{ data: ServerAttempt }>(this.path + suffix, { method, body: JSON.stringify(body) });
-    if ((this.domain === "tryout" || this.domain === "checkpoint") && suffix === "/submit" && (response.data.status !== "completed" || !response.data.result)) throw new ApiError(200, {}, "Try Out: backend belum mengonfirmasi hasil selesai. Coba kembali untuk memeriksa attempt yang sama.");
+    if ((this.domain === "tryout" || this.domain === "checkpoint") && suffix === "/submit" && (response.data.status !== "completed" || !response.data.result)) throw new ApiError(200, {}, `${this.domain === "checkpoint" ? "Checkpoint" : "Try Out"}: backend belum mengonfirmasi hasil selesai. Coba kembali untuk memeriksa attempt yang sama.`);
     this.attempt = { ...response.data, request_started_at, received_at: performance.now() };
     return this.attempt;
   }
@@ -71,7 +71,7 @@ export class AttemptPersistence {
     return this.enqueue(async () => {
       if (this.attempt.status === "completed") return this.attempt;
       if (this.expired()) return this.refresh();
-      const body = this.domain === "placement" ? { answers: snapshot, ...((this.attempt.adaptive || this.attempt.scoring_version === "percentage-v1") ? { revision: this.attempt.revision } : {}) } : (this.domain === "tryout" || this.domain === "checkpoint") ? { answers: snapshot, revision: this.attempt.revision, ...(this.domain === "tryout" ? { finish_session: finishSession } : {}) } : { answers: snapshot, revision: this.attempt.revision };
+      const body = this.domain === "placement" ? { answers: snapshot, ...((this.attempt.adaptive || this.attempt.scoring_version === "percentage-v1") ? { revision: this.attempt.revision } : {}) } : (this.domain === "tryout" || this.domain === "checkpoint") ? { answers: snapshot, revision: this.attempt.revision, ...((this.domain === "tryout" || this.domain === "checkpoint") ? { finish_session: finishSession } : {}) } : { answers: snapshot, revision: this.attempt.revision };
       try {
         const attempt = await this.write("/answers", body, "PUT");
         this.saveError = undefined;
@@ -98,7 +98,7 @@ export class AttemptPersistence {
       if (this.attempt.status === "completed") return this.attempt;
       if (this.expired()) {
         const attempt = await this.refresh();
-        if (attempt.status !== "completed" || !attempt.result) throw new ApiError(200, {}, "Try Out: backend belum mengonfirmasi hasil selesai. Coba kembali untuk memeriksa attempt yang sama.");
+        if (attempt.status !== "completed" || !attempt.result) throw new ApiError(200, {}, `${this.domain === "checkpoint" ? "Checkpoint" : "Try Out"}: backend belum mengonfirmasi hasil selesai. Coba kembali untuk memeriksa attempt yang sama.`);
         return attempt;
       }
       if (this.saveError && this.attempt.kind !== "mini") throw this.saveError;

@@ -6,6 +6,7 @@ use App\Models\Program;
 use App\Models\TryOut;
 use App\Models\TryOutQuestion;
 use App\Models\TryOutPassage;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -13,6 +14,12 @@ use Illuminate\Validation\ValidationException;
 
 class TryOutService
 {
+    protected string $assessmentModel = TryOut::class;
+    protected string $questionModel = TryOutQuestion::class;
+    protected string $passageModel = TryOutPassage::class;
+    protected string $attemptTable = 'try_out_attempts';
+    protected string $parentKey = 'try_out_id';
+
     public const SESSIONS = ['vocabulary_kanji' => 'Kosakata & Kanji', 'grammar' => 'Tata Bahasa', 'reading' => 'Reading (Dokkai)', 'audio' => 'Audio (Choukai)'];
 
     public function validateInput(array $input, array $rules): array
@@ -35,10 +42,10 @@ class TryOutService
         return $program;
     }
 
-    public function save(array $input, ?TryOut $tryOut = null): TryOut
+    public function save(array $input, ?Model $tryOut = null): Model
     {
         return DB::transaction(function () use ($input, $tryOut) {
-            $model = $tryOut ? TryOut::whereKey($tryOut->id)->lockForUpdate()->firstOrFail() : new TryOut;
+            $model = $tryOut ? $this->assessmentModel::whereKey($tryOut->id)->lockForUpdate()->firstOrFail() : new $this->assessmentModel;
             $required = $model->exists ? 'sometimes' : 'required';
             $data = $this->validateInput($input, [
                 'program_id' => [$required, 'required', 'integer', 'exists:programs,id'],
@@ -47,7 +54,7 @@ class TryOutService
                 'status' => ['sometimes', 'required', Rule::in(['draft', 'published'])],
                 'total_passing_score' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:2147483647'],
                 'max_score' => ['sometimes', 'required', 'integer', 'min:1', 'max:2147483647'],
-                'sort_order' => ['sometimes', 'required', 'integer', 'min:0', 'max:2147483647'],
+                'sort_order' => ['sometimes', 'required', 'integer', 'min:1', 'max:2147483647'],
                 'session_passing_scores' => ['sometimes', 'nullable', 'array:'.implode(',', array_keys(self::SESSIONS)), 'size:4'],
                 'session_passing_scores.*' => ['required', 'integer', 'min:0', 'max:2147483647'],
                 'duration_minutes' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:2147483647', function ($attribute, $value, $fail) {
@@ -56,17 +63,22 @@ class TryOutService
                     }
                 }],
             ]);
+            $resequence = array_key_exists('sort_order', $input) || ! $model->exists;
+            $targetOrder = array_key_exists('sort_order', $data) ? (int) $data['sort_order'] : (int) ($model->sort_order ?? 1);
             $model->fill($data);
             $model->max_score ??= 180;
-            $model->sort_order ??= 0;
+            $model->sort_order = max(1, (int) ($model->sort_order ?? 1));
             if ($model->total_passing_score !== null && $model->total_passing_score > $model->max_score) {
                 throw ValidationException::withMessages(['total_passing_score' => 'Passing score cannot exceed maximum score.']);
             }
-            if ($model->exists && $model->isDirty('program_id') && DB::table('try_out_attempts')->where('try_out_id', $model->id)->exists()) {
+            if ($model->exists && $model->isDirty('program_id') && DB::table($this->attemptTable)->where($this->parentKey, $model->id)->exists()) {
                 throw ValidationException::withMessages(['program_id' => 'Program cannot change after an attempt exists.']);
             }
             $this->program($model->program_id);
             $model->save();
+            if ($resequence) {
+                $this->resequenceOrders($model, $targetOrder);
+            }
             if ($model->status === 'published') {
                 if ($model->questions()->where('status', '!=', 'published')->exists()) {
                     throw ValidationException::withMessages(['status' => 'Publish requires all questions to be published.']);
@@ -108,10 +120,10 @@ class TryOutService
         return $rules;
     }
 
-    private function assertQuestion(TryOutQuestion $question): void
+    private function assertQuestion(Model $question): void
     {
         Validator::make($question->only(array_keys($this->questionRules())), $this->questionRules())->validate();
-        if ($question->passage_id !== null && ($question->session !== 'reading' || ! TryOutPassage::whereKey($question->passage_id)->where('try_out_id', $question->try_out_id)->exists())) {
+        if ($question->passage_id !== null && ($question->session !== 'reading' || ! $this->passageModel::whereKey($question->passage_id)->where($this->parentKey, $question->{$this->parentKey})->exists())) {
             throw ValidationException::withMessages(['passage_id' => 'Reading passage must belong to this Try Out.']);
         }
         if ($question->passage_id !== null && $question->reading_passage !== null) {
@@ -122,17 +134,17 @@ class TryOutService
         }
     }
 
-    public function saveQuestion(TryOut $tryOut, array $input, ?TryOutQuestion $question = null): TryOutQuestion
+    public function saveQuestion(Model $tryOut, array $input, ?Model $question = null): Model
     {
         return app(MediaService::class)->locked(fn () => $this->saveQuestionContent($tryOut, $input, $question));
     }
 
-    private function saveQuestionContent(TryOut $tryOut, array $input, ?TryOutQuestion $question): TryOutQuestion
+    private function saveQuestionContent(Model $tryOut, array $input, ?Model $question): Model
     {
         return DB::transaction(function () use ($tryOut, $input, $question) {
-            $parent = TryOut::whereKey($tryOut->id)->lockForUpdate()->firstOrFail();
+            $parent = $this->assessmentModel::whereKey($tryOut->id)->lockForUpdate()->firstOrFail();
             $this->program($parent->program_id);
-            $model = $question ? $parent->questions()->whereKey($question->id)->lockForUpdate()->firstOrFail() : new TryOutQuestion;
+            $model = $question ? $parent->questions()->whereKey($question->id)->lockForUpdate()->firstOrFail() : new $this->questionModel;
             $rules = $this->questionRules();
             if ($model->exists) {
                 foreach ($rules as $key => &$rule) {
@@ -154,7 +166,7 @@ class TryOutService
                 $data['options'] = array_map(PlacementRichText::sanitize(...), $data['options']);
             }
             $model->fill($data);
-            $model->try_out_id = $parent->id;
+            $model->{$this->parentKey} = $parent->id;
             $model->status ??= 'draft';
             $model->sort_order ??= 0;
             $this->assertQuestion($model);
@@ -167,12 +179,12 @@ class TryOutService
         }, 3);
     }
 
-    public function publishQuestions(TryOut $tryOut, array $input): array
+    public function publishQuestions(Model $tryOut, array $input): array
     {
         $this->validateInput($input, []);
 
         return app(MediaService::class)->locked(function () use ($tryOut) {
-            $parent = TryOut::whereKey($tryOut->id)->lockForUpdate()->firstOrFail();
+            $parent = $this->assessmentModel::whereKey($tryOut->id)->lockForUpdate()->firstOrFail();
             $this->program($parent->program_id);
             $questions = $parent->questions()->orderBy('id')->lockForUpdate()->get();
             if ($questions->isEmpty()) {
@@ -187,11 +199,11 @@ class TryOutService
                 $this->assertPublishable($parent);
             }
 
-            return ['try_out_id' => $parent->id, 'published_count' => $published];
+            return [$this->parentKey => $parent->id, 'published_count' => $published];
         });
     }
 
-    public function assertPublishable(TryOut $tryOut): void
+    public function assertPublishable(Model $tryOut): void
     {
         $this->program($tryOut->program_id);
         $questions = $tryOut->questions()->where('status', 'published')->get();
@@ -211,17 +223,17 @@ class TryOutService
         }
     }
 
-    public function delete(TryOut $tryOut, ?TryOutQuestion $question = null): void
+    public function delete(Model $tryOut, ?Model $question = null): void
     {
         DB::transaction(function () use ($tryOut, $question) {
-            $parent = TryOut::whereKey($tryOut->id)->lockForUpdate()->firstOrFail();
+            $parent = $this->assessmentModel::whereKey($tryOut->id)->lockForUpdate()->firstOrFail();
             if ($question) {
                 $parent->questions()->whereKey($question->id)->firstOrFail()->delete();
                 if ($parent->status === 'published') {
                     $this->assertPublishable($parent);
                 }
             } else {
-                if (DB::table('try_out_attempts')->where('try_out_id', $parent->id)->exists()) {
+                if (DB::table($this->attemptTable)->where($this->parentKey, $parent->id)->exists()) {
                     throw ValidationException::withMessages(['try_out' => 'Assessment with attempts cannot be deleted.']);
                 }
                 $parent->delete();
@@ -229,21 +241,44 @@ class TryOutService
         }, 3);
     }
 
-    public function payload(TryOut $tryOut): array
+    public function resequenceOrders(Model $model, int $targetOrder): void
+    {
+        $targetOrder = max(1, $targetOrder);
+        $conflicts = $this->assessmentModel::where('id', '!=', $model->id)
+            ->where('sort_order', '>=', $targetOrder)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get(['id', 'sort_order']);
+
+        $nextOrder = $targetOrder + 1;
+        foreach ($conflicts as $other) {
+            if ($other->sort_order < $nextOrder) {
+                $this->assessmentModel::whereKey($other->id)->update(['sort_order' => $nextOrder]);
+                $nextOrder++;
+            } else {
+                $nextOrder = $other->sort_order + 1;
+            }
+        }
+        if ($model->sort_order !== $targetOrder) {
+            $model->update(['sort_order' => $targetOrder]);
+        }
+    }
+
+    public function payload(Model $tryOut): array
     {
         return ['access_type' => $tryOut->access_type ?? 'membership', 'id' => $tryOut->id, 'program_id' => $tryOut->program_id, 'level' => strtoupper($tryOut->program->code), 'title' => $tryOut->title, 'status' => $tryOut->status, 'max_score' => $tryOut->max_score, 'sort_order' => $tryOut->sort_order, 'session_passing_scores' => $tryOut->session_passing_scores, 'section_passing_score' => $tryOut->session_passing_scores === null ? 19 : null, 'section_passing_score_basis' => $tryOut->session_passing_scores === null ? 'correct_answers' : 'points', 'total_passing_score' => $tryOut->total_passing_score, 'duration_minutes' => $tryOut->duration_minutes, 'question_count' => $tryOut->questions()->count(), 'published_question_count' => $tryOut->questions()->where('status', 'published')->count(), 'sessions' => self::SESSIONS];
     }
 
-    public function studioRevision(TryOut $tryOut): string
+    public function studioRevision(Model $tryOut): string
     {
         return hash('sha256', json_encode([
             $tryOut->fresh()->getAttributes(),
-            TryOutPassage::where('try_out_id', $tryOut->id)->orderBy('id')->get()->map->getAttributes()->all(),
+            $this->passageModel::where($this->parentKey, $tryOut->id)->orderBy('id')->get()->map->getAttributes()->all(),
             $tryOut->questions()->orderBy('id')->get()->map->getAttributes()->all(),
         ], JSON_THROW_ON_ERROR));
     }
 
-    public function saveStudio(TryOut $tryOut, array $input): TryOut
+    public function saveStudio(Model $tryOut, array $input): Model
     {
         $data = $this->validateInput($input, [
             'revision' => ['required', 'string', 'size:64'],
@@ -262,15 +297,15 @@ class TryOutService
         ]);
 
         return app(MediaService::class)->locked(function () use ($tryOut, $data) {
-            $parent = TryOut::whereKey($tryOut->id)->lockForUpdate()->firstOrFail();
+            $parent = $this->assessmentModel::whereKey($tryOut->id)->lockForUpdate()->firstOrFail();
             abort_unless(hash_equals($this->studioRevision($parent), $data['revision']), 409, 'Try Out berubah. Muat ulang sebelum menyimpan; perubahan lokal belum disimpan.');
             $status = $data['settings']['status'] ?? $parent->status;
             $parent = $this->save(array_replace($data['settings'], ['status' => 'draft']), $parent);
             $ids = [];
             foreach ($data['passages'] as $passage) {
                 $model = ctype_digit($passage['id'])
-                    ? TryOutPassage::where('try_out_id', $parent->id)->whereKey($passage['id'])->firstOrFail()
-                    : new TryOutPassage(['try_out_id' => $parent->id]);
+                    ? $this->passageModel::where($this->parentKey, $parent->id)->whereKey($passage['id'])->firstOrFail()
+                    : new $this->passageModel([$this->parentKey => $parent->id]);
                 $model->fill(['title' => $passage['title'], 'body' => PlacementRichText::sanitize($passage['body'])])->save();
                 $ids[$passage['id']] = $model->id;
             }
@@ -289,7 +324,7 @@ class TryOutService
                 $parent->questions()->whereKey($id)->firstOrFail()->delete();
             }
             foreach ($data['deleted_passage_ids'] as $id) {
-                $passage = TryOutPassage::where('try_out_id', $parent->id)->whereKey($id)->firstOrFail();
+                $passage = $this->passageModel::where($this->parentKey, $parent->id)->whereKey($id)->firstOrFail();
                 if ($parent->questions()->where('passage_id', $id)->exists()) {
                     throw ValidationException::withMessages(['passages' => 'Remove linked questions before deleting passage.']);
                 }
@@ -300,8 +335,8 @@ class TryOutService
         });
     }
 
-    public function adminQuestion(TryOutQuestion $question): array
+    public function adminQuestion(Model $question): array
     {
-        return app(MediaService::class)->payload($question->only(['id', 'try_out_id', 'passage_id', 'session', 'question', 'options', 'correct_option', 'explanation', 'point_value', 'reading_passage', 'audio_url', 'sort_order', 'status', 'instruction', 'japanese']));
+        return app(MediaService::class)->payload($question->only(['id', $this->parentKey, 'passage_id', 'session', 'question', 'options', 'correct_option', 'explanation', 'point_value', 'reading_passage', 'audio_url', 'sort_order', 'status', 'instruction', 'japanese']));
     }
 }

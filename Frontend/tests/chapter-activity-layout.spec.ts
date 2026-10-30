@@ -36,6 +36,9 @@ for (const width of [1440, 768, 390]) for (const code of ["n5", "n4", "n3", "n2"
       const box = await card.boundingBox();
       expect(badge!.y - box!.y).toBeLessThan(30);
       expect(box!.x + box!.width - badge!.x - badge!.width).toBeLessThan(30);
+      const description = await card.locator(":scope > p").boundingBox();
+      const action = await card.locator(".activity-action-button, .learning-activity-unavailable").boundingBox();
+      expect(action!.y - description!.y - description!.height).toBeGreaterThanOrEqual(15);
     }
     await expect(grid.getByRole("status").filter({ hasText: /^Selesai$/ })).toHaveCount(2);
     await expect(grid.locator("article").filter({ has: page.getByRole("heading", { name: "Reading Question", exact: true }) }).getByRole("status")).toHaveText("Terkunci");
@@ -45,13 +48,19 @@ for (const width of [1440, 768, 390]) for (const code of ["n5", "n4", "n3", "n2"
     await expect(mini.getByRole("status").filter({ hasText: /^Terkunci$/ })).toBeVisible();
     await expect(mini.getByRole("link", { name: "Mulai Mini Checkpoint", exact: true })).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Mini Checkpoint", exact: true })).toHaveCount(0);
+    const lockedIcon = await mini.locator(".learning-activity-icon").innerHTML();
     done = true;
     await page.reload();
     await expect(mini.getByRole("status").filter({ hasText: /^Belum dimulai$/ })).toBeVisible();
     await expect(mini.getByRole("link", { name: "Mulai Mini Checkpoint", exact: true })).toHaveAttribute("href", `/learn/${code}/chapter-1/checkpoint`);
+    const unlockedIcon = await mini.locator(".learning-activity-icon").innerHTML();
+    expect(unlockedIcon).not.toBe(lockedIcon);
     completed = true;
     await page.reload();
     await expect(mini.getByText("Selesai", { exact: true })).toBeVisible();
+    const completedIcon = await mini.locator(".learning-activity-icon").innerHTML();
+    expect(completedIcon).not.toBe(lockedIcon);
+    expect(completedIcon).not.toBe(unlockedIcon);
     await expect(mini.getByRole("status").filter({ hasText: /^Belum dimulai$/ })).toHaveCount(0);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });

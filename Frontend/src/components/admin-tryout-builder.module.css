@@ -12,8 +12,9 @@
 .workspace :global(.admin-data-table td:nth-child(3)) { white-space: normal; min-width: 0; }
 .rowActions { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
 .rowActions :global(.button) { width: auto; white-space: nowrap; padding: 8px 12px; }
-.more summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; white-space: nowrap; }
-.more > div { display: flex; flex-wrap: wrap; gap: 8px; max-width: 300px; padding-top: 8px; }
+.actionGrid { display:grid; grid-template-columns:repeat(2, auto); gap:6px; }
+.actionGrid :global(.button) { display:flex; align-items:center; justify-content:center; gap:6px; min-height:44px; }
+.actionGrid :global(.button):last-child { color:#b42318; }
 .accessBadge { display: inline-flex; padding: 6px 10px; border-radius: 999px; background: var(--soft); color: var(--navy); font-weight: 700; white-space: nowrap; }
 .summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; max-width: 360px; white-space: normal; }
 .packageFields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
@@ -96,8 +97,10 @@
 .listHeading h2 { margin:0; font-size:15px; }
 .listHeading > span { border-radius:20px; background:#f0f2f7; color:#526078; padding:4px 8px; font-size:12px; }
 .searchField > span { display:flex; align-items:center; gap:6px; font-size:12px; }
-.studioNavigator ol { display:grid; align-content:start; gap:6px; list-style:none; margin:0; padding:0; min-width:0; }
-.studioNavigator li > button { display:grid; grid-template-columns:32px minmax(0,1fr); gap:4px 8px; width:100%; min-height:60px; padding:10px 8px; text-align:left; border:1px solid transparent; border-radius:8px; background:#fff; color:#263247; overflow-wrap:anywhere; }
+.studioNavigator ol { display:grid; align-content:start; gap:6px; list-style:none; margin:0; padding:0; min-width:0; max-height:624px; overflow-y:auto; scrollbar-width:thin; scrollbar-color:#c4cad5 transparent; scrollbar-gutter:stable; }
+.studioNavigator ol::-webkit-scrollbar { width:6px; }
+.studioNavigator ol::-webkit-scrollbar-thumb { background:#c4cad5; border-radius:6px; }
+.studioNavigator li > button { display:grid; grid-template-columns:32px minmax(0,1fr); gap:4px 8px; width:100%; height:84px; padding:10px 8px; text-align:left; border:1px solid transparent; border-radius:8px; background:#fff; color:#263247; overflow-wrap:anywhere; }
 .studioNavigator li > button:hover { background:#f9f9ff; }
 .studioNavigator li > [aria-current] { border-color:#f48220; background:#fff3e8; color:#5a2a00; }
 .questionNumber { grid-row:1 / span 2; align-self:center; display:grid; place-items:center; width:30px; height:32px; background:#f0f2f7; border-radius:8px; color:#526078; font-size:12px; }
@@ -114,6 +117,8 @@
 .studioNavigator details > button { width:100%; margin-top:8px; }
 .studioEditor, .editorStack, .previewReading { display:grid; gap:16px; min-width:0; }
 .sessionContext { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; min-width:0; }
+.studioNavigation { display:flex; align-items:center; flex-wrap:wrap; gap:12px; min-width:0; max-width:100%; }
+.studioNavigation > :global(.admin-tabs) { max-width:100%; }
 .sessionContext h2 { margin:0 0 4px; font-size:18px; }
 .sessionContext p { margin:0; font-size:12px; color:#526078; }
 .questionCard, .passageEditor { display:grid; gap:16px; min-width:0; padding:20px; border:1px solid #e2e5ec; border-radius:12px; background:#fff; box-shadow:0 2px 6px #17203304; }
@@ -164,7 +169,7 @@
  .studio { padding:16px; }
  .studioPanels { grid-template-columns:minmax(0,1fr); }
  .studioNavigator { position:static; }
- .studioNavigator ol { max-height:none; }
+ .studioNavigator ol { max-height:624px; }
 }
 @media(max-width:639px) {
  .studio { padding:12px; }
