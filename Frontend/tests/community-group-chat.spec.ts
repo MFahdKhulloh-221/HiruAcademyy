@@ -308,12 +308,19 @@ test("conversation retry releases aborted send controls and preserves retry key"
   await expect(page.getByText("Retry after cancellation", { exact: true })).toBeVisible();
 });
 
-test("free instructor form still obeys backend denial", async ({ page }) => {
-  const state = await setup(page, "free"); state.failure = 403;
+for (const plan of ["lms", "sensei"]) test(`${plan} has no instructor access toggle`, async ({ page }) => {
+  await setup(page, plan);
   await page.getByRole("button", { name: /Kerja Jepang/ }).click();
-  await page.getByRole("button", { name: "Saya pengajar — gunakan otorisasi backend" }).click();
-  await page.getByRole("textbox", { name: "Pesan", exact: true }).fill("Periksa akses");
-  await page.getByRole("button", { name: "Kirim", exact: true }).click();
-  await expect(page.getByRole("region", { name: /^Percakapan / }).getByRole("alert")).toContainText("Akses kirim ditolak");
-  await expect(page.locator(".community-bubble").filter({ hasText: "Periksa akses" })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Pesan", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: /Saya pengajar/ })).toHaveCount(0);
+});
+
+test("free cannot unlock composer through instructor button", async ({ page }) => {
+  const state = await setup(page, "free");
+  await page.getByRole("button", { name: /Kerja Jepang/ }).click();
+  await expect(page.getByText(/Free Member dapat membaca diskusi/)).toBeVisible();
+  await expect(page.getByRole("button", { name: /Saya pengajar/ })).toHaveCount(0);
+  await expect(page.getByRole("textbox", { name: "Pesan", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Kirim", exact: true })).toHaveCount(0);
+  expect(state.posts).toHaveLength(0);
 });

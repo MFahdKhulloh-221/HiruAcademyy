@@ -86,8 +86,7 @@ function CommunityConversation({ topic, userId, canPost, pending, onPending, onB
   const [sendError, setSendError] = useState("");
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
-  const [instructorAttempt, setInstructorAttempt] = useState(false);
-  const showComposer = canPost || instructorAttempt;
+  const showComposer = canPost;
   const confirmedVersion = useRef(0);
   const [olderBusy, setOlderBusy] = useState(false);
   const [revision, setRevision] = useState(0);
@@ -237,7 +236,7 @@ function CommunityConversation({ topic, userId, canPost, pending, onPending, onB
         }} placeholder={`Tulis pesan ke ${topic.title}…`} /></label>
         <small>{text.length}/5.000 · Shift+Enter untuk baris baru</small>
         <button className="button button-primary" type="submit" disabled={!ready || sending || (!pending && !text.trim())}><LuSend aria-hidden="true" />{sending ? "Mengirim…" : pending ? "Coba Lagi Kirim" : "Kirim"}</button>
-      </form> : <div><p role="status">{topic.slug === "tanya-sensei" ? "Grup Tanya Sensei khusus membership Sensei, pengajar, dan admin." : "Free Member dapat membaca diskusi. Upgrade ke Belajar Mandiri atau Sensei untuk mengirim pesan."}</p><button type="button" className="button button-secondary" onClick={() => setInstructorAttempt(true)}>Saya pengajar — gunakan otorisasi backend</button><small>Form pengajar tidak memberi akses tambahan. Server tetap memeriksa hak kirim.</small></div>}
+      </form> : <div><p role="status">{topic.slug === "tanya-sensei" ? "Grup Tanya Sensei khusus membership Sensei, pengajar, dan admin." : "Free Member dapat membaca diskusi. Upgrade ke Belajar Mandiri atau Sensei untuk mengirim pesan."}</p></div>}
     </div>
   </section>;
 }
