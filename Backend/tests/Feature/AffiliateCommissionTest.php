@@ -35,6 +35,7 @@ class AffiliateCommissionTest extends TestCase
         parent::setUp();
         $this->assertSame('pgsql', DB::connection()->getDriverName());
         $this->assertSame('hiru_academy_test', DB::connection()->getDatabaseName());
+        if (! \Illuminate\Support\Facades\Schema::hasTable('affiliate_settings')) (require database_path('migrations/2026_10_29_000030_extend_affiliate_withdrawals.php'))->up();
         $this->student = User::create(['name' => 'Student', 'email' => 'student@affiliate.example.test', 'whatsapp' => '081234569001', 'password' => 'Password123!']);
         $this->admin = User::create(['name' => 'Admin', 'email' => 'admin@affiliate.example.test', 'whatsapp' => '081234569002', 'password' => 'Password123!']);
         $this->admin->role = 'admin';
@@ -68,7 +69,7 @@ class AffiliateCommissionTest extends TestCase
         $invoice = $this->invoice('active');
         $snapshot = $invoice->getAttributes();
         $commission = app(AffiliateService::class)->createCommission($invoice, $affiliate);
-        $payload = ['request_key' => (string) Str::uuid(), 'affiliate_id' => $affiliate->id, 'commission_ids' => [$commission->id], 'paid_at' => today()->toDateString()];
+        $payload = ['request_key' => (string) Str::uuid(), 'affiliate_id' => $affiliate->id, 'commission_ids' => [$commission->id], 'paid_at' => today()->toDateString(), 'note' => 'Bank transfer REF-TEST'];
         $this->actingAs($this->student)->postJson('/api/admin/payouts', $payload)->assertForbidden();
         $this->actingAs($this->admin)->postJson('/api/admin/payouts', $payload)->assertUnprocessable();
         app(AffiliateService::class)->transition($commission, ['status' => 'approved']);
@@ -190,7 +191,8 @@ class AffiliateCommissionTest extends TestCase
         $this->patchJson($url, ['status' => 'paid'])->assertUnprocessable();
         $this->patchJson($url, ['status' => 'paid', 'paid_at' => '2026-10-04T12:00:00+07:00'])->assertUnprocessable()->assertJsonValidationErrors('paid_at');
         $this->patchJson($url, ['status' => 'paid', 'paid_at' => today()->addDay()->toDateString()])->assertUnprocessable();
-        $this->patchJson($url, ['status' => 'paid', 'paid_at' => today()->toDateString(), 'note' => 'Paid externally'])->assertOk()->assertJsonPath('data.status', 'paid');
+        $this->patchJson($url, ['status' => 'paid', 'paid_at' => today()->toDateString(), 'note' => 'Paid externally'])->assertUnprocessable();
+        $this->postJson('/api/admin/payouts', ['request_key' => (string) Str::uuid(), 'affiliate_id' => $affiliate->id, 'commission_ids' => [$commission->id], 'paid_at' => today()->toDateString(), 'note' => 'Bank transfer REF-TEST'])->assertOk();
         $this->patchJson($url, ['status' => 'approved'])->assertUnprocessable();
         $this->patchJson('/api/admin/affiliates/'.$affiliate->id, ['rate' => 30])->assertUnprocessable();
         $this->patchJson('/api/admin/affiliates/'.$affiliate->id, ['rate' => '25.00'])->assertOk();
@@ -205,7 +207,8 @@ class AffiliateCommissionTest extends TestCase
 
     public function test_checkout_referral_no_discount_no_automatic_commission_and_private_projection(): void
     {
-        $affiliate = $this->affiliate(extra: ['user_id' => $this->student->id, 'email' => 'private@example.test', 'whatsapp' => '081234569009']);
+        $owner = User::create(['name' => 'Owner', 'email' => 'owner@affiliate.example.test', 'whatsapp' => '081234569004', 'password' => 'Password123!']);
+        $affiliate = $this->affiliate(extra: ['user_id' => $owner->id, 'email' => 'private@example.test', 'whatsapp' => '081234569009']);
         $this->actingAs($this->student);
         $response = $this->postJson('/api/student/invoices', ['program_offer_id' => $this->offer->id, 'referral_code' => ' test_code '])->assertCreated()->assertJsonPath('data.total_price', 101);
         $invoice = Invoice::findOrFail($response->json('data.id'));
@@ -221,14 +224,16 @@ class AffiliateCommissionTest extends TestCase
         $workflow = app(InvoiceWorkflowService::class);
         foreach (['awaiting_payment', 'paid', 'verified', 'active'] as $state) {
             $invoice = $workflow->transition($invoice, $state, $this->admin);
-            $this->assertDatabaseCount('commissions', 0);
+            $this->assertDatabaseCount('commissions', in_array($state, ['verified', 'active']) ? 1 : 0);
         }
         app(AffiliateService::class)->createCommission($invoice);
+        $this->actingAs($owner);
         $projection = $this->getJson('/api/student/affiliate?user_id='.$this->admin->id.'&affiliate_id=999')->assertOk()->assertJsonPath('data.code', 'TEST_CODE')->assertJsonPath('data.totals.pending', 51);
         $this->assertArrayNotHasKey('email', $projection->json('data.affiliate'));
         $this->assertArrayNotHasKey('whatsapp', $projection->json('data.affiliate'));
         $other = User::create(['name' => 'Other', 'email' => 'other@affiliate.example.test', 'whatsapp' => '081234569003', 'password' => 'Password123!']);
-        $this->actingAs($other)->getJson('/api/student/affiliate?user_id='.$this->student->id)->assertOk()->assertJsonPath('data.affiliate', null)->assertJsonPath('data.code', null)->assertJsonPath('data.totals.pending', 0);
+        $this->actingAs($other)->getJson('/api/student/affiliate?user_id='.$this->student->id)->assertOk()->assertJsonPath('data.totals.pending', 0);
+        $this->assertNotSame('TEST_CODE', $this->getJson('/api/student/affiliate')->json('data.code'));
         $this->assertDatabaseCount('invoices', 1);
     }
 

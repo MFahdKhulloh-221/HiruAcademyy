@@ -14,6 +14,49 @@ use Illuminate\Validation\ValidationException;
 
 class AffiliateService
 {
+    public function ensure(User $user): Affiliate
+    {
+        abort_unless($user->role === 'student', 403);
+        return DB::transaction(function () use ($user) {
+            User::whereKey($user->id)->lockForUpdate()->firstOrFail();
+            if ($existing = Affiliate::where('user_id', $user->id)->first()) return $existing;
+            // Privacy-first: random alias never exposes the student's name.
+            for ($attempt = 0; $attempt < 5; $attempt++) {
+                try {
+                    return DB::transaction(fn () => Affiliate::create([
+                        'user_id' => $user->id, 'name' => $user->name, 'code' => $this->generateCode(),
+                        'status' => 'active', 'rate' => app(AffiliateWithdrawalService::class)->settings()->rate,
+                    ]));
+                } catch (\Illuminate\Database\UniqueConstraintViolationException $exception) {
+                    if ($existing = Affiliate::where('user_id', $user->id)->first()) return $existing;
+                    if ($attempt === 4) throw $exception;
+                }
+            }
+            throw new \RuntimeException('Kode referral gagal dibuat.');
+        }, 3);
+    }
+
+    protected function generateCode(): string
+    {
+        return 'HIRU-'.strtoupper(bin2hex(random_bytes(3))).'-'.strtoupper(bin2hex(random_bytes(3)));
+    }
+
+    public function validateReferral(User $user, mixed $code): Affiliate
+    {
+        $data = Validator::make(['code' => is_string($code) ? strtoupper(trim($code)) : $code], ['code' => ['required', 'string', 'max:255', 'regex:/^[A-Z0-9_-]+$/D']])->validate();
+        $affiliate = Affiliate::where('code', $data['code'])->first();
+        if (! app(ReferralCreditService::class)->policy()->enabled || ! $affiliate || $affiliate->status !== 'active') {
+            throw ValidationException::withMessages(['referral_code' => 'Kode referral tidak ditemukan atau tidak aktif.']);
+        }
+        if ($affiliate->user_id === $user->id) {
+            throw ValidationException::withMessages(['referral_code' => 'Kode referral sendiri tidak dapat digunakan.']);
+        }
+        if ($user->referrer_affiliate_id !== null && $user->referrer_affiliate_id !== $affiliate->id) {
+            throw ValidationException::withMessages(['referral_code' => 'Akun sudah terhubung dengan kode referral lain.']);
+        }
+        return $affiliate;
+    }
+
     public function save(array $input, ?Affiliate $affiliate = null): Affiliate
     {
         return DB::transaction(function () use ($input, $affiliate) {
@@ -41,7 +84,9 @@ class AffiliateService
             if (! $affiliate) {
                 return Affiliate::create($data)->fresh();
             }
+            $before = $affiliate->only(['code', 'status', 'rate', 'user_id']);
             $affiliate->update($data);
+            app(AffiliateWithdrawalService::class)->audit('affiliate.updated', (string) $affiliate->id, ['before' => $before, 'after' => $affiliate->only(['code', 'status', 'rate', 'user_id'])]);
 
             return $affiliate->fresh();
         });
@@ -78,7 +123,8 @@ class AffiliateService
 
         return DB::transaction(function () use ($invoice, $data) {
             $invoice = Invoice::whereKey($invoice->id)->lockForUpdate()->firstOrFail();
-            $affiliate = Affiliate::where('code', $data['referral_code'])->lockForUpdate()->first();
+            $validated = $this->validateReferral(User::findOrFail($invoice->user_id), $data['referral_code']);
+            $affiliate = Affiliate::whereKey($validated->id)->lockForUpdate()->first();
             if (! $affiliate || $affiliate->status !== 'active' || $invoice->status !== 'draft') {
                 throw ValidationException::withMessages(['referral_code' => 'Referral requires an active affiliate and a new draft invoice.']);
             }
@@ -101,6 +147,9 @@ class AffiliateService
 
     private function persistAttribution(Invoice $invoice, Affiliate $affiliate): InvoiceAttribution
     {
+        if ($affiliate->user_id === $invoice->user_id) {
+            throw ValidationException::withMessages(['referral_code' => 'Kode referral sendiri tidak dapat digunakan.']);
+        }
         $existing = InvoiceAttribution::where('invoice_id', $invoice->id)->first();
         if ($existing && $existing->affiliate_id !== $affiliate->id) {
             throw ValidationException::withMessages(['affiliate_id' => 'Invoice already has a different affiliate.']);
@@ -111,6 +160,7 @@ class AffiliateService
 
     public function createCommission(Invoice $invoice, ?Affiliate $affiliate = null, ?string $note = null): Commission
     {
+        abort(410, 'Reward uang tunai tidak tersedia.');
         Validator::make(['note' => $note], ['note' => ['nullable', 'string', 'max:5000']])->validate();
 
         return DB::transaction(function () use ($invoice, $affiliate, $note) {
@@ -142,7 +192,7 @@ class AffiliateService
     public function transition(Commission $commission, array $input): Commission
     {
         $data = Validator::make($input, [
-            'status' => ['required', Rule::in(['approved', 'paid'])],
+            'status' => ['required', Rule::in(['approved'])],
             'paid_at' => ['required_if:status,paid', 'prohibited_unless:status,paid', 'date_format:Y-m-d', 'before_or_equal:today'],
             'note' => ['sometimes', 'nullable', 'string', 'max:5000'],
         ])->validate();
@@ -153,7 +203,12 @@ class AffiliateService
             if ((['pending' => 'approved', 'approved' => 'paid'][$commission->status] ?? null) !== $data['status']) {
                 throw ValidationException::withMessages(['status' => 'Commission must advance exactly one state.']);
             }
+            $this->qualify($commission->invoice);
+            if (DB::table('commission_holds')->where('commission_id', $commission->id)->exists()) {
+                throw ValidationException::withMessages(['status' => 'Komisi ditahan.']);
+            }
             $commission->update($data);
+            app(AffiliateWithdrawalService::class)->audit('commission.approved', (string) $commission->id);
 
             return $commission->fresh();
         });
@@ -175,17 +230,21 @@ class AffiliateService
 
     public function student(User $user): array
     {
-        $affiliate = Affiliate::where('user_id', $user->id)->first();
-        $totals = ['pending' => 0, 'approved' => 0, 'paid' => 0];
-        if ($affiliate) {
-            foreach ($affiliate->commissions()->selectRaw('status, SUM(amount) AS total')->groupBy('status')->get() as $row) {
-                $totals[$row->status] = (int) $row->total;
-            }
-        }
-
+        $affiliate = $this->ensure($user);
+        $withdrawals = app(AffiliateWithdrawalService::class);
+        $settings = $withdrawals->settings();
+        $records = $affiliate->commissions()->with('invoice.program')->orderByDesc('id')->get();
+        $requests = DB::table('affiliate_withdrawals')->where('affiliate_id', $affiliate->id)->orderByDesc('id')->get()->map(fn ($row) => $withdrawals->publicRow($row));
+        $processing = (int) $requests->whereIn('status', ['pending', 'approved', 'processing', 'reconciliation'])->sum('amount');
+        $paid = (int) DB::table('payouts')->where('affiliate_id', $affiliate->id)->sum('amount');
+        $available = array_sum(array_column($withdrawals->available($affiliate), 'amount'));
         return [
-            'affiliate' => $affiliate ? $affiliate->only(['id', 'name', 'code', 'status', 'rate']) : null,
-            'code' => $affiliate?->code, 'totals' => $totals,
+            'affiliate' => $affiliate->only(['id', 'name', 'code', 'status', 'rate']), 'code' => $affiliate->code,
+            'totals' => ['pending' => (int) $records->where('status', 'pending')->sum('amount'), 'approved' => $available, 'paid' => $paid, 'processing' => $processing],
+            'referral_count' => $records->count(),
+            'history' => $records->map(fn ($record) => ['id' => $record->id, 'created_at' => $record->created_at, 'program' => $record->invoice->program->name, 'buyer' => 'Siswa ????', 'transaction_status' => $record->invoice->status, 'amount' => $record->amount, 'status' => DB::table('commission_holds')->where('commission_id', $record->id)->exists() ? 'held' : $record->status]),
+            'withdrawals' => $requests,
+            'policy' => ['enabled' => (bool) $settings->enabled, 'withdrawals_enabled' => (bool) $settings->withdrawals_enabled && $affiliate->status === 'active' && $settings->minimum !== null && $settings->fee !== null && $settings->waiting_days !== null, 'minimum' => $settings->minimum, 'fee' => $settings->fee, 'waiting_days' => $settings->waiting_days],
         ];
     }
 }

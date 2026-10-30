@@ -24,7 +24,11 @@ class AdminCommissionController extends Controller
     {
         $this->authorizeAdmin($request);
 
-        return response()->json(['data' => Commission::orderByDesc('id')->get()], 200);
+        return response()->json(['data' => Commission::orderByDesc('id')->get()->map(function ($commission) {
+            $hold = \Illuminate\Support\Facades\DB::table('commission_holds')->where('commission_id', $commission->id)->first();
+            $commission->setAttribute('hold_reason', $hold?->reason);
+            return $commission;
+        })], 200);
     }
 
     public function show(Request $request, Commission $commission): JsonResponse

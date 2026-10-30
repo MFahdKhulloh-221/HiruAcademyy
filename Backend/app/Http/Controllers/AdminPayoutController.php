@@ -23,13 +23,14 @@ class AdminPayoutController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        abort(410, 'Pembayaran komisi tunai tidak tersedia.');
         $data = $request->validate([
             'request_key' => ['required', 'uuid'],
             'affiliate_id' => ['required', 'integer', 'exists:affiliates,id'],
             'commission_ids' => ['required', 'array', 'min:1'],
             'commission_ids.*' => ['required', 'integer', 'distinct', 'exists:commissions,id'],
             'paid_at' => ['required', 'date_format:Y-m-d', 'before_or_equal:today'],
-            'note' => ['nullable', 'string', 'max:5000'],
+            'note' => ['required', 'string', 'min:3', 'max:5000'],
             'amount' => ['prohibited'], 'status' => ['prohibited'], 'balance' => ['prohibited'],
         ]);
         $data['affiliate_id'] = (int) $data['affiliate_id'];
@@ -48,7 +49,7 @@ class AdminPayoutController extends Controller
             }
             $commissions = Commission::whereIn('id', $data['commission_ids'])->orderBy('id')->lockForUpdate()->get();
             foreach ($commissions as $commission) {
-                if ($commission->affiliate_id !== $data['affiliate_id'] || $commission->status !== 'approved' || DB::table('payout_commissions')->where('commission_id', $commission->id)->exists()) {
+                if ($commission->affiliate_id !== $data['affiliate_id'] || $commission->status !== 'approved' || ! in_array($commission->invoice->status, ['verified', 'active']) || DB::table('commission_holds')->where('commission_id', $commission->id)->exists() || DB::table('affiliate_withdrawal_allocations as a')->join('affiliate_withdrawals as w', 'w.id', '=', 'a.withdrawal_id')->where('a.commission_id', $commission->id)->where('w.status', '!=', 'rejected')->exists() || DB::table('payout_commissions')->where('commission_id', $commission->id)->exists()) {
                     throw ValidationException::withMessages(['commission_ids' => 'Select only unsettled approved commissions for this affiliate.']);
                 }
             }
@@ -59,6 +60,7 @@ class AdminPayoutController extends Controller
                 $commission->update(['status' => 'paid', 'paid_at' => $data['paid_at']]);
             }
 
+            app(\App\Services\AffiliateWithdrawalService::class)->audit('payout.recorded', (string) $id, ['reference' => $data['note']]);
             return ['id' => $id, 'amount' => $amount, 'status' => 'paid'];
         });
 

@@ -1,5 +1,5 @@
-import { AdminAffiliatePrototype } from "@/components/admin-affiliate-prototype";
+import { AdminReferralProgram } from "@/components/admin-referral-program";
 
 export default function Page() {
-  return <AdminAffiliatePrototype />;
+  return <AdminReferralProgram />;
 }

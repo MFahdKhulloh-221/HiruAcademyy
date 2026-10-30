@@ -1,0 +1,24 @@
+.page { display: grid; gap: 20px; color: #202733; min-width: 0; }
+.hero { padding: 28px; border: 1px solid #e1e4ec; border-radius: 20px; background: #fff; }
+.hero h1 { font-size: clamp(24px, 3vw, 34px); line-height: 1.3; margin: 10px 0; font-weight: 800; }
+.hero > p:first-child { color: #954900; font-size: 12px; font-weight: 700; letter-spacing: .08em; }
+.hero p, .card p { color: #595e70; line-height: 1.7; margin: 8px 0 16px; }
+.card { padding: 24px; border: 1px solid #e1e4ec; background: #fff; border-radius: 16px; min-width: 0; }
+.card h2 { font-size: 18px; font-weight: 700; margin: 0 0 16px; }
+.code { display: block; color: #954900; font-size: clamp(20px, 3vw, 30px); font-weight: 800; overflow-wrap: anywhere; }
+.link { overflow-wrap: anywhere; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; }
+.actions > * { min-height: 44px; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; }
+.stats .card { padding: 18px; }
+.stats strong { font-size: 22px; overflow-wrap: anywhere; }
+.table { overflow-x: auto; max-width: 100%; }
+.table table { border-collapse: collapse; width: 100%; font-size: 13px; text-align: left; }
+.table th, .table td { padding: 14px 12px; border-bottom: 1px solid #e1e4ec; vertical-align: top; }
+.table th { color: #595e70; white-space: nowrap; }
+.badge { display: inline-block; border-radius: 20px; padding: 5px 10px; background: #f1f3f8; color: #303a50; font-size: 12px; }
+.card ol { padding-left: 20px; line-height: 1.9; color: #595e70; }
+.form { display: grid; gap: 16px; }
+.form label { display: grid; gap: 8px; }
+.form input { min-height: 44px; width: 100%; border: 1px solid #cbd1df; border-radius: 10px; padding: 10px; }
+@media(max-width: 639px) { .hero, .card { padding: 18px; } .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); } .stats strong { font-size: 18px; } .actions > * { flex: 1 1 100%; text-align: center; } }

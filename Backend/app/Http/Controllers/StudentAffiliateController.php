@@ -14,6 +14,6 @@ class StudentAffiliateController extends Controller
         abort_unless($request->user()->account_status === 'active', 401);
         abort_unless($request->user()->role === 'student', 403);
 
-        return response()->json(['data' => $affiliates->student($request->user())], 200);
+        return response()->json(['data' => app(\App\Services\ReferralCreditService::class)->student($request->user())], 200);
     }
 }
