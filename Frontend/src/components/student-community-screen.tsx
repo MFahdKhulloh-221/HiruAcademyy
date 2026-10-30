@@ -1,18 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ApiError } from "@/lib/api";
 import "./student-community.css";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
-import { LuArrowLeft, LuMessagesSquare, LuSearch } from "react-icons/lu";
+import { LuArrowLeft, LuMessagesSquare, LuSearch, LuSend } from "react-icons/lu";
 import { useAuth } from "@/components/auth-provider";
 import { useLearningRequest } from "@/components/learning-hooks";
 import {
-  createCommunityReply,
-  createCommunityThread,
-  fetchCommunityThread,
-  fetchCommunityThreads,
   fetchCommunityTopics,
   fetchCommunityRoom,
   fetchCommunityMessages,
@@ -20,7 +16,6 @@ import {
   reportCommunityMessage,
   type CommunityMessage,
   type CommunityTopic,
-  type CommunityThread,
 } from "@/lib/community-api";
 import type { Membership } from "@/lib/dashboard-mock";
 
@@ -44,41 +39,44 @@ export function StudentCommunityScreen({ membership }: { membership: Membership 
 
 function CommunitySession({ membership }: { membership: Membership }) {
   const { user } = useAuth();
-  const [archive, setArchive] = useState(false);
+  const params = useSearchParams();
   const [topicId, setTopicId] = useState<number>();
+  const [search, setSearch] = useState("");
+  const [mobileChat, setMobileChat] = useState(() => !!params.get("topic"));
   const [pending, setPending] = useState<Record<number, PendingMessage>>({});
   const load = useCallback((signal: AbortSignal) => fetchCommunityTopics(signal), []);
   const topics = useLearningRequest(load, "community-chat-topics");
-  const selected = topics.data?.find(topic => topic.id === topicId && topic.slug !== "tanya-sensei");
+  const selected = topics.data?.find(topic => topic.id === topicId)
+    ?? topics.data?.find(topic => topic.slug === params.get("topic"))
+    ?? topics.data?.find(topic => topic.slug !== "tanya-sensei")
+    ?? topics.data?.[0];
 
-  if (archive) return <><button className="button button-secondary" type="button" onClick={() => setArchive(false)}>Kembali ke Grup Chat</button><CommunityArchive membership={membership} /></>;
-
-  return <section className="community-chat-page">
-    <header className="supporting-header">
-      <p className="dash-kicker">KOMUNITAS</p>
-      <h1>Diskusi Member Kerja ke Jepang</h1>
-      <p>Pilih kategori untuk membuka percakapan grup.</p>
-      <button type="button" className="button button-secondary" onClick={() => setArchive(true)}>Arsip Diskusi Lama</button>
-    </header>
-    {!topics.data && !topics.error && <LoadingSkeleton variant="cards" label="Memuat kategori…" />}
-    {topics.error && <p role="alert">{topics.error} <button type="button" onClick={topics.retry}>Coba Lagi Kategori</button></p>}
-    <section className="community-access-grid community-category-menu" aria-label="Kategori diskusi">
-      {(topics.data ?? []).map(topic => topic.slug === "tanya-sensei"
-        ? <Link className="button button-secondary" key={topic.id} href="/ask-sensei">{topic.title}</Link>
-        : <button type="button" key={topic.id} aria-pressed={topicId === topic.id} onClick={() => setTopicId(topic.id)}><strong>{topic.title}</strong><span>{topic.description}</span></button>)}
-    </section>
-    {topics.data?.length === 0 && <p role="status">Belum ada kategori komunitas.</p>}
-    {selected && user ? <CommunityConversation key={`${user.id}-${selected.id}`} topic={selected} userId={Number(user.id)} canPost={membership !== "free" || user.role === "admin"}
+  const filtered = (topics.data ?? []).filter(topic => `${topic.title} ${topic.description ?? ""}`.toLocaleLowerCase("id-ID").includes(search.trim().toLocaleLowerCase("id-ID")));
+  return <section className={`community-chat-page${mobileChat ? " community-mobile-chat" : ""}`} aria-label="Komunitas">
+    <aside className="community-group-panel">
+      <header className="community-group-heading"><h1>Komunitas</h1><p>Terhubung, belajar, dan berbagi bersama.</p></header>
+      <label className="community-group-search"><LuSearch aria-hidden="true" /><input aria-label="Cari grup" placeholder="Cari grup…" value={search} onChange={event => setSearch(event.target.value)} /></label>
+      <section className="community-group-list" aria-label="Kategori diskusi">
+        {!topics.data && !topics.error && <LoadingSkeleton variant="list" label="Memuat kategori…" />}
+        {topics.error && <p role="alert">{topics.error} <button type="button" onClick={topics.retry}>Coba Lagi Kategori</button></p>}
+        {filtered.map(topic => {
+          const content = <><span className="community-group-avatar" aria-hidden="true"><LuMessagesSquare /></span><span className="community-group-copy"><strong>{topic.title}</strong><span>{topic.description}</span></span></>;
+          return <button type="button" key={topic.id} aria-pressed={selected?.id === topic.id} onClick={() => { setTopicId(topic.id); setMobileChat(true); }}>{content}</button>;
+        })}
+        {topics.data && !filtered.length && <p className="community-list-empty" role="status">{search ? "Grup tidak ditemukan." : "Belum ada kategori komunitas."}</p>}
+      </section>
+    </aside>
+    {selected && user ? <CommunityConversation key={`${user.id}-${selected.id}`} topic={selected} userId={Number(user.id)} canPost={(selected.slug === "tanya-sensei" ? membership === "sensei" : membership !== "free") || user.role === "admin"} onBack={() => setMobileChat(false)}
       pending={pending[selected.id]} onPending={value => setPending(current => {
         const next = { ...current };
         if (value) next[selected.id] = value; else delete next[selected.id];
         return next;
-      })} /> : topics.data && <p role="status">Pilih ruang percakapan di atas.</p>}
+      })} /> : <div className="community-chat-welcome"><span className="community-welcome-icon"><LuMessagesSquare aria-hidden="true" /></span><h2>Ruang untuk tumbuh bersama</h2><p>Pilih grup untuk membaca pesan dan ikut percakapan.</p></div>}
   </section>;
 }
 
-function CommunityConversation({ topic, userId, canPost, pending, onPending }: {
-  topic: CommunityTopic; userId: number; canPost: boolean; pending?: PendingMessage; onPending: (value?: PendingMessage) => void;
+function CommunityConversation({ topic, userId, canPost, pending, onPending, onBack }: {
+  topic: CommunityTopic; userId: number; canPost: boolean; pending?: PendingMessage; onPending: (value?: PendingMessage) => void; onBack: () => void;
 }) {
   const [roomId, setRoomId] = useState<number>();
   const [messages, setMessages] = useState<CommunityMessage[]>([]);
@@ -213,31 +211,33 @@ function CommunityConversation({ topic, userId, canPost, pending, onPending }: {
   }
 
   return <section className="community-conversation" aria-label={`Percakapan ${topic.title}`}>
-    <header className="community-room-header"><h2>{topic.title}</h2><small>Grup komunitas · Sinkronisasi berkala</small></header>
+    <header className="community-room-header"><button type="button" className="community-chat-back" aria-label="Kembali ke daftar grup" onClick={onBack}><LuArrowLeft aria-hidden="true" /></button><span className="community-group-avatar" aria-hidden="true"><LuMessagesSquare /></span><div><h2>{topic.title}</h2><p>{topic.description}</p><small>Sinkronisasi berkala</small></div></header>
     {error && <p role="alert" className="community-chat-error">{error} <button type="button" onClick={() => setRevision(value => value + 1)}>Coba Lagi Percakapan</button></p>}
     <div ref={history} className="community-chat-history" role="region" aria-label="Riwayat pesan" tabIndex={0} onScroll={() => {
       const box = history.current!; nearBottom.current = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
     }}>
-      {!ready && !error && <p role="status">Memuat percakapan…</p>}
+      {!ready && !error && <div className="community-history-state" role="status"><LoadingSkeleton variant="list" label="Memuat percakapan…" /></div>}
       {hasOlder && <button type="button" className="button button-secondary community-older" disabled={olderBusy} onClick={() => void loadOlder()}>{olderBusy ? "Memuat pesan lama…" : "Muat Pesan Lama"}</button>}
-      {ready && messages.length === 0 && <p role="status">Belum ada pesan. Mulai percakapan di ruang ini.</p>}
+      {ready && messages.length === 0 && <div className="community-history-state" role="status"><LuMessagesSquare aria-hidden="true" /><h3>Belum ada pesan</h3><p>Percakapan di {topic.title} akan tampil di sini.</p></div>}
       {messages.map(message => <article key={message.id} data-message-id={message.id} className={`community-bubble ${message.author.id === userId ? "community-bubble-own" : "community-bubble-other"}`}>
         <strong>{message.author.name}</strong>
         <p>{message.content}</p>
-        <MessageReport messageId={message.id} />
-        <time dateTime={message.created_at}>{new Date(message.created_at).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" })}</time>
+        <footer className="community-bubble-footer">
+          <MessageReport messageId={message.id} />
+          <time dateTime={message.created_at}>{new Date(message.created_at).toLocaleString("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" })}</time>
+        </footer>
       </article>)}
     </div>
     <div className="community-chat-composer">
       {pending && <div className="community-pending" role="status"><p>{pending.content}</p><span>{sending ? "Mengirim…" : "Belum terkonfirmasi. Pesan mungkin sudah tersimpan; coba lagi dengan pesan yang sama."}</span></div>}
       {sendError && <p role="alert">{sendError}</p>}
       {showComposer ? <form onSubmit={event => { event.preventDefault(); void send(); }}>
-        <label><span>Pesan</span><textarea aria-label="Pesan" rows={2} maxLength={5000} value={text} disabled={!!pending} onChange={event => setText(event.target.value)} onKeyDown={event => {
+        <label><span className="community-input-label">Pesan</span><textarea aria-label="Pesan" rows={2} maxLength={5000} value={text} disabled={!!pending} onChange={event => setText(event.target.value)} onKeyDown={event => {
           if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); void send(); }
-        }} placeholder="Tulis pesan…" /></label>
+        }} placeholder={`Tulis pesan ke ${topic.title}…`} /></label>
         <small>{text.length}/5.000 · Shift+Enter untuk baris baru</small>
-        <button className="button button-primary" type="submit" disabled={!ready || sending || (!pending && !text.trim())}>{sending ? "Mengirim…" : pending ? "Coba Lagi Kirim" : "Kirim"}</button>
-      </form> : <div><p role="status">Free Member dapat membaca diskusi. Upgrade ke Belajar Mandiri atau Sensei untuk mengirim pesan.</p><button type="button" className="button button-secondary" onClick={() => setInstructorAttempt(true)}>Saya pengajar — gunakan otorisasi backend</button><small>Form pengajar tidak memberi akses tambahan. Server tetap memeriksa hak kirim.</small></div>}
+        <button className="button button-primary" type="submit" disabled={!ready || sending || (!pending && !text.trim())}><LuSend aria-hidden="true" />{sending ? "Mengirim…" : pending ? "Coba Lagi Kirim" : "Kirim"}</button>
+      </form> : <div><p role="status">{topic.slug === "tanya-sensei" ? "Grup Tanya Sensei khusus membership Sensei, pengajar, dan admin." : "Free Member dapat membaca diskusi. Upgrade ke Belajar Mandiri atau Sensei untuk mengirim pesan."}</p><button type="button" className="button button-secondary" onClick={() => setInstructorAttempt(true)}>Saya pengajar — gunakan otorisasi backend</button><small>Form pengajar tidak memberi akses tambahan. Server tetap memeriksa hak kirim.</small></div>}
     </div>
   </section>;
 }
@@ -261,387 +261,4 @@ function MessageReport({ messageId }: { messageId: number }) {
     </form>}
     {feedback && <p role={failed ? "alert" : "status"}>{feedback}</p>}
   </div>;
-}
-
-function CommunityArchive({ membership }: { membership: Membership }) {
-  const { user } = useAuth();
-  const [selectedThreadId, setSelectedThreadId] = useState<number>();
-  const [selectedTopicSlug, setSelectedTopicSlug] = useState<string>("all");
-  const [search, setSearch] = useState("");
-  const [viewMode, setViewMode] = useState<"list" | "create">("list");
-
-  // Create form state
-  const [newTopicId, setNewTopicId] = useState<number>();
-  const [newTitle, setNewTitle] = useState("");
-  const [newContent, setNewContent] = useState("");
-  const [createBusy, setCreateBusy] = useState(false);
-  const [createError, setCreateError] = useState("");
-
-  // Reply form state
-  const [replyText, setReplyText] = useState("");
-  const [replyBusy, setReplyBusy] = useState(false);
-
-  const canPost = membership !== "free" || user?.role === "admin";
-
-  const loadTopics = useCallback((signal: AbortSignal) => fetchCommunityTopics(signal), []);
-  const topicsReq = useLearningRequest(loadTopics, "community-topics");
-
-  const loadThreads = useCallback(
-    (signal: AbortSignal) =>
-      fetchCommunityThreads(
-        {
-          topic_slug: selectedTopicSlug === "all" ? undefined : selectedTopicSlug,
-          search: search.trim() || undefined,
-        },
-        signal
-      ),
-    [selectedTopicSlug, search]
-  );
-  const threadsReq = useLearningRequest(loadThreads, `community-threads-${selectedTopicSlug}-${search}`);
-
-  const loadSingleThread = useCallback(
-    (signal: AbortSignal) =>
-      selectedThreadId ? fetchCommunityThread(selectedThreadId, signal) : Promise.resolve(null),
-    [selectedThreadId]
-  );
-  const singleReq = useLearningRequest(loadSingleThread, `community-thread-${selectedThreadId ?? ""}`);
-
-  async function handleCreateThread(e: React.FormEvent) {
-    e.preventDefault();
-    const topicId = newTopicId ?? topicsReq.data?.[0]?.id;
-    if (!topicId || createBusy) return;
-    setCreateBusy(true);
-    setCreateError("");
-    try {
-      await createCommunityThread({
-        topic_id: topicId,
-        title: newTitle,
-        content: newContent,
-      });
-      setNewTitle("");
-      setNewContent("");
-      setViewMode("list");
-      threadsReq.retry();
-    } catch (cause) {
-      setCreateError(cause instanceof Error ? cause.message : "Gagal membuat postingan.");
-    } finally {
-      setCreateBusy(false);
-    }
-  }
-
-  async function handleSendReply(thread: CommunityThread) {
-    if (!replyText.trim() || replyBusy) return;
-    setReplyBusy(true);
-    try {
-      await createCommunityReply(thread.id, replyText.trim());
-      setReplyText("");
-      singleReq.retry();
-      threadsReq.retry();
-    } catch (cause) {
-      alert(cause instanceof Error ? cause.message : "Gagal mengirim balasan.");
-    } finally {
-      setReplyBusy(false);
-    }
-  }
-
-  // 1. Thread Detail View
-  if (selectedThreadId && !singleReq.data) return singleReq.error ? <p role="alert">{singleReq.error} <button type="button" onClick={singleReq.retry}>Coba Lagi</button><button type="button" onClick={() => setSelectedThreadId(undefined)}>Kembali ke Diskusi</button></p> : <LoadingSkeleton variant="article" />;
-
-  if (selectedThreadId && singleReq.data) {
-    const thread = singleReq.data;
-
-    return (
-      <div className="community-detail-view" style={{ maxWidth: "840px", margin: "0 auto", padding: "16px 0" }}>
-        <button
-          type="button"
-          className="button button-secondary"
-          onClick={() => setSelectedThreadId(undefined)}
-          style={{ marginBottom: "20px", display: "inline-flex", alignItems: "center", gap: "8px" }}
-        >
-          <LuArrowLeft aria-hidden="true" /> Kembali ke Diskusi
-        </button>
-
-        <article style={{ padding: "24px", background: "#fff", borderRadius: "18px", border: "1px solid var(--line)" }}>
-          <header style={{ marginBottom: "16px" }}>
-            <span style={{ fontSize: "11px", fontWeight: 800, color: "var(--orange-dark)", textTransform: "uppercase" }}>
-              {thread.topic_title}
-            </span>
-            <h1 style={{ fontSize: "24px", margin: "8px 0" }}>{thread.title}</h1>
-            <small style={{ color: "var(--muted)" }}>
-              Oleh {thread.author.name} • {new Date(thread.created_at).toLocaleDateString("id-ID")}
-            </small>
-          </header>
-          <p style={{ whiteSpace: "pre-wrap", lineHeight: 1.6, fontSize: "15px" }}>{thread.content}</p>
-        </article>
-
-        <section style={{ marginTop: "24px", display: "grid", gap: "16px" }}>
-          <h2 style={{ fontSize: "18px", fontWeight: 800 }}>Tanggapan ({thread.replies?.length ?? 0})</h2>
-
-          {(thread.replies ?? []).map(r => (
-            <article
-              key={r.id}
-              style={{
-                padding: "16px 20px",
-                borderRadius: "14px",
-                border: "1px solid var(--line)",
-                background: r.author.is_sensei ? "#fff7ef" : "#fff",
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "8px" }}>
-                <strong>
-                  {r.author.name} {r.author.is_sensei && <span style={{ color: "var(--orange)", fontSize: "11px", marginLeft: "6px" }}>(Sensei Pengajar)</span>}
-                </strong>
-                <small style={{ color: "var(--muted)" }}>{new Date(r.created_at).toLocaleDateString("id-ID")}</small>
-              </div>
-              <p style={{ margin: 0, whiteSpace: "pre-wrap", lineHeight: 1.5 }}>{r.content}</p>
-            </article>
-          ))}
-
-          {canPost ? (
-            <form
-              onSubmit={e => {
-                e.preventDefault();
-                void handleSendReply(thread);
-              }}
-              style={{ marginTop: "12px" }}
-            >
-              <label style={{ display: "grid", gap: "8px" }}>
-                <span style={{ fontWeight: 700 }}>Tulis Tanggapan:</span>
-                <textarea
-                  required
-                  rows={3}
-                  value={replyText}
-                  onChange={e => setReplyText(e.target.value)}
-                  placeholder="Bagikan pandangan atau jawabanmu…"
-                  style={{ padding: "12px", borderRadius: "12px", border: "1px solid var(--line)", font: "inherit" }}
-                />
-              </label>
-              <button
-                type="submit"
-                disabled={replyBusy || !replyText.trim()}
-                className="button button-primary"
-                style={{ marginTop: "10px" }}
-              >
-                {replyBusy ? "Mengirim…" : "Kirim Tanggapan"}
-              </button>
-            </form>
-          ) : (
-            <p role="status" style={{ color: "var(--muted)", fontStyle: "italic" }}>
-              Free Member dapat membaca diskusi. Upgrade ke Belajar Mandiri atau Sensei untuk membalas.
-            </p>
-          )}
-        </section>
-      </div>
-    );
-  }
-
-  // 2. Create Thread View
-  if (viewMode === "create" && !topicsReq.data) return topicsReq.error ? <p role="alert">{topicsReq.error} <button type="button" onClick={topicsReq.retry}>Coba Lagi</button><button type="button" onClick={() => setViewMode("list")}>Batal</button></p> : <LoadingSkeleton variant="form" />;
-
-  if (viewMode === "create") {
-    return (
-      <div style={{ maxWidth: "760px", margin: "0 auto", padding: "16px 0" }}>
-        <button
-          type="button"
-          className="button button-secondary"
-          onClick={() => setViewMode("list")}
-          style={{ marginBottom: "20px", display: "inline-flex", alignItems: "center", gap: "8px" }}
-        >
-          <LuArrowLeft aria-hidden="true" /> Batal &amp; Kembali
-        </button>
-
-        <header className="supporting-header">
-          <p className="dash-kicker">BUAT POSTINGAN</p>
-          <h1>Bagikan pertanyaan atau pengalaman belajar</h1>
-        </header>
-
-        {createError && <p role="alert" style={{ color: "#c65b4b" }}>{createError}</p>}
-
-        <form onSubmit={handleCreateThread} style={{ display: "grid", gap: "16px", marginTop: "20px" }}>
-          <label style={{ display: "grid", gap: "8px", fontWeight: 700 }}>
-            <span>Kategori Topik</span>
-            <select
-              value={newTopicId ?? topicsReq.data?.[0]?.id ?? ""}
-              onChange={e => setNewTopicId(Number(e.target.value))}
-              style={{ padding: "12px", borderRadius: "12px", border: "1px solid var(--line)", background: "#fff", font: "inherit" }}
-            >
-              {(topicsReq.data ?? []).map(t => (
-                <option key={t.id} value={t.id}>{t.title}</option>
-              ))}
-            </select>
-          </label>
-
-          <label style={{ display: "grid", gap: "8px", fontWeight: 700 }}>
-            <span>Judul Diskusi</span>
-            <input
-              required
-              value={newTitle}
-              onChange={e => setNewTitle(e.target.value)}
-              placeholder="Tulis judul yang jelas dan spesifik"
-              style={{ padding: "12px", borderRadius: "12px", border: "1px solid var(--line)", font: "inherit" }}
-            />
-          </label>
-
-          <label style={{ display: "grid", gap: "8px", fontWeight: 700 }}>
-            <span>Isi Postingan</span>
-            <textarea
-              required
-              rows={6}
-              value={newContent}
-              onChange={e => setNewContent(e.target.value)}
-              placeholder="Ceritakan pertanyaan atau topik yang ingin didiskusikan…"
-              style={{ padding: "12px", borderRadius: "12px", border: "1px solid var(--line)", font: "inherit" }}
-            />
-          </label>
-
-          <div style={{ display: "flex", gap: "12px", marginTop: "8px" }}>
-            <button
-              type="submit"
-              disabled={createBusy || !newTitle.trim() || !newContent.trim()}
-              className="button button-primary"
-            >
-              {createBusy ? "Mempublikasikan…" : "Publikasikan Postingan"}
-            </button>
-            <button
-              type="button"
-              className="button button-secondary"
-              onClick={() => setViewMode("list")}
-            >
-              Batal
-            </button>
-          </div>
-        </form>
-      </div>
-    );
-  }
-
-  // 3. Thread List View
-  return (
-    <>
-      <div className="progress-title-row">
-        <header className="supporting-header">
-          <p className="dash-kicker">FORUM KOMUNITAS</p>
-          <h1>Berdiskusi, bertanya, dan berbagi perjalanan belajar</h1>
-          <p>
-            {membership === "sensei"
-              ? "Belajar dengan Sensei dapat membuat post, membalas komentar, dan menggunakan Tanya Sensei."
-              : membership === "lms"
-              ? "Belajar Mandiri dapat membuat post, membalas komentar, dan berdiskusi di forum."
-              : "Free Member dapat membaca seluruh diskusi aktif. Post dan komentar terbuka setelah upgrade."}
-          </p>
-        </header>
-        {canPost && (
-          <button
-            type="button"
-            className="button button-primary"
-            onClick={() => setViewMode("create")}
-          >
-            Buat Postingan
-          </button>
-        )}
-      </div>
-
-      {!topicsReq.data && !topicsReq.error && <LoadingSkeleton variant="cards" label="Memuat kategori…" />}
-      {topicsReq.error && <p role="alert">{topicsReq.error} <button type="button" onClick={topicsReq.retry}>Coba Lagi Kategori</button></p>}
-      <section className="community-access-grid community-category-menu" aria-label="Kategori diskusi">
-        <button type="button" aria-pressed={selectedTopicSlug === "all"} onClick={() => setSelectedTopicSlug("all")}>
-          <strong>Semua Diskusi</strong>
-          <span>Lihat seluruh kategori diskusi.</span>
-        </button>
-        {(topicsReq.data ?? []).map(topic => {
-          const isSelected = selectedTopicSlug === topic.slug;
-          return (
-            <button
-              type="button"
-              key={topic.id}
-              aria-pressed={isSelected}
-              onClick={() => setSelectedTopicSlug(topic.slug)}
-            >
-              <strong>{topic.title}</strong>
-              <span>{topic.description}</span>
-            </button>
-          );
-        })}
-      </section>
-
-      <section className="community-feed-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", margin: "24px 0 16px", gap: "16px", flexWrap: "wrap" }}>
-        <div>
-          <p className="dash-kicker" style={{ margin: 0 }}>DISKUSI TERBARU</p>
-          <small style={{ color: "var(--muted)" }}>Aktivitas diskusi pembelajar aktif.</small>
-        </div>
-        <label className="library-search community-search">
-          <span aria-hidden="true"><LuSearch /></span>
-          <input
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            aria-label="Cari diskusi"
-            placeholder="Cari diskusi atau topik…"
-          />
-        </label>
-      </section>
-
-      {!threadsReq.data && !threadsReq.error && <LoadingSkeleton variant="list" label="Memuat diskusi…" />}
-      {threadsReq.error && <p role="alert">{threadsReq.error} <button type="button" onClick={threadsReq.retry}>Coba Lagi</button></p>}
-
-      <section className="community-list" style={{ display: "grid", gap: "14px" }}>
-        {(threadsReq.data ?? []).map(thread => (
-          <article
-            key={thread.id}
-            onClick={() => setSelectedThreadId(thread.id)}
-            style={{
-              padding: "20px 24px",
-              borderRadius: "16px",
-              border: "1px solid var(--line)",
-              background: "#fff",
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              cursor: "pointer",
-              gap: "16px",
-            }}
-          >
-            <div>
-              <span
-                style={{
-                  fontSize: "11px",
-                  fontWeight: 800,
-                  color: "var(--orange-dark)",
-                  background: "var(--soft)",
-                  padding: "3px 8px",
-                  borderRadius: "6px",
-                  display: "inline-block",
-                  marginBottom: "8px",
-                }}
-              >
-                {thread.topic_title}
-              </span>
-              <h2 style={{ fontSize: "18px", margin: "0 0 6px", fontWeight: 800 }}>{thread.title}</h2>
-              <p style={{ margin: 0, color: "var(--muted)", fontSize: "13px", lineHeight: 1.4 }}>
-                {thread.content.length > 120 ? `${thread.content.slice(0, 120)}…` : thread.content}
-              </p>
-              <small style={{ display: "block", marginTop: "8px", color: "var(--muted)", fontSize: "11px" }}>
-                {thread.author.name} • {new Date(thread.created_at).toLocaleDateString("id-ID")}
-              </small>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: "12px", flexShrink: 0 }}>
-              <span style={{ fontSize: "12px", color: "var(--muted)", display: "inline-flex", alignItems: "center", gap: "5px" }}>
-                <LuMessagesSquare aria-hidden="true" />
-                {thread.replies_count}
-              </span>
-              <button type="button" className="button button-primary" style={{ padding: "6px 16px" }}>
-                Buka
-              </button>
-            </div>
-          </article>
-        ))}
-
-        {threadsReq.data && !threadsReq.error && threadsReq.data.length === 0 && (
-          <div className="library-empty">
-            <h2>Belum ada diskusi</h2>
-            <p>Jadilah yang pertama membuat postingan di komunitas.</p>
-          </div>
-        )}
-      </section>
-    </>
-  );
 }

@@ -4,7 +4,7 @@ const topics = [{ id: 1, slug: "kerja", title: "Kerja Jepang", description: "Rua
 const message = (id: number, room = 1, own = false) => ({ id, room_id: room, client_message_id: `00000000-0000-4000-8000-${String(id).padStart(12, "0")}`, content: `Pesan ${room}-${id}`, status: "published", author: { id: own ? 9 : 10, name: own ? "Siswa" : "Teman", is_sensei: false }, created_at: "2026-10-28T01:30:00Z" });
 
 type State = { rows: ReturnType<typeof message>[]; posts: { client_message_id: string; content: string }[]; failure: number; loseResponse: boolean; hold?: Route; holdRoom: boolean; reads: number; userId: number; pageSize: number; holdHistory: boolean; heldHistory?: { route: Route; json: unknown; headers: Record<string, string> } };
-async function setup(page: Page, plan = "lms") {
+async function setup(page: Page, plan = "lms", role = "student") {
   const state: State = { rows: [message(1), message(2, 1, true), message(3, 2)], posts: [], failure: 0, loseResponse: false, holdRoom: false, reads: 0, userId: 9, pageSize: 2, holdHistory: false };
   await page.route(/\/(api\/|sanctum\/csrf-cookie)/, async route => {
     const url = new URL(route.request().url());
@@ -15,7 +15,7 @@ async function setup(page: Page, plan = "lms") {
       await page.context().addCookies([{ name: "XSRF-TOKEN", value: "chat-test-csrf", url: page.url() }]);
       return route.fulfill({ status: 204, headers });
     }
-    if (url.pathname === "/api/me") return reply({ id: state.userId, name: "Siswa", email: "student@example.test", whatsapp: "628123456789", role: "student", account_status: "active" });
+    if (url.pathname === "/api/me") return reply({ id: state.userId, name: "Siswa", email: "student@example.test", whatsapp: "628123456789", role, account_status: "active" });
     if (url.pathname === "/api/student/dashboard") return reply({ programs: [], access: { learning: {}, replay_levels: [], source_grants: plan === "free" ? [] : [{ plan_code: plan, program_code: "n5" }] } });
     if (url.pathname === "/api/community/topics") return reply(topics);
     const room = /topics\/(\d+)\/room$/.exec(url.pathname);
@@ -50,7 +50,7 @@ async function setup(page: Page, plan = "lms") {
 
 for (const width of [1440, 768, 390]) {
   test(`chat category identity and responsive ${width}`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 1000 });
+    await page.setViewportSize({ width, height: 810 });
     await setup(page);
     const menu = page.getByRole("region", { name: "Kategori diskusi" });
     await menu.getByRole("button", { name: /Kerja Jepang/ }).click();
@@ -61,14 +61,79 @@ for (const width of [1440, 768, 390]) {
     await expect(other).toContainText("Teman");
     await expect(own.locator("time")).toHaveAttribute("datetime", "2026-10-28T01:30:00Z");
     await expect(own.locator("time")).toContainText("08.30");
+    const bubble = await own.boundingBox();
+    expect(bubble!.width).toBeGreaterThan(bubble!.height * 1.5);
+    const report = await own.getByRole("button", { name: "Laporkan", exact: true }).boundingBox();
+    const timestamp = await own.locator("time").boundingBox();
+    expect(timestamp!.y).toBeGreaterThanOrEqual(report!.y);
+    expect(timestamp!.y + timestamp!.height).toBeLessThanOrEqual(report!.y + report!.height);
     expect(await own.evaluate(el => el.getBoundingClientRect().right)).toBeGreaterThan(await other.evaluate(el => el.getBoundingClientRect().right));
+    if (width < 768) await page.getByRole("button", { name: "Kembali ke daftar grup" }).click();
     await menu.getByRole("button", { name: /Belajar/ }).click();
     await expect(page.getByText("Pesan 2-3", { exact: true })).toBeVisible();
     await expect(page.getByText("Pesan 1-1", { exact: true })).toHaveCount(0);
-    await expect(menu.getByRole("link", { name: "Tanya Sensei" })).toHaveAttribute("href", "/ask-sensei");
+    if (width < 768) await page.getByRole("button", { name: "Kembali ke daftar grup" }).click();
+    await menu.getByRole("button", { name: /Tanya Sensei/ }).click();
+    await expect(page.getByRole("heading", { name: "Tanya Sensei", exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/community$/);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 }
+
+test("admin replies in same community room and archive is removed", async ({ page }) => {
+  const state = await setup(page, "sensei", "admin");
+  await page.goto("/admin/komunitas");
+  await expect(page.getByRole("button", { name: "Moderasi", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("navigation", { name: "Tampilan komunitas" })).toHaveCount(0);
+  await page.getByRole("button", { name: /Tanya Sensei/ }).click();
+  await expect(page.getByRole("heading", { name: "Tanya Sensei", exact: true })).toBeVisible();
+  await page.getByRole("textbox", { name: "Pesan", exact: true }).fill("Jawaban admin");
+  await page.getByRole("button", { name: "Kirim", exact: true }).click();
+  await expect(page.locator(".community-bubble-own")).toContainText("Jawaban admin");
+  expect(state.rows.find(row => row.content === "Jawaban admin")?.room_id).toBe(3);
+  await expect(page.getByRole("button", { name: "Arsip Diskusi Lama", exact: true })).toHaveCount(0);
+  await page.route("**/api/me", route => route.fulfill({ json: { data: { id: 25, name: "Member Sensei", email: "sensei.member@example.test", whatsapp: "628123456789", role: "student", account_status: "active" } } }));
+  await page.goto("/community?topic=tanya-sensei");
+  await expect(page.locator(".community-bubble-other")).toContainText("Jawaban admin");
+});
+
+test("desktop opens chat immediately and legacy Sensei page redirects to unified room", async ({ page }) => {
+  await setup(page, "sensei");
+  await expect(page.getByRole("heading", { name: "Kerja Jepang", exact: true })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Pesan", exact: true })).toBeVisible();
+  await page.goto("/ask-sensei?membership=sensei");
+  await expect(page).toHaveURL(/\/community\?topic=tanya-sensei$/);
+  await expect(page.getByRole("heading", { name: "Tanya Sensei", exact: true })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Pesan", exact: true })).toBeVisible();
+  await page.getByRole("textbox", { name: "Pesan", exact: true }).fill("Pertanyaan untuk Sensei");
+  await page.getByRole("button", { name: "Kirim", exact: true }).click();
+  await expect(page.locator(".community-bubble-own")).toContainText("Pertanyaan untuk Sensei");
+});
+
+test("group search, empty conversation and workspace bounds", async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 810 });
+  const state = await setup(page);
+  const search = page.getByRole("textbox", { name: "Cari grup", exact: true });
+  await search.fill("tidak ditemukan");
+  await expect(page.getByText("Grup tidak ditemukan.", { exact: true })).toBeVisible();
+  await search.fill("Kerja");
+  const menu = page.getByRole("region", { name: "Kategori diskusi" });
+  await expect(menu.getByRole("button")).toHaveCount(1);
+  state.rows = [];
+  await page.reload();
+  await page.getByRole("textbox", { name: "Cari grup", exact: true }).fill("Kerja");
+  await menu.getByRole("button", { name: /Kerja Jepang/ }).click();
+  await expect(menu.getByRole("button")).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("heading", { name: "Belum ada pesan", exact: true })).toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Pesan", exact: true })).toHaveAttribute("placeholder", "Tulis pesan ke Kerja Jepang…");
+  await expect(page.locator(".community-room-header")).toContainText("Ruang kerja");
+  const header = await page.locator(".community-room-header").boundingBox();
+  const history = await page.getByRole("region", { name: "Riwayat pesan" }).boundingBox();
+  const composer = await page.locator(".community-chat-composer").boundingBox();
+  expect(header!.y + header!.height).toBeLessThanOrEqual(history!.y + 1);
+  expect(history!.y + history!.height).toBeLessThanOrEqual(composer!.y + 1);
+  expect(composer!.y + composer!.height).toBeLessThanOrEqual(810);
+});
 
 test("send lost response retry same UUID no duplicate and reload", async ({ page }) => {
   const state = await setup(page);

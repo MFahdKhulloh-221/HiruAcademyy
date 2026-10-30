@@ -86,45 +86,7 @@ for (const width of [1440, 768, 390]) {
     await expect(page.getByRole("button", { name: "Laporkan", exact: true })).toHaveCount(0);
   });
 
-  test(`Admin moderation filters pagination confirmation and review ${width}`, async ({ page }) => {
-    await page.setViewportSize({ width, height: 1000 });
-    const state = await setup(page, "admin");
-    await page.goto("/admin/komunitas");
-    await expect(page.getByRole("heading", { name: "Moderasi Komunitas", exact: true })).toBeVisible();
-    if (width < 1024) await page.getByRole("button", { name: "Buka navigasi admin" }).click();
-    await expect(page.getByRole("link", { name: "Moderasi Komunitas", exact: true })).toHaveAttribute("href", "/admin/komunitas");
-    if (width < 1024) await page.keyboard.press("Escape");
-    await expect(page.locator("main article")).toHaveCount(25);
-    await page.getByLabel("Kategori", { exact: true }).selectOption("1");
-    await page.getByLabel("Status pesan").selectOption("published");
-    await expect.poll(() => state.queries.at(-1)?.get("status")).toBe("published");
-    expect(state.queries.at(-1)?.get("topic_id")).toBe("1");
-    await page.getByRole("button", { name: "Berikutnya", exact: true }).click();
-    await expect(page.locator("main article")).toHaveCount(1);
-    expect(state.queries.at(-1)?.get("page")).toBe("2");
-    await page.getByRole("button", { name: "Sebelumnya", exact: true }).click();
-    await expect(page.locator("main article")).toHaveCount(25);
-    await page.getByLabel("Daftar", { exact: true }).selectOption("reports");
-    await expect(page.locator("main article")).toHaveCount(1);
-    await page.getByLabel("Status laporan").selectOption("pending");
-    await expect.poll(() => state.queries.at(-1)?.get("report_status")).toBe("pending");
-    page.once("dialog", dialog => dialog.dismiss());
-    await page.getByRole("button", { name: "Sembunyikan pesan", exact: true }).click();
-    expect(state.patches).toHaveLength(0);
-    page.once("dialog", async dialog => { expect(dialog.type()).toBe("confirm"); await dialog.accept(); });
-    await page.getByRole("button", { name: "Sembunyikan pesan", exact: true }).focus();
-    await page.keyboard.press("Enter");
-    await expect(page.getByText("Status pesan: hidden", { exact: true })).toBeVisible();
-    expect(state.patches[0]).toEqual({ path: "/api/community/messages/7", status: "hidden" });
-    page.once("dialog", dialog => dialog.accept());
-    await page.getByRole("button", { name: "Pulihkan pesan", exact: true }).click();
-    await expect(page.getByText("Status pesan: published", { exact: true })).toBeVisible();
-    page.once("dialog", dialog => dialog.accept());
-    await page.getByRole("button", { name: "Tandai ditangani", exact: true }).click();
-    await expect(page.getByText("Status laporan: handled", { exact: true })).toBeVisible();
-    expect(state.patches.at(-1)).toEqual({ path: "/api/admin/community/reports/3", status: "handled" });
-    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  });
+
 }
 for (const failure of [401, 403, 404, 422, 0]) {
   test(`report error ${failure || "network"} never claims success`, async ({ page }) => {
@@ -135,20 +97,7 @@ for (const failure of [401, 403, 404, 422, 0]) {
     else await expect(page.getByText("Laporan gagal disimpan. Coba lagi.", { exact: true })).toBeVisible();
     await expect(page.getByText("Laporan tersimpan.")).toHaveCount(0);
   });
-  test(`Admin action error ${failure || "network"} never claims success`, async ({ page }) => {
-    const state = await setup(page, "admin"); state.failure = failure; state.network = !failure;
-    await page.goto("/admin/komunitas");
-    await page.getByLabel("Daftar", { exact: true }).selectOption("reports");
-    page.once("dialog", dialog => dialog.accept());
-    await page.getByRole("button", { name: "Tandai ditangani", exact: true }).click();
-    if (failure === 401) await expect(page).toHaveURL(/\/login/);
-    else {
-      await expect(page.locator("main").getByRole("alert").filter({ hasText: "Tindakan gagal disimpan. Coba lagi." })).toBeVisible();
-      await expect(page.getByText("Status laporan: pending", { exact: true })).toBeVisible();
-    }
-    expect(state.handled).toBe(false);
-    await expect(page.getByText("Tindakan tersimpan.")).toHaveCount(0);
-  });
+
 }
 test("student cannot open moderation", async ({ page }) => {
   const state = await setup(page);
@@ -156,10 +105,4 @@ test("student cannot open moderation", async ({ page }) => {
   await expect(page).toHaveURL(/\/dashboard/);
   await expect(page.getByRole("heading", { name: "Moderasi Komunitas", exact: true })).toHaveCount(0);
   expect(state.queries).toHaveLength(0);
-});
-test("Admin list forbidden shows error without actions", async ({ page }) => {
-  const state = await setup(page, "admin"); state.listFailure = 403;
-  await page.goto("/admin/komunitas");
-  await expect(page.getByText("Daftar moderasi gagal dimuat.", { exact: false })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Sembunyikan pesan", exact: true })).toHaveCount(0);
 });

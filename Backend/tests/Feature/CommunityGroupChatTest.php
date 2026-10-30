@@ -208,15 +208,51 @@ class CommunityGroupChatTest extends TestCase
         $this->send($room)->assertUnauthorized();
     }
 
-    public function test_unpublished_and_sensei_categories_are_not_chat_rooms(): void
+    public function test_unpublished_categories_are_not_chat_rooms(): void
     {
         $room = $this->room();
         $this->topic->update(['status' => 'hidden']);
         $this->getJson('/api/community/topics/'.$this->topic->id.'/room')->assertNotFound();
         $this->getJson("/api/community/rooms/{$room}/messages")->assertNotFound();
         $this->send($room)->assertNotFound();
-        $sensei = CommunityTopic::firstOrCreate(['slug' => 'tanya-sensei'], ['title' => 'Tanya Sensei', 'status' => 'published']);
-        $this->getJson('/api/community/topics/'.$sensei->id.'/room')->assertNotFound();
+    }
+
+    public function test_tanya_sensei_requires_sensei_plan_or_staff_for_room_history_send_and_report(): void
+    {
+        $topic = CommunityTopic::firstOrCreate(['slug' => 'tanya-sensei'], ['title' => 'Tanya Sensei', 'status' => 'published']);
+        $topic->update(['status' => 'published']);
+        $admin = $this->user('admin');
+        $this->actingAs($admin);
+        $room = $this->room($topic);
+        $id = $this->send($room, 'Tanya Sensei')->assertCreated()->json('data.id');
+
+        foreach ([$this->user(), $this->member] as $user) {
+            $this->actingAs($user);
+            $this->getJson('/api/community/topics/'.$topic->id.'/room')->assertForbidden();
+            $this->getJson("/api/community/rooms/{$room}/messages")->assertForbidden();
+            $this->send($room)->assertForbidden();
+            $this->postJson("/api/community/messages/{$id}/reports", ['reason' => 'Spam'])->assertForbidden();
+        }
+
+        DB::table('access_grants')->where('user_id', $this->member->id)->update(['plan_code' => 'sensei']);
+        $instructor = $this->user();
+        SenseiProfile::create(['user_id' => $instructor->id, 'name' => 'Instructor', 'role' => 'Mentor', 'bio' => 'Test', 'expertise' => ['Grammar'], 'active' => true, 'level' => 'n5']);
+        foreach ([$this->member, $instructor, $admin] as $user) {
+            $this->actingAs($user);
+            $this->assertSame($room, $this->room($topic));
+            $this->getJson("/api/community/rooms/{$room}/messages?after=".($id - 1))->assertOk()->assertJsonPath('data.0.id', $id);
+            $this->send($room)->assertCreated();
+            $this->postJson("/api/community/messages/{$id}/reports", ['reason' => 'Spam'])->assertCreated();
+        }
+
+        $topic->update(['status' => 'hidden']);
+        foreach ([$this->member, $instructor, $admin] as $user) {
+            $this->actingAs($user);
+            $this->getJson('/api/community/topics/'.$topic->id.'/room')->assertNotFound();
+            $this->getJson("/api/community/rooms/{$room}/messages")->assertNotFound();
+            $this->send($room)->assertNotFound();
+            $this->postJson("/api/community/messages/{$id}/reports", ['reason' => 'Spam'])->assertNotFound();
+        }
     }
 
     public function test_moderation_is_admin_only_and_hidden_messages_do_not_leak(): void

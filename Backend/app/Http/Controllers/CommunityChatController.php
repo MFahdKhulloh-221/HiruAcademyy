@@ -186,7 +186,14 @@ class CommunityChatController extends Controller
 
     private function assertTopic(CommunityTopic $topic): void
     {
-        abort_unless($topic->status === 'published' && $topic->slug !== 'tanya-sensei', 404);
+        abort_unless($topic->status === 'published', 404);
+        if ($topic->slug === 'tanya-sensei') {
+            $user = request()->user();
+            if ($user->role !== 'admin' && ! $user->isSenseiInstructor()) {
+                $sources = $this->entitlements->effectiveAccess($user)['source_grants'] ?? [];
+                abort_unless(collect($sources)->contains(fn ($grant) => $grant['plan_code'] === 'sensei'), 403);
+            }
+        }
     }
 
     private function serialize(CommunityMessage $message): array
