@@ -106,6 +106,7 @@ export function ProfileScreen({ access, programs }: { access: LearningAccess; pr
   function openPersonal() { setTab("Data Akun"); setNameEditRequest(value => value + 1); }
   return <div className={styles.page}>
     <header className={styles.header}><h1>Profil</h1><p>Informasi akun, program belajar, dan pengaturan.</p></header>
+    <nav className={styles.quickLinks} aria-label="Akses Cepat"><Link href="/certificate">Sertifikat <span aria-hidden="true">&rarr;</span></Link><Link href="/affiliate">Program Affiliate <span aria-hidden="true">&rarr;</span></Link></nav>
     <div className={styles.identity} id="foto-profil">
       <ProfileIdentity><div className={styles.actions}>
         <button type="button" className="button button-primary" disabled={!!avatarBusy} onClick={() => photoInput.current?.click()}>{avatarBusy === "upload" ? "Mengunggah..." : "Ganti Foto"}</button>
@@ -119,7 +120,6 @@ export function ProfileScreen({ access, programs }: { access: LearningAccess; pr
     <section className={styles.card} aria-labelledby="membership-title"><div className={styles.sectionHead}><h2 id="membership-title">Keanggotaan</h2><Link className="button button-secondary" href="/renewal">Perpanjang Membership</Link></div>
       {access.source_grants.length ? <ul className={styles.memberships}>{access.source_grants.map((grant, index) => <li key={`${grant.program_code}/${grant.plan_code}/${index}`}><span>{programs.find(program => program.code === grant.program_code)?.name ?? commercialCode(grant.program_code)} &middot; {grant.plan_code === "sensei" ? "Kelas bersama Sensei" : grant.plan_code === "lms" ? "Belajar Mandiri" : grant.plan_code}</span>{grant.ends_at && <small>Berlaku hingga {new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeZone: "Asia/Jakarta" }).format(new Date(grant.ends_at))}</small>}</li>)}</ul> : <p>Belum ada keanggotaan program.</p>}
     </section>
-    <nav className={styles.quickLinks} aria-label="Akses Cepat"><Link href="/certificate">Sertifikat <span aria-hidden="true">&rarr;</span></Link><Link href="/affiliate">Program Affiliate <span aria-hidden="true">&rarr;</span></Link></nav>
     <section className={styles.card} id="pengaturan" aria-labelledby="settings-title"><div className={styles.sectionHead}><h2 id="settings-title">Pengaturan Akun</h2></div>
       <div id="profile-settings-content">
         <div role="tablist" aria-label="Pengaturan Akun" className={styles.tabs}>{tabs.map(label => <button key={label} id={`profile-tab-${tabs.indexOf(label)}`} type="button" role="tab" aria-selected={tab === label} aria-controls="profile-settings-panel" tabIndex={tab === label ? 0 : -1} onClick={() => { setTab(label); setProfileSuccess(false); setProfileError(""); }} onKeyDown={event => {

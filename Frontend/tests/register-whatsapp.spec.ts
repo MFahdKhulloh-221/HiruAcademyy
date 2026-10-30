@@ -10,6 +10,7 @@ test("registration distinguishes duplicate WhatsApp, keeps inputs, and permits n
     attempt++;
     if (attempt === 1) await route.fulfill({ status: 422, json: { errors: { whatsapp: ["Nomor WhatsApp sudah digunakan. Silakan gunakan nomor lain."] } } });
     else if (attempt === 2) await route.fulfill({ status: 422, json: { errors: { whatsapp: ["Invalid phone format."] } } });
+    else if (attempt === 3) await route.fulfill({ status: 500, json: { message: 'SQLSTATE[42P01]: Undefined table: affiliate_settings' } });
     else await route.fulfill({ json: { data: { id: 991, role: "student", name: "Nama Asli", email: "student@example.test", whatsapp: "628987654321" } } });
   });
   await page.goto("/register");
@@ -27,6 +28,10 @@ test("registration distinguishes duplicate WhatsApp, keeps inputs, and permits n
   await expect(page.locator("#register-whatsapp-error")).toHaveText("Periksa nomor WhatsApp.");
   await page.getByLabel("Nomor WhatsApp", { exact: true }).fill("08987654321");
   await submit.click();
+  await expect(page.getByText("Pendaftaran belum berhasil karena gangguan sistem. Silakan coba lagi nanti.", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Nama Lengkap", { exact: true })).toHaveValue("Nama Asli");
+  await expect(page.getByText(/SQLSTATE|affiliate_settings/)).toHaveCount(0);
+  await submit.click();
   await expect(page).toHaveURL(/\/dashboard/);
-  expect(attempt).toBe(3);
+  expect(attempt).toBe(4);
 });

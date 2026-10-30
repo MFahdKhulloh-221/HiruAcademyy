@@ -11,8 +11,10 @@
 .memberships { list-style: none; padding: 0; margin: 16px 0 0; }
 .memberships li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 20px; padding: 12px 0; border-top: 1px solid #eeeef3; }
 .page small { color: #626773; font-size: 13px; }
-.quickLinks { display: flex; flex-wrap: wrap; gap: 12px 28px; }
-.quickLinks a { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 44px; color: #954900; font-weight: 600; text-decoration: none; }
+.quickLinks { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 10px; }
+.quickLinks a { display: flex; align-items: center; justify-content: space-between; gap: 20px; min-height: 44px; padding: 10px 16px; border: 1px solid #e3e5eb; border-radius: 12px; background: #fff; color: #252833; font-size: 13px; font-weight: 600; text-decoration: none; }
+.quickLinks a span { color: #954900; }
+.quickLinks a:hover { border-color: #f48220; background: #fffaf4; }
 .tabs { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; border-bottom: 1px solid #e3e5eb; padding-bottom: 8px; }
 .tabs button { min-height: 44px; padding: 10px 14px; border: 0; border-radius: 6px; background: transparent; color: #535865; cursor: pointer; font: inherit; }
 .tabs button[aria-selected="true"] { color: #954900; background: #fff2e6; font-weight: 600; }
@@ -26,4 +28,4 @@
 .form > button { justify-self: start; }
 .page :global(.button) { min-height: 44px; white-space: normal; }
 .page :global(.button-primary) { background: #f48220; color: #5a2a00; }
-@media (max-width: 639px) { .page { gap: 20px; } .card, .identity { padding: 20px; } .form fieldset { grid-template-columns: 1fr; } .quickLinks { flex-direction: column; gap: 4px; } .tabs button { flex: 1 1 100px; padding: 10px 6px; } }
+@media (max-width: 639px) { .page { gap: 20px; } .card, .identity { padding: 20px; } .form fieldset { grid-template-columns: 1fr; } .quickLinks { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; } .quickLinks a { gap: 8px; padding: 10px 12px; } .tabs button { flex: 1 1 100px; padding: 10px 6px; } }

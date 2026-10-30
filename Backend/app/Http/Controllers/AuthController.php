@@ -26,8 +26,14 @@ class AuthController extends Controller
         $user->role = 'student';
         $user->account_status = 'active';
         try {
-            DB::transaction(function () use ($user) {
+            DB::transaction(function () use ($user, $request) {
                 $user->save();
+                app(\App\Services\AffiliateService::class)->ensure($user);
+                if ($request->filled('referral_code')) {
+                    $referrer = app(\App\Services\AffiliateService::class)->validateReferral($user, $request->input('referral_code'));
+                    $user->referrer_affiliate_id = $referrer->id;
+                    $user->save();
+                }
                 app(NotificationService::class)->welcome($user);
             });
         } catch (UniqueConstraintViolationException $exception) {

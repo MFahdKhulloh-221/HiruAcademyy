@@ -46,6 +46,7 @@ class ProfileRequest extends FormRequest
             'password' => $update ? ['prohibited'] : ['required', 'string', 'max:72', 'confirmed', Password::min(8)],
             'country' => ['sometimes', 'nullable', 'string', 'max:100'],
             'target_jlpt' => ['sometimes', 'nullable', Rule::in(['N5', 'N4', 'N3', 'N2', 'N1'])],
+            'referral_code' => $update ? ['prohibited'] : ['sometimes', 'nullable', 'string', 'max:255', 'regex:/^[A-Za-z0-9_-]+$/D'],
             'avatar' => ['prohibited'],
             'avatar_resolved_url' => ['prohibited'],
             'role' => ['prohibited'],

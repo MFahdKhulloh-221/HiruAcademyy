@@ -46,7 +46,7 @@ function RegisterForm() {
     };
     const checkout = new URLSearchParams({ program: selection.level || (searchParams.get("program") ?? searchParams.get("level") ?? targetJlpt), plan: plan === "Belajar Mandiri" ? "lms" : "sensei" });
     const referral = String(data.get("referral") ?? "").trim();
-    if (referral) checkout.set("referral", referral);
+    if (referral) { checkout.set("referral", referral); payload.referral_code = referral; }
     const destination = plan === "Free Member" ? "/dashboard?membership=free" : `/checkout?${checkout}`;
     pending.current = true;
     setBusy(true);
@@ -141,7 +141,6 @@ function RegisterForm() {
           </div>
 
           <div className="register-actions">
-            <p className="register-notice">Progres placement dan rekomendasi level akan disimpan pada akun.</p>
             {error && <p id="register-error" className="recovery-error" role="alert">{error}</p>}
             <button className="button button-primary" type="submit" disabled={busy}>{busy ? "Memuat..." : "Buat Akun"}</button>
             <p className="auth-switch">Sudah punya akun? <Link className="text-link" href="/login">Masuk</Link></p>
