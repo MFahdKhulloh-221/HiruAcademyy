@@ -19,7 +19,9 @@ class CheckpointHttpTest extends TestCase
             ['GET', '/api/student/checkpoint-packages/1/attempts/1/review'],
             ['GET', '/api/admin/checkpoint-packages'],
             ['POST', '/api/admin/checkpoint-packages'],
-            ['PUT', '/api/admin/checkpoint-packages/1'],
+            ['PATCH', '/api/admin/checkpoint-packages/1'],
+            ['PUT', '/api/admin/checkpoint-packages/1/studio'],
+            ['POST', '/api/student/checkpoint-packages/1/attempts/1/abandon'],
         ] as [$method, $url]) {
             $this->json($method, $url)->assertUnauthorized();
         }

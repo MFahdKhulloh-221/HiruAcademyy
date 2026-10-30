@@ -6,7 +6,7 @@ import { jlptTryoutSessions, tryoutQuestions } from "@/lib/tryout-mock";
 export const assessmentLetters = ["A", "B", "C", "D"] as const;
 export const miniAssessmentContexts = ["DASAR", "N5", "N4", "N3", "N2", "SSW"] as const;
 export const tryoutAssessmentContexts = ["N5", "N4", "N3", "N2", "N1"] as const;
-export type AdminAssessmentKind = "mini" | "tryout";
+export type AdminAssessmentKind = "mini" | "tryout" | "checkpoint";
 export type AdminAssessmentQuestion = {
   passageId?: string | null;
   id: string;
@@ -46,7 +46,7 @@ export type AdminAssessment = {
 };
 
 export function assessmentSections(item: Pick<AdminAssessment, "kind" | "context">): readonly string[] {
-  return item.kind === "tryout" || !["DASAR", "SSW"].includes(item.context) ? jlptTryoutSessions : ["Chapter"];
+  return item.kind !== "mini" || !["DASAR", "SSW"].includes(item.context) ? jlptTryoutSessions : ["Chapter"];
 }
 export function orderedAssessmentQuestions(item: AdminAssessment) {
   const sections = assessmentSections(item);
@@ -74,9 +74,9 @@ export function assessmentQuestionError(question: AdminAssessmentQuestion, item:
   if (!["Multiple choice", "Audio", "Reading"].includes(question.type) || (["DASAR", "SSW"].includes(item.context) && question.type !== "Multiple choice")) return "DASAR dan SSW hanya memakai Multiple choice.";
   if (!question.prompt.trim() || question.answers.length !== 4 || question.answers.some((answer) => !answer.trim())) return "Isi pertanyaan dan pilihan A–D.";
   if (!Number.isInteger(question.correctAnswer) || question.correctAnswer < 0 || question.correctAnswer > 3) return "Pilih jawaban benar A–D.";
-  if (item.kind === "tryout" ? !/^\d+$/.test(question.order) || !Number.isSafeInteger(Number(question.order)) : !positiveInteger(question.order)) return item.kind === "tryout" ? "Urutan harus berupa bilangan bulat nonnegatif." : "Urutan harus berupa bilangan bulat positif.";
+  if (item.kind !== "mini" ? !/^\d+$/.test(question.order) || !Number.isSafeInteger(Number(question.order)) : !positiveInteger(question.order)) return item.kind !== "mini" ? "Urutan harus berupa bilangan bulat nonnegatif." : "Urutan harus berupa bilangan bulat positif.";
   if (!["Draft", "Published"].includes(question.status)) return "Pilih status yang valid.";
-  if (item.kind === "tryout" && (!Number.isSafeInteger(question.pointValue) || question.pointValue! < 1 || question.pointValue! > 180)) return "Point value harus antara 1 dan 180.";
+  if (item.kind !== "mini" && (!Number.isSafeInteger(question.pointValue) || question.pointValue! < 1 || question.pointValue! > 180)) return "Point value harus antara 1 dan 180.";
   if (question.japanese?.reading && !question.japanese.text.trim()) return "Isi Teks Jepang.";
   if (!validAssessmentAudio(question.file)) return "Pilih file audio yang valid dan tidak kosong.";
   if (question.type !== "Audio" && question.file) return "File audio hanya untuk soal Audio.";
@@ -88,13 +88,13 @@ export function assessmentError(item: AdminAssessment) {
   if (!contexts.includes(item.context) || !item.title.trim()) return "Isi judul dan pilih konteks yang valid.";
   if (item.kind === "mini" && (!item.chapter.trim() || !positiveInteger(item.session) || !["1", "2"].includes(item.part))) return "Isi chapter, sesi, dan part yang valid.";
   if (item.duration && !positiveInteger(item.duration)) return "Durasi harus berupa bilangan bulat positif.";
-  if (!positiveInteger(item.maxScore) || (item.kind === "tryout" ? !/^\d+$/.test(item.order) || !Number.isSafeInteger(Number(item.order)) : !positiveInteger(item.order))) return "Skor maksimal dan urutan harus berupa bilangan bulat positif.";
-  if (item.kind === "tryout") {
+  if (!positiveInteger(item.maxScore) || !positiveInteger(item.order)) return "Skor maksimal dan urutan harus berupa bilangan bulat positif.";
+  if (item.kind !== "mini") {
     if (item.passingScore !== "" && (!/^\d+$/.test(item.passingScore) || !Number.isSafeInteger(Number(item.passingScore)))) return "Passing score harus berupa bilangan bulat nonnegatif.";
     if (item.sessionPassingScores != null && (Object.keys(item.sessionPassingScores).length !== assessmentSessions.length || assessmentSessions.some(session => !Number.isSafeInteger(item.sessionPassingScores?.[session]) || item.sessionPassingScores![session] < 0))) return "Passing score per sesi harus berupa bilangan bulat nonnegatif.";
     if (item.status === "Published") {
       const published = item.questions.filter(question => question.status === "Published");
-      if (published.reduce((total, question) => total + (question.pointValue ?? 0), 0) !== Number(item.maxScore)) return `Total poin soal Published saat ini: ${published.reduce((total, question) => total + (question.pointValue ?? 0), 0)} dari ${item.maxScore}. Lengkapi poin sebelum mempublikasikan Try Out.`;
+      if (published.reduce((total, question) => total + (question.pointValue ?? 0), 0) !== Number(item.maxScore)) return `Total poin soal Published saat ini: ${published.reduce((total, question) => total + (question.pointValue ?? 0), 0)} dari ${item.maxScore}. Lengkapi poin sebelum mempublikasikan ${item.kind === "checkpoint" ? "Checkpoint" : "Try Out"}.`;
       if (item.sessionPassingScores && assessmentSessions.some((session, index) => item.sessionPassingScores![session] > published.filter(question => question.section === jlptTryoutSessions[index]).reduce((total, question) => total + (question.pointValue ?? 0), 0))) return "Passing score per sesi harus antara 0 dan skor maksimal sesi.";
     }
   }
@@ -105,7 +105,7 @@ export function assessmentError(item: AdminAssessment) {
   if (item.status === "Published") {
     if (item.kind === "mini" && (!item.duration || item.passingScore === "")) return "OPEN: isi durasi dan passing score sebelum publish.";
     if (!item.questions.some((question) => question.status === "Published")) return "Tambahkan soal Published sebelum publish.";
-    if (item.kind === "tryout" && assessmentSections(item).some((section) => !item.questions.some((question) => question.section === section && question.status === "Published"))) return "Setiap sesi membutuhkan soal Published.";
+    if (item.kind !== "mini" && assessmentSections(item).some((section) => !item.questions.some((question) => question.section === section && question.status === "Published"))) return "Setiap sesi membutuhkan soal Published.";
     if (item.questions.some((question) => question.status === "Published" && ((question.type === "Audio" && !question.file && !question.audioUrl?.trim()) || (question.type === "Reading" && !question.passageId && !question.passage.trim())))) return "OPEN: lengkapi file audio dan teks bacaan sebelum publish.";
   }
   return "";

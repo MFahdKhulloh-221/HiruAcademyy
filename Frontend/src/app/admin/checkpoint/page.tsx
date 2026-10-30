@@ -1,5 +1,5 @@
-import { AdminCheckpointWorkspace } from "@/components/admin-checkpoint-workspace";
+import { AdminCheckpointPrototype } from "@/components/admin-assessment-prototype";
 
 export default function CheckpointPage() {
-  return <AdminCheckpointWorkspace />;
+  return <AdminCheckpointPrototype />;
 }

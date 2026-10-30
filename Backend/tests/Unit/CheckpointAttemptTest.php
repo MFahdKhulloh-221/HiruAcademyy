@@ -7,8 +7,8 @@ use App\Models\CheckpointPackage;
 use App\Models\Program;
 use App\Models\User;
 use App\Services\ChapterAccessPolicy;
-use App\Services\CheckpointAttemptService;
-use App\Services\CheckpointPackageService;
+use App\Services\LegacyCheckpointAttemptService as CheckpointAttemptService;
+use App\Services\LegacyCheckpointPackageService as CheckpointPackageService;
 use App\Services\MediaService;
 use Illuminate\Validation\ValidationException;
 use Symfony\Component\HttpKernel\Exception\HttpException;
@@ -74,7 +74,7 @@ class CheckpointAttemptTest extends TestCase
                 'inactive_account' => $u->account_status = 'inactive',
             };
             try {
-                $service->authorize($u, $p, $a);
+                $service->authorize($u, $p, $case === 'draft' ? null : $a);
                 $this->fail('Unauthorized request must fail.');
             } catch (HttpException $error) {
                 $this->assertSame(in_array($case, ['foreign_user', 'foreign_package', 'draft'], true) ? 404 : 403, $error->getStatusCode());
