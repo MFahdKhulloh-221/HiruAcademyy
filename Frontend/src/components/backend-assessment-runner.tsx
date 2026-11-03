@@ -72,6 +72,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
   const [confirming, setConfirming] = useState<false | "sync" | "submit">(false);
 
   const actionDialog = useRef<HTMLDialogElement>(null);
+  const unansweredDialog = useRef<HTMLDialogElement>(null);
 
   const [examAction, setExamAction] = useState<"start" | "exit">("start");
 
@@ -505,7 +506,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
   const allAnswered = domain === "learning" && startBody && "kind" in startBody && startBody.kind !== "mini"
 
-    ? Object.keys(flow.answers).length === questions.length
+    ? questions.every(item => Boolean(flow.answers[item.id]))
 
     : true;
 
@@ -534,6 +535,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
   const answerReview = reviewing && attempt.status === "completed";
 
   const readingLayout = isReading;
+  const practiceNavigator = readingLayout || (domain === "learning" && attempt.kind === "audio");
 
   const examReading = tryoutExperience && question?.session === "reading";
 
@@ -579,7 +581,11 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
       {flow.error && <p role="alert">{flow.error}<button type="button" disabled={flow.busy} onClick={() => void (tryoutExperience && remaining === 0 ? flow.expire() : scope && remaining === 0 ? flow.submit() : flow.retrySave())}>Coba Lagi</button></p>}
 
-      {answerReview && <p className="answer-review-legend">Keterangan: Jawaban benar (hijau) · Jawaban kamu salah (merah) · Tidak dijawab</p>}
+      <dialog ref={unansweredDialog} className="tryout-finish-dialog" aria-labelledby="unanswered-title" aria-describedby="unanswered-description">
+        <h2 id="unanswered-title">Belum semua soal dijawab</h2>
+        <p id="unanswered-description">Pilih jawaban untuk soal {questions.flatMap((item, position) => flow.answers[item.id] ? [] : [position + 1]).join(", ")} sebelum mengumpulkan jawaban.</p>
+        <div className="tryout-check-actions"><button type="button" className="button button-primary" autoFocus onClick={() => unansweredDialog.current?.close()}>Kembali ke Soal</button></div>
+      </dialog>
 
       {tryoutExperience && !navigatorVisible && <div className="tryout-navigator-toggle"><button type="button" className="button button-secondary" aria-label="Tampilkan Navigator" title="Tampilkan Navigator" aria-expanded={false} aria-controls="tryout-question-navigator" onClick={() => setNavigatorVisible(true)}><FiMenu aria-hidden="true" /></button></div>}
 
@@ -673,10 +679,6 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
                 <section>
 
-                  {answerReview && <p>Status: {!flow.answers[question.id] ? "Tidak dijawab" : !question.correct_option ? "Belum tersedia" : flow.answers[question.id] === question.correct_option ? "Benar" : "Salah"}</p>}{answerReview && !flow.answers[question.id] && <p>Tidak dijawab</p>}
-
-                  <p>Jawaban benar: <PlacementRichText value={question.correct_option ? question.options[question.correct_option] : "—"} /></p>
-
                   <p>Penjelasan: {question.explanation ? <PlacementRichText value={question.explanation} /> : "Belum tersedia."}</p>
 
                 </section>
@@ -686,6 +688,8 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
             </section>
 
           )}
+
+
 
           <div className="learning-question-actions">
 
@@ -729,9 +733,9 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
                 {!tryoutExperience && isLast && questions.length > 0 && (
 
-                  <button type="button" className="button button-primary" disabled={flow.busy || Boolean(flow.error) || !allAnswered} onClick={() => void flow.submit()}>
+                  <button type="button" className="button button-primary" disabled={flow.busy || Boolean(flow.error)} onClick={() => { if (!allAnswered) { unansweredDialog.current?.showModal(); return; } void flow.submit(); }}>
 
-                    Kumpulkan Jawaban
+                    {flow.submitting ? "Mengumpulkan…" : flow.busy ? "Menyimpan…" : "Kumpulkan Jawaban"}
 
                   </button>
 
@@ -745,13 +749,13 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
         </main>
 
-        <aside id={tryoutExperience ? "tryout-question-navigator" : undefined} hidden={tryoutExperience && !navigatorVisible} className="learning-question-sidebar">
+        <aside id={tryoutExperience ? "tryout-question-navigator" : undefined} hidden={tryoutExperience && !navigatorVisible} className={`learning-question-sidebar${practiceNavigator ? " practice-question-navigator" : ""}`}>
 
           {!answerReview && (readingLayout || (domain === "learning" && attempt.kind === "audio")) && (attempt.expires_at ? remaining !== null && <div className="checkpoint-timer practice-compact-timer" role="timer"><span>Waktu tersisa</span><strong>{String(Math.floor(remaining / 60)).padStart(2, "0")}:{String(remaining % 60).padStart(2, "0")}</strong></div> : <PracticeElapsedTimer startedAt={attempt.started_at} />)}
 
           <nav aria-label="Navigasi soal">
 
-            {readingLayout ? <h2>Navigasi Soal</h2> : tryoutExperience ? <header className="tryout-navigator-heading"><h2>NAVIGATOR SOAL</h2><button type="button" className="button button-secondary" aria-label="Sembunyikan Navigator" title="Sembunyikan Navigator" aria-expanded={true} aria-controls="tryout-question-navigator" onClick={() => setNavigatorVisible(false)}><FiMenu aria-hidden="true" /></button></header> : tryoutExperience && <h2>NAVIGATOR SOAL</h2>}
+            {practiceNavigator ? <h2>Navigasi Soal</h2> : tryoutExperience ? <header className="tryout-navigator-heading"><h2>NAVIGATOR SOAL</h2><button type="button" className="button button-secondary" aria-label="Sembunyikan Navigator" title="Sembunyikan Navigator" aria-expanded={true} aria-controls="tryout-question-navigator" onClick={() => setNavigatorVisible(false)}><FiMenu aria-hidden="true" /></button></header> : tryoutExperience && <h2>NAVIGATOR SOAL</h2>}
 
             {navigatorGroups.map((group, groupIndex) => <section className={tryoutExperience ? "tryout-navigator-group" : undefined} key={`${group.key}-${groupIndex}`}>
 
@@ -773,7 +777,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
                   aria-current={position === index ? "step" : undefined}
 
-                  title={readingLayout ? (flow.answers[item.id] ? "Terjawab" : "Belum dijawab") : undefined}
+                  title={practiceNavigator ? (flow.answers[item.id] ? "Terjawab" : "Belum dijawab") : undefined}
 
                   className={tryoutExperience ? [position === index ? "active" : "", flow.answers[item.id] ? "answered" : ""].filter(Boolean).join(" ") : position === index ? "active" : flow.answers[item.id] ? "answered" : ""}
 
@@ -791,7 +795,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
             </section>)}
 
-            {readingLayout && <p className="reading-nav-legend">Oranye: aktif · Bertanda: terjawab · Putih: belum dijawab</p>}
+            {practiceNavigator && <p className="reading-nav-legend">Oranye: aktif · Bertanda: terjawab · Putih: belum dijawab</p>}
 
             {!tryoutExperience && tryoutExperience && sessionQuestions.length > 25 && <footer className="tryout-navigator-pages"><button type="button" aria-label="Halaman soal sebelumnya" disabled={navigatorPage === 0} onClick={() => setIndex(questions.findIndex(item => item.id === sessionQuestions[(navigatorPage - 1) * 25]?.id))}><FiArrowLeft aria-hidden="true" /></button><span>{navigatorPage + 1} / {Math.ceil(sessionQuestions.length / 25)}</span><button type="button" aria-label="Halaman soal selanjutnya" disabled={(navigatorPage + 1) * 25 >= sessionQuestions.length} onClick={() => setIndex(questions.findIndex(item => item.id === sessionQuestions[(navigatorPage + 1) * 25]?.id))}><FiArrowRight aria-hidden="true" /></button></footer>}
 

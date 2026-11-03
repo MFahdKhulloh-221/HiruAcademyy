@@ -29,6 +29,10 @@ class AppServiceProvider extends ServiceProvider
                     : Limit::perMinute(120)->by('public-read:'.$request->ip());
             }
 
+            if ($request->routeIs('assessment.*')) {
+                return Limit::none();
+            }
+
             return Limit::perMinute(20)->by('write:'.$key);
         });
         RateLimiter::for('identity', fn (Request $request) => Limit::perMinute(20)->by($request->ip()));

@@ -79,14 +79,14 @@
 .reading-workspace .learning-question-actions > :last-child { background: var(--navy); color: white; }
 .reading-workspace .learning-question-sidebar { min-width: 0; margin: 0; }
 .reading-workspace .learning-question-sidebar > .checkpoint-timer { margin-bottom: 16px; }
-.reading-workspace .learning-question-sidebar nav { padding: 16px; border: 1px solid #e2e5ec; border-radius: 16px; background: white; }
-.reading-workspace .learning-question-sidebar nav h2 { margin: 0 0 16px; font-size: 18px; }
-.reading-workspace .learning-question-sidebar nav > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); gap: 8px; max-height: 360px; overflow-y: auto; padding: 4px; }
-.reading-workspace .learning-question-sidebar nav button { position: relative; min-width: 44px; min-height: 44px; border: 1px solid #dfe3eb; border-radius: 10px; background: white; color: var(--navy); }
-.reading-workspace .learning-question-sidebar nav button.answered { border-color: #954900; background: #fff2e5; }
-.reading-workspace .learning-question-sidebar nav button[title='Terjawab']::after { content: ''; position: absolute; bottom: 4px; left: calc(50% - 3px); width: 6px; height: 3px; border-radius: 2px; background: currentColor; }
-.reading-workspace .learning-question-sidebar nav button.active { border-color: #f48220; background: #f48220; color: #5a2a00; font-weight: 800; }
-.reading-workspace .reading-nav-legend { margin: 12px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.learning-question-sidebar.practice-question-navigator nav { padding: 16px; border: 1px solid #e2e5ec; border-radius: 16px; background: white; }
+.learning-question-sidebar.practice-question-navigator nav h2 { margin: 0 0 16px; font-size: 18px; }
+.learning-question-sidebar.practice-question-navigator nav > section > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); gap: 8px; max-height: 360px; overflow-y: auto; padding: 4px; }
+.learning-question-sidebar.practice-question-navigator nav button { position: relative; min-width: 44px; min-height: 44px; border: 1px solid #dfe3eb; border-radius: 10px; background: white; color: var(--navy); }
+.learning-question-sidebar.practice-question-navigator nav button.answered { border-color: #954900; background: #fff2e5; }
+.learning-question-sidebar.practice-question-navigator nav button[title='Terjawab']::after { content: ''; position: absolute; bottom: 4px; left: calc(50% - 3px); width: 6px; height: 3px; border-radius: 2px; background: currentColor; }
+.learning-question-sidebar.practice-question-navigator nav button.active { border-color: #f48220; background: #f48220; color: #5a2a00; font-weight: 800; }
+.practice-question-navigator .reading-nav-legend { margin: 12px 0 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
 .reading-workspace .learning-question-sidebar > [role='status'] { display: block; margin-top: 12px; font-size: 13px; }
 @media (max-width: 1023px) {
   .reading-workspace .reading-panels { grid-template-columns: minmax(0, 1fr); }

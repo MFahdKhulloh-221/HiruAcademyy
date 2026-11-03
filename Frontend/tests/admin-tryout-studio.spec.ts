@@ -259,6 +259,67 @@ test("package detail save closes dialog and confirms saved order", async ({ page
   expect(api.item.sort_order).toBe(2);
 });
 
+test("validation popup identifies question, repeats and retains draft", async ({ page }) => {
+  const api = await mockStudio(page);
+  await openStudio(page);
+  await page.getByRole("textbox", { name: "Pertanyaan", exact: true }).fill("Draft retained");
+  await page.getByRole("textbox", { name: "Pilihan B", exact: true }).fill("");
+  const save = page.getByRole("button", { name: "Simpan Try Out", exact: true });
+  const popup = page.getByRole("dialog", { name: "Tindakan belum berhasil", exact: true });
+  await save.click();
+  await expect(popup).toContainText(/Sesi .+ — Soal 1: Isi pertanyaan dan pilihan A–D/);
+  await expect(popup.getByRole("button", { name: "Tutup pesan" })).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(popup).not.toBeVisible();
+  await expect(page.getByRole("textbox", { name: "Pertanyaan", exact: true })).toHaveText("Draft retained");
+  await save.click();
+  await expect(popup).toBeVisible();
+  await popup.getByRole("button", { name: "Tutup pesan" }).click();
+  expect(api.writes).toHaveLength(0);
+});
+
+test("group errors layer above custom dialog without closing form", async ({ page }) => {
+  await mockStudio(page);
+  await openStudio(page);
+  await page.getByRole("tab", { name: "Reading (Dokkai)", exact: true }).click();
+  await page.getByRole("button", { name: "Tambah Grup Bacaan", exact: true }).click();
+  const group = page.getByRole("dialog", { name: "Grup Bacaan Reading", exact: true });
+  await group.getByRole("button", { name: "Buat Grup", exact: true }).click();
+  const popup = page.getByRole("dialog", { name: "Tindakan belum berhasil", exact: true });
+  await expect(popup).toContainText("Grup bacaan baru");
+  await page.keyboard.press("Tab");
+  expect(await popup.evaluate(element => element.contains(document.activeElement))).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(popup).not.toBeVisible();
+  await expect(group).toBeVisible();
+  await group.getByRole("button", { name: "Buat Grup", exact: true }).click();
+  await expect(popup).toBeVisible();
+});
+
+test("API validation popup keeps field keys and question context", async ({ page }) => {
+  await mockStudio(page);
+  await page.route("**/api/admin/try-outs/7/studio", route => route.fulfill({ status: 422, json: { message: "Validation failed", errors: { "questions.0.content.point_value": ["Invalid points"], point_value: ["Check points"] } } }));
+  await openStudio(page);
+  await page.getByRole("textbox", { name: "Pertanyaan", exact: true }).fill("API draft retained");
+  await page.getByRole("button", { name: "Simpan Try Out", exact: true }).click();
+  const popup = page.getByRole("dialog", { name: "Tindakan belum berhasil", exact: true });
+  await expect(popup).toContainText(/Sesi .+ — Soal 1 — questions\.0\.content\.point_value: Invalid points/);
+  await expect(popup).toContainText("\npoint_value: Check points");
+  await popup.getByRole("button", { name: "Tutup pesan" }).click();
+  await expect(page.getByRole("textbox", { name: "Pertanyaan", exact: true })).toHaveText("API draft retained");
+});
+
+test("audio upload failure popup identifies current question", async ({ page }) => {
+  await mockStudio(page);
+  await openStudio(page);
+  await page.getByRole("tab", { name: "Audio (Choukai)", exact: true }).click();
+  await page.getByLabel("Upload audio", { exact: true }).setInputFiles({ name: "wrong.txt", mimeType: "text/plain", buffer: Buffer.from("not audio") });
+  const popup = page.getByRole("dialog", { name: "Tindakan belum berhasil", exact: true });
+  await expect(popup).toContainText(/Sesi .+ — Soal 1 — Upload audio:/);
+  await popup.getByRole("button", { name: "Tutup pesan" }).click();
+  await expect(page.getByRole("textbox", { name: "Pertanyaan", exact: true })).toHaveText("問題 1：正しい答えを選んでください。");
+});
+
 test("tryout studio rich text keeps field-local toolbars", async ({ page }) => {
   const api = await mockStudio(page);
   api.item.questions[0].question = "Standalone question";

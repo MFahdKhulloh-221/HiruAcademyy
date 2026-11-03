@@ -82,6 +82,47 @@ class ApiThrottleTest extends TestCase
         $this->actingAs($second)->patchJson('/api/me', ['role' => 'admin'])->assertUnprocessable();
     }
 
+    public function test_assessment_writes_are_unlimited_without_disabling_other_limits(): void
+    {
+        // Rate-limit test needs no checkpoint content or model queries.
+        Route::bind('package', fn () => abort(404));
+        $first = $this->user();
+        $second = $this->user('student', 2);
+        $this->actingAs($first);
+        $paths = [
+            '/api/student/programs/999999999/chapters/999999999/attempts/999999999',
+            '/api/student/try-outs/999999999/attempts/999999999',
+            '/api/student/checkpoint-packages/999999999/attempts/999999999',
+        ];
+
+        for ($i = 0; $i < 20; $i++) {
+            $this->patchJson('/api/me', ['role' => 'admin'])->assertUnprocessable();
+        }
+        for ($i = 0; $i < 120; $i++) {
+            $this->putJson($paths[$i % 3].'/answers')->assertNotFound();
+        }
+        foreach ($paths as $path) {
+            $this->putJson($path.'/answers')->assertNotFound();
+        }
+        for ($i = 0; $i < 21; $i++) {
+            foreach ($paths as $path) {
+                $this->postJson($path.'/submit')->assertNotFound();
+                $this->postJson(substr($path, 0, strrpos($path, '/')))->assertNotFound();
+            }
+        }
+        $limiter = app(\Illuminate\Cache\RateLimiter::class)->limiter('api');
+        foreach (['learning', 'tryout', 'checkpoint'] as $domain) {
+            foreach (['start', 'answers', 'submit'] as $action) {
+                $request = \Illuminate\Http\Request::create('/api/test', 'POST');
+                $request->setRouteResolver(fn () => Route::getRoutes()->getByName("assessment.$domain.$action"));
+                $this->assertInstanceOf(\Illuminate\Cache\RateLimiting\Unlimited::class, $limiter($request));
+            }
+        }
+        $this->patchJson('/api/me', ['role' => 'admin'])->assertStatus(429);
+        $this->actingAs($second)->putJson($paths[0].'/answers')->assertNotFound();
+        $this->postJson($paths[0].'/submit')->assertNotFound();
+    }
+
     public function test_guest_write_bucket_does_not_consume_public_reads_or_auth(): void
     {
         for ($i = 0; $i < 20; $i++) {

@@ -8,6 +8,7 @@ import { useLearningRequest } from "@/components/learning-hooks";
 import { adminAssessmentApi } from "@/lib/admin-tryout-api";
 import { AdminTryoutQuestionBuilder } from "@/components/admin-tryout-question-builder";
 import { AdminDataTable, AdminDialog, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge, AdminTabs } from "@/components/admin-primitives";
+import { AdminErrorDialog } from "@/components/admin-error-dialog";
 import { AdminAssessmentPreview } from "@/components/admin-assessment-preview";
 import tryoutStyles from "./admin-tryout-builder.module.css";
 import { AdminQuestionWorkspace } from "@/components/admin-question-workspace";
@@ -51,7 +52,17 @@ function AssessmentWorkspace({ kind, navigation }: { kind: AdminAssessmentKind; 
   const [chapter, setChapter] = useState("");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [popup, setPopup] = useState<{ message: string } | null>(null);
   const [message, setMessage] = useState("");
+  const reportError = useCallback((detail: string) => {
+    setError(detail); setMessage(""); setPopup({ message: `${detail}\n\nPeriksa bagian yang disebutkan, perbaiki isian lalu coba lagi. Jika permintaan server gagal, periksa koneksi atau masuk kembali bila sesi berakhir. Perubahan editor tetap tersedia selama halaman tidak ditutup.` });
+  }, [setError, setMessage, setPopup]);
+  useEffect(() => {
+    let active = true;
+    const detail = [request.error && `Daftar ${title}: ${request.error}\nGunakan Coba Lagi pada daftar.`, catalog.error && `Katalog program: ${catalog.error}\nGunakan Coba Lagi pada katalog program.`].filter(Boolean).join("\n");
+    if (detail) queueMicrotask(() => { if (active) reportError(detail); });
+    return () => { active = false; };
+  }, [request.error, catalog.error, reportError, title]);
   const [pending, setPending] = useState<{ action: "save" | "status" | "questions" | "delete"; id: string } | null>(null);
   const busy = pending !== null;
   const busyRef = useRef(false);
@@ -72,9 +83,9 @@ function AssessmentWorkspace({ kind, navigation }: { kind: AdminAssessmentKind; 
   }
   async function persist(next: AdminAssessment) {
     setError(""); setMessage("");
-    if (!request.data && !savedRows) { setError("Data awal belum berhasil dimuat. Coba Lagi sebelum menyimpan."); return; }
+    if (!request.data && !savedRows) { reportError("Data awal belum berhasil dimuat. Coba Lagi sebelum menyimpan."); return; }
     const issue = assessmentError(next);
-    if (issue) { setError(issue); return; }
+    if (issue) { reportError(`${title} / ${next.title || "tanpa judul"}:\n${issue}`); return; }
     if (!beginWrite("save", next.id)) return;
     try {
       const saved = await saveAdminTryOut(next, rows.find(row => row.id === next.id));
@@ -83,7 +94,7 @@ function AssessmentWorkspace({ kind, navigation }: { kind: AdminAssessmentKind; 
       else { const created = saved.find(row => row.id === next.id) ?? saved.find(row => row.title === next.title && row.context === next.context); if (created) { if (rows.some(row => row.id === next.id)) closeEditor(); else { setDraft(copyAssessment(created)); setPackageForm(false); } } }
       setMessage(`${title} berhasil disimpan.`);
     }
-    catch (cause) { setError(adminTryOutError(cause)); }
+    catch (cause) { reportError(`Simpan ${title}: ${adminTryOutError(cause, next)}`); }
     finally { endWrite(); }
   }
   async function save(event: FormEvent<HTMLFormElement>) {
@@ -105,17 +116,17 @@ function AssessmentWorkspace({ kind, navigation }: { kind: AdminAssessmentKind; 
   async function toggleAssessment(item: AdminAssessment) {
     const next = { ...item, status: item.status === "Draft" ? "Published" : "Draft" } as AdminAssessment;
     const issue = assessmentError(next);
-    if (issue) { setMessage(issue); return; }
+    if (issue) { reportError(`Status ${item.title}:\n${issue}`); return; }
     if (draft || !beginWrite("status", item.id)) return;
     try {
       await setAdminTryOutStatus(item.id, next.status);
       setRows(current => (current ?? rows).map(row => row.id === item.id ? { ...row, status: next.status } : row));
       setMessage("Status diubah.");
-    } catch (cause) { setMessage(adminTryOutError(cause)); }
+    } catch (cause) { reportError(`Ubah status ${item.title}: ${adminTryOutError(cause, item)}`); }
     finally { endWrite(); }
   }
   async function publishQuestions(item: AdminAssessment) {
-    if (packageDirty || questionDirty) { setError("Simpan perubahan sebelum mempublikasikan semua soal."); return; }
+    if (packageDirty || questionDirty) { reportError("Publish semua soal: Simpan perubahan sebelum mempublikasikan semua soal."); return; }
     if (!/^\d+$/.test(item.id) || !beginWrite("questions", item.id)) return;
     setError(""); setMessage("");
     try {
@@ -125,7 +136,7 @@ function AssessmentWorkspace({ kind, navigation }: { kind: AdminAssessmentKind; 
       setRows(current => (current ?? rows).map(row => row.id === item.id ? published(row) : row));
       if (draft?.id === item.id) setDraft(published(item));
       setMessage(`${item.questions.length} soal Published (${result.published_count} baru dipublikasikan).`);
-    } catch (cause) { const detail = adminTryOutError(cause); setError(detail); setMessage(detail); }
+    } catch (cause) { reportError(`Publish soal ${item.title}: ${adminTryOutError(cause, item)}`); }
     finally { endWrite(); }
   }
   function manageQuestions(item: AdminAssessment, question?: AdminAssessmentQuestion) {
@@ -137,13 +148,15 @@ function AssessmentWorkspace({ kind, navigation }: { kind: AdminAssessmentKind; 
     const item = rows.find(row => row.id === questionTarget) ?? rows.find(row => !context || row.context === context);
     if (item) manageQuestions(item); else setTab("Bank Soal");
   }
-  const questionBuilder = draft && !packageForm ? <AdminTryoutQuestionBuilder bulkAction={<button className="button" type="button" disabled={busy || packageDirty || questionDirty} title={packageDirty || questionDirty ? "Simpan perubahan terlebih dahulu" : undefined} onClick={() => void publishQuestions(draft)}><FiUpload aria-hidden="true" />Publish Semua Soal</button>} navigation={<AdminTabs tabs={[`Daftar ${title}`, "Bank Soal"]} active="Bank Soal" onChange={value => { if (value !== "Bank Soal") requestClose(); }} label={`Tampilan ${title}`} />} saveStatus={packageDirty || questionDirty ? "Perubahan belum disimpan" : message || "Semua perubahan tersimpan"} draft={draft} initialQuestion={questionDraft} onDirtyChange={setQuestionDirty} busy={busy} error={error} onChange={setDraft} onSave={persist} onClose={requestClose} onDelete={async question => { if (/^\d+$/.test(question.id)) { if (!beginWrite("delete", question.id)) return; try { setRows(await deleteAdminTryOut(draft.id, question)); } finally { endWrite(); } } setDraft({ ...draft, questions: draft.questions.filter(item => item.id !== question.id) }); }} /> : null;
+  const questionBuilder = draft && !packageForm ? <AdminTryoutQuestionBuilder bulkAction={<button className="button" type="button" disabled={busy || packageDirty || questionDirty} title={packageDirty || questionDirty ? "Simpan perubahan terlebih dahulu" : undefined} onClick={() => void publishQuestions(draft)}><FiUpload aria-hidden="true" />Publish Semua Soal</button>} navigation={<AdminTabs tabs={[`Daftar ${title}`, "Bank Soal"]} active="Bank Soal" onChange={value => { if (value !== "Bank Soal") requestClose(); }} label={`Tampilan ${title}`} />} saveStatus={packageDirty || questionDirty ? "Perubahan belum disimpan" : message || "Semua perubahan tersimpan"} draft={draft} initialQuestion={questionDraft} onDirtyChange={setQuestionDirty} busy={busy} error={error} onChange={setDraft} onSave={persist} onClose={requestClose} onDelete={async question => { if (/^\d+$/.test(question.id)) { if (!beginWrite("delete", question.id)) return; try { setRows(await deleteAdminTryOut(draft.id, question)); } catch (cause) { reportError(`Hapus soal: ${adminTryOutError(cause, draft)}`); return; } finally { endWrite(); } } setDraft({ ...draft, questions: draft.questions.filter(item => item.id !== question.id) }); }} /> : null;
   if (questionBuilder) return <AdminShell current={currentPath} hideTopbar><main className={`${tryoutStyles.workspace} ${tryoutStyles.studio}`}>
     <StudioNavigationGuard dirty={packageDirty || questionDirty} saving={busy} discard={closeEditor} />
     {questionBuilder}
+    <AdminErrorDialog error={popup} close={() => { setPopup(null); setError(""); }} />
     <AdminDialog open={confirmClose} title="Tutup builder?" close={() => setConfirmClose(false)} actions={<><button type="button" className="button" onClick={() => setConfirmClose(false)}>Lanjut Mengedit</button><button type="button" className="button button-primary" onClick={() => { setConfirmClose(false); closeEditor(); }}>Buang Perubahan dan Tutup</button></>}><p>Perubahan belum disimpan ke backend.</p></AdminDialog>
   </main></AdminShell>;
   return <AdminShell current={mini ? "/admin/mini-checkpoint" : currentPath}><main className={`admin-public-prototype admin-assessment-prototype ${tryoutStyles.workspace}`}>{navigation}
+    <AdminErrorDialog error={popup} close={() => { setPopup(null); setError(""); }} />
     <AdminPageHeader title={title} description="Kelola simulasi ujian dan bank soal HiruAcademy." actions={<button className="button button-primary" type="button" disabled={!request.data && !savedRows} onClick={() => edit({ id: crypto.randomUUID(), kind, title: "", context: context || contexts[0] || "", chapter: mini ? chapter : "", session: mini ? "1" : "", part: mini ? "1" : "", duration: "", maxScore: mini ? "100" : "180", passingScore: "", order: String(rows.reduce((max, row) => Math.max(max, Number(row.order)), 0) + 1), status: "Draft", questions: [] })}>+ Buat {title}</button>} />
     {mini && <p role="status">OPEN: konfigurasi sesi, part, timer Mini belum tersedia di backend.</p>}{request.error && <p role="alert">Data {title} gagal dimuat. {request.error} <button type="button" onClick={request.retry}>Coba Lagi</button></p>}<p role="status">{message}</p>
     <AdminTabs tabs={[`Daftar ${title}`, "Bank Soal"]} active={tab} onChange={value => { if (value === "Bank Soal") openBank(); else if (draft && !packageForm && (packageDirty || questionDirty)) requestClose(); else { closeEditor(); setTab(value); } }} label={`Tampilan ${title}`} />
@@ -186,7 +199,7 @@ function AssessmentWorkspace({ kind, navigation }: { kind: AdminAssessmentKind; 
        </>}</AdminDialog>
     <AdminDialog open={confirmClose} title="Tutup builder?" close={() => setConfirmClose(false)} actions={<><button type="button" className="button" onClick={() => setConfirmClose(false)}>Lanjut Mengedit</button><button type="button" className="button button-primary" onClick={() => { setConfirmClose(false); closeEditor(); }}>Buang Perubahan dan Tutup</button></>}><p>Perubahan {title} belum disimpan. Tutup tanpa menyimpan?</p></AdminDialog>
     <AdminDialog open={Boolean(viewItem)} title={`Detail ${title}`} close={closeView}>{viewItem && <AdminAssessmentPreview key={viewItem.id} assessment={viewItem} />}</AdminDialog>
-    <AdminDialog open={Boolean(deleting)} title={`Hapus ${deleting?.question ? "Soal" : title}?`} close={closeDelete} actions={<><button className="button" type="button" onClick={closeDelete}>Batal</button><button className="button button-primary" type="button" onClick={async () => { if (!deleting || !beginWrite("delete", deleting.id)) return; try { if (deleting.question && draft) { const question = draft.questions.find(question => question.id === deleting.id); if (question && /^\d+$/.test(question.id)) setRows(await deleteAdminTryOut(draft.id, question)); setDraft({ ...draft, questions: draft.questions.filter(question => question.id !== deleting.id) }); } else setRows(await deleteAdminTryOut(deleting.id)); closeDelete(); } catch (cause) { setMessage(adminTryOutError(cause)); } finally { endWrite(); } }}>Hapus</button></>}><p>Hapus {deleting?.label} dari sesi ini? Halaman siswa tidak berubah.</p></AdminDialog>
+    <AdminDialog open={Boolean(deleting)} title={`Hapus ${deleting?.question ? "Soal" : title}?`} close={closeDelete} actions={<><button className="button" type="button" onClick={closeDelete}>Batal</button><button className="button button-primary" type="button" onClick={async () => { if (!deleting || !beginWrite("delete", deleting.id)) return; try { if (deleting.question && draft) { const question = draft.questions.find(question => question.id === deleting.id); if (question && /^\d+$/.test(question.id)) setRows(await deleteAdminTryOut(draft.id, question)); setDraft({ ...draft, questions: draft.questions.filter(question => question.id !== deleting.id) }); } else setRows(await deleteAdminTryOut(deleting.id)); closeDelete(); } catch (cause) { reportError(`Hapus ${deleting.label}: ${adminTryOutError(cause, draft ?? undefined)}`); } finally { endWrite(); } }}>Hapus</button></>}><p>Hapus {deleting?.label} dari sesi ini? Halaman siswa tidak berubah.</p></AdminDialog>
   </main></AdminShell>;
 }
 

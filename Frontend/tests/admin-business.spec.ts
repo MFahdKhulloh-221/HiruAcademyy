@@ -88,11 +88,24 @@ test("Scenario D — MEMBERSHIP ACTIVATION: N4 Belajar Mandiri activated, access
   await page.route("**/api/admin/users/7/access", route => route.fulfill({ json: { data: [{ id: 11, program_id: 2, plan_code: "lms", starts_at: "2026-10-01", ends_at: "2027-03-31", status: "active", source_invoice_id: 42 }] } }));
   await page.route("**/api/admin/users/7/effective-access", route => route.fulfill({ json: { data: { learning: { dasar: "full", n5: "full", n4: "full", n3: "preview", n2: "preview", "ssw-food": "none", interview: "none" }, replay_levels: [], source_grants: [] } } }));
   await page.goto("/admin/pengguna-akses");
+  await expect(page.getByText("ID Pengguna", { exact: true })).toHaveCount(0);
+  await page.getByRole("searchbox", { name: "Cari pengguna" }).fill("tidak-ada");
+  await expect(page.getByRole("table", { name: "Pengguna", exact: true })).toHaveCount(0);
+  await page.getByRole("searchbox", { name: "Cari pengguna" }).fill("mandiri.n4");
   await page.getByRole("row").filter({ hasText: "Siswa N4 Mandiri" }).getByRole("button", { name: "Detail", exact: true }).click();
   const accessTable = page.getByRole("table", { name: "Akses efektif", exact: true });
   for (const code of ["DASAR", "N5", "N4"]) await expect(accessTable.getByRole("row").filter({ has: page.getByRole("cell", { name: code, exact: true }) })).toContainText("Akses penuh");
   for (const code of ["N3", "N2"]) await expect(accessTable.getByRole("row").filter({ has: page.getByRole("cell", { name: code, exact: true }) })).toContainText("Preview Chapter 1");
   for (const code of ["SSW", "INTERVIEW"]) await expect(accessTable.getByRole("row").filter({ has: page.getByRole("cell", { name: code, exact: true }) })).toContainText("Terkunci");
+  await expect(page.getByRole("table", { name: "Pengguna", exact: true })).toHaveCount(1);
+  const detail = page.getByRole("dialog", { name: "Detail Pengguna & Akses", exact: true });
+  await expect(detail).toBeVisible();
+  await expect(detail.getByRole("heading", { name: "Siswa N4 Mandiri", exact: true })).toBeInViewport();
+  await detail.getByRole("button", { name: "Tutup dialog", exact: true }).click();
+  await expect(detail).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Detail", exact: true })).toBeFocused();
+  await expect(page.getByRole("searchbox", { name: "Cari pengguna" })).toHaveValue("mandiri.n4");
+  await expect(page.getByRole("table", { name: "Pengguna", exact: true })).toBeVisible();
 });
 
 test("Scenario E — Sensei grant projects cumulative replay without changing student role", async ({ page }) => {

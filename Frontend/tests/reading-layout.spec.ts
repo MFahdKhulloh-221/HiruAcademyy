@@ -87,7 +87,13 @@ for (const [width, height] of [[1280, 720], [1366, 768], [1440, 810], [768, 1024
     expect(page.url()).toBe(url);
     expect(await passagePanel.evaluate((el, previous) => el === previous, passageNode)).toBe(true);
     expect(await body.evaluate(el => el.scrollTop)).toBe(160);
-    await expect(runner.getByRole('button', { name: 'Kumpulkan Jawaban', exact: true })).toBeDisabled();
+    await runner.getByRole('button', { name: 'Kumpulkan Jawaban', exact: true }).click();
+    const unansweredDialog = runner.getByRole('dialog', { name: 'Belum semua soal dijawab', exact: true });
+    await expect(unansweredDialog).toBeVisible();
+    await expect(unansweredDialog).toContainText('soal 2 sebelum mengumpulkan jawaban.');
+    expect(completed).toBe(false);
+    await unansweredDialog.getByRole('button', { name: 'Kembali ke Soal', exact: true }).click();
+    await expect(unansweredDialog).not.toBeVisible();
     await runner.getByRole('button', { name: 'Soal 1', exact: true }).click();
     await expect(runner.getByRole('radio', { name: 'A. 図書館で勉強します。', exact: true })).toBeChecked();
     await runner.getByRole('button', { name: 'Soal 2', exact: true }).click();
@@ -107,6 +113,13 @@ for (const [width, height] of [[1280, 720], [1366, 768], [1440, 810], [768, 1024
     expect(answers).toEqual({ '1': 'A', '2': 'B' });
     await page.getByRole('button', { name: 'Review Jawaban', exact: true }).click();
     await expect(page.locator('.answer-review')).toBeVisible();
+    await expect(page.getByText('Status:', { exact: false })).toHaveCount(0);
+    await expect(page.getByText('Jawaban benar:', { exact: false })).toHaveCount(0);
+    await expect(page.getByText('Penjelasan: Belum tersedia.', { exact: true })).toBeVisible();
+    await expect(page.locator('label.review-correct')).toHaveCount(1);
+    await page.getByRole('button', { name: 'Soal 2', exact: true }).click();
+    await expect(page.locator('label.review-wrong')).toHaveCount(1);
+    await expect(page.locator('label.review-correct')).toHaveCount(1);
     await expect(page.locator('.reading-workspace')).toHaveCount(1);
     await expect(page.getByRole('heading', { name: 'Teks Reading', exact: true })).toBeVisible();
     await expect(page.getByRole('timer')).toHaveCount(0);

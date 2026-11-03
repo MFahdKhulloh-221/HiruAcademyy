@@ -9,6 +9,17 @@ use Illuminate\Http\Request;
 
 class AdminUserController extends Controller
 {
+    public function updateStatus(Request $request, User $user): JsonResponse
+    {
+        abort_unless($request->user()?->role === 'admin' && $request->user()?->account_status === 'active', 403);
+        abort_unless($user->role === 'student', 404);
+        $data = $request->validate(['account_status' => ['required', 'string', 'in:active,inactive']]);
+        $user->account_status = $data['account_status'];
+        $user->save();
+
+        return response()->json(['data' => $user->only(['id', 'name', 'email', 'whatsapp', 'account_status'])]);
+    }
+
     public function index(Request $request, EntitlementService $entitlements): JsonResponse
     {
         $data = $request->validate(['search' => ['nullable', 'string', 'max:255'], 'include' => ['sometimes', 'string', 'in:effective_access']]);

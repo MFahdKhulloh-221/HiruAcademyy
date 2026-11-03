@@ -140,6 +140,7 @@ Route::prefix('api')->middleware('throttle:api')->group(function () {
         Route::get('settings', [AdminSettingsController::class, 'index']);
         Route::patch('settings', [AdminSettingsController::class, 'update']);
         Route::get('users', [AdminUserController::class, 'index']);
+        Route::patch('users/{user}/status', [AdminUserController::class, 'updateStatus'])->whereNumber('user');
         Route::post('invoices', [InvoiceController::class, 'adminStore']);
         Route::get('invoices', [InvoiceController::class, 'index']);
         Route::get('invoices/{invoice}', [InvoiceController::class, 'show']);
@@ -161,11 +162,11 @@ Route::prefix('api')->middleware('throttle:api')->group(function () {
     Route::middleware(['auth:sanctum', 'active', 'role:student'])->prefix('student')->group(function () {
         Route::get('checkpoint-packages', [\App\Http\Controllers\StudentCheckpointController::class, 'index']);
         Route::get('checkpoint-packages/{package}', [\App\Http\Controllers\StudentCheckpointController::class, 'show']);
-        Route::post('checkpoint-packages/{package}/attempts', [\App\Http\Controllers\StudentCheckpointController::class, 'start']);
+        Route::post('checkpoint-packages/{package}/attempts', [\App\Http\Controllers\StudentCheckpointController::class, 'start'])->name('assessment.checkpoint.start');
         Route::get('checkpoint-packages/{package}/history', [\App\Http\Controllers\StudentCheckpointController::class, 'history']);
         Route::get('checkpoint-packages/{package}/attempts/{attempt}', [\App\Http\Controllers\StudentCheckpointController::class, 'attempt']);
-        Route::put('checkpoint-packages/{package}/attempts/{attempt}/answers', [\App\Http\Controllers\StudentCheckpointController::class, 'save']);
-        Route::post('checkpoint-packages/{package}/attempts/{attempt}/submit', [\App\Http\Controllers\StudentCheckpointController::class, 'submit']);
+        Route::put('checkpoint-packages/{package}/attempts/{attempt}/answers', [\App\Http\Controllers\StudentCheckpointController::class, 'save'])->name('assessment.checkpoint.answers');
+        Route::post('checkpoint-packages/{package}/attempts/{attempt}/submit', [\App\Http\Controllers\StudentCheckpointController::class, 'submit'])->name('assessment.checkpoint.submit');
         Route::post('checkpoint-packages/{package}/attempts/{attempt}/abandon', [\App\Http\Controllers\StudentCheckpointController::class, 'abandon']);
         Route::get('checkpoint-packages/{package}/attempts/{attempt}/result', [\App\Http\Controllers\StudentCheckpointController::class, 'result']);
         Route::get('checkpoint-packages/{package}/attempts/{attempt}/review', [\App\Http\Controllers\StudentCheckpointController::class, 'review']);
@@ -192,21 +193,21 @@ Route::prefix('api')->middleware('throttle:api')->group(function () {
         Route::prefix('programs/{program}/chapters/{chapter}')->group(function () {
             Route::get('progress', [StudentAssessmentController::class, 'progress']);
             Route::post('completions', [StudentAssessmentController::class, 'complete']);
-            Route::post('attempts', [StudentAssessmentController::class, 'start']);
+            Route::post('attempts', [StudentAssessmentController::class, 'start'])->name('assessment.learning.start');
             Route::get('attempts/{attempt}', [StudentAssessmentController::class, 'show']);
-            Route::put('attempts/{attempt}/answers', [StudentAssessmentController::class, 'save']);
-            Route::post('attempts/{attempt}/submit', [StudentAssessmentController::class, 'submit']);
+            Route::put('attempts/{attempt}/answers', [StudentAssessmentController::class, 'save'])->name('assessment.learning.answers');
+            Route::post('attempts/{attempt}/submit', [StudentAssessmentController::class, 'submit'])->name('assessment.learning.submit');
             Route::get('attempts/{attempt}/review', [StudentAssessmentController::class, 'review']);
         });
         Route::prefix('try-outs')->group(function () {
             Route::get('/', [StudentTryOutController::class, 'index']);
             Route::get('{tryOut}', [StudentTryOutController::class, 'show']);
             Route::get('{tryOut}/history', [StudentTryOutController::class, 'history']);
-            Route::post('{tryOut}/attempts', [StudentTryOutController::class, 'start']);
+            Route::post('{tryOut}/attempts', [StudentTryOutController::class, 'start'])->name('assessment.tryout.start');
             Route::get('{tryOut}/attempts/{attempt}', [StudentTryOutController::class, 'attempt']);
-            Route::put('{tryOut}/attempts/{attempt}/answers', [StudentTryOutController::class, 'save']);
+            Route::put('{tryOut}/attempts/{attempt}/answers', [StudentTryOutController::class, 'save'])->name('assessment.tryout.answers');
             Route::post('{tryOut}/attempts/{attempt}/abandon', [StudentTryOutController::class, 'abandon']);
-            Route::post('{tryOut}/attempts/{attempt}/submit', [StudentTryOutController::class, 'submit']);
+            Route::post('{tryOut}/attempts/{attempt}/submit', [StudentTryOutController::class, 'submit'])->name('assessment.tryout.submit');
             Route::get('{tryOut}/attempts/{attempt}/review', [StudentTryOutController::class, 'review']);
         });
         Route::get('programs/{program}/chapters', [StudentLearningController::class, 'index']);

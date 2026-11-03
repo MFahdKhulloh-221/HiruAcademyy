@@ -50,6 +50,7 @@ export function AdminConfirmDialog({ open, title, children, close, initialFocusR
     const focusable = () => [...(panel.current?.querySelectorAll<HTMLElement>('button:not([disabled]), a[href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])') ?? [])];
     (initialFocusRef?.current ?? focusable()[0] ?? panel.current)?.focus();
     function keydown(event: globalThis.KeyboardEvent) {
+      if (document.querySelector("dialog:modal")) return;
       if (event.key === "Escape") { event.preventDefault(); closeRef.current(); return; }
       if (event.key !== "Tab") return;
       const elements = focusable();

@@ -1,7 +1,7 @@
 import { apiRequest, ApiError } from "@/lib/api";
 import { assessmentSessions } from "@/lib/assessment-attempt";
 import { jlptTryoutSessions as assessmentSessionLabels } from "@/lib/tryout-mock";
-import type { AdminAssessment, AdminAssessmentQuestion } from "@/components/admin-assessment-fixtures";
+import { assessmentQuestionLocation, type AdminAssessment, type AdminAssessmentQuestion } from "@/components/admin-assessment-fixtures";
 
 export type AdminTryOut = AdminAssessment & { sessionPassingScores?: Record<string, number> | null };
 type Question = { passage_id?: number | null; instruction?: string | null; japanese?: AdminAssessmentQuestion["japanese"] | null; id: number; session: string; question: string; options: Record<string, string>; correct_option: string; explanation: string | null; reading_passage: string | null; audio_url: string | null; point_value: number; sort_order: number; status: string };
@@ -25,13 +25,19 @@ async function setAdminTryOutStatus(id: string, status: AdminAssessment["status"
 async function publishAdminTryOutQuestions(id: string) {
   return (await apiRequest<{ data: { try_out_id: number; published_count: number } }>(`${endpoint}/${id}/questions/publish`, { method: "POST" })).data;
 }
-function adminTryOutError(cause: unknown) {
+function adminTryOutError(cause: unknown, item?: AdminAssessment) {
   if (!(cause instanceof ApiError)) return cause instanceof Error ? cause.message : "Permintaan belum berhasil. Silakan coba lagi.";
   if (cause.status === 401 || cause.status === 419) return "Sesi berakhir. Silakan masuk kembali.";
   if (cause.status === 403) return "Akses admin diperlukan. Anda tidak diizinkan melakukan tindakan ini.";
-  if (cause.status === 422) return [cause.message, ...Object.entries(cause.errors).flatMap(([field, messages]) => messages.map(message => `${field}: ${message}`))].join(" ");
+  if (cause.status === 422) return [cause.message, ...Object.entries(cause.errors).flatMap(([field, messages]) => {
+    const questionIndex = /^questions\.(\d+)\./.exec(field);
+    const passageIndex = /^passages\.(\d+)\./.exec(field);
+    const question = questionIndex && item?.questions[Number(questionIndex[1])];
+    const context = question ? assessmentQuestionLocation(question, item!) : passageIndex ? `Bacaan ${Number(passageIndex[1]) + 1}` : field.startsWith("settings.") ? "Pengaturan paket" : "";
+    return messages.map(message => `${context ? `${context} — ` : ""}${field}: ${message}`);
+  }), "Perbaiki field yang disebutkan lalu coba lagi."].join("\n");
   if (cause.status === 429) return "Terlalu banyak percobaan. Silakan coba lagi nanti.";
-  if (cause.status >= 500) return `Data ${title} belum dapat dimuat dari server. Silakan Coba Lagi; jika tetap gagal, periksa log backend dan migration lokal.`;
+  if (cause.status >= 500) return `Permintaan ${title} gagal di server. Coba lagi; jika tetap gagal, hubungi pengelola server.`;
   return cause.message;
 }
 async function saveAdminTryOut(item: AdminTryOut, baseline?: AdminTryOut) {

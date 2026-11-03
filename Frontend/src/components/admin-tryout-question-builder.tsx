@@ -2,10 +2,11 @@
 
 import { Fragment, useEffect, useState, type ReactNode } from "react";
 import { FiSave, FiPlus, FiBookOpen, FiChevronLeft, FiChevronRight, FiChevronDown, FiSearch, FiCopy, FiTrash2, FiArrowUp, FiArrowDown, FiCheckCircle, FiAlertCircle } from "react-icons/fi";
+import { AdminErrorDialog } from "@/components/admin-error-dialog";
 import { AdminMediaUpload } from "@/components/admin-media-upload";
 import { AdminDialog, AdminTabs, AdminStatusBadge } from "@/components/admin-primitives";
 import { PlacementRichText, PlacementTextEditor, PlacementEditorProvider, PlacementEditorToolbar } from "@/components/placement-rich-text";
-import { assessmentLetters, assessmentQuestionError, assessmentSections, orderedAssessmentQuestions, type AdminAssessment, type AdminAssessmentQuestion } from "@/components/admin-assessment-fixtures";
+import { assessmentLetters, assessmentPassageError, assessmentQuestionLocation, assessmentQuestionError, assessmentSections, orderedAssessmentQuestions, type AdminAssessment, type AdminAssessmentQuestion } from "@/components/admin-assessment-fixtures";
 import { placementText } from "@/lib/placement-rich-text";
 import styles from "./admin-tryout-builder.module.css";
 
@@ -34,6 +35,8 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
   const [groupBody, setGroupBody] = useState("");
   const [groupCount, setGroupCount] = useState("5");
   const [issue, setIssue] = useState("");
+  const [popup, setPopup] = useState<{ message: string } | null>(null);
+  function reportIssue(message: string) { setIssue(message); setPopup({ message }); }
   const [remove, setRemove] = useState<"question" | "group" | null>(null);
   const questions = orderedAssessmentQuestions(draft).filter(question => question.section === sections[session]);
   const active = questions.find(question => question.id === activeId) ?? (readingOnly ? questions[0] : undefined);
@@ -57,7 +60,8 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
   }
   function addGroup() {
     const count = Number(groupCount);
-    if (!groupTitle.trim() || !placementText(groupBody).trim() || !Number.isSafeInteger(count) || count < 1) { setIssue("Isi judul, bacaan, dan jumlah soal positif."); return; }
+    const issue = assessmentPassageError({ title: groupTitle, body: groupBody });
+    if (issue || !Number.isSafeInteger(count) || count < 1) { reportIssue(`Sesi ${sections[session]} — Grup bacaan baru: ${issue || "Isi jumlah soal dengan bilangan bulat positif."}\nPerbaiki form grup lalu pilih Buat Grup kembali. Isian tetap tersedia.`); return; }
     const group = { id: crypto.randomUUID(), title: groupTitle.trim(), body: groupBody };
     const slots = Array.from({ length: count }, (_, index) => newQuestion(group.id, index));
     onChange({ ...draft, passages: [...draft.passages ?? [], group], questions: [...draft.questions, ...slots] });
@@ -106,7 +110,9 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
       <h1>{draft.title}</h1>
       <div className={styles.metadata}><span>{readingOnly ? draft.context : `JLPT ${draft.context.toUpperCase().replace(/^JLPT\s*/, "")}`}</span>{!readingOnly && <AdminStatusBadge status={draft.status} />}</div>
     </header>
-    {(issue || error) && <p role="alert">{issue || error}</p>}
+    <AdminErrorDialog error={popup} close={() => { setPopup(null); setIssue(""); }} />
+    {error && <p role="alert">{error}</p>}
+    {issue && <p role="alert">{issue}</p>}
     {!readingOnly && <AdminTabs tabs={labels} active={labels[session]} label={`Sesi ${title}`} onChange={label => { const next = labels.indexOf(label); setSession(next); setActiveId(orderedAssessmentQuestions(draft).find(question => question.section === sections[next])?.id ?? ""); setSearch(""); setPreview(false); }} />}
     <div className={styles.sessionContext}>
       <div><h2>{labels[session]}</h2><p>{questions.length} soal{session === 2 && passage ? ` / ${passage.title} / Nomor ${groupRange}` : ""}</p></div>
@@ -140,7 +146,7 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
                 <button type="button" className={`button ${styles.danger}`} disabled={busy} onClick={() => setRemove("question")}><FiTrash2 aria-hidden="true" />Hapus Soal</button>
               </div></details></header>
               <fieldset className={styles.editorFields} disabled={busy}>
-                {active.type === "Audio" && <><AdminMediaUpload kind="audio" onUploaded={audioUrl => update({ ...active, audioUrl })} /><label className="admin-field">URL audio<input value={active.audioUrl ?? ""} onChange={event => update({ ...active, audioUrl: event.target.value })} /></label></>}
+                {active.type === "Audio" && <><AdminMediaUpload kind="audio" onError={message => reportIssue(`${assessmentQuestionLocation(active, draft)} — Upload audio: ${message}\nPilih file audio yang sesuai lalu unggah kembali. Isian soal tetap tersedia.`)} onUploaded={audioUrl => update({ ...active, audioUrl })} /><label className="admin-field">URL audio<input value={active.audioUrl ?? ""} onChange={event => update({ ...active, audioUrl: event.target.value })} /></label></>}
                 <PlacementTextEditor shared disabled={busy} label="Pertanyaan" value={active.prompt} onChange={prompt => update({ ...active, prompt })} />
                 <section className={styles.answerSection} aria-label="Pilihan Jawaban"><h3>Pilihan Jawaban</h3><div className={styles.studioGrid}>{active.answers.map((answer, index) => <div key={index} className={`${styles.studioAnswer} ${index === active.correctAnswer ? styles.correctAnswer : ""}`}><PlacementTextEditor shared disabled={busy} label={`Pilihan ${assessmentLetters[index]}`} value={answer} onChange={value => update({ ...active, answers: active.answers.map((answer, position) => index === position ? value : answer) })} /></div>)}</div></section>
                 <label className="admin-field">Kunci Jawaban<select aria-label="Jawaban Benar" value={active.correctAnswer} onChange={event => update({ ...active, correctAnswer: Number(event.target.value) })}><option value={-1}>Pilih kunci jawaban</option>{active.answers.map((_, index) => <option key={index} value={index}>{assessmentLetters[index]}</option>)}</select></label>
@@ -155,7 +161,7 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
     </div>
     <footer className={styles.studioActions} aria-label="Aksi Studio"><p role="status">{saveStatus}</p><div>{bulkAction}<button type="button" className="button" disabled={busy} onClick={onClose}>Kembali ke Daftar</button><button type="button" className="button button-primary" disabled={busy} aria-busy={busy} onClick={() => void onSave(draft)}><FiSave aria-hidden="true" />{busy ? "Menyimpan..." : saveLabel ?? `Simpan ${title}`}</button></div></footer>
     <AdminDialog open={groupForm} title="Grup Bacaan Reading" className={styles.packageDialog} close={() => setGroupForm(false)} actions={<><button className="button" type="button" onClick={() => setGroupForm(false)}>Kembali</button><button className="button button-primary" type="submit" form="tryout-reading-group" disabled={busy}>Buat Grup</button></>}>
-      <form id="tryout-reading-group" className={styles.groupForm} onSubmit={event => { event.preventDefault(); addGroup(); }}>
+      <form id="tryout-reading-group" className={styles.groupForm} noValidate onSubmit={event => { event.preventDefault(); const invalid = event.currentTarget.querySelector<HTMLInputElement>("input:invalid"); if (invalid) { reportIssue(`Sesi ${sections[session]} — Grup bacaan baru: ${invalid.labels?.[0]?.textContent || "Isian"}: ${invalid.validationMessage}\nPerbaiki isian lalu pilih Buat Grup kembali.`); return; } addGroup(); }}>
         <p className={styles.linkedHint}>Satu bacaan bersama untuk beberapa soal Reading.</p>
         <label className="admin-field">Judul internal bacaan<input required value={groupTitle} placeholder="Contoh: Bacaan A" onChange={event => setGroupTitle(event.target.value)} /></label>
         <PlacementEditorProvider>

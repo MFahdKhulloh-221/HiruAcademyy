@@ -1,0 +1,120 @@
+.userCount {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border: 1px solid #eef0f6;
+  border-radius: 999px;
+  background: #fff;
+  color: #24324a;
+  box-shadow: 0 2px 6px rgb(36 50 74 / 8%);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.userCount strong {
+  font-size: 18px;
+  font-variant-numeric: tabular-nums;
+}
+
+.list :global(.admin-field) {
+  flex: 1;
+  min-width: 0;
+}
+
+.list :global(.admin-data-table-wrap) {
+  margin-top: 20px;
+  max-height: 60vh;
+  overflow: auto;
+}
+
+.list thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: #fff;
+}
+
+:global(.admin-shell .admin-dialog-layer) > .detail {
+  width: min(1100px, calc(100vw - 32px));
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 32px);
+}
+
+.detail > :global(.admin-dialog-content) {
+  display: block;
+  overflow-y: auto;
+}
+
+.identity {
+  display: flex;
+  justify-content: space-between;
+  align-items: start;
+  gap: 16px;
+  padding: 20px;
+  margin-bottom: 20px;
+  border: 1px solid #d9deef;
+  border-radius: 16px;
+  background: #f9f9ff;
+}
+
+.identity > div {
+  min-width: 0;
+}
+
+.identity h3 {
+  margin: 0 0 8px;
+  font-size: 20px;
+}
+
+.identity p {
+  margin: 4px 0;
+  overflow-wrap: anywhere;
+}
+
+.accountActions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.freeMembership {
+  padding: 20px;
+  border: 1px solid #d9deef;
+  border-radius: 16px;
+  background: #f9f9ff;
+}
+
+.freeMembership p {
+  margin: 8px 0 0;
+}
+
+@media (max-width: 639px) {
+  .identity {
+    flex-direction: column;
+  }
+
+  .accountActions {
+    justify-content: flex-start;
+  }
+}
+
+.access {
+  display: grid;
+  gap: 16px;
+  align-items: start;
+}
+
+.access > section {
+  min-width: 0;
+  margin: 0;
+}
+
+.detail .access > section {
+  padding: 0;
+  border: 0;
+  box-shadow: none;
+}

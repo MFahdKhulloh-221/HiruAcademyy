@@ -9,7 +9,7 @@ export function AdminVideoPreview({ value, resolved, title }: { value: string; r
   return embed ? <iframe src={embed} title={title} allowFullScreen style={{ width: "100%", aspectRatio: "16 / 9", border: 0 }} /> : url ? <video src={url} controls preload="metadata" aria-label={title} style={{ width: "100%", maxHeight: 360 }} /> : null;
 }
 
-export function AdminMediaUpload({ kind, onUploaded, label, buttonLabel }: { kind: MediaKind; onUploaded: (path: string, url: string) => void; label?: string; buttonLabel?: string }) {
+export function AdminMediaUpload({ kind, onUploaded, label, buttonLabel, onError }: { onError?: (message: string) => void; kind: MediaKind; onUploaded: (path: string, url: string) => void; label?: string; buttonLabel?: string }) {
   const inputId = useId();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -28,7 +28,7 @@ export function AdminMediaUpload({ kind, onUploaded, label, buttonLabel }: { kin
     if (!file || uploading.current) return;
     uploading.current = true; setBusy(true); setError("");
     try { const media = await uploadAdminMedia(file, kind); onUploadedRef.current(media.path, media.url); }
-    catch (cause) { setError(kind === "image" && cause instanceof Error && cause.message.includes("format yang didukung") ? "Format gambar tidak didukung. Pilih JPEG, PNG, atau WebP yang tidak kosong." : cause instanceof Error ? cause.message : "Unggah gagal. Silakan coba lagi."); }
+    catch (cause) { const message = kind === "image" && cause instanceof Error && cause.message.includes("format yang didukung") ? "Format gambar tidak didukung. Pilih JPEG, PNG, atau WebP yang tidak kosong." : cause instanceof Error ? cause.message : "Unggah gagal. Silakan coba lagi."; setError(message); onError?.(message); }
     finally { uploading.current = false; setBusy(false); }
   }} />{busy && <p role="status">Mengunggah…</p>}{error && <p id={`${inputId}-error`} role="alert">{error}</p>}</div>;
 }
