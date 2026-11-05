@@ -8,6 +8,7 @@ use App\Models\TryOutQuestion;
 use App\Models\TryOutPassage;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -90,6 +91,57 @@ class TryOutService
         }, 3);
     }
 
+    public function builderCapabilities(): array
+    {
+        return ['images' => $this->assessmentModel === TryOut::class
+            && Schema::hasColumns('try_out_questions', ['image', 'image_alt', 'image_position'])
+            && Schema::hasColumns('try_out_passages', ['image', 'image_alt', 'image_position']), 'decimal_points' => false];
+    }
+
+    public function imageFields(): array
+    {
+        return $this->builderCapabilities()['images'] ? ['image', 'image_alt', 'image_position'] : [];
+    }
+
+    private function imageRules(): array
+    {
+        return $this->builderCapabilities()['images'] ? [
+            'image' => ['sometimes', 'nullable', 'string', app(MediaService::class)->rule('image')],
+            'image_alt' => ['sometimes', 'nullable', 'string', 'max:1000'],
+            'image_position' => ['sometimes', 'nullable', Rule::in(['before', 'after'])],
+        ] : [];
+    }
+
+    private function assertImage(Model $model): void
+    {
+        $rules = $this->imageRules();
+        if ($rules !== []) {
+            Validator::make($model->only(array_keys($rules)), $rules)->validate();
+            if ($model->image && trim($model->image_alt ?? '') === '') {
+                throw ValidationException::withMessages(['image_alt' => 'Alternative text is required for an image.']);
+            }
+            if ($model->image_position === null) {
+                $model->image_position = 'before';
+            }
+            if ($model->image_alt === null) {
+                $model->image_alt = '';
+            }
+        }
+    }
+
+    private function rejectUnavailableImages(array $input): void
+    {
+        if (! $this->builderCapabilities()['images'] && array_intersect(['image', 'image_alt', 'image_position'], array_keys($input)) !== []) {
+            throw ValidationException::withMessages(['image' => 'Images are unavailable for this assessment until the Try Out image schema is installed.']);
+        }
+    }
+
+    public function adminPassages(Model $tryOut): array
+    {
+        return $this->passageModel::where($this->parentKey, $tryOut->id)->get(array_merge(['id', 'title', 'body'], $this->imageFields()))
+            ->map(fn ($passage) => app(MediaService::class)->payload($passage->getAttributes()))->all();
+    }
+
     private function questionRules(): array
     {
         $rules = [
@@ -117,14 +169,22 @@ class TryOutService
             }];
         }
 
-        return $rules;
+        return $rules + $this->imageRules();
     }
 
     private function assertQuestion(Model $question): void
     {
         Validator::make($question->only(array_keys($this->questionRules())), $this->questionRules())->validate();
-        if ($question->passage_id !== null && ($question->session !== 'reading' || ! $this->passageModel::whereKey($question->passage_id)->where($this->parentKey, $question->{$this->parentKey})->exists())) {
-            throw ValidationException::withMessages(['passage_id' => 'Reading passage must belong to this Try Out.']);
+        $this->assertImage($question);
+        $passageSessions = $this->assessmentModel === TryOut::class ? ['grammar', 'reading'] : ['reading'];
+        if ($question->passage_id !== null && (! in_array($question->session, $passageSessions, true) || ! $this->passageModel::whereKey($question->passage_id)->where($this->parentKey, $question->{$this->parentKey})->exists())) {
+            throw ValidationException::withMessages(['passage_id' => 'Shared passage must belong to this assessment and an allowed session.']);
+        }
+        if ($question->passage_id !== null && $this->assessmentModel === TryOut::class
+            && $this->questionModel::where($this->parentKey, $question->{$this->parentKey})->where('passage_id', $question->passage_id)
+                ->when($question->exists, fn ($query) => $query->where('id', '!=', $question->id))
+                ->where('session', '!=', $question->session)->exists()) {
+            throw ValidationException::withMessages(['passage_id' => 'Shared passage cannot span sessions.']);
         }
         if ($question->passage_id !== null && $question->reading_passage !== null) {
             throw ValidationException::withMessages(['reading_passage' => 'Shared passage cannot also have an inline passage.']);
@@ -156,6 +216,7 @@ class TryOutService
                 }
                 unset($rule);
             }
+            $this->rejectUnavailableImages($input);
             $data = $this->validateInput($input, $rules);
             foreach (['question', 'instruction', 'reading_passage', 'explanation'] as $field) {
                 if (isset($data[$field])) {
@@ -280,6 +341,15 @@ class TryOutService
 
     public function saveStudio(Model $tryOut, array $input): Model
     {
+        foreach (is_array($input['passages'] ?? null) ? $input['passages'] : [] as $passage) {
+            if (is_array($passage)) {
+                $this->rejectUnavailableImages($passage);
+                $this->validateInput($passage, [
+                    'id' => ['required', 'string'], 'title' => ['required', 'string', 'max:255'],
+                    'body' => ['required', 'string'],
+                ] + $this->imageRules());
+            }
+        }
         $data = $this->validateInput($input, [
             'revision' => ['required', 'string', 'size:64'],
             'settings' => ['required', 'array'],
@@ -294,7 +364,10 @@ class TryOutService
             'deleted_question_ids.*' => ['integer', 'distinct'],
             'deleted_passage_ids' => ['present', 'array'],
             'deleted_passage_ids.*' => ['integer', 'distinct'],
-        ]);
+        ] + array_combine(
+            array_map(fn ($field) => 'passages.*.'.$field, array_keys($this->imageRules())),
+            array_values($this->imageRules()),
+        ));
 
         return app(MediaService::class)->locked(function () use ($tryOut, $data) {
             $parent = $this->assessmentModel::whereKey($tryOut->id)->lockForUpdate()->firstOrFail();
@@ -306,7 +379,9 @@ class TryOutService
                 $model = ctype_digit($passage['id'])
                     ? $this->passageModel::where($this->parentKey, $parent->id)->whereKey($passage['id'])->firstOrFail()
                     : new $this->passageModel([$this->parentKey => $parent->id]);
-                $model->fill(['title' => $passage['title'], 'body' => PlacementRichText::sanitize($passage['body'])])->save();
+                $model->fill(array_intersect_key($passage, array_flip($this->imageFields())) + ['title' => $passage['title'], 'body' => PlacementRichText::sanitize($passage['body'])]);
+                $this->assertImage($model);
+                $model->save();
                 $ids[$passage['id']] = $model->id;
             }
             foreach ($data['questions'] as $question) {
@@ -337,6 +412,6 @@ class TryOutService
 
     public function adminQuestion(Model $question): array
     {
-        return app(MediaService::class)->payload($question->only(['id', $this->parentKey, 'passage_id', 'session', 'question', 'options', 'correct_option', 'explanation', 'point_value', 'reading_passage', 'audio_url', 'sort_order', 'status', 'instruction', 'japanese']));
+        return app(MediaService::class)->payload($question->only(array_merge(['id', $this->parentKey, 'passage_id', 'session', 'question', 'options', 'correct_option', 'explanation', 'point_value', 'reading_passage', 'audio_url', 'sort_order', 'status', 'instruction', 'japanese'], $this->imageFields())));
     }
 }

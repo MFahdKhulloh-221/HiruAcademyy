@@ -7,6 +7,7 @@ import { tryoutStudyRecommendations } from "@/lib/tryout-study-recommendation";
 
 
 import { PlacementRichText } from "@/components/placement-rich-text";
+import { AssessmentContent } from "@/components/assessment-content";
 
 import Link from "next/link";
 
@@ -538,6 +539,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
   const practiceNavigator = readingLayout || (domain === "learning" && attempt.kind === "audio");
 
   const examReading = tryoutExperience && question?.session === "reading";
+  const tryoutImages = domain === "tryout";
 
   const QuestionPanel = Fragment;
 
@@ -607,7 +609,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
           {examReading && question && <section className="exam-reading-passage" key={question.passage?.id ?? question.id} aria-label="Teks bacaan"><h2><FiBookOpen aria-hidden="true" /> Teks Bacaan</h2><div className="exam-reading-scroll" role="region" aria-label="Isi teks bacaan" tabIndex={0} lang="ja">
 
-            {question.passage ? <><h3><PlacementRichText value={question.passage.title} /></h3><PlacementRichText value={question.passage.body} /></> : <PlacementRichText value={question.reading_passage ?? ""} />}
+            {question.passage ? <><h3><PlacementRichText value={question.passage.title} /></h3><AssessmentContent content={tryoutImages ? question.passage : {}}><PlacementRichText value={question.passage.body} /></AssessmentContent></> : <PlacementRichText value={question.reading_passage ?? ""} />}
 
           </div></section>}
 
@@ -617,7 +619,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
               <p className="dash-kicker">{tryoutExperience ? <>{sessionLabel && <span>{sessionLabel}</span>}<span>Soal {sessionPosition + 1}</span></> : <>SOAL {Math.min(index + 1, questions.length)} DARI {questions.length}</>}</p>
 
-              {!isReading && !examReading && question.passage && <section className="reading-passage"><h2><PlacementRichText value={question.passage.title} /></h2><p><PlacementRichText value={question.passage.body} /></p></section>}
+              {!isReading && !examReading && question.passage && <section className="reading-passage" aria-label={tryoutImages && question.session === "grammar" ? "Kelompok soal tata bahasa" : undefined}><h2><PlacementRichText value={question.passage.title} /></h2><AssessmentContent content={tryoutImages ? question.passage : {}}><p><PlacementRichText value={question.passage.body} /></p></AssessmentContent></section>}
 
               {!isReading && !examReading && question.reading_passage && <p><PlacementRichText value={question.reading_passage} /></p>}
 
@@ -627,6 +629,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
               ) : question.audio_url ? <p role="status">Audio belum tersedia.</p> : null}
 
+              <AssessmentContent content={tryoutImages ? question : {}}>
               {!isReading && question.instruction && <p><PlacementRichText value={question.instruction} /></p>}
 
               {readingLayout ? <div className="reading-question-copy" tabIndex={0} role="region" aria-label="Isi pertanyaan">
@@ -644,6 +647,9 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
                 {question.japanese?.text && <p lang="ja"><ruby>{question.japanese.text}{question.japanese.reading && <rt>{question.japanese.reading}</rt>}</ruby></p>}
 
               </>}
+              </AssessmentContent>
+
+              {tryoutImages && answerReview && !flow.answers[question.id] && <p role="status">Jawaban kamu: Kosong</p>}
 
               <fieldset disabled={Boolean((scope || tryoutExperience) && remaining === 0) || reviewing || flow.submitting || (!tryoutExperience && flow.busy) || attempt.status === "completed"}>
 

@@ -32,7 +32,7 @@ class AdminTryOutController extends Controller
     {
         $this->authorizeAdmin($request);
 
-        return response()->json(['data' => $content->payload($tryOut) + ['studio_revision' => $content->studioRevision($tryOut), 'passages' => \App\Models\TryOutPassage::where('try_out_id', $tryOut->id)->get(['id', 'title', 'body']), 'questions' => $tryOut->questions()->orderBy('sort_order')->orderBy('id')->get()->map(fn ($question) => $content->adminQuestion($question))]]);
+        return response()->json(['data' => $content->payload($tryOut) + ['builder_capabilities' => $content->builderCapabilities(), 'studio_revision' => $content->studioRevision($tryOut), 'passages' => $content->adminPassages($tryOut), 'questions' => $tryOut->questions()->orderBy('sort_order')->orderBy('id')->get()->map(fn ($question) => $content->adminQuestion($question))]]);
     }
 
     public function update(Request $request, TryOut $tryOut, TryOutService $content)

@@ -1,4 +1,5 @@
 import { assessmentSessions } from "@/lib/assessment-attempt";
+import type { AssessmentImage } from "@/lib/assessment-image";
 import { placementText } from "@/lib/placement-rich-text";
 import type { AssessmentQuestion } from "@/lib/assessment-mock";
 import { miniCheckpointConfig } from "@/lib/sensei-mock";
@@ -8,7 +9,8 @@ export const assessmentLetters = ["A", "B", "C", "D"] as const;
 export const miniAssessmentContexts = ["DASAR", "N5", "N4", "N3", "N2", "SSW"] as const;
 export const tryoutAssessmentContexts = ["N5", "N4", "N3", "N2", "N1"] as const;
 export type AdminAssessmentKind = "mini" | "tryout" | "checkpoint";
-export type AdminAssessmentQuestion = {
+export type { AssessmentImage } from "@/lib/assessment-image";
+export type AdminAssessmentQuestion = AssessmentImage & {
   passageId?: string | null;
   id: string;
   section: string;
@@ -28,7 +30,8 @@ export type AdminAssessmentQuestion = {
 };
 export type AdminAssessment = {
   studioRevision?: string;
-  passages?: { id: string; title: string; body: string }[];
+  builderCapabilities?: { images: boolean; decimal_points: false };
+  passages?: ({ id: string; title: string; body: string } & AssessmentImage)[];
   accessType?: "free" | "membership";
   id: string;
   kind: AdminAssessmentKind;
@@ -70,7 +73,13 @@ export function validAssessmentAudio(file: File | null) {
 function positiveInteger(value: string) {
   return /^\d+$/.test(value) && Number.isSafeInteger(Number(value)) && Number(value) > 0;
 }
+export function assessmentImageError(content: AssessmentImage) {
+  if (content.image && !content.image_alt?.trim()) return "Isi teks alternatif gambar.";
+  if (content.image && content.image_position != null && !["before", "after"].includes(content.image_position)) return "Pilih posisi gambar sebelum atau sesudah teks.";
+  return "";
+}
 export function assessmentQuestionError(question: AdminAssessmentQuestion, item: AdminAssessment) {
+  if (item.kind === "tryout" && item.builderCapabilities?.images && assessmentImageError(question)) return assessmentImageError(question);
   if (!assessmentSections(item).includes(question.section)) return "Pilih sesi yang valid.";
   if (!["Multiple choice", "Audio", "Reading"].includes(question.type) || (["DASAR", "SSW"].includes(item.context) && question.type !== "Multiple choice")) return "DASAR dan SSW hanya memakai Multiple choice.";
   if (!placementText(question.prompt).trim() || question.answers.length !== 4 || question.answers.some((answer) => !placementText(answer).trim())) return "Isi pertanyaan dan pilihan A–D.";
@@ -81,6 +90,11 @@ export function assessmentQuestionError(question: AdminAssessmentQuestion, item:
   if (question.japanese?.reading && !question.japanese.text.trim()) return "Isi Teks Jepang.";
   if (!validAssessmentAudio(question.file)) return "Pilih file audio yang valid dan tidak kosong.";
   if (question.type !== "Audio" && question.file) return "File audio hanya untuk soal Audio.";
+  if (question.passageId) {
+    if (!item.passages?.some(passage => passage.id === question.passageId)) return "Grup bacaan tidak ditemukan.";
+    if (question.section !== assessmentSections(item)[2] && !(item.kind === "tryout" && question.section === assessmentSections(item)[1])) return "Grup stimulus hanya untuk sesi Tata Bahasa Try Out atau Reading.";
+    if (item.questions.some(linked => linked.passageId === question.passageId && linked.section !== question.section)) return "Satu grup stimulus tidak boleh terhubung ke sesi berbeda.";
+  }
   if (question.type !== "Reading" && question.passage.trim()) return "Teks bacaan hanya untuk soal Reading.";
   return "";
 }
@@ -108,7 +122,7 @@ export function assessmentError(item: AdminAssessment) {
   if (!["Draft", "Published"].includes(item.status)) return "Pilih status yang valid.";
   const contentIssues = [
     ...(item.passages ?? []).flatMap((passage, index) => {
-      const issue = assessmentPassageError(passage);
+      const issue = assessmentPassageError(passage) || (item.kind === "tryout" && item.builderCapabilities?.images ? assessmentImageError(passage) : "");
       const linked = orderedAssessmentQuestions(item).filter(question => question.passageId === passage.id);
       return issue ? [`Bacaan ${index + 1} (${passage.title || "tanpa judul"})${linked.length ? ` — ${linked.map(question => assessmentQuestionLocation(question, item)).join(", ")}` : ""}: ${issue}`] : [];
     }),

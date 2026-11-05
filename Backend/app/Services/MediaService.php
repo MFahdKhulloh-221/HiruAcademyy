@@ -199,6 +199,20 @@ class MediaService
         $this->locked(fn () => $this->deleteUnreferenced($path));
     }
 
+    protected function assertTryOutImagesUnreferenced(string $path): void
+    {
+        foreach (['try_out_questions', 'try_out_passages'] as $table) {
+            if (\Illuminate\Support\Facades\Schema::hasColumn($table, 'image')) {
+                abort_if(DB::table($table)->where('image', $path)->exists(), 409, 'Media is still referenced by Try Out content.');
+            }
+        }
+        // Passage images live in grading_snapshot, including attempts made before later schema changes.
+        abort_if(DB::table('try_out_attempts')->where(function ($query) use ($path) {
+            $query->whereRaw('REPLACE(CAST(grading_snapshot AS TEXT), ?, ?) LIKE ?', ['\\/', '/', '%'.$path.'%'])
+                ->orWhereRaw('REPLACE(CAST(content_snapshot AS TEXT), ?, ?) LIKE ?', ['\\/', '/', '%'.$path.'%']);
+        })->exists(), 409, 'Media is retained in an assessment snapshot.');
+    }
+
     private function deleteUnreferenced(string $path): void
     {
         abort_unless($this->managed($path), 422, 'Only managed media paths may be deleted.');
@@ -218,6 +232,10 @@ class MediaService
                 }
             }
         }
+        if (\Illuminate\Support\Facades\Schema::hasTable('try_out_passages')) {
+            DB::statement('LOCK TABLE try_out_passages IN SHARE ROW EXCLUSIVE MODE');
+        }
+        $this->assertTryOutImagesUnreferenced($path);
         foreach (['learning_attempts', 'placement_attempts', 'try_out_attempts'] as $table) {
             if (DB::table($table)->whereRaw('content_snapshot::text LIKE ?', ['%'.$path.'%'])->exists()) {
                 abort(409, 'Media is retained in an assessment snapshot.');
