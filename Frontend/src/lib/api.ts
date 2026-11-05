@@ -94,6 +94,15 @@ async function request(path: string, options: RequestInit): Promise<Response> {
   return response;
 }
 
+export async function apiDownload(path: string, signal?: AbortSignal): Promise<Blob> {
+  const version = sessionVersion;
+  const response = await request(path, { method: "GET", headers: { Accept: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }, signal });
+  const blob = await response.blob();
+  signal?.throwIfAborted();
+  if (version !== sessionVersion) throw new ApiError(419);
+  return blob;
+}
+
 function csrfToken() {
   try {
     const token = typeof document === "undefined" ? undefined : document.cookie.split(";").map(cookie => cookie.trim()).find(cookie => cookie.startsWith("XSRF-TOKEN="))?.slice("XSRF-TOKEN=".length);

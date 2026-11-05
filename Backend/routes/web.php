@@ -14,6 +14,7 @@ use App\Http\Controllers\AdminPublicContentController;
 use App\Http\Controllers\AdminScheduleReplayController;
 use App\Http\Controllers\AdminSettingsController;
 use App\Http\Controllers\AdminTryOutController;
+use App\Http\Controllers\AdminTryOutReportController;
 use App\Http\Controllers\AdminUserController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CommunityChatController;
@@ -115,6 +116,12 @@ Route::prefix('api')->middleware('throttle:api')->group(function () {
         Route::prefix('try-outs')->group(function () {
             Route::get('/', [AdminTryOutController::class, 'index']);
             Route::post('/', [AdminTryOutController::class, 'store']);
+            Route::prefix('{tryOut}/reports')->whereNumber('tryOut')->group(function () {
+                Route::get('/', [AdminTryOutReportController::class, 'overview']);
+                Route::get('participants', [AdminTryOutReportController::class, 'participants']);
+                Route::get('attempts/{attempt}', [AdminTryOutReportController::class, 'attempt'])->whereNumber('attempt');
+                Route::get('export.xlsx', [AdminTryOutReportController::class, 'export']);
+            });
             Route::get('{tryOut}', [AdminTryOutController::class, 'show']);
             Route::patch('{tryOut}', [AdminTryOutController::class, 'update']);
             Route::put('{tryOut}/studio', [AdminTryOutController::class, 'studio']);
