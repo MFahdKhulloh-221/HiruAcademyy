@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\User;
+use App\Support\Identity;
 use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -12,7 +13,7 @@ use Illuminate\Validation\ValidationException;
 
 class RecoveryOtpService
 {
-    public const MESSAGE = 'Jika akun tersedia, kode OTP dikirim melalui email. Tunggu 60 detik sebelum meminta ulang.';
+    public const MESSAGE = 'Jika akun tersedia, kode OTP dikirim melalui email. Tunggu 30 detik sebelum meminta ulang.';
 
     private function key(string $value): string
     {
@@ -44,10 +45,11 @@ class RecoveryOtpService
         });
     }
 
-    public function send(string $email, string $ip): void
+    public function send(string $email, string $ip): array
     {
+        $email = Identity::email($email);
         if (! $this->ipAllowed($ip)) {
-            return;
+            return ['status' => 'ip_limited', 'accepted' => false, 'daily_limit_reached' => false, 'retry_after' => 60];
         }
         $code = (string) random_int(100000, 999999);
         $accepted = $this->locked('otp:'.$this->key($email), function (&$state) use ($email, $code) {
@@ -56,16 +58,21 @@ class RecoveryOtpService
                 $state['d'] = $day;
                 $state['n'] = 0;
             }
-            if (($state['n'] ?? 0) >= 5 || now()->timestamp - ($state['s'] ?? 0) < 60) {
-                return false;
+            // Quota activity is public by product decision; account existence is not.
+            if (($state['n'] ?? 0) >= 5) {
+                return ['status' => 'daily_limit_reached', 'accepted' => false, 'daily_limit_reached' => true, 'retry_after' => 0];
+            }
+            $retry = 30 - (now()->timestamp - ($state['s'] ?? 0));
+            if ($retry > 0) {
+                return ['status' => 'cooldown', 'accepted' => false, 'daily_limit_reached' => false, 'retry_after' => $retry];
             }
             $state = ['d' => $day, 'n' => ($state['n'] ?? 0) + 1, 's' => now()->timestamp,
                 'h' => $this->key($email.':'.$code), 'e' => now()->addMinutes(10)->timestamp, 'a' => 0];
 
-            return true;
+            return ['status' => 'accepted', 'accepted' => true, 'daily_limit_reached' => $state['n'] === 5, 'retry_after' => 30];
         });
         $user = User::where('email_normalized', $email)->where('account_status', 'active')->first();
-        if ($accepted && $user) {
+        if ($accepted['accepted'] && $user) {
             try {
                 Mail::raw("Kode pemulihan HiruAcademy: {$code}\nBerlaku 10 menit. Jangan bagikan kode ini.", fn ($mail) => $mail->to($user->email)->subject('Kode OTP pemulihan akun'));
             } catch (\Throwable) {
@@ -73,6 +80,8 @@ class RecoveryOtpService
                 logger()->error('Recovery OTP mail delivery failed.');
             }
         }
+
+        return $accepted;
     }
 
     public function verify(string $email, string $code, string $ip): ?string

@@ -6,20 +6,23 @@ import { Suspense, useEffect, useRef, useState } from "react";
 import { ApiError, apiRequest } from "@/lib/api";
 import { AuthShell } from "@/components/auth-shell";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
-import { AuthStatus } from "@/components/auth-status";
 
 function ResetPasswordContent() {
   const router = useRouter();
   const [valid, setValid] = useState<boolean | null>(null);
   const [checkError, setCheckError] = useState(false);
   const expired = valid === false;
+  const verificationUrl = "/forgot-password?verification=required";
   useEffect(() => {
     const controller = new AbortController();
     apiRequest<{ valid: boolean }>("/api/auth/reset-grant", { signal: controller.signal })
-      .then((result) => setValid(result.valid))
+      .then((result) => {
+        setValid(result.valid);
+        if (!result.valid) router.replace(verificationUrl);
+      })
       .catch(() => { if (!controller.signal.aborted) setCheckError(true); });
     return () => controller.abort();
-  }, []);
+  }, [router]);
   const pending = useRef(false);
   const [busy, setBusy] = useState(false);
   const [password, setPassword] = useState("");
@@ -42,7 +45,7 @@ function ResetPasswordContent() {
       router.replace("/login");
     } catch (cause) {
       const failure = cause instanceof ApiError ? cause : new ApiError(0);
-      if (failure.status === 422 && (failure.errors.token || !Object.keys(failure.errors).length)) setValid(false);
+      if (failure.status === 422 && (failure.errors.token || !Object.keys(failure.errors).length)) { setValid(false); router.replace(verificationUrl); }
       else setError(Object.values(failure.errors).flat().join(" ") || failure.message);
       pending.current = false;
       setBusy(false);
@@ -51,7 +54,7 @@ function ResetPasswordContent() {
 
   if (checkError) return <p role="alert">Verifikasi belum dapat diperiksa. Muat ulang halaman atau <Link href="/forgot-password">minta OTP baru</Link>.</p>;
   if (valid === null) return <LoadingSkeleton variant="form" label="Memeriksa verifikasi OTP..." />;
-  if (expired) return <AuthStatus tone="error" eyebrow="AUTH • LINK EXPIRED" title="Verifikasi OTP diperlukan" marker="期" description="Tautan mungkin telah digunakan, melewati masa berlaku, atau dibatalkan oleh sistem." items={["Tidak ada perubahan akun", "Token tidak dapat digunakan ulang", "Request baru diperlukan"]} primary={{ label: "Minta OTP Baru", href: "/forgot-password" }} secondary={{ label: "Kembali Login", href: "/login" }} />;
+  if (expired) return <LoadingSkeleton variant="form" label="Mengalihkan ke verifikasi OTP..." />;
 
   return <><p className="kicker">RESET KATA SANDI</p><h2>Tetapkan kata sandi baru</h2><p className="auth-description">Masukkan kata sandi baru untuk mengamankan kembali akunmu.</p><form className="auth-form" onSubmit={submit} aria-busy={busy} aria-describedby={error ? "reset-error" : undefined}><div className="auth-field"><label htmlFor="password">Kata Sandi Baru</label><div className="password-wrap"><input id="password" name="password" type={visible ? "text" : "password"} autoComplete="new-password" placeholder="Masukkan kata sandi baru" value={password} onChange={(event) => setPassword(event.target.value)} required minLength={8} /><button type="button" onClick={() => setVisible(!visible)} aria-label={visible ? "Sembunyikan kata sandi" : "Tampilkan kata sandi"}><span aria-hidden="true">◉</span></button></div><small>Teks bantuan opsional</small></div><div className="auth-field"><label htmlFor="confirmation">Konfirmasi Kata Sandi</label><input id="confirmation" name="confirmation" type={visible ? "text" : "password"} autoComplete="new-password" placeholder="Ulangi kata sandi baru" value={confirmation} onChange={(event) => setConfirmation(event.target.value)} required minLength={8} /><small>Teks bantuan opsional</small></div><div className="password-guidance"><strong>KEKUATAN KATA SANDI</strong><ul><li>✓ Minimal 8 karakter</li><li>✓ Huruf besar &amp; kecil</li><li>✓ Angka</li><li>✓ Simbol disarankan</li></ul></div>{error && <p id="reset-error" className="recovery-error" role="alert">{error}</p>}<div className="runner-actions"><button className="button button-primary" type="submit" disabled={busy}>{busy ? "Memuat..." : "Simpan Kata Sandi"}</button><Link className="button button-dark" href="/forgot-password">Minta OTP Baru</Link></div></form><div className="auth-announcement"><strong>Pengumuman</strong><p>Setelah berhasil, sesi lama dicabut dan kamu perlu login kembali.</p></div></>;
 }

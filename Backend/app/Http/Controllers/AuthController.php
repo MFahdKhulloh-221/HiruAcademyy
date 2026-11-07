@@ -111,9 +111,9 @@ class AuthController extends Controller
     public function forgot(Request $request, RecoveryOtpService $otp)
     {
         $data = $request->validate(['email' => ['required', 'string', 'email:rfc', 'max:255']]);
-        $otp->send(Identity::email($data['email']), $request->ip());
+        $result = $otp->send(Identity::email($data['email']), $request->ip());
 
-        return response()->json(['message' => RecoveryOtpService::MESSAGE]);
+        return response()->json(['message' => RecoveryOtpService::MESSAGE, ...$result]);
     }
 
     public function verifyOtp(Request $request, RecoveryOtpService $otp)
