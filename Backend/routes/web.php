@@ -3,6 +3,7 @@
 use App\Http\Controllers\AccessGrantController;
 use App\Http\Controllers\AdminAffiliateController;
 use App\Http\Controllers\AdminBlogCatalogController;
+use App\Http\Controllers\AdminCheckpointController;
 use App\Http\Controllers\AdminCommissionController;
 use App\Http\Controllers\AdminLearningController;
 use App\Http\Controllers\AdminMediaController;
@@ -16,6 +17,7 @@ use App\Http\Controllers\AdminSettingsController;
 use App\Http\Controllers\AdminTryOutController;
 use App\Http\Controllers\AdminTryOutReportController;
 use App\Http\Controllers\AdminUserController;
+use App\Http\Controllers\AffiliateWithdrawalController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CommunityChatController;
 use App\Http\Controllers\CommunityController;
@@ -27,8 +29,10 @@ use App\Http\Controllers\ProgramOfferController;
 use App\Http\Controllers\PromotionController;
 use App\Http\Controllers\PublicContentController;
 use App\Http\Controllers\PublicPlacementController;
+use App\Http\Controllers\ReferralCreditController;
 use App\Http\Controllers\StudentAffiliateController;
 use App\Http\Controllers\StudentAssessmentController;
+use App\Http\Controllers\StudentCheckpointController;
 use App\Http\Controllers\StudentGamificationController;
 use App\Http\Controllers\StudentLearningController;
 use App\Http\Controllers\StudentNotificationController;
@@ -43,19 +47,19 @@ use App\Services\PublicContentService;
 use App\Services\ScheduleReplayService;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('api')->middleware('throttle:api')->group(function () {
+Route::prefix('api')->middleware(['throttle:api', 'auth.session'])->group(function () {
     Route::middleware(['auth:sanctum', 'active', 'role:admin'])->prefix('admin')->group(function () {
         Route::prefix('checkpoint-packages')->group(function () {
-            Route::get('/', [\App\Http\Controllers\AdminCheckpointController::class, 'index']);
-            Route::post('/', [\App\Http\Controllers\AdminCheckpointController::class, 'store']);
-            Route::get('{package}', [\App\Http\Controllers\AdminCheckpointController::class, 'show']);
-            Route::patch('{package}', [\App\Http\Controllers\AdminCheckpointController::class, 'update']);
-            Route::put('{package}/studio', [\App\Http\Controllers\AdminCheckpointController::class, 'studio']);
-            Route::delete('{package}', [\App\Http\Controllers\AdminCheckpointController::class, 'destroy']);
-            Route::post('{package}/questions', [\App\Http\Controllers\AdminCheckpointController::class, 'storeQuestion']);
-            Route::post('{package}/questions/publish', [\App\Http\Controllers\AdminCheckpointController::class, 'publishQuestions']);
-            Route::patch('{package}/questions/{question}', [\App\Http\Controllers\AdminCheckpointController::class, 'updateQuestion']);
-            Route::delete('{package}/questions/{question}', [\App\Http\Controllers\AdminCheckpointController::class, 'destroyQuestion']);
+            Route::get('/', [AdminCheckpointController::class, 'index']);
+            Route::post('/', [AdminCheckpointController::class, 'store']);
+            Route::get('{package}', [AdminCheckpointController::class, 'show']);
+            Route::patch('{package}', [AdminCheckpointController::class, 'update']);
+            Route::put('{package}/studio', [AdminCheckpointController::class, 'studio']);
+            Route::delete('{package}', [AdminCheckpointController::class, 'destroy']);
+            Route::post('{package}/questions', [AdminCheckpointController::class, 'storeQuestion']);
+            Route::post('{package}/questions/publish', [AdminCheckpointController::class, 'publishQuestions']);
+            Route::patch('{package}/questions/{question}', [AdminCheckpointController::class, 'updateQuestion']);
+            Route::delete('{package}/questions/{question}', [AdminCheckpointController::class, 'destroyQuestion']);
         });
         foreach (array_keys(BlogCatalogService::RESOURCES) as $resource) {
             Route::get($resource, [AdminBlogCatalogController::class, 'index'])->defaults('resource', $resource);
@@ -131,15 +135,15 @@ Route::prefix('api')->middleware('throttle:api')->group(function () {
             Route::patch('{tryOut}/questions/{question}', [AdminTryOutController::class, 'updateQuestion']);
             Route::delete('{tryOut}/questions/{question}', [AdminTryOutController::class, 'destroyQuestion']);
         });
-        Route::get('referral-program', [\App\Http\Controllers\ReferralCreditController::class, 'admin']);
-        Route::patch('referral-program', [\App\Http\Controllers\ReferralCreditController::class, 'settings']);
-        Route::post('referral-program/invoices/{invoice}/control', [\App\Http\Controllers\ReferralCreditController::class, 'control']);
-        Route::patch('referral-program/codes/{affiliate}', [\App\Http\Controllers\ReferralCreditController::class, 'code']);
-        Route::get('affiliate-audits', [\App\Http\Controllers\AffiliateWithdrawalController::class, 'audits']);
-        Route::get('affiliate-settings', [\App\Http\Controllers\AffiliateWithdrawalController::class, 'settings']);
-        Route::get('affiliate-withdrawals', [\App\Http\Controllers\AffiliateWithdrawalController::class, 'index']);
-        Route::get('affiliate-withdrawals/{withdrawal}/destination', [\App\Http\Controllers\AffiliateWithdrawalController::class, 'destination'])->whereNumber('withdrawal')->middleware('throttle:20,1');
-        Route::post('commissions/{commission}/hold', [\App\Http\Controllers\AffiliateWithdrawalController::class, 'hold']);
+        Route::get('referral-program', [ReferralCreditController::class, 'admin']);
+        Route::patch('referral-program', [ReferralCreditController::class, 'settings']);
+        Route::post('referral-program/invoices/{invoice}/control', [ReferralCreditController::class, 'control']);
+        Route::patch('referral-program/codes/{affiliate}', [ReferralCreditController::class, 'code']);
+        Route::get('affiliate-audits', [AffiliateWithdrawalController::class, 'audits']);
+        Route::get('affiliate-settings', [AffiliateWithdrawalController::class, 'settings']);
+        Route::get('affiliate-withdrawals', [AffiliateWithdrawalController::class, 'index']);
+        Route::get('affiliate-withdrawals/{withdrawal}/destination', [AffiliateWithdrawalController::class, 'destination'])->whereNumber('withdrawal')->middleware('throttle:20,1');
+        Route::post('commissions/{commission}/hold', [AffiliateWithdrawalController::class, 'hold']);
         Route::get('payouts', [AdminPayoutController::class, 'index']);
         Route::get('landing/hero', [LandingHeroController::class, 'show']);
         Route::patch('landing/hero/draft', [LandingHeroController::class, 'draft']);
@@ -167,16 +171,16 @@ Route::prefix('api')->middleware('throttle:api')->group(function () {
         Route::patch('community/replies/{reply}', [CommunityController::class, 'adminUpdateReply']);
     });
     Route::middleware(['auth:sanctum', 'active', 'role:student'])->prefix('student')->group(function () {
-        Route::get('checkpoint-packages', [\App\Http\Controllers\StudentCheckpointController::class, 'index']);
-        Route::get('checkpoint-packages/{package}', [\App\Http\Controllers\StudentCheckpointController::class, 'show']);
-        Route::post('checkpoint-packages/{package}/attempts', [\App\Http\Controllers\StudentCheckpointController::class, 'start'])->name('assessment.checkpoint.start');
-        Route::get('checkpoint-packages/{package}/history', [\App\Http\Controllers\StudentCheckpointController::class, 'history']);
-        Route::get('checkpoint-packages/{package}/attempts/{attempt}', [\App\Http\Controllers\StudentCheckpointController::class, 'attempt']);
-        Route::put('checkpoint-packages/{package}/attempts/{attempt}/answers', [\App\Http\Controllers\StudentCheckpointController::class, 'save'])->name('assessment.checkpoint.answers');
-        Route::post('checkpoint-packages/{package}/attempts/{attempt}/submit', [\App\Http\Controllers\StudentCheckpointController::class, 'submit'])->name('assessment.checkpoint.submit');
-        Route::post('checkpoint-packages/{package}/attempts/{attempt}/abandon', [\App\Http\Controllers\StudentCheckpointController::class, 'abandon']);
-        Route::get('checkpoint-packages/{package}/attempts/{attempt}/result', [\App\Http\Controllers\StudentCheckpointController::class, 'result']);
-        Route::get('checkpoint-packages/{package}/attempts/{attempt}/review', [\App\Http\Controllers\StudentCheckpointController::class, 'review']);
+        Route::get('checkpoint-packages', [StudentCheckpointController::class, 'index']);
+        Route::get('checkpoint-packages/{package}', [StudentCheckpointController::class, 'show']);
+        Route::post('checkpoint-packages/{package}/attempts', [StudentCheckpointController::class, 'start'])->name('assessment.checkpoint.start');
+        Route::get('checkpoint-packages/{package}/history', [StudentCheckpointController::class, 'history']);
+        Route::get('checkpoint-packages/{package}/attempts/{attempt}', [StudentCheckpointController::class, 'attempt']);
+        Route::put('checkpoint-packages/{package}/attempts/{attempt}/answers', [StudentCheckpointController::class, 'save'])->name('assessment.checkpoint.answers');
+        Route::post('checkpoint-packages/{package}/attempts/{attempt}/submit', [StudentCheckpointController::class, 'submit'])->name('assessment.checkpoint.submit');
+        Route::post('checkpoint-packages/{package}/attempts/{attempt}/abandon', [StudentCheckpointController::class, 'abandon']);
+        Route::get('checkpoint-packages/{package}/attempts/{attempt}/result', [StudentCheckpointController::class, 'result']);
+        Route::get('checkpoint-packages/{package}/attempts/{attempt}/review', [StudentCheckpointController::class, 'review']);
         Route::get('testimonial', [StudentTestimonialController::class, 'show']);
         Route::put('testimonial', [StudentTestimonialController::class, 'update']);
         Route::post('profile/avatar', [StudentProfileAvatarController::class, 'store']);
@@ -190,9 +194,9 @@ Route::prefix('api')->middleware('throttle:api')->group(function () {
         Route::get('notifications', [StudentNotificationController::class, 'index']);
         Route::patch('notifications/{notification}/read', [StudentNotificationController::class, 'read'])->whereNumber('notification');
         Route::post('notifications/read-all', [StudentNotificationController::class, 'readAll']);
-        Route::post('referral-quote', [\App\Http\Controllers\ReferralCreditController::class, 'quote']);
+        Route::post('referral-quote', [ReferralCreditController::class, 'quote']);
         Route::get('affiliate', [StudentAffiliateController::class, 'show']);
-        Route::post('affiliate/validate', [\App\Http\Controllers\AffiliateWithdrawalController::class, 'validateReferral'])->middleware('throttle:20,1');
+        Route::post('affiliate/validate', [AffiliateWithdrawalController::class, 'validateReferral'])->middleware('throttle:20,1');
         Route::get('class-schedules', [StudentScheduleReplayController::class, 'schedules']);
         Route::get('class-schedules/{schedule}', [StudentScheduleReplayController::class, 'schedule'])->whereNumber('schedule');
         Route::get('replays', [StudentScheduleReplayController::class, 'replays']);
@@ -254,6 +258,8 @@ Route::prefix('api')->middleware('throttle:api')->group(function () {
         Route::post('login', [AuthController::class, 'login']);
         Route::post('logout', [AuthController::class, 'logout'])->middleware(['auth:sanctum']);
         Route::post('forgot-password', [AuthController::class, 'forgot'])->middleware('throttle:recovery');
+        Route::post('verify-recovery-otp', [AuthController::class, 'verifyOtp'])->middleware('throttle:recovery');
+        Route::get('reset-grant', [AuthController::class, 'resetGrant'])->middleware('throttle:recovery');
         Route::post('reset-password', [AuthController::class, 'reset'])->middleware('throttle:recovery');
     });
 

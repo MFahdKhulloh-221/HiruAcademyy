@@ -17,6 +17,27 @@ class AppServiceProvider extends ServiceProvider
     {
         if ($this->app->environment('local')) {
             config(['mail.default' => 'log']);
+            // Process-only opt-in: never read credentials from .env or config cache.
+            if (getenv('HIRU_LOCAL_RESEND') === '1') {
+                $key = getenv('HIRU_LOCAL_RESEND_KEY');
+                if ($this->app->configurationIsCached() || ! is_string($key) || trim($key) === '') {
+                    throw new \RuntimeException('Local Resend requires uncached config and a process API key.');
+                }
+                config([
+                    'mail.default' => 'local_resend',
+                    'mail.mailers.local_resend' => [
+                        'transport' => 'smtp',
+                        'scheme' => 'smtps',
+                        'url' => null,
+                        'host' => 'smtp.resend.com',
+                        'port' => 465,
+                        'username' => 'resend',
+                        'password' => $key,
+                        'timeout' => 20,
+                    ],
+                    'mail.from' => ['address' => 'noreply@mail.hiruacademy.id', 'name' => 'HiruAcademy'],
+                ]);
+            }
         }
         ResetPassword::createUrlUsing(fn ($user, string $token) => rtrim(config('app.frontend_url'), '/').'/reset-password?'.http_build_query(['token' => $token, 'email' => $user->getEmailForPasswordReset()]));
         RateLimiter::for('api', function (Request $request) {

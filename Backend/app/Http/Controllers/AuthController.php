@@ -5,15 +5,15 @@ namespace App\Http\Controllers;
 use App\Http\Requests\ProfileRequest;
 use App\Http\Resources\UserResource;
 use App\Models\User;
+use App\Services\AffiliateService;
 use App\Services\NotificationService;
+use App\Services\RecoveryOtpService;
 use App\Support\Identity;
-use Illuminate\Auth\Events\PasswordReset;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password as PasswordRule;
 use Illuminate\Validation\ValidationException;
@@ -28,9 +28,9 @@ class AuthController extends Controller
         try {
             DB::transaction(function () use ($user, $request) {
                 $user->save();
-                app(\App\Services\AffiliateService::class)->ensure($user);
+                app(AffiliateService::class)->ensure($user);
                 if ($request->filled('referral_code')) {
-                    $referrer = app(\App\Services\AffiliateService::class)->validateReferral($user, $request->input('referral_code'));
+                    $referrer = app(AffiliateService::class)->validateReferral($user, $request->input('referral_code'));
                     $user->referrer_affiliate_id = $referrer->id;
                     $user->save();
                 }
@@ -71,6 +71,7 @@ class AuthController extends Controller
         app(NotificationService::class)->welcome($user);
         Auth::guard('web')->login($user);
         $request->session()->regenerate();
+        $request->session()->put('password_hash_web', $user->password);
 
         return new UserResource($user);
     }
@@ -107,38 +108,49 @@ class AuthController extends Controller
         return response()->noContent();
     }
 
-    public function forgot(Request $request)
+    public function forgot(Request $request, RecoveryOtpService $otp)
     {
         $data = $request->validate(['email' => ['required', 'string', 'email:rfc', 'max:255']]);
-        Password::sendResetLink(['email_normalized' => Identity::email($data['email']), 'account_status' => 'active']);
+        $otp->send(Identity::email($data['email']), $request->ip());
 
-        return response()->json(['message' => 'Jika akun tersedia, tautan reset kata sandi akan dikirim.']);
+        return response()->json(['message' => RecoveryOtpService::MESSAGE]);
     }
 
-    public function reset(Request $request)
+    public function verifyOtp(Request $request, RecoveryOtpService $otp)
     {
         $data = $request->validate([
             'email' => ['required', 'string', 'email:rfc', 'max:255'],
-            'token' => ['required', 'string', 'max:255'],
+            'otp' => ['required', 'string', 'regex:/^[0-9]{6}$/D'],
+        ]);
+        $email = Identity::email($data['email']);
+        $token = $otp->verify($email, $data['otp'], $request->ip());
+        if (! $token) {
+            return response()->json(['message' => 'Kode tidak valid atau kedaluwarsa.'], 422);
+        }
+        $request->session()->regenerate();
+        $request->session()->put('recovery_grant', compact('email', 'token'));
+
+        return response()->json(['message' => 'OTP terverifikasi.']);
+    }
+
+    public function resetGrant(Request $request, RecoveryOtpService $otp)
+    {
+        return response()->json(['valid' => $otp->grant($request->session()->get('recovery_grant', []))]);
+    }
+
+    public function reset(Request $request, RecoveryOtpService $otp)
+    {
+        $data = $request->validate([
             'password' => ['required', 'string', 'max:72', 'confirmed', PasswordRule::min(8)],
         ]);
-        $status = Password::reset([
-            'email_normalized' => Identity::email($data['email']),
-            'account_status' => 'active',
-            'token' => $data['token'],
-            'password' => $data['password'],
-        ], function (User $user, string $password) {
-            $user->password = $password;
-            $user->setRememberToken(Str::random(60));
-            $user->save();
-            event(new PasswordReset($user));
-        });
+        if (! $otp->grant($request->session()->get('recovery_grant', []), $data['password'])) {
+            return response()->json(['message' => 'Verifikasi OTP diperlukan.'], 422);
+        }
+        Auth::guard('web')->logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
 
-        return response()->json([
-            'message' => $status === Password::PASSWORD_RESET
-                ? 'Kata sandi berhasil direset.'
-                : 'Tautan reset tidak valid atau kedaluwarsa.',
-        ], $status === Password::PASSWORD_RESET ? 200 : 422);
+        return response()->json(['message' => 'Kata sandi berhasil direset. Silakan login kembali.']);
     }
 
     public function updatePassword(Request $request)
