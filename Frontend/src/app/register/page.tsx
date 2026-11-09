@@ -2,35 +2,66 @@
 
 import Link from "next/link";
 import { useSearchParams, useRouter } from "next/navigation";
-import { Suspense, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { PublicPage } from "@/components/public-shell";
 import { useAuth, type RegisterPayload } from "@/components/auth-provider";
 import { ApiError } from "@/lib/api";
-import { commercialSelection } from "@/lib/commercial-api";
+import { freeChapterDestination } from "@/lib/free-chapter";
+import { commercialCode } from "@/lib/commercial-api";
+import { useContent, type PublicOffer } from "@/lib/public-content-api";
+import { readRegistrationDraft, writeRegistrationDraft } from "@/lib/registration-draft";
 
 function RegisterForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const next = freeChapterDestination(searchParams.get("next"));
   const placement = searchParams.get("placement");
   const planContext = searchParams.get("plan");
-  const selection = commercialSelection(searchParams);
+  const programContext = searchParams.get("program") ?? searchParams.get("level") ?? placement;
+  const selection = { level: commercialCode(programContext ?? "") };
 
   const [visible, setVisible] = useState(false);
-  const defaultTarget = placement && ["N1", "N2", "N3", "N4", "N5"].includes(placement) ? placement : "N4";
+  const requestedTarget = selection.level || placement?.toUpperCase();
+  const defaultTarget = requestedTarget && ["N1", "N2", "N3", "N4", "N5"].includes(requestedTarget) ? requestedTarget : "N4";
   const defaultPlan = planContext === "sensei" ? "Belajar dengan Sensei" : planContext === "lms" ? "Belajar Mandiri" : "Free Member";
-  const [target, setTarget] = useState(defaultTarget);
-  const [plan, setPlan] = useState(defaultPlan);
+  const contextKey = `${selection.level}/${planContext ?? ""}`;
+  const [preferences, setPreferences] = useState<{ key: string; target: string; plan: string }>();
+  const target = preferences?.key === contextKey ? preferences.target : defaultTarget;
+  const plan = preferences?.key === contextKey ? preferences.plan : defaultPlan;
+  const offers = useContent<PublicOffer>("/api/public/offers");
+  const hasSelection = Boolean(searchParams.get("program") || searchParams.get("level") || placement);
+  const selectedProgram = (selection.level || placement || "").toUpperCase();
+  const paidPlan = plan === "Belajar Mandiri" ? "lms" : "sensei";
+  const invalidSelection = (hasSelection && !planContext) || (planContext !== null && (!hasSelection || !["free", "lms", "sensei"].includes(planContext))) || (hasSelection && (plan === "Free Member" ? !/^N[1-5]$/.test(selectedProgram) : !offers.data.some(offer => commercialCode(offer.program.code) === selectedProgram && offer.plan_code === paidPlan)));
+  const checkingSelection = hasSelection && plan !== "Free Member";
+  const selectionBlocked = invalidSelection || (checkingSelection && (offers.loading || Boolean(offers.error)));
 
-  const { register } = useAuth();
+  const { register, authenticated, loading: authLoading } = useAuth();
+  const formRef = useRef<HTMLFormElement>(null);
+  useEffect(() => {
+    if (authLoading || authenticated) return;
+    const draft = readRegistrationDraft();
+    if (!draft) return;
+    for (const field of ["name", "email", "whatsapp"] as const) {
+      const input = formRef.current?.elements.namedItem(field);
+      if (input instanceof HTMLInputElement && !input.value) input.value = draft[field];
+    }
+  }, [authLoading, authenticated]);
+  const selectionQuery = new URLSearchParams({ ...(selection.level ? { program: selection.level } : placement ? { placement } : {}), ...(planContext ? { plan: planContext } : {}) });
+  const summaryHref = `/program?${selectionQuery}#program-summary`;
   const pending = useRef(false);
   const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    if (!authLoading && authenticated && !busy) router.replace(next ?? (selection.level && planContext ? summaryHref : "/dashboard"));
+  }, [authLoading, authenticated, busy, router, selection.level, planContext, summaryHref, next]);
   const [error, setError] = useState("");
+  const [emailError, setEmailError] = useState("");
   const [whatsappError, setWhatsappError] = useState("");
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (pending.current) return;
+    if (pending.current || selectionBlocked) return;
     const data = new FormData(event.currentTarget);
     const levels = ["N1", "N2", "N3", "N4", "N5"] as const;
     const targetJlpt = levels.find(level => level === target);
@@ -47,11 +78,12 @@ function RegisterForm() {
     const checkout = new URLSearchParams({ program: selection.level || (searchParams.get("program") ?? searchParams.get("level") ?? targetJlpt), plan: plan === "Belajar Mandiri" ? "lms" : "sensei" });
     const referral = String(data.get("referral") ?? "").trim();
     if (referral) { checkout.set("referral", referral); payload.referral_code = referral; }
-    const destination = plan === "Free Member" ? "/dashboard?membership=free" : `/checkout?${checkout}`;
+    const destination = plan === "Free Member" ? next ?? "/dashboard?membership=free" : `/checkout?${checkout}`;
     pending.current = true;
     setBusy(true);
     setError("");
     setWhatsappError("");
+    setEmailError("");
     try {
       await register(payload);
       router.replace(destination);
@@ -59,8 +91,10 @@ function RegisterForm() {
       const failure = cause instanceof ApiError ? cause : new ApiError(0);
       const phoneError = failure.errors.whatsapp?.join(" ") || "";
       setWhatsappError(phoneError);
-      const otherErrors = Object.entries(failure.errors).filter(([field]) => field !== "whatsapp").flatMap(([, messages]) => messages).join(" ");
-      setError(otherErrors || (phoneError ? "" : failure.message));
+      const mailError = failure.errors.email?.join(" ") || "";
+      setEmailError(mailError);
+      const otherErrors = Object.entries(failure.errors).filter(([field]) => field !== "whatsapp" && field !== "email").flatMap(([, messages]) => messages).join(" ");
+      setError(otherErrors || (phoneError || mailError ? "" : failure.message));
       pending.current = false;
       setBusy(false);
     }
@@ -104,10 +138,14 @@ function RegisterForm() {
           <h1>Pendaftaran Akun Baru</h1>
         </header>
 
-        <form className="public-form register-form" onSubmit={submit} aria-busy={busy} aria-describedby={error ? "register-error" : undefined}>
+        <form ref={formRef} className="public-form register-form" onInput={event => {
+          if (event.target instanceof HTMLInputElement && ["name", "email", "whatsapp"].includes(event.target.name)) writeRegistrationDraft(event.currentTarget);
+        }} onSubmit={submit} aria-busy={busy} aria-describedby={error ? "register-error" : undefined}>
           <div className="register-form-grid">
             <label>Nama Lengkap<input name="name" type="text" autoComplete="name" placeholder="Masukkan nama lengkap" required /></label>
-            <label>Email<input name="email" type="email" autoComplete="email" placeholder="contoh@email.com" required /></label>
+            <label>Email<input aria-label="Email" name="email" type="email" autoComplete="email" placeholder="contoh@email.com" required aria-invalid={emailError ? true : undefined} aria-describedby={emailError ? "register-email-error" : undefined} onChange={() => setEmailError("")} />
+              {emailError && <span id="register-email-error" className="recovery-error" role="alert">{emailError}</span>}
+            </label>
             <label>Nomor WhatsApp<input aria-label="Nomor WhatsApp" name="whatsapp" type="tel" inputMode="tel" autoComplete="tel" placeholder="+62 8xx xxxx xxxx" required aria-invalid={whatsappError ? true : undefined} aria-describedby={whatsappError ? "register-whatsapp-error" : undefined} onChange={() => setWhatsappError("")} />
               {whatsappError && <span id="register-whatsapp-error" className="recovery-error" role="alert">{whatsappError}</span>}
             </label>
@@ -123,12 +161,12 @@ function RegisterForm() {
             </div>
 
             <label>Target Ujian
-              <select name="target" value={target} onChange={(event) => setTarget(event.target.value)} required>
+              <select name="target" value={target} onChange={(event) => setPreferences({ key: contextKey, target: event.target.value, plan })} required>
                 {["N1", "N2", "N3", "N4", "N5"].map(level => <option key={level}>{level}</option>)}
               </select>
             </label>
             <label>Cara Belajar
-              <select name="plan" value={plan} onChange={(event) => setPlan(event.target.value)} required>
+              <select name="plan" value={plan} onChange={(event) => setPreferences({ key: contextKey, target, plan: event.target.value })} required>
                 <option>Free Member</option>
                 <option>Belajar Mandiri</option>
                 <option>Belajar dengan Sensei</option>
@@ -142,8 +180,12 @@ function RegisterForm() {
 
           <div className="register-actions">
             {error && <p id="register-error" className="recovery-error" role="alert">{error}</p>}
-            <button className="button button-primary" type="submit" disabled={busy}>{busy ? "Memuat..." : "Buat Akun"}</button>
-            <p className="auth-switch">Sudah punya akun? <Link className="text-link" href="/login">Masuk</Link></p>
+            {checkingSelection && offers.loading && <p role="status">Memeriksa penawaran…</p>}
+            {checkingSelection && offers.error && <p role="alert">{offers.error} <button type="button" onClick={offers.reload}>Coba lagi</button></p>}
+            {!offers.loading && !offers.error && invalidSelection && <p role="alert">Pilihan program atau paket tidak tersedia. Kembali ke Ringkasan Pilihan untuk memilih ulang.</p>}
+            <button className="button button-primary" type="submit" disabled={busy || selectionBlocked}>{busy ? "Memuat..." : "Buat Akun"}</button>
+            <Link className="text-link" href={summaryHref}>Kembali ke Ringkasan Pilihan</Link>
+            <p className="auth-switch">Sudah punya akun? <Link className="text-link" href={`/login?${next ? new URLSearchParams({ next }) : selectionQuery}`}>Masuk</Link></p>
           </div>
         </form>
       </section>

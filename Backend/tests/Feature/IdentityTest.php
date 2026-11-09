@@ -167,6 +167,26 @@ class IdentityTest extends TestCase
         $this->assertSame($resWrong->json('message'), $resInactive->json('message'));
     }
 
+    public function test_admin_session_survives_sanctum_guard_and_rejects_changed_password(): void
+    {
+        $user = $this->createUser();
+        $user->forceFill(['role' => 'admin'])->save();
+        $guard = auth()->guard('web');
+        $this->withSession([
+            $guard->getName() => $user->id,
+            'password_hash_web' => $user->password,
+        ]);
+        auth()->forgetGuards();
+
+        $this->getJson('/api/me')->assertOk()->assertJsonPath('data.role', 'admin');
+        auth()->forgetGuards();
+        $this->getJson('/api/admin/users?include=effective_access')->assertOk();
+
+        $user->forceFill(['password' => Hash::make('ChangedPassword123!')])->save();
+        auth()->forgetGuards();
+        $this->getJson('/api/me')->assertUnauthorized();
+    }
+
     // 16. Guest /api/me returns 401
     // 17. Authenticated /api/me returns safe fields
     // 18. Sensitive fields absent

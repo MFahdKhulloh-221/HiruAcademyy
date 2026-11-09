@@ -28,7 +28,7 @@ class ProfileRequest extends FormRequest
 
     public function messages(): array
     {
-        return ['whatsapp_normalized.unique' => 'Nomor WhatsApp sudah digunakan. Silakan gunakan nomor lain.'];
+        return ['email_normalized.unique' => 'Email ini sudah terdaftar. Silakan masuk dengan akun tersebut atau gunakan email lain.', 'whatsapp_normalized.unique' => 'Nomor WhatsApp sudah digunakan. Silakan gunakan nomor lain.'];
     }
 
     public function rules(): array

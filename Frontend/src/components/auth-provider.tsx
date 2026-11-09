@@ -4,6 +4,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
 import { ApiError, apiRequest, AUTH_EXPIRED_EVENT, setApiAuthenticated } from "@/lib/api";
 import { StudentLoading, type LoadingSkeletonProps } from "@/components/loading-skeleton";
+import { clearRegistrationDraft } from "@/lib/registration-draft";
 
 export type AuthUser = {
   id: number | string;
@@ -72,6 +73,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const task = apiRequest<{ data: AuthUser }>("/api/me").then(response => {
       if (version.current !== current) return null;
       const next = readUser(response);
+      clearRegistrationDraft();
       setApiAuthenticated(true);
       setUser(next);
       return next;
@@ -93,6 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     function expire() {
+      clearRegistrationDraft();
       version.current += 1;
       pending.current = null;
       setApiAuthenticated(false);
@@ -117,6 +120,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const next = readUser(await apiRequest<{ data: AuthUser }>(path, { method: "POST", body: JSON.stringify(payload) }));
       if (version.current !== current) throw new ApiError(401);
+      clearRegistrationDraft();
       setUser(next);
       setApiAuthenticated(true);
       return next;
@@ -141,6 +145,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function logout(): Promise<void> {
     if (mutating.current) throw new ApiError(409);
+    clearRegistrationDraft();
     mutating.current = true;
     const current = ++version.current;
     pending.current = null;
