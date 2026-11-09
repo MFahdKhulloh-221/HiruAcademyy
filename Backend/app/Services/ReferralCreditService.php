@@ -144,7 +144,7 @@ class ReferralCreditService
             ->select('r.id', 'r.invoice_id', 'r.created_at', 'r.reward', 'r.friend_discount', 'r.status', 'p.name as program', 'i.status as payment_status')->orderByDesc('r.id')->get();
         $usage = DB::table('referral_credit_uses as u')->join('referral_learning_credits as c', 'c.id', '=', 'u.credit_id')->join('invoices as i', 'i.id', '=', 'u.invoice_id')->join('programs as p', 'p.id', '=', 'i.program_id')->where('c.user_id', $user->id)
             ->select('u.invoice_id', 'u.credit_id', 'u.amount', 'u.status', 'u.created_at', 'i.reference', 'p.name as program')->orderByDesc('u.created_at')->get();
-        return ['affiliate' => $affiliate->only(['id', 'code', 'status']), 'policy' => $this->policy(),
+        return ['affiliate' => [...$affiliate->only(['id', 'code', 'status']), 'name' => $user->name], 'policy' => $this->policy(),
             'totals' => ['available' => array_sum(array_column($this->balances($user->id), 'amount')), 'pending' => (int) $pending,
                 'reserved' => (int) (clone $uses)->where('u.status', 'reserved')->sum('u.amount'), 'used' => (int) (clone $uses)->where('u.status', 'used')->sum('u.amount')],
             'history' => $history, 'usage' => $usage];
