@@ -12,7 +12,8 @@ const compile = source => ts.transpileModule(source, { compilerOptions: { module
 test("gamification reads use shared authenticated API and forward cancellation", async () => {
   const calls = [];
   const payload = { entries: [], self: null };
-  const context = vm.createContext({ exports: {}, require: () => ({ apiRequest: async (path, options) => { calls.push({ path, options }); return { data: payload }; } }) });
+  const gamification = { weekly_xp: 0, streak_days: 0, challenge: { active_days: 0, target_days: 5, total_days: 7, starts_on: "2026-11-09", ends_on: "2026-11-15", status: "active", badge: null } };
+  const context = vm.createContext({ exports: {}, require: () => ({ apiRequest: async (path, options) => { calls.push({ path, options }); return { data: path === "/api/student/gamification" ? gamification : payload }; } }) });
   vm.runInContext(compile(read("../src/lib/learning-api.ts")), context);
   const signal = new AbortController().signal;
   for (const scope of ["all", "lms", "sensei"]) {
@@ -20,7 +21,7 @@ test("gamification reads use shared authenticated API and forward cancellation",
     assert.equal(calls.at(-1).path, `/api/student/leaderboard?scope=${scope}`);
     assert.equal(calls.at(-1).options.signal, signal);
   }
-  assert.equal(await context.exports.studentGamification(signal), payload);
+  assert.equal(await context.exports.studentGamification(signal), gamification);
   assert.equal(calls.at(-1).path, "/api/student/gamification");
   assert.equal(calls.at(-1).options.signal, signal);
 });
@@ -49,6 +50,7 @@ test("leaderboard keeps top twenty and exactly one outside self, filters scope",
   assert.match(markup, /LMS Mandiri · 20 XP · 3 Hari Streak/);
   assert.match(markup, /<dialog[^>]+aria-labelledby=/);
   assert.match(markup, /Aturan Leaderboard HiruAcademy/);
+  assert.doesNotMatch(markup, /50 XP/);
   assert.match(markup, /Senin pukul 00.00 WIB/);
   data = { entries, self: { ...entries[0], is_current_user: true } };
   assert.equal((render().match(/<li value=/g) ?? []).length, 20);

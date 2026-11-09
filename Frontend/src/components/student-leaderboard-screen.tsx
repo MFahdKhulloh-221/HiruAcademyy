@@ -15,7 +15,6 @@ const rules = [
   "Ranking dihitung berdasarkan XP dari aktivitas belajar yang diselesaikan.",
   "Leaderboard diperbarui berdasarkan aktivitas siswa.",
   "Periode kompetisi Senin–Minggu dan dimulai ulang setiap Senin pukul 00.00 WIB.",
-  "Maksimal 50 XP dapat diperoleh setiap hari.",
   "Mengulang aktivitas yang sama tidak memberikan XP tanpa batas.",
   "Filter Semua Siswa, LMS Mandiri, dan Sensei menggunakan aturan XP yang sama.",
   "Streak dihitung dari aktivitas belajar harian dan tidak ikut direset setiap minggu.",

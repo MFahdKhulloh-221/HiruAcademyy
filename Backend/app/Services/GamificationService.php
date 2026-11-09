@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\ActivityCompletion;
 use App\Models\Chapter;
+use App\Models\CheckpointAttempt;
 use App\Models\LearningAttempt;
 use App\Models\TryOutAttempt;
 use App\Models\User;
@@ -63,6 +64,12 @@ class GamificationService
         }
         foreach (TryOutAttempt::whereIn('user_id', $userIds)->where('status', 'completed')->get(['user_id', 'answers', 'completed_at']) as $attempt) {
             if (count($attempt->answers ?? []) > 0) {
+                $add($attempt->user_id, $attempt->completed_at);
+            }
+        }
+
+        foreach (CheckpointAttempt::whereIn('user_id', $userIds)->where('status', 'completed')->whereNull('abandoned_at')->get(['user_id', 'answers', 'grading_snapshot', 'completed_at']) as $attempt) {
+            if (isset($attempt->grading_snapshot['max_score']) && count($attempt->answers ?? []) > 0) {
                 $add($attempt->user_id, $attempt->completed_at);
             }
         }
