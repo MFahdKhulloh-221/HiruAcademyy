@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { GamificationChallenge } from "@/components/gamification-challenge";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { useCallback } from "react";
 import {
@@ -44,12 +45,7 @@ export function StudentProgressScreen({ membership }: { membership: Membership }
       {gamification.error && <p role="alert">{gamification.error} <button type="button" className="button button-secondary" onClick={gamification.retry}>Coba Lagi</button></p>}
       {gamification.data && <section className="dash-leaderboard-section gamification-challenge">
         <div className="gamification-metrics"><span><strong>{gamification.data.weekly_xp.toLocaleString("id-ID")} XP</strong>XP Mingguan</span></div>
-        <h2>Tantangan 7 Hari Pertama</h2>
-        <p>{gamification.data.challenge.starts_on} – {gamification.data.challenge.ends_on}</p>
-        <p>{gamification.data.challenge.active_days}/{gamification.data.challenge.target_days} Hari · {gamification.data.challenge.total_days} Hari</p>
-        <progress aria-label="Tantangan 7 Hari Pertama" value={gamification.data.challenge.active_days} max={gamification.data.challenge.target_days} />
-        <p>{gamification.data.challenge.status === "achieved" ? "Selesai" : gamification.data.challenge.status === "expired" ? "Berakhir" : "Aktif"}</p>
-        {gamification.data.challenge.badge && <span className="progress-streak-badge"><LuAward aria-hidden="true" />{gamification.data.challenge.badge}</span>}
+        <GamificationChallenge challenge={gamification.data.challenge} />
       </section>}
 
       {/* 1. Progress Summary */}

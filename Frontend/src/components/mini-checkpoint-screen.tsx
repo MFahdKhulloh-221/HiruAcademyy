@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { LuFileCheck, LuArrowLeft } from "react-icons/lu";
 import { ChapterAssessment } from "@/components/chapter-assessment";
@@ -12,8 +13,10 @@ import type { Membership } from "@/lib/dashboard-mock";
 
 export function MiniCheckpointScreen({ membership = "sensei", resolvedCatalog }: { membership?: Membership; resolvedCatalog?: LearningCatalog } = {}) {
   const { user } = useAuth();
-  const [selection, setSelection] = useState<{ level: string; chapterSlug: string; identity: number | string }>();
-  const selected = selection?.identity === user?.id ? selection : undefined;
+  const params = useSearchParams();
+  const level = params.get("mini_level");
+  const chapterSlug = params.get("mini_chapter");
+  const selected = user && level && chapterSlug ? { level, chapterSlug } : undefined;
   const [selectedLevel, setSelectedLevel] = useState("all");
 
   const load = useCallback(async (signal: AbortSignal) => {
@@ -47,7 +50,11 @@ export function MiniCheckpointScreen({ membership = "sensei", resolvedCatalog }:
         <button
           className="sensei-back button button-secondary"
           type="button"
-          onClick={() => setSelection(undefined)}
+          onClick={() => {
+            const url = new URL(window.location.href);
+            for (const key of ["mini_level", "mini_chapter", "mini_session", "mini_part", "attempt"]) url.searchParams.delete(key);
+            window.history.replaceState(null, "", url);
+          }}
           style={{ marginBottom: "20px", display: "inline-flex", alignItems: "center", gap: "8px" }}
         >
           <LuArrowLeft aria-hidden="true" />
@@ -128,11 +135,12 @@ export function MiniCheckpointScreen({ membership = "sensei", resolvedCatalog }:
                       const level = programSlug(context.program.code);
                       const chapterSlug = `chapter-${context.chapter.chapter_number}`;
                       const url = new URL(window.location.href);
-                      if (url.searchParams.get("mini_level") !== level || url.searchParams.get("mini_chapter") !== chapterSlug) url.searchParams.delete("attempt");
+                      if (url.searchParams.get("mini_level") !== level || url.searchParams.get("mini_chapter") !== chapterSlug) {
+                        for (const key of ["attempt", "mini_session", "mini_part"]) url.searchParams.delete(key);
+                      }
                       url.searchParams.set("mini_level", level);
                       url.searchParams.set("mini_chapter", chapterSlug);
                       window.history.replaceState(null, "", url);
-                      setSelection({ level, chapterSlug, identity: user.id });
                     }}
                   >
                     Mulai Mini Checkpoint

@@ -58,7 +58,8 @@ for (const width of [1440, 768, 390]) {
     await expect(page.locator('a[href="/learn/n2/chapter-2"]').first()).toBeVisible();
     await page.goto("/library");
     await expect(page.getByRole("heading", { name: material.title, exact: true })).toBeVisible();
-    await expect(page.getByRole("link", { name: `Tata Bahasa: ${material.title}`, exact: true })).toHaveAttribute("href", "/learn/n2/chapter-2/grammar?membership=lms");
+    await expect(page.getByRole("link", { name: `Tata Bahasa: ${material.title}`, exact: true })).toHaveCount(0);
+    await expect(page.getByRole("status").filter({ hasText: "File materi belum tersedia." })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 }

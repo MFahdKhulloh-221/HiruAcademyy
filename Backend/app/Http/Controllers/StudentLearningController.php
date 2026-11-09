@@ -155,6 +155,14 @@ class StudentLearningController extends Controller
                 $chReq = $reqVideo + $reqMod + $reqFc + $reqAud + $reqRd;
 
                 $compCount = ActivityCompletion::where('user_id', $user->id)->where('chapter_id', $ch->id)->count();
+                if ($prog->code === 'dasar') {
+                    $activities = app(LearningProgressService::class)->progress($user, $prog, $ch)['activities'];
+                    $chReq = $compCount = 0;
+                    foreach ($activities as $type => $activity) {
+                        $chReq += $type === 'flashcard' ? (int) ($activity['total'] > 0) : $activity['total'];
+                        $compCount += $type === 'flashcard' ? (int) $activity['complete'] : $activity['completed'];
+                    }
+                }
 
                 $progReq += $chReq;
                 $progComp += min($chReq, $compCount);

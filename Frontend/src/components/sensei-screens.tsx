@@ -7,7 +7,7 @@ import { useCallback, useState } from "react";
 import { LuArrowLeft, LuPlay, LuSearch } from "react-icons/lu";
 import { useLearningRequest } from "@/components/learning-hooks";
 import { replayLevels } from "@/lib/sensei-mock";
-import { safeSystemUrl, studentReplays, studentSchedules, systemData, systemId, type ClassSchedule, type ReplayPlaylist } from "@/lib/schedule-replay-api";
+import { safeSystemUrl, studentReplays, studentSchedules, systemData, systemId, type ClassSchedule, type ReplayPlaylist, type ReplayVideo } from "@/lib/schedule-replay-api";
 
 const jakartaDate = new Intl.DateTimeFormat("sv-SE", { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit" });
 const scheduleDate = new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta", weekday: "long", day: "numeric", month: "long", year: "numeric" });
@@ -132,21 +132,26 @@ export function ReplayScreen(props: { purchasedLevel?: string } = {}) {
   </div>;
 }
 
+function replayMediaUrl(video?: ReplayVideo) {
+  const url = video?.video_url_resolved_url === undefined ? video?.video_url : video.video_url_resolved_url;
+  return safeSystemUrl(url) ? url : null;
+}
+
 export function ReplayPlayerScreen({ playlistId }: { playlistId?: string; youtubeVideoId?: string; purchasedLevel?: string } = {}) {
   const search = useSearchParams();
   const id = playlistId || search.get("id") || "";
   const load = useCallback(async (signal: AbortSignal) => systemData<ReplayPlaylist>(`/api/student/replay-playlists/${systemId(id)}`, signal), [id]);
   const request = useLearningRequest(load, `replay:${id}`);
-  const [videoId, setVideoId] = useState<number>();
+  const [selection, setSelection] = useState<{ playlist: string; video: number }>();
   if (!request.data) return <RequestState {...request} variant="learning" />;
   const item = request.data;
-  const video = item.videos?.find(value => value.id === videoId) || item.videos?.[0];
-  const mediaUrl = [video?.video_url_resolved_url, video?.video_url].find(url => safeSystemUrl(url));
-  return <div className="batch3-replay">
+  const video = item.videos?.find(value => selection?.playlist === id && value.id === selection.video) || item.videos?.[0];
+  const mediaUrl = replayMediaUrl(video);
+  return <div className="batch3-replay replay-player-page">
     <Link className="sensei-back" href="/replay"><LuArrowLeft aria-hidden="true" /> Kembali ke Replay</Link><PageHead eyebrow="REPLAY" title={item.title} description={item.description || ""} />
     <section className="batch3-replay-detail"><span className="replay-category-tag">{item.program?.name || item.program?.code.toUpperCase()}</span>{video && <><h2>{video.title}</h2>{video.description && <p>{video.description}</p>}<dl className="batch3-metadata"><div><dt>Sensei</dt><dd>{video.sensei_name || "—"}</dd></div>{video.recorded_at && <div><dt>Tanggal</dt><dd><time dateTime={video.recorded_at}>{scheduleDate.format(new Date(video.recorded_at))}</time></dd></div>}{video.chapter && <div><dt>Chapter</dt><dd>{contextLabel("Chapter", video.chapter)}</dd></div>}{video.session && <div><dt>Sesi</dt><dd>{contextLabel("Sesi", video.session)}</dd></div>}</dl></>}</section>
-    <section className="replay-player-container batch3-replay-player">{video && mediaUrl ? <ReplayMedia url={mediaUrl} title={video.title} /> : <section className="batch3-media-empty"><LuPlay aria-hidden="true" /><h2>Replay sedang diproses</h2><p>Rekaman, transkrip, dan materi sedang disiapkan sebelum dipublikasikan.</p></section>}</section>
-    <section className="replay-markers"><h2>Daftar Rekaman Sesi</h2>{item.videos?.map(value => <button className={video?.id === value.id ? "active" : ""} aria-pressed={video?.id === value.id} type="button" key={value.id} onClick={() => setVideoId(value.id)}><strong>{value.title}</strong><span>{[contextLabel("Chapter", value.chapter), contextLabel("Sesi", value.session), value.sensei_name].filter(Boolean).join(" • ")}</span></button>)}</section><section className="sensei-announcement"><strong>Status publikasi</strong><p>Replay tampil setelah rekaman sesi selesai diverifikasi dan dipublikasikan.</p></section>
+    <section className="replay-player-container batch3-replay-player">{video && mediaUrl ? <ReplayMedia url={mediaUrl} title={video.title} /> : <section className="batch3-media-empty"><LuPlay aria-hidden="true" /><h2>{item.videos?.length ? "Replay sedang diproses" : "Belum ada rekaman"}</h2><p>{item.videos?.length ? "Media rekaman belum tersedia atau URL tidak valid." : "Daftar rekaman akan tampil setelah dipublikasikan."}</p></section>}</section>
+    <section className="replay-markers"><h2>Daftar Rekaman Sesi</h2>{item.videos?.map(value => <button className={video?.id === value.id ? "active" : ""} aria-pressed={video?.id === value.id} disabled={!replayMediaUrl(value)} type="button" key={value.id} onClick={() => setSelection({ playlist: id, video: value.id })}><strong>{value.title}</strong><small>{!replayMediaUrl(value) ? "Belum tersedia" : video?.id === value.id ? "Dipilih" : "Tersedia"}</small><span>{[contextLabel("Chapter", value.chapter), contextLabel("Sesi", value.session), value.sensei_name].filter(Boolean).join(" • ")}</span></button>)}</section><section className="sensei-announcement"><strong>Status publikasi</strong><p>Replay tampil setelah rekaman sesi selesai diverifikasi dan dipublikasikan.</p></section>
   </div>;
 }
 

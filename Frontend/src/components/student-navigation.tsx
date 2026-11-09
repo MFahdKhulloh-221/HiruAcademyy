@@ -31,7 +31,7 @@ export function resolveStudentNavKey(pathname: string): StudentNavKey | null {
   if (matchesFamily(pathname, "/tryout")) return "tryout";
   if (matchesFamily(pathname, "/schedule")) return "schedule";
   if (matchesFamily(pathname, "/replay")) return "replay";
-  if (matchesFamily(pathname, "/mini-checkpoint")) return "journey";
+  if (matchesFamily(pathname, "/mini-checkpoint")) return "mini-checkpoint";
   if (matchesFamily(pathname, "/checkpoint")) return "checkpoint";
   if (pathname === "/community/ask") return "ask-sensei";
   if (matchesFamily(pathname, "/community")) return "community";
@@ -62,6 +62,7 @@ function itemsFor(membership: Membership, current: StudentNavKey | null): NavIte
       { key: "schedule", label: "Jadwal", href: `/schedule${query}`, entitlement: sensei ? "available" : "locked" },
       { key: "replay", label: "Replay", href: `/replay${query}`, entitlement: sensei ? "available" : "locked" },
       { key: "checkpoint", label: "Checkpoint", href: `/checkpoint${query}`, entitlement: "available" },
+      { key: "mini-checkpoint", label: "Mini Checkpoint", href: `/mini-checkpoint${query}`, entitlement: sensei ? "available" : "locked" },
     ] },
     { label: "Komunitas", icon: LuMessagesSquare, entitlement: free ? "readOnly" : "available", implementation: "implemented", children: [
       { key: "community", label: "Diskusi Member", href: `/community${query}`, entitlement: free ? "readOnly" : "available" },

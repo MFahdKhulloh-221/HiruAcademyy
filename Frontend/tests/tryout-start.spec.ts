@@ -193,29 +193,28 @@ for (const width of [1440, 768, 390]) {
     const timer = page.getByRole('timer');
     await expect.poll(async () => { await page.clock.runFor(1); return timer.count(); }).toBe(1);
     const seconds = async () => {
-      const [minutes, seconds] = (await timer.locator('strong').innerText()).split(':').map(Number);
-      return minutes * 60 + seconds;
+      return (await timer.locator('strong').innerText()).split(':').reduce((total, value) => total * 60 + Number(value), 0);
     };
     const initialSeconds = await seconds();
     expect(initialSeconds).toBeGreaterThanOrEqual(599);
     expect(initialSeconds).toBeLessThanOrEqual(600);
     await page.clock.runFor(5000);
-    await expect(timer.locator('strong')).toHaveText('09:55');
+    await expect(timer.locator('strong')).toHaveText('00:09:55');
     await page.getByRole('button', { name: 'Selanjutnya', exact: true }).click();
     await expect(page.getByRole('heading', { name: 'Question 2', exact: true })).toBeVisible();
-    await expect(timer.locator('strong')).toHaveText('09:55');
+    await expect(timer.locator('strong')).toHaveText('00:09:55');
     await page.getByRole('button', { name: 'Sebelumnya', exact: true }).click();
-    await expect(timer.locator('strong')).toHaveText('09:55');
+    await expect(timer.locator('strong')).toHaveText('00:09:55');
     await page.reload();
     await expect.poll(async () => { await page.clock.runFor(1); return timer.count(); }).toBe(1);
-    await expect(timer.locator('strong')).toHaveText('09:55');
+    await expect(timer.locator('strong')).toHaveText('00:09:55');
     const other = await context.newPage();
     await other.bringToFront();
     // Simulate a throttled/suspended interval: one tick after 60 seconds, not 60 ticks.
     await page.clock.fastForward(60000);
     await page.bringToFront();
     await other.close();
-    await expect(timer.locator('strong')).toHaveText('08:55');
+    await expect(timer.locator('strong')).toHaveText('00:08:55');
     expect(mock.calls.starts).toBe(0);
     await expect(page.getByText('Backend explanation', { exact: true })).toHaveCount(0);
     await timer.scrollIntoViewIfNeeded();
@@ -228,7 +227,7 @@ for (const width of [1440, 768, 390]) {
     expect(layout).toEqual({ readable: true, clear: true, unobscured: true });
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.clock.fastForward(533000);
-    await expect(timer.locator('strong')).toHaveText('00:02');
+    await expect(timer.locator('strong')).toHaveText('00:00:02');
     await page.clock.runFor(2000);
     await expect(page.getByRole('heading', { name: 'Hasil Server Try Out', exact: true })).toBeVisible();
     expect(mock.getServer().status).toBe('completed');

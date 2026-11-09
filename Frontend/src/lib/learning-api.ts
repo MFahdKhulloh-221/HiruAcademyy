@@ -160,7 +160,15 @@ export async function studentLeaderboard(scope: LeaderboardScope, signal?: Abort
   return (await apiRequest<{ data: StudentLeaderboardData }>(`/api/student/leaderboard?scope=${scope}`, { signal })).data;
 }
 export async function studentGamification(signal?: AbortSignal) {
-  return (await apiRequest<{ data: StudentGamificationData }>("/api/student/gamification", { signal })).data;
+  const { data } = await apiRequest<{ data: StudentGamificationData | null }>("/api/student/gamification", { signal });
+  const challenge = data?.challenge;
+  if (!data || !challenge || ![data.weekly_xp, data.streak_days, challenge.active_days].every(value => Number.isSafeInteger(value) && value >= 0) ||
+    challenge.target_days !== 5 || challenge.total_days !== 7 || challenge.active_days > challenge.total_days ||
+    ![challenge.starts_on, challenge.ends_on].every(value => typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) ||
+    !["active", "achieved", "expired"].includes(challenge.status)) {
+    throw new Error("Data gamifikasi belum tersedia. Silakan coba lagi.");
+  }
+  return data;
 }
 
 export async function studentOverallProgress(signal?: AbortSignal) {

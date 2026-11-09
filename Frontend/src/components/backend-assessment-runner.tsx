@@ -534,6 +534,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
   const saveStatus = flow.busy ? "Menyimpan…" : flow.error ? "—" : "Tersimpan";
 
   const answerReview = reviewing && attempt.status === "completed";
+  const reviewAnswerAvailable = answerReview && question?.correct_option !== undefined && Object.hasOwn(question.options, question.correct_option);
 
   const readingLayout = isReading;
   const practiceNavigator = readingLayout || (domain === "learning" && attempt.kind === "audio");
@@ -649,7 +650,9 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
               </>}
               </AssessmentContent>
 
-              {tryoutImages && answerReview && !flow.answers[question.id] && <p role="status">Jawaban kamu: Kosong</p>}
+              {tryoutExperience && answerReview && <p className="answer-review-legend">Hijau = Jawaban benar. Merah lembut = Jawaban siswa yang salah. Tidak dijawab = Tidak ada pilihan yang dipilih.</p>}
+              {tryoutImages && answerReview && !flow.answers[question.id] && <p role="status">Tidak dijawab</p>}
+              {tryoutExperience && answerReview && !reviewAnswerAvailable && <p role="status">Jawaban benar belum tersedia.</p>}
 
               <fieldset disabled={Boolean((scope || tryoutExperience) && remaining === 0) || reviewing || flow.submitting || (!tryoutExperience && flow.busy) || attempt.status === "completed"}>
 
@@ -657,7 +660,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
                 {Object.entries(question.options).map(([option, label]) => (
 
-                  <label key={option} className={answerReview ? option === question.correct_option ? "review-correct" : flow.answers[question.id] === option ? "review-wrong" : "" : flow.answers[question.id] === option ? "selected" : ""}>
+                  <label key={option} className={answerReview ? !reviewAnswerAvailable ? "" : option === question.correct_option ? "review-correct" : flow.answers[question.id] === option ? "review-wrong" : "" : flow.answers[question.id] === option ? "selected" : ""}>
 
                     <input
 
@@ -673,7 +676,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
                     {tryoutExperience ? <><span className="tryout-option-letter">{option}.</span>{" "}<span className="tryout-option-text"><PlacementRichText value={label} /></span></> : <span>{option}. <PlacementRichText value={label} /></span>}
 
-                    {answerReview && (option === question.correct_option ? <strong className="tryout-review-label">{flow.answers[question.id] === option ? "Jawaban kamu · Benar" : "Jawaban benar"}</strong> : flow.answers[question.id] === option ? <strong className="tryout-review-label">Jawaban kamu · Salah</strong> : null)}
+                    {reviewAnswerAvailable && (option === question.correct_option ? <strong className="tryout-review-label">{flow.answers[question.id] === option ? "Jawaban kamu · Benar" : "Jawaban benar"}</strong> : flow.answers[question.id] === option ? <strong className="tryout-review-label">Jawaban kamu · Salah</strong> : null)}
 
                   </label>
 

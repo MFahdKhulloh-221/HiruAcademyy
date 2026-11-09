@@ -1231,3 +1231,16 @@
 .tryout-placement-style .learning-question-actions { flex-wrap: wrap; margin-top: 16px; }
 
 .tryout-placement-style .tryout-shared-reading > main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
+
+@media (min-width: 1024px) {
+  .tryout-placement-style .tryout-shared-reading > main { gap: 12px; }
+  .tryout-placement-style .exam-reading-passage { padding: 16px; margin-bottom: 0; }
+  .tryout-placement-style .exam-reading-passage > h2 { font-size: 16px; margin-bottom: 8px; }
+  .tryout-placement-style .exam-reading-scroll { padding: 12px; font-size: 16px; line-height: 1.8; }
+  .tryout-placement-style .exam-reading-scroll h3 { font-size: 17px; margin-bottom: 8px; }
+  .tryout-placement-style .exam-reading-questions { padding: 20px 24px; }
+  .tryout-placement-style .exam-reading-questions h2 { font-size: 20px; line-height: 1.5; margin: 0 0 16px; }
+  .tryout-placement-style .exam-reading-questions p { margin-block: 8px; }
+  .tryout-placement-style .exam-reading-questions fieldset { gap: 8px; }
+  .tryout-placement-style .exam-reading-questions label { padding: 10px 16px; min-height: 44px; }
+}

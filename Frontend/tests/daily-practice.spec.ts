@@ -37,8 +37,9 @@ for (const width of [1440, 768, 390]) test(`practice completion updates recommen
   await page.goto("/dashboard");
   const recommendations = page.getByRole("region", { name: "Rekomendasi latihan", exact: true });
   await expect(recommendations.getByRole("link")).toHaveCount(1);
-  await expect(recommendations).toContainText("Reading (0/1)");
-  await recommendations.getByRole("link").click();
+  await expect(recommendations).toContainText("Reading Question");
+  await page.goto("/practice?category=reading");
+  await page.getByRole("button", { name: "Kerjakan Latihan", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Real bank question", exact: true })).toBeVisible();
   await expect(page.getByText("Jawaban benar:", { exact: false })).toHaveCount(0);
   const saved = page.waitForResponse(response => response.url().endsWith("/answers") && response.request().method() === "PUT");
@@ -52,7 +53,7 @@ for (const width of [1440, 768, 390]) test(`practice completion updates recommen
   await expect(page.getByRole("tab", { name: "Kosakata", exact: true })).toHaveCount(0);
   await page.goto("/dashboard");
   await expect(recommendations.getByRole("link")).toHaveCount(0);
-  await expect(recommendations).toContainText("Tidak ada latihan belum selesai");
+  await expect(recommendations).toContainText("Aktivitas berikutnya belum tersedia atau masih terkunci.");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   fail = true;
   await page.reload();
@@ -61,7 +62,7 @@ for (const width of [1440, 768, 390]) test(`practice completion updates recommen
   empty = true;
   await page.getByRole("button", { name: "Coba Lagi", exact: true }).click();
   await expect(recommendations.getByRole("link")).toHaveCount(0);
-  await page.goto("/practice");
+  await page.goto("/practice?category=reading");
   await expect(page.getByRole("status")).toContainText("Belum ada latihan soal");
   locked = true;
   empty = false;

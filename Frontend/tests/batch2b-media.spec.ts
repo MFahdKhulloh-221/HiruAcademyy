@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 
 for (const width of [1440, 768, 390]) {
-  test(`empty modules and replay playlist ${width}`, async ({ page }) => {
+  test(`empty modules and replay playlist ${width}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: 1000 });
     let empty = false;
     let denied = false;
@@ -9,7 +9,7 @@ for (const width of [1440, 768, 390]) {
     let playlistStatus = 200;
     let missingVideo = false;
     let mediaRequests = 0;
-    const videos = [1, 2].map(id => ({ id, title: `Rekaman ${id}`, video_url: `https://media.example.test/video${id}.mp4`, sort_order: id, chapter: "1", session: String(id) }));
+    const videos = [1, 2].map(id => ({ id, title: `Rekaman ${id}: Pembahasan pola kalimat dan latihan percakapan bersama Sensei untuk persiapan ujian`, video_url: `https://media.example.test/video${id}.mp4`, sort_order: id, chapter: "1", session: String(id) }));
     await page.route("https://media.example.test/**", route => {
       mediaRequests++;
       return mediaStatus === 200
@@ -29,7 +29,8 @@ for (const width of [1440, 768, 390]) {
       if (path.endsWith("/progress")) return reply({ chapter_id: 11, activities: {}, mini_unlocked: false });
       if (path.includes("replay-playlists")) {
         if (denied || playlistStatus !== 200) return route.fulfill({ status: denied ? 403 : playlistStatus, json: {} });
-        return reply({ id: 5, title: "Playlist Kelas N5", program: { code: "n5", name: "JLPT N5" }, videos: empty ? [] : missingVideo ? [{ ...videos[0], video_url: null }] : videos });
+        if (path.endsWith("/6")) return reply({ id: 6, title: "Playlist Kelas B", program: { code: "n5", name: "JLPT N5" }, videos: [{ ...videos[0], title: "Kelas B pertama" }, { ...videos[1], title: "Kelas B kedua" }] });
+        return reply({ id: 5, title: "Playlist Kelas N5", program: { code: "n5", name: "JLPT N5" }, videos: empty ? [] : missingVideo ? [{ ...videos[0], video_url_resolved_url: null }] : videos });
       }
       return reply([]);
     });
@@ -47,8 +48,22 @@ for (const width of [1440, 768, 390]) {
     await expect(markers.getByRole("button", { name: /Rekaman 2/ })).toHaveAttribute("aria-pressed", "true");
     const video = page.locator("video");
     await expect(video).toHaveAttribute("src", videos[1].video_url);
-    await expect(page.getByRole("heading", { name: "Rekaman 2", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: videos[1].title, exact: true })).toBeVisible();
+    await expect(markers.getByRole("button", { name: /Rekaman 2/ })).toContainText("Dipilih");
+    const player = page.locator(".batch3-replay-player");
+    const playerBox = (await player.boundingBox())!;
+    const playlistBox = (await markers.boundingBox())!;
+    expect(playlistBox.y).toBeGreaterThan(playerBox.y + playerBox.height);
+    expect(Math.abs(playerBox.width / playerBox.height - 16 / 9)).toBeLessThan(0.02);
+    await player.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: testInfo.outputPath(`replay-${width}.png`), fullPage: true });
+    await markers.getByRole("button").last().scrollIntoViewIfNeeded();
+    await expect(markers.getByRole("button").last()).toBeInViewport();
     await expect(page.locator(".batch3-metadata")).toContainText("Sesi 2");
+    await page.reload();
+    await expect(markers.getByRole("button").first()).toHaveAttribute("aria-pressed", "true");
+    await expect(page.locator("video")).toHaveAttribute("src", videos[0].video_url);
+    await markers.getByRole("button", { name: /Rekaman 2/ }).click();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await expect.poll(() => video.evaluate(el => (el as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
     await video.evaluate(el => (el as HTMLVideoElement).play());
@@ -71,6 +86,13 @@ for (const width of [1440, 768, 390]) {
     await video.evaluate(el => (el as HTMLVideoElement).pause());
     await expect(failed).toHaveCount(0);
     await expect(markers.getByRole("button", { name: /Rekaman 2/ })).toHaveAttribute("aria-pressed", "true");
+    await page.goto("/replay/chapter-4?id=6");
+    await expect(page.getByRole("heading", { name: "Playlist Kelas B", exact: true })).toBeVisible();
+    await expect(markers.getByRole("button").first()).toHaveAttribute("aria-pressed", "true");
+    await expect(markers).not.toContainText("Pembahasan pola kalimat");
+    await page.reload();
+    await expect(page.getByRole("heading", { name: "Kelas B pertama", exact: true })).toBeVisible();
+    await page.goto("/replay/chapter-4?id=5");
     mediaStatus = 404;
     await markers.getByRole("button", { name: /Rekaman 1/ }).click();
     await expect(failed).toBeVisible();
@@ -78,6 +100,7 @@ for (const width of [1440, 768, 390]) {
     await page.reload();
     await expect(page.getByRole("heading", { name: "Replay sedang diproses", exact: true })).toBeVisible();
     await expect(video).toHaveCount(0);
+    await expect(markers.getByRole("button")).toBeDisabled();
     playlistStatus = 503;
     await page.reload();
     await expect(page.getByRole("button", { name: "Coba Lagi", exact: true })).toBeVisible();
@@ -85,9 +108,11 @@ for (const width of [1440, 768, 390]) {
     missingVideo = false;
     expect(new URL(page.url()).searchParams.get("id")).toBe("5");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.getByRole("button", { name: "Coba Lagi", exact: true }).click();
+    await expect(markers.getByRole("button")).toHaveCount(2);
     empty = true;
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Replay sedang diproses", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Belum ada rekaman", exact: true })).toBeVisible();
     denied = true;
     await page.reload();
     await expect(page.getByRole("button", { name: "Coba Lagi", exact: true })).toBeVisible();

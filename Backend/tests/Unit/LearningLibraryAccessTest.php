@@ -33,6 +33,7 @@ final class LearningLibraryAccessTest extends TestCase
     public static function moduleAccessCases(): array
     {
         return [
+            'allowed general' => ['general', 'n5', true, 'General module description'],
             'allowed kanji' => ['kanji', 'n5', true, 'Private lesson description'],
             'locked kanji' => ['kanji', 'n5', false, 'Private lesson description'],
             'allowed grammar' => ['grammar', 'ssw-food', true, 'Private lesson description'],
@@ -68,8 +69,9 @@ final class LearningLibraryAccessTest extends TestCase
 
         // Alias only query entry points; no Laravel application or DB connection boots.
         $this->mockQuery('App\\Models\\LearningModule', [$module], 1);
-        $this->mockQuery('App\\Models\\Chapter', [], 2);
-        $this->mockQuery('App\\Models\\ReadingPassage', [], 1);
+        foreach (['Chapter', 'Flashcard', 'AudioQuestion', 'ReadingPassage', 'ReadingQuestion', 'MiniCheckpointQuestion'] as $model) {
+            Mockery::mock('alias:App\\Models\\'.$model)->shouldNotReceive('query');
+        }
 
         $user = new User;
         $policy = Mockery::mock(ChapterAccessPolicy::class);
@@ -83,7 +85,8 @@ final class LearningLibraryAccessTest extends TestCase
         }
         $container->instance(MediaService::class, $media);
 
-        $type = $moduleType === 'kanji' ? 'Kanji' : 'Tata Bahasa';
+        $type = match ($moduleType) { 'kanji' => 'Kanji', 'grammar' => 'Tata Bahasa', default => 'Umum' };
+        $routeType = $moduleType === 'kanji' ? 'kanji' : 'grammar';
         $routeProgram = $programCode === 'ssw-food' ? 'ssw-pengolahan-makanan' : $programCode;
         $level = $programCode === 'ssw-food' ? 'SSW' : strtoupper($programCode);
 
@@ -99,7 +102,7 @@ final class LearningLibraryAccessTest extends TestCase
             'chapter' => $chapter,
             'file_url' => $allowed ? $file : null,
             'file_url_resolved_url' => $allowed ? $resolved : null,
-            'href' => "/learn/{$routeProgram}/chapter-2/{$moduleType}",
+            'href' => "/learn/{$routeProgram}/chapter-2/{$routeType}",
             'locked' => ! $allowed,
         ]], (new LearningLibraryService($policy))->modules($user));
     }

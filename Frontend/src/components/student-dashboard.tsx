@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { GamificationChallenge } from "@/components/gamification-challenge";
 import practiceStyles from "./dashboard-practice.module.css";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { useCallback, useState, type ReactNode } from "react";
@@ -153,7 +154,7 @@ export function StudentDashboard({
               </div>
               {!gamification.data && !gamification.error && <LoadingSkeleton variant="stats" rows={1} label="Memuat progres…" />}
               {gamification.error && <p role="alert">{gamification.error} <button type="button" className="button button-secondary" onClick={gamification.retry}>Coba Lagi</button></p>}
-              {gamification.data && <div className="gamification-metrics"><span><strong>{gamification.data.weekly_xp.toLocaleString("id-ID")} XP</strong>XP Mingguan</span><span><strong>{gamification.data.streak_days}</strong>Hari Streak</span></div>}
+              {gamification.data && <><div className="gamification-metrics"><span><strong>{gamification.data.weekly_xp.toLocaleString("id-ID")} XP</strong>XP Mingguan</span><span><strong>{gamification.data.streak_days}</strong>Hari Streak</span></div><div className="gamification-challenge"><GamificationChallenge challenge={gamification.data.challenge} /></div></>}
             </section>
 
             <section className="dash-leaderboard-section dashboard-bento-leaderboard">

@@ -4,16 +4,13 @@ import Link from "next/link";
 import { StudentLoading } from "@/components/loading-skeleton";
 import { useState } from "react";
 import {
-  LuBookMarked,
   LuBookOpen,
-  LuLayers3,
   LuPenTool,
   LuSearch,
-  LuVolume2,
 } from "react-icons/lu";
 import { StudentNavigation } from "@/components/student-navigation";
 import { useLearningRequest } from "@/components/learning-hooks";
-import { learningCatalog, learningLibrary, learningMembership, type LibraryModule } from "@/lib/learning-api";
+import { learningCatalog, learningLibrary, learningMembership, safeLearningUrl, type LibraryModule } from "@/lib/learning-api";
 
 async function loadLibrary(signal: AbortSignal) {
   const [catalog, modules] = await Promise.all([
@@ -61,7 +58,7 @@ export function LearningLibrary() {
             <input
               value={search}
               onChange={event => setSearch(event.target.value)}
-              placeholder="Cari materi, tata bahasa, kanji, atau audio"
+              placeholder="Cari modul, tata bahasa, atau kanji"
             />
           </label>
           <div className="library-dropdowns">
@@ -84,7 +81,7 @@ export function LearningLibrary() {
                 value={type}
                 onChange={event => setType(event.target.value)}
               >
-                {["Semua", "Tata Bahasa", "Kanji", "Kosakata", "Audio", "Reading"].map(cat => (
+                {["Semua", "Tata Bahasa", "Kanji", "Umum"].map(cat => (
                   <option key={cat} value={cat}>{cat}</option>
                 ))}
               </select>
@@ -99,16 +96,9 @@ export function LearningLibrary() {
             </section>
             <section className="library-material-grid">
               {visible.map((item: LibraryModule) => {
-                const Icon = item.category === "Kanji"
-                  ? LuPenTool
-                  : item.category === "Kosakata"
-                  ? LuLayers3
-                  : item.category === "Audio"
-                  ? LuVolume2
-                  : item.category === "Reading"
-                  ? LuBookMarked
-                  : LuBookOpen;
-
+                const Icon = item.category === "Kanji" ? LuPenTool : LuBookOpen;
+                const available = Boolean(safeLearningUrl(item.file_url_resolved_url === undefined ? item.file_url : item.file_url_resolved_url));
+                const href = `${item.href}${query}&module=${item.resource_id}`;
                 return (
                   <article key={item.id}>
                     <div className="library-material-visual">
@@ -131,10 +121,10 @@ export function LearningLibrary() {
                           >
                             Terkunci
                           </button>
-                        ) : (
+                        ) : !available ? <span role="status">File materi belum tersedia.</span> : (
                           <Link
                             aria-label={`${item.category}: ${item.title}`}
-                            href={`${item.href}${query}`}
+                            href={href}
                           >
                             Buka materi
                           </Link>

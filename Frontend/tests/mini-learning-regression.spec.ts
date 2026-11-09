@@ -6,7 +6,7 @@ import type { CanonicalChapter, ChapterProgress, LearningAccess, LearningProgram
 
 type MiniAttempt = Omit<ServerAttempt, "questions"> & { chapter_id: number; kind: "mini"; submitted_at: string | null; questions: (Omit<AttemptQuestion, "session"> & { session: number; part: number; duration_minutes: number })[] };
 
-async function mockMiniApi(page: Page, questionCount = 1, faults: { startDelay?: number; saveError?: boolean; submitErrors?: number; miniEligible?: boolean } = {}) {
+async function mockMiniApi(page: Page, questionCount = 1, faults: { startDelay?: number; saveError?: boolean; submitErrors?: number; miniEligible?: boolean; listStatus?: number; detailStatus?: number; empty?: boolean; single?: boolean; longTitle?: boolean; listGate?: Promise<void> } = {}) {
   const users: Record<string, AuthUser> = {
     A: { id: 71, name: "Mini Account A", email: "mini-a@example.test", whatsapp: "081234567890", role: "student", account_status: "active" },
     B: { id: 72, name: "Mini Account B", email: "mini-b@example.test", whatsapp: "081234567891", role: "student", account_status: "active" },
@@ -24,7 +24,7 @@ async function mockMiniApi(page: Page, questionCount = 1, faults: { startDelay?:
   const count = (method: string, path: string, owner = account) => calls.filter(call => call === `${owner}:${method} ${path}`).length;
   const chapter = (program: number): CanonicalChapter => ({
     id: program === 5 ? 9 : 8, chapter_number: 1, sort_order: 0,
-    title: `${account} ${program === 5 ? "N5" : "N4"} content`,
+    title: faults.longTitle ? `Pembahasan pola kalimat dan latihan percakapan ${"bersamaSensei".repeat(8)}` : `${account} ${program === 5 ? "N5" : "N4"} content`,
     access: account === "B" && program === 4 ? "none" : "full",
     flashcards: [{ id: program * 10, japanese: program === 5 ? "猫" : "犬", reading: program === 5 ? "ねこ" : "いぬ", meaning: program === 5 ? "Cat" : "Dog", example: null, sort_order: 0 }],
     video_lessons: [], modules: [], mini_checkpoint: { exists: true },
@@ -90,8 +90,12 @@ async function mockMiniApi(page: Page, questionCount = 1, faults: { startDelay?:
       const program = Number(match[1]);
       const detail = chapter(program);
       if (match[2]) expect(Number(match[2])).toBe(detail.id);
-      if (!match[2] && method === "GET") { await reply([detail]); return; }
+      if (!match[2] && method === "GET") {
+        await faults.listGate;
+        await reply(faults.listStatus ? null : faults.empty || (faults.single && program === 4) ? [] : [{ ...detail, mini_checkpoints: undefined }], faults.listStatus ?? 200); return;
+      }
       if (!match[3] && method === "GET") {
+        if (faults.detailStatus) { await reply(null, faults.detailStatus); return; }
         await reply(detail.access === "none" ? null : detail, detail.access === "none" ? 403 : 200); return;
       }
       if (match[3] === "progress" && method === "GET") { await reply(progress(program)); return; }
@@ -172,6 +176,98 @@ async function openMini(page: Page) {
   await expect(page.getByRole("button", { name: "Mulai Mini Checkpoint" })).toHaveCount(2);
 }
 
+for (const width of [390, 768, 1440]) {
+  test(`Mini cards navigation and layout ${width}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 1000 });
+    const faults = { longTitle: true, miniEligible: true };
+    const api = await mockMiniApi(page, 1, faults);
+    await page.goto("/login");
+    await loginMini(page, api.users.A.email);
+    if (width < 1024) await page.getByRole("button", { name: "Buka navigasi" }).click();
+    await page.getByRole("button", { name: "Kelas Saya", exact: true }).click();
+    const nav = page.getByRole("link", { name: "Mini Checkpoint", exact: true });
+    await expect(nav).toHaveAttribute("href", /\/mini-checkpoint/);
+    if (width === 390) await page.screenshot({ path: testInfo.outputPath("mini-sidebar-390.png") });
+    await nav.click();
+    await expect(page).toHaveURL(/\/mini-checkpoint/);
+    await expect(page.locator("#student-mobile-panel")).toHaveCount(0);
+    const cards = page.locator(".mini-checkpoint-card");
+    await expect(cards).toHaveCount(2);
+    await expect(cards.first()).toContainText("JLPT N5 • Mini Checkpoint Chapter 1");
+    await expect(cards.last()).toContainText("JLPT N4 • Mini Checkpoint Chapter 1");
+    for (const card of await cards.all()) await expect(card).not.toContainText(/\d+ soal/);
+    await expect(cards.first()).toContainText("Tersedia");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const cta = cards.first().getByRole("button", { name: "Mulai Mini Checkpoint" });
+    expect((await cta.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+    await cards.last().scrollIntoViewIfNeeded();
+    await expect(cards.last()).toBeInViewport();
+    if (width < 1024) expect(await page.getByRole("button", { name: "Buka navigasi" }).evaluate(element => getComputedStyle(element).position)).toBe("absolute");
+    await page.screenshot({ path: testInfo.outputPath(`mini-cards-${width}.png`), fullPage: true });
+    if (width >= 1024) await expect(nav).toHaveAttribute("aria-current", "page");
+    await cards.last().getByRole("button", { name: "Mulai Mini Checkpoint" }).click();
+    await expect(page).toHaveURL(/mini_level=n4.*mini_chapter=chapter-1/);
+    await expect(page.getByRole("button", { name: "Mulai", exact: true })).toBeEnabled();
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Mulai", exact: true })).toBeEnabled();
+    await page.getByRole("button", { name: "Mulai", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "A N4 question" })).toBeVisible();
+    expect(api.count("POST", "/api/student/programs/5/chapters/9/attempts")).toBe(0);
+    await page.getByRole("button", { name: "Kembali ke Daftar" }).click();
+    expect(new URL(page.url()).searchParams.has("attempt")).toBe(false);
+    expect(new URL(page.url()).searchParams.has("mini_level")).toBe(false);
+    faults.miniEligible = false;
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Mulai Mini Checkpoint" })).toHaveCount(0);
+    await expect(cards.first()).toContainText("Terkunci");
+    await page.screenshot({ path: testInfo.outputPath(`mini-locked-${width}.png`), fullPage: true });
+    await page.goto("/mini-checkpoint?mini_level=n5&mini_chapter=chapter-1");
+    await expect(page.getByRole("button", { name: "Terkunci", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Mulai", exact: true })).toHaveCount(0);
+    expect(api.errors).toEqual([]);
+  });
+}
+
+test("Mini list loading, retry, empty, single and HTTP failures", async ({ page }) => {
+  let release!: () => void;
+  const faults: { listGate?: Promise<void>; listStatus?: number; detailStatus?: number; empty?: boolean; single?: boolean } = {};
+  const api = await mockMiniApi(page, 1, faults);
+  await page.goto("/login");
+  await loginMini(page, api.users.A.email);
+  faults.listGate = new Promise<void>(resolve => { release = resolve; });
+  await page.goto("/mini-checkpoint");
+  await expect(page.getByRole("status").filter({ hasText: "Memuat Mini Checkpoint…" })).toBeVisible();
+  release();
+  await expect(page.locator(".mini-checkpoint-card")).toHaveCount(2);
+  faults.listStatus = 503;
+  await page.reload();
+  await expect(page.getByRole("alert")).toBeVisible();
+  await expect(page.locator(".mini-checkpoint-card")).toHaveCount(0);
+  faults.listStatus = undefined;
+  faults.empty = true;
+  await page.getByRole("button", { name: "Coba Lagi", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Tidak ada Mini Checkpoint" })).toBeVisible();
+  faults.empty = false;
+  faults.single = true;
+  await page.reload();
+  await expect(page.locator(".mini-checkpoint-card")).toHaveCount(1);
+  for (const status of [401, 403, 404]) {
+    faults.listStatus = status;
+    await page.reload();
+    await expect(page.getByRole("alert")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Mulai Mini Checkpoint" })).toHaveCount(0);
+  }
+  faults.listStatus = undefined;
+  for (const status of [403, 404]) {
+    faults.detailStatus = status;
+    await page.goto("/mini-checkpoint?mini_level=n5&mini_chapter=chapter-1");
+    await expect(page.getByRole("alert")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Mulai", exact: true })).toHaveCount(0);
+    await page.goto("/mini-checkpoint");
+  }
+  expect(api.errors).toEqual([]);
+});
+
 test.describe("Mini learning regression — mock API only, no backend or DB", () => {
   test.setTimeout(60000);
   test("full learning access without Mini entitlement stays locked despite completed activities", async ({ page }) => {
@@ -204,9 +300,6 @@ test.describe("Mini learning regression — mock API only, no backend or DB", ()
     await expect.poll(() => api.count("PUT", "/api/student/programs/5/chapters/9/attempts/700/answers")).toBe(1);
     await expect.poll(() => api.attempts.get(700)?.data.answers).toEqual({ "500": "A" });
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Mini Checkpoint Evaluasi Bertahap" })).toBeVisible();
-    await page.getByLabel("Pilih Level:").selectOption("n5");
-    await page.getByRole("button", { name: "Mulai Mini Checkpoint" }).click();
     await expect(page.getByRole("radio", { name: "A. Cat" })).toBeChecked();
     await page.getByRole("button", { name: "Kumpulkan Jawaban" }).click();
     await expect(page.getByRole("heading", { name: "Hasil Mini Checkpoint" })).toBeVisible();
@@ -259,8 +352,6 @@ test.describe("Mini learning regression — mock API only, no backend or DB", ()
     expect(data.expires_at).toBe(deadline);
     data.expires_at = new Date(Date.now() + 3000).toISOString();
     await page.reload();
-    await page.getByLabel("Pilih Level:").selectOption("n5");
-    await page.getByRole("button", { name: "Mulai Mini Checkpoint" }).click();
     await expect(page.getByRole("timer")).toContainText(/0:0[1-3]/);
     await expect(page.getByRole("heading", { name: "Hasil Mini Checkpoint" })).toBeVisible();
     expect(data.answers).toEqual({ "500": "A" });
