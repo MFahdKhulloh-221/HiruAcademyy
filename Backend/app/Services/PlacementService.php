@@ -246,7 +246,7 @@ class PlacementService
             'whatsapp' => ['required', 'string', 'regex:/^\+?[0-9][0-9 ()-]{5,30}[0-9]$/D'],
             'target' => ['required', Rule::in(['N1', 'N2', 'N3', 'N4', 'N5', 'Belum menentukan'])],
             'privacy' => ['required', 'accepted'],
-            'whatsappConsent' => ['sometimes', 'required', 'boolean'],
+            'whatsappConsent' => ['required', 'accepted'],
         ]);
         $data['privacy'] = true;
         $data['whatsappConsent'] = (bool) ($data['whatsappConsent'] ?? false);

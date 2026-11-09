@@ -50,6 +50,12 @@ for (const width of [1440, 390]) {
       await page.getByRole("textbox", { name: "Nomor WhatsApp", exact: true }).fill("081234567890");
       await page.getByRole("combobox", { name: "Target Ujian" }).selectOption("N5");
       await page.locator('input[name="privacy"]').check();
+      await expect(start).toBeDisabled();
+      await page.locator('input[name="whatsappConsent"]').check();
+      await page.locator('input[name="privacy"]').uncheck();
+      await expect(start).toBeDisabled();
+      await page.locator('input[name="privacy"]').check();
+      await expect(start).toBeEnabled();
       await start.click();
       await expect(page.getByText("Mohon isi nama lengkap kamu (minimal 2 huruf).", { exact: true })).toBeVisible();
       expect(state.starts).toBe(0);

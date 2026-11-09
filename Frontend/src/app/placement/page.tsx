@@ -29,7 +29,7 @@ export default function PlacementPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const isReady = Boolean(publishedConfig && publishedConfig.isReady && !loadError);
   const unavailableNotice = loadError || (!publishedConfig || !publishedConfig.isReady ? "Placement Test sedang disiapkan. Silakan coba lagi nanti." : undefined);
-  const valid = Boolean(name.trim() && whatsapp.trim() && target && privacy && isReady && !busy);
+  const valid = Boolean(name.trim() && whatsapp.trim() && target && privacy && whatsappConsent && isReady && !busy);
 
   function validate(): Record<string, string> {
     const errors: Record<string, string> = {};
@@ -40,6 +40,7 @@ export default function PlacementPage() {
     if (!/^\+?(?:62|0)8?\d{8,13}$/.test(digits)) errors.whatsapp = "Nomor WhatsApp belum benar. Contoh: 081234567890 atau +6281234567890.";
     if (!target) errors.target = "Pilih salah satu target ujian yang kamu tuju.";
     if (!privacy) errors.privacy = "Kamu perlu menyetujui Kebijakan Privasi untuk melanjutkan.";
+    if (!whatsappConsent) errors.whatsappConsent = "Kamu perlu menyetujui komunikasi melalui WhatsApp untuk melanjutkan.";
     return errors;
   }
 
@@ -194,8 +195,9 @@ export default function PlacementPage() {
               {fieldErrors.privacy && <em id="err-privacy" role="alert">{fieldErrors.privacy}</em>}
             </label>
             <label className="consent">
-              <input type="checkbox" name="whatsappConsent" checked={whatsappConsent} onChange={(event) => setWhatsappConsent(event.target.checked)} />
+              <input type="checkbox" name="whatsappConsent" checked={whatsappConsent} onChange={(event) => { setWhatsappConsent(event.target.checked); clearFieldError("whatsappConsent"); }} required />
               <span>Saya bersedia menerima penjelasan hasil dan informasi program Hiru Academy melalui WhatsApp.</span>
+              {fieldErrors.whatsappConsent && <em id="err-whatsappConsent" role="alert">{fieldErrors.whatsappConsent}</em>}
             </label>
             <button className="button button-primary" type="submit" disabled={!isReady || !valid}>Mulai Placement Test Gratis</button>
           </form>

@@ -14,11 +14,16 @@ export type RecommendationRule = {
 export type PlacementLead = {
   id: number;
   date: string;
+  started_at?: string;
+  completed_at?: string | null;
   name: string;
   whatsapp: string;
   target: string;
+  whatsapp_consent?: boolean;
   score: number | null;
   recommended_level: string | null;
+  recommended_program?: { code: string; title: string; path: string } | null;
+  attempt_status?: string;
   status: "new" | "contacted";
 };
 

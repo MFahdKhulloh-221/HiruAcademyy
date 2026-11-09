@@ -7,12 +7,15 @@ import { LuCircleCheck, LuSettings, LuTriangleAlert } from "react-icons/lu";
 import { type FormEvent, useState } from "react";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { AdminMediaUpload } from "@/components/admin-media-upload";
-import { AdminDialog, AdminEmptyState, AdminPageHeader, AdminShell, AdminStatusBadge } from "@/components/admin-primitives";
+import { AdminDataTable, AdminDialog, AdminEmptyState, AdminFilterToolbar, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge } from "@/components/admin-primitives";
 import type { PlacementQuestion, PlacementSettings } from "@/components/admin-placement-preview";
 import { useLearningRequest } from "@/components/learning-hooks";
-import { loadAdminPlacement, saveAdminPlacement, saveAdminPlacementQuestion, placementQuestionView, deleteAdminPlacementQuestion } from "@/lib/admin-placement-api";
+import { loadAdminPlacement, loadAdminPlacementLeads, saveAdminPlacement, saveAdminPlacementQuestion, placementQuestionView, deleteAdminPlacementQuestion, updateAdminPlacementLead, type PlacementLead } from "@/lib/admin-placement-api";
 import { adminMediaUrl } from "@/lib/admin-media";
+import { studentWhatsAppUrl } from "@/lib/admin-whatsapp";
 import styles from "./admin-placement-builder.module.css";
+
+const formatLeadDate = (value?: string | null) => value ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(new Date(value)) : "—";
 
 const letters = ["A", "B", "C", "D"] as const;
 const categories = ["Bunpou", "Moji・Goi", "Dokkai", "Choukai"] as const;
@@ -57,11 +60,45 @@ function PlacementEditor({ initial }: { initial: Awaited<ReturnType<typeof loadA
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const leadsRequest = useLearningRequest(loadAdminPlacementLeads, "admin-placement-leads");
+  const [leadStatusOverrides, setLeadStatusOverrides] = useState<Record<number, "new" | "contacted">>({});
+  const [leadBusyId, setLeadBusyId] = useState<number | null>(null);
+  const [leadSearch, setLeadSearch] = useState("");
+  const [leadStatusFilter, setLeadStatusFilter] = useState("all");
+  const [leadPage, setLeadPage] = useState(1);
+  const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
+  const leads = (leadsRequest.data ?? [])
+    .filter(lead => !lead.attempt_status || lead.attempt_status === "completed")
+    .map(lead => ({ ...lead, status: leadStatusOverrides[lead.id] ?? lead.status }));
+  const filteredLeads = leads.filter(lead => {
+    if (leadStatusFilter !== "all" && lead.status !== leadStatusFilter) return false;
+    const query = leadSearch.trim().toLocaleLowerCase("id-ID");
+    if (!query) return true;
+    const wa = lead.whatsapp_consent === false ? "" : lead.whatsapp;
+    const rec = lead.recommended_program?.title || lead.recommended_level || "";
+    return `${lead.name} ${wa} ${lead.target} ${rec}`.toLocaleLowerCase("id-ID").includes(query);
+  });
+  const leadPages = Math.max(1, Math.ceil(filteredLeads.length / 10));
+  const currentLeadPage = Math.min(leadPage, leadPages);
+  const pagedLeads = filteredLeads.slice((currentLeadPage - 1) * 10, currentLeadPage * 10);
+  const selectedLead = leads.find(lead => lead.id === selectedLeadId) ?? null;
   const ready = rows.filter(row => row.published && !questionError(row)).length;
+
+  async function toggleLeadStatus(lead: PlacementLead) {
+    if (leadBusyId !== null) return;
+    const next = lead.status === "new" ? "contacted" : "new";
+    setLeadBusyId(lead.id); setError("");
+    try {
+      const saved = await updateAdminPlacementLead(lead.id, next);
+      setLeadStatusOverrides(current => ({ ...current, [lead.id]: saved.status === "contacted" ? "contacted" : "new" }));
+      setMessage(saved.status === "contacted" ? "Status kontak diperbarui: Sudah Dihubungi." : "Status kontak diperbarui: Baru.");
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Status kontak gagal diperbarui."); }
+    finally { setLeadBusyId(null); }
+  }
 
   function close() {
     if (busy) return;
-    setDraft(null); setSettingsDraft(null); setDeleting(null); setError("");
+    setDraft(null); setSettingsDraft(null); setDeleting(null); setSelectedLeadId(null); setError("");
   }
 
   async function saveSettings(publish: boolean) {
@@ -124,6 +161,64 @@ function PlacementEditor({ initial }: { initial: Awaited<ReturnType<typeof loadA
       <div className={styles.content}><div className={styles.meta}><strong>Soal {index + 1}</strong><span>{row.category}</span><AdminStatusBadge status={row.published ? "Published" : "Draft"} /></div><p className={styles.prompt}><PlacementRichText value={row.prompt} /></p>{questionError(row) && <small>Belum siap: {questionError(row)}</small>}</div>
       <div className={styles.actions}><button type="button" className="button button-secondary" aria-label={`Edit soal ${index + 1}`} onClick={() => { setError(""); setDraft({ ...row, answers: [...row.answers], mediaType: mediaType(row), order: row.order }); }}>Edit</button><button type="button" className="button button-secondary" aria-label={`Hapus soal ${index + 1}`} onClick={() => { setError(""); setDeleting(row); }}>Hapus</button></div>
     </li>)}</ol>}
+
+    <AdminSection title="Hasil & Leads Peserta" description="Daftar peserta yang telah menyelesaikan Placement Test.">
+      <AdminFilterToolbar>
+        <label className="admin-field">Cari peserta<input type="search" placeholder="Nama, WhatsApp, target, atau rekomendasi" value={leadSearch} onChange={event => { setLeadSearch(event.target.value); setLeadPage(1); }} /></label>
+        <label className="admin-field">Status kontak<select value={leadStatusFilter} onChange={event => { setLeadStatusFilter(event.target.value); setLeadPage(1); }}><option value="all">Semua status</option><option value="new">Baru</option><option value="contacted">Sudah Dihubungi</option></select></label>
+      </AdminFilterToolbar>
+      {leadsRequest.error && <p role="alert">{leadsRequest.error} <button type="button" className="button" onClick={leadsRequest.retry}>Coba Lagi</button></p>}
+      <AdminDataTable
+        loading={leadsRequest.loading && !leadsRequest.data}
+        caption="Data Hasil Placement Test"
+        rows={pagedLeads}
+        rowKey={lead => String(lead.id)}
+        empty={leadsRequest.error ? "Data gagal dimuat." : "Belum ada hasil Placement selesai."}
+        columns={[
+          { key: "date", header: "Tanggal (WIB)", cell: lead => formatLeadDate(lead.completed_at ?? lead.date) },
+          { key: "name", header: "Nama", cell: lead => lead.name || "—" },
+          { key: "whatsapp", header: "WhatsApp", cell: lead => {
+            const raw = lead.whatsapp_consent === false ? "" : lead.whatsapp;
+            const url = studentWhatsAppUrl(raw);
+            return url ? <a href={url} target="_blank" rel="noopener noreferrer">{raw}</a> : "Belum tersedia";
+          } },
+          { key: "target", header: "Target JLPT", cell: lead => lead.target || "—" },
+          { key: "score", header: "Nilai", cell: lead => lead.score !== null && lead.score !== undefined ? `${lead.score}%` : "—" },
+          { key: "level", header: "Rekomendasi", cell: lead => lead.recommended_level ? <div><AdminStatusBadge status={lead.recommended_level} />{lead.recommended_program?.title && <div><small>{lead.recommended_program.title}</small></div>}</div> : "—" },
+          { key: "status", header: "Status Kontak", cell: lead => <AdminStatusBadge status={lead.status === "contacted" ? "Sudah Dihubungi" : "Baru"} /> },
+        ]}
+        actions={{
+          cell: lead => <div className={styles.actions}>
+            <button type="button" className="button button-secondary" onClick={() => setSelectedLeadId(lead.id)}>Detail</button>
+            <button type="button" className="button" disabled={leadBusyId === lead.id} onClick={() => void toggleLeadStatus(lead)}>{lead.status === "new" ? "Tandai Dihubungi" : "Tandai Baru"}</button>
+          </div>
+        }}
+      />
+      {filteredLeads.length > 10 && <div className={styles.bankFooter}><span role="status">Halaman {currentLeadPage} / {leadPages} · {filteredLeads.length} peserta</span><div className={styles.actions}><button type="button" className="button button-secondary" disabled={currentLeadPage <= 1} onClick={() => setLeadPage(currentLeadPage - 1)}>Sebelumnya</button><button type="button" className="button button-secondary" disabled={currentLeadPage >= leadPages} onClick={() => setLeadPage(currentLeadPage + 1)}>Berikutnya</button></div></div>}
+    </AdminSection>
+
+    <AdminDialog open={Boolean(selectedLead)} title="Detail Hasil Placement" close={close}>
+      {selectedLead && <div className={styles.deleteConfirmation}>
+        <dl className="admin-user-detail">
+          <div><dt>Nama Peserta</dt><dd>{selectedLead.name || "—"}</dd></div>
+          <div><dt>WhatsApp</dt><dd>{(() => {
+            const raw = selectedLead.whatsapp_consent === false ? "" : selectedLead.whatsapp;
+            const url = studentWhatsAppUrl(raw);
+            return url ? <a href={url} target="_blank" rel="noopener noreferrer">{raw}</a> : "Belum tersedia";
+          })()}</dd></div>
+          <div><dt>Nilai Placement</dt><dd>{selectedLead.score !== null && selectedLead.score !== undefined ? `${selectedLead.score}%` : "—"}</dd></div>
+          <div><dt>Waktu Pengerjaan (WIB)</dt><dd>{formatLeadDate(selectedLead.completed_at ?? selectedLead.date)}</dd></div>
+          <div><dt>Target JLPT</dt><dd>{selectedLead.target || "—"}</dd></div>
+          <div><dt>Rekomendasi Level</dt><dd>{selectedLead.recommended_level || "—"}</dd></div>
+          <div><dt>Rekomendasi Program</dt><dd>{selectedLead.recommended_program?.title || "Belum tersedia"}</dd></div>
+          <div><dt>Status Kontak</dt><dd>{selectedLead.status === "contacted" ? "Sudah Dihubungi" : "Baru"}</dd></div>
+        </dl>
+        <div className={styles.actions}>
+          <button type="button" className="button button-secondary" onClick={() => setSelectedLeadId(null)}>Tutup</button>
+          <button type="button" className="button button-primary" disabled={leadBusyId === selectedLead.id} onClick={() => void toggleLeadStatus(selectedLead)}>{selectedLead.status === "new" ? "Tandai Dihubungi" : "Tandai Baru"}</button>
+        </div>
+      </div>}
+    </AdminDialog>
 
     <AdminDialog open={Boolean(draft)} title={rows.some(row => row.id === draft?.id) ? "Edit Soal" : "Tambah Soal"} close={close}>
       {draft && <form className={`admin-prototype-form ${styles.form} ${styles.questionForm}`} onSubmit={saveQuestion}>

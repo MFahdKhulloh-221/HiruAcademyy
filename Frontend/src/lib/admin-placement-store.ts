@@ -34,11 +34,11 @@ const load = async (signal: AbortSignal): Promise<PlacementStoreData> => {
     rules: (result.rules ?? []).map((r, i) => ({ id: String(r.id ?? i + 1), minScore: r.minScore, maxScore: r.maxScore, recommendedProgramCode: r.recommendedProgramCode, resultTitle: r.resultTitle, resultDescription: r.resultDescription, order: i + 1 })),
     questions: result.questions.map(question => ({ id: String(question.id), number: question.sort_order, area: question.category, level: question.level ?? null, passage: question.passage ?? null, prompt: question.prompt, imageUrl: question.image_url ?? "", audioUrl: question.audio_url ?? "", explanation: question.explanation ?? "", options: Object.entries(question.options).map(([id, text]) => ({ id, text, isCorrect: id === question.correct_option })) }))
   };
-  const leads: PlacementLead[] = leadsData.map(lead => ({
+  const leads: PlacementLead[] = leadsData.filter(lead => !lead.attempt_status || lead.attempt_status === "completed").map(lead => ({
     id: String(lead.id),
-    date: lead.date,
+    date: lead.completed_at ?? lead.date,
     name: lead.name,
-    whatsapp: lead.whatsapp,
+    whatsapp: lead.whatsapp_consent === false ? "" : lead.whatsapp,
     target: lead.target,
     score: lead.score ?? 0,
     recommendedLevel: lead.recommended_level ?? "-",

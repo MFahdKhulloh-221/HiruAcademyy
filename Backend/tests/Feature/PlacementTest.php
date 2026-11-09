@@ -116,7 +116,7 @@ class PlacementTest extends TestCase
 
     private function applicant(): array
     {
-        return ['name' => 'Fixture applicant', 'whatsapp' => '+62 81234567890', 'target' => 'N3', 'privacy' => true, 'whatsappConsent' => false];
+        return ['name' => 'Fixture applicant', 'whatsapp' => '+62 81234567890', 'target' => 'N3', 'privacy' => true, 'whatsappConsent' => true];
     }
 
     private function start(): array
@@ -241,22 +241,21 @@ class PlacementTest extends TestCase
         $response->assertJsonPath('data.is_ready', false);
     }
 
-    public function test_required_applicant_and_optional_whatsapp_consent_without_effects(): void
+    public function test_required_applicant_and_both_consents_without_effects(): void
     {
         $this->published();
-        foreach (['name', 'whatsapp', 'target', 'privacy'] as $field) {
+        foreach (['name', 'whatsapp', 'target', 'privacy', 'whatsappConsent'] as $field) {
             $input = $this->applicant();
             unset($input[$field]);
             $this->postJson('/api/placement/attempts', $input)->assertUnprocessable();
         }
-        foreach ([['privacy' => false], ['target' => 'N6'], ['whatsapp' => 'javascript:alert(1)'], ['whatsappConsent' => 'yes'], ['user_id' => 1], ['score' => 100]] as $change) {
+        foreach ([['privacy' => false], ['whatsappConsent' => false], ['target' => 'N6'], ['whatsapp' => 'javascript:alert(1)'], ['whatsappConsent' => 'invalid'], ['user_id' => 1], ['score' => 100]] as $change) {
             $this->postJson('/api/placement/attempts', array_replace($this->applicant(), $change))->assertUnprocessable();
         }
         $input = $this->applicant();
-        unset($input['whatsappConsent']);
         $attempt = $this->postJson('/api/placement/attempts', $input)->assertCreated()->json('data');
         $stored = PlacementAttempt::findOrFail($attempt['id']);
-        $this->assertFalse($stored->applicant_snapshot['whatsappConsent']);
+        $this->assertTrue($stored->applicant_snapshot['whatsappConsent']);
         $this->assertNull($stored->user_id);
         $this->assertSame(64, strlen($stored->owner_hash));
         $this->assertNoSecrets($attempt);
@@ -472,6 +471,89 @@ class PlacementTest extends TestCase
         $leadsAfter = $this->actingAs($this->admin)->getJson('/api/admin/placement-leads')->assertOk();
         $leadAfter = collect($leadsAfter->json('data'))->firstWhere('id', $attempt['id']);
         $this->assertSame('contacted', $leadAfter['status']);
+    }
+
+    public function test_admin_placement_leads_exclude_unfinished_respect_whatsapp_and_reject_non_admin(): void
+    {
+        $config = $this->published();
+        $student = $this->user('student');
+
+        $this->getJson('/api/admin/placement-leads')->assertUnauthorized();
+        $this->actingAs($student)->getJson('/api/admin/placement-leads')->assertForbidden();
+
+        $question = $config->questions()->firstOrFail();
+        $contentSnapshot = [$question->only(['id', 'prompt', 'options', 'category', 'sort_order', 'image_url', 'audio_url'])];
+        $gradingSnapshot = [$question->id => $question->correct_option];
+
+        $unfinished = PlacementAttempt::create([
+            'placement_config_id' => $config->id,
+            'user_id' => $student->id,
+            'owner_hash' => null,
+            'applicant_snapshot' => ['name' => 'Belum Submit', 'whatsapp' => '+62 81111111111', 'target' => 'N5', 'privacy' => true, 'whatsappConsent' => true],
+            'config_snapshot' => $config->only(['id', 'title', 'intro_heading', 'duration_minutes', 'description', 'recommendation_rules']),
+            'content_snapshot' => $contentSnapshot,
+            'grading_snapshot' => $gradingSnapshot,
+            'answers' => [],
+            'status' => 'in_progress',
+            'started_at' => now()->subMinutes(5),
+            'expires_at' => now()->addMinutes(5),
+        ]);
+
+        $noWaZero = PlacementAttempt::create([
+            'placement_config_id' => $config->id,
+            'user_id' => null,
+            'owner_hash' => hash('sha256', 'guest-zero'),
+            'applicant_snapshot' => ['name' => 'Tamu Tanpa WA', 'whatsapp' => '', 'target' => 'N5', 'privacy' => true, 'whatsappConsent' => false],
+            'config_snapshot' => $config->only(['id', 'title', 'intro_heading', 'duration_minutes', 'description', 'recommendation_rules']),
+            'content_snapshot' => $contentSnapshot,
+            'grading_snapshot' => $gradingSnapshot,
+            'answers' => [],
+            'result_snapshot' => ['percentage' => 0, 'recommendation_level' => 'N5', 'recommended_program' => ['code' => 'n5', 'title' => 'JLPT N5', 'path' => '/program?level=n5']],
+            'status' => 'completed',
+            'started_at' => now()->subMinutes(10),
+            'expires_at' => now()->subMinutes(3),
+            'completed_at' => now()->subMinutes(4),
+        ]);
+
+        $fullMax = PlacementAttempt::create([
+            'placement_config_id' => $config->id,
+            'user_id' => $student->id,
+            'owner_hash' => null,
+            'applicant_snapshot' => ['name' => 'Siswa Lengkap', 'whatsapp' => '081234567890', 'target' => 'N2', 'privacy' => true, 'whatsappConsent' => true],
+            'config_snapshot' => $config->only(['id', 'title', 'intro_heading', 'duration_minutes', 'description', 'recommendation_rules']),
+            'content_snapshot' => $contentSnapshot,
+            'grading_snapshot' => $gradingSnapshot,
+            'answers' => [],
+            'result_snapshot' => ['percentage' => 100, 'recommendation_level' => 'N1', 'recommended_program' => ['code' => 'n1', 'title' => 'JLPT N1', 'path' => '/program?level=n1']],
+            'status' => 'completed',
+            'started_at' => now()->subMinutes(8),
+            'expires_at' => now()->subMinutes(1),
+            'completed_at' => now()->subMinutes(2),
+        ]);
+
+        $this->actingAs($student)->patchJson('/api/admin/placement-leads/'.$fullMax->id, ['status' => 'contacted'])->assertForbidden();
+        $this->actingAs($this->admin)->patchJson('/api/admin/placement-leads/'.$unfinished->id, ['status' => 'contacted'])->assertNotFound();
+
+        $leads = collect($this->actingAs($this->admin)->getJson('/api/admin/placement-leads')->assertOk()->json('data'));
+        $this->assertNull($leads->firstWhere('id', $unfinished->id));
+
+        $zeroRow = $leads->firstWhere('id', $noWaZero->id);
+        $this->assertNotNull($zeroRow);
+        $this->assertSame('Tamu Tanpa WA', $zeroRow['name']);
+        $this->assertSame('', $zeroRow['whatsapp']);
+        $this->assertSame(0, $zeroRow['score']);
+        $this->assertSame('N5', $zeroRow['recommended_level']);
+        $this->assertSame('JLPT N5', $zeroRow['recommended_program']['title']);
+        $this->assertSame($noWaZero->completed_at->utc()->toISOString(), $zeroRow['completed_at']);
+
+        $maxRow = $leads->firstWhere('id', $fullMax->id);
+        $this->assertNotNull($maxRow);
+        $this->assertSame('Siswa Lengkap', $maxRow['name']);
+        $this->assertSame('081234567890', $maxRow['whatsapp']);
+        $this->assertSame(100, $maxRow['score']);
+        $this->assertSame('N1', $maxRow['recommended_level']);
+        $this->assertSame('JLPT N1', $maxRow['recommended_program']['title']);
+        $this->assertSame($fullMax->completed_at->utc()->toISOString(), $maxRow['completed_at']);
     }
 
     public function test_recovered_rules_migration_preserves_custom_configs_and_attempts(): void
