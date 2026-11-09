@@ -144,6 +144,9 @@ class LearningContentService
 
         try {
             return DB::transaction(function () use ($resource, $model, $data) {
+                if ($resource === 'chapters') {
+                    $this->lockChapters();
+                }
                 if ($model->exists) {
                     $model = $model->newQuery()->whereKey($model->getKey())->lockForUpdate()->firstOrFail();
                 }
@@ -192,7 +195,25 @@ class LearningContentService
                     $group[] = $model->only(['session', 'part', 'duration_minutes', 'passing_score']);
                     app(LearningAttemptService::class)->miniConfiguration($group);
                 }
+                $reorderChapter = $resource === 'chapters'
+                    && (! $model->exists || $model->isDirty('program_id') || array_key_exists('sort_order', $data));
+                if ($reorderChapter) {
+                    $oldProgramId = $model->exists ? $model->getRawOriginal('program_id') : null;
+                    $siblings = $this->chapterSiblings($model->program_id, $model->getKey());
+                    $position = array_key_exists('sort_order', $data) ? (int) $data['sort_order'] : $siblings->count();
+                    if ($position > $siblings->count()) {
+                        throw ValidationException::withMessages(['sort_order' => 'Position is outside this program.']);
+                    }
+                    $model->sort_order = $position;
+                }
                 $model->save();
+                if ($reorderChapter) {
+                    $siblings->splice($position, 0, [$model]);
+                    $this->normalizeChapters($siblings);
+                    if ($oldProgramId !== null && (int) $oldProgramId !== $model->program_id) {
+                        $this->normalizeChapters($this->chapterSiblings((int) $oldProgramId));
+                    }
+                }
 
                 return $model->fresh();
             }, 3);
@@ -211,6 +232,9 @@ class LearningContentService
     {
         $class = $this->model($resource);
         DB::transaction(function () use ($resource, $class, $id) {
+            if ($resource === 'chapters') {
+                $this->lockChapters();
+            }
             $model = $class::whereKey($id)->lockForUpdate()->firstOrFail();
             if ($resource === 'chapters' && CheckpointQuestion::where('chapter_id', $model->id)->exists()) {
                 throw ValidationException::withMessages(['chapter' => 'Chapter has Checkpoint questions and cannot be deleted.']);
@@ -219,7 +243,33 @@ class LearningContentService
                 throw ValidationException::withMessages(['chapter' => 'Chapter has retained learning attempts and cannot be deleted.']);
             }
             $model->delete();
+            if ($resource === 'chapters') {
+                $this->normalizeChapters($this->chapterSiblings($model->program_id));
+            }
         }, 3);
+    }
+
+    private function lockChapters(): void
+    {
+        DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', ['learning-chapter-order']);
+    }
+
+    private function chapterSiblings(int $programId, ?int $exceptId = null): \Illuminate\Database\Eloquent\Collection
+    {
+        return Chapter::where('program_id', $programId)
+            ->when($exceptId !== null, fn ($query) => $query->whereKeyNot($exceptId))
+            ->orderBy('sort_order')->orderBy('chapter_number')->orderBy('id')
+            ->lockForUpdate()->get();
+    }
+
+    private function normalizeChapters(\Illuminate\Database\Eloquent\Collection $chapters): void
+    {
+        foreach ($chapters->values() as $position => $chapter) {
+            if ($chapter->sort_order !== $position) {
+                $chapter->sort_order = $position;
+                $chapter->save();
+            }
+        }
     }
 
     private function allowed(string $family, string $activity): bool

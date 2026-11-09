@@ -77,7 +77,7 @@ export function AdminSenseiPrototype() {
       { key: "bio", header: "Bio singkat", cell: (row) => row.bio },
       { key: "expertise", header: "Keahlian", cell: (row) => row.expertise.join(", ") },
       { key: "level", header: "Level utama", cell: (row) => row.level || "—" },
-      { key: "order", header: "Urutan", cell: (row) => row.order },
+      { key: "order", header: "Urutan Tampil", cell: (row) => row.order },
       { key: "status", header: "Status", cell: (row) => <AdminStatusBadge status={row.active ? "Aktif" : "Nonaktif"} /> },
     ]} actions={{ cell: (row) => <>
       <button type="button" className={`button ${styles.trigger}`} popoverTarget={`sensei-actions-${row.id}`} aria-label={`Tindakan ${row.name}`} onClick={event => {
@@ -102,7 +102,7 @@ export function AdminSenseiPrototype() {
         <AdminMediaUpload label="Foto" kind="image" onUploaded={(photo, url) => setDraft({ ...draft, photo, photo_resolved_url: url })} />
         <label className="admin-field">Level utama (opsional)<select value={draft.level} onChange={(event) => setDraft({ ...draft, level: event.target.value })}><option value="">Tidak ditentukan</option>{levels.map((level) => <option key={level}>{level}</option>)}</select></label>
         <label className="admin-field">Status<select value={draft.active ? "active" : "inactive"} onChange={(event) => setDraft({ ...draft, active: event.target.value === "active" })}><option value="active">Aktif</option><option value="inactive">Nonaktif</option></select></label>
-        <label className="admin-field">Urutan<input placeholder="Contoh: 1" type="number" min="1" step="1" value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })} required /><small>Urutan tampil profil.</small></label>
+        <label className="admin-field">Urutan Tampil<input placeholder="Contoh: 1" type="number" min="1" step="1" value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })} required /><small>Mengubah urutan akan menyesuaikan posisi Sensei lainnya secara otomatis.</small></label>
         <AdminSenseiPreview profile={{ ...draft, expertise: [...new Set(draft.expertise.split(",").map((label) => label.trim()).filter(Boolean))] }} onPhotoError={() => setError("Foto tidak dapat dibaca. Pilih foto lain sebelum menyimpan.")} />
         {error && <p role="alert">{error}</p>}
         <div className="admin-page-actions"><button type="button" className="button" onClick={closeEditor}>Batal</button><button type="submit" disabled={busy} className="button button-primary">Simpan Sensei</button></div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useRef, useState, type FormEvent } from "react";
 import { AdminDataTable, AdminDialog, AdminStatusBadge } from "@/components/admin-primitives";
 import { useContent } from "@/lib/public-content-api";
 import { apiRequest } from "@/lib/api";
@@ -14,10 +14,12 @@ export function AdminPrograms() {
   const [draft, setDraft] = useState<Draft | null>(null);
   const [deleting, setDeleting] = useState<Program | null>(null);
   const [busy, setBusy] = useState(false);
+  const pending = useRef(false);
   const [message, setMessage] = useState("");
 
   async function mutate(path: string, method: string, body?: object) {
-    if (busy) return;
+    if (pending.current) return;
+    pending.current = true;
     setBusy(true);
     setMessage("");
     try {
@@ -28,6 +30,7 @@ export function AdminPrograms() {
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Program gagal disimpan.");
     } finally {
+      pending.current = false;
       setBusy(false);
     }
   }
@@ -38,20 +41,20 @@ export function AdminPrograms() {
     const { name, description, sort_order, status, id } = draft;
     const base = name.normalize("NFKD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 210) || "program";
     const slug = `${base}-${crypto.randomUUID()}`;
-    void mutate(`/api/admin/programs${id ? `/${id}` : ""}`, id ? "PATCH" : "POST", { name, description, sort_order, ...(id ? { status } : { slug, plan_code: draft.plan_code, duration_months: Number(draft.duration_months), base_price: Number(draft.base_price) }) });
+    void mutate(`/api/admin/programs${id ? `/${id}` : ""}`, id ? "PATCH" : "POST", { name, description, sort_order: sort_order - 1, ...(id ? { status } : { slug, plan_code: draft.plan_code, duration_months: Number(draft.duration_months), base_price: Number(draft.base_price) }) });
   }
 
   return <section>
-    <div className="admin-journey-actions"><button type="button" className="button button-primary" disabled={busy || loading || Boolean(error)} onClick={() => { setMessage(""); setDraft({ name: "", slug: "", description: "", status: "draft", plan_code: "", duration_months: "", base_price: "", sort_order: Math.min(32767, Math.max(0, ...rows.map(row => row.sort_order)) + 1) }); }}>+ Tambah Program</button></div>
+    <div className="admin-journey-actions"><button type="button" className="button button-primary" disabled={busy || loading || Boolean(error)} onClick={() => { setMessage(""); setDraft({ name: "", slug: "", description: "", status: "draft", plan_code: "", duration_months: "", base_price: "", sort_order: rows.length + 1 }); }}>+ Tambah Program</button></div>
     {error && <p role="alert">{error} <button type="button" onClick={reload}>Coba lagi</button></p>}
     {message && <p role="alert">{message}</p>}
     <AdminDataTable caption="Daftar Program" loading={loading} rows={rows} rowKey={row => String(row.id)} columns={[
       { key: "name", header: "Nama Program", cell: row => row.name },
       { key: "description", header: "Deskripsi Singkat", cell: row => row.description ?? "" },
-      { key: "order", header: "Urutan", cell: row => row.sort_order },
+      { key: "order", header: "Urutan", cell: row => rows.findIndex(item => item.id === row.id) + 1 },
       { key: "status", header: "Status", cell: row => <AdminStatusBadge status={row.status === "active" ? "Aktif" : row.status === "inactive" ? "Nonaktif" : "Draft"} /> },
     ]} actions={{ cell: row => <div className="admin-page-actions">
-      <button type="button" className="button" disabled={busy} onClick={() => { setMessage(""); setDraft({ ...row }); }}>Edit / Atur Urutan</button>
+      <button type="button" className="button" disabled={busy} onClick={() => { setMessage(""); setDraft({ ...row, sort_order: rows.findIndex(item => item.id === row.id) + 1 }); }}>Edit / Atur Urutan</button>
       <button type="button" className="button" disabled={busy} onClick={() => void mutate(`/api/admin/programs/${row.id}`, "PATCH", { status: row.status === "active" ? "inactive" : "active" })}>{row.status === "active" ? "Nonaktifkan" : "Aktifkan"}</button>
       <button type="button" className="button" disabled={busy} onClick={() => { setMessage(""); setDeleting(row); }}>Hapus</button>
     </div> }} />
@@ -59,7 +62,7 @@ export function AdminPrograms() {
       {draft && <form className="admin-prototype-form" onSubmit={save}>
         <label className="admin-field">Nama program<input required maxLength={255} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} /></label>
         <label className="admin-field">Deskripsi / informasi program<textarea maxLength={10000} value={draft.description ?? ""} onChange={event => setDraft({ ...draft, description: event.target.value })} /></label>
-        <label className="admin-field">Urutan<input required type="number" min={0} max={32767} step={1} value={draft.sort_order} onChange={event => setDraft({ ...draft, sort_order: Number(event.target.value) })} /></label>
+        <label className="admin-field">Urutan<input required type="number" min={1} max={draft.id ? rows.length : rows.length + 1} step={1} value={draft.sort_order} onChange={event => setDraft({ ...draft, sort_order: Number(event.target.value) })} /></label>
         <label className="admin-field">Status<select disabled={!draft.id} value={draft.status} onChange={event => setDraft({ ...draft, status: event.target.value as Program["status"] })}><option value="draft">Draft</option><option value="active">Aktif</option><option value="inactive">Nonaktif</option></select></label>
         {!draft.id && <>
           <label className="admin-field">Paket<select required value={draft.plan_code} onChange={event => setDraft({ ...draft, plan_code: event.target.value as Offer["plan_code"] | "" })}><option value="" disabled>Pilih paket</option><option value="lms">Belajar Mandiri</option><option value="sensei">Kelas bersama Sensei</option></select></label>

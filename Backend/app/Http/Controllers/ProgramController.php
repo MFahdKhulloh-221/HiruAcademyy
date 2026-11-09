@@ -36,7 +36,9 @@ class ProgramController extends Controller
             'duration_months' => ['required', 'integer', 'min:1', 'max:32767'],
             'base_price' => ['required', 'integer', 'min:0', 'max:2147483647'],
         ]);
-        $program = DB::transaction(function () use ($data) {
+        $program = $this->locked(function () use ($data) {
+            $ids = Program::query()->orderBy('sort_order')->orderBy('id')->pluck('id')->all();
+            $this->validatePosition((int) $data['sort_order'], count($ids));
             $program = Program::create([
                 'name' => $data['name'], 'slug' => $data['slug'], 'code' => $data['slug'],
                 'description' => $data['description'] ?? null, 'sort_order' => $data['sort_order'],
@@ -47,6 +49,9 @@ class ProgramController extends Controller
                 'duration_months' => $data['duration_months'], 'base_price' => $data['base_price'],
                 'currency' => 'IDR', 'status' => 'inactive',
             ]);
+
+            array_splice($ids, (int) $data['sort_order'], 0, [$program->id]);
+            $this->normalizeOrder($ids);
 
             return $program;
         });
@@ -63,7 +68,19 @@ class ProgramController extends Controller
             'status' => ['sometimes', 'required', Rule::in(['draft', 'active', 'inactive'])],
             'sort_order' => ['sometimes', 'required', 'integer', 'min:0', 'max:32767'],
         ]);
-        $program->update($data);
+        $program = $this->locked(function () use ($data, $program) {
+            $program = Program::query()->findOrFail($program->id);
+            if (array_key_exists('sort_order', $data)) {
+                $ids = Program::query()->orderBy('sort_order')->orderBy('id')->pluck('id')->all();
+                $this->validatePosition((int) $data['sort_order'], count($ids) - 1);
+                $ids = array_values(array_diff($ids, [$program->id]));
+                array_splice($ids, (int) $data['sort_order'], 0, [$program->id]);
+                $this->normalizeOrder($ids);
+            }
+            $program->update($data);
+
+            return $program->refresh();
+        });
 
         return response()->json(['data' => $program]);
     }
@@ -71,8 +88,13 @@ class ProgramController extends Controller
     public function destroy(Program $program): JsonResponse
     {
         try {
-            // Restrictive foreign keys reject deletion of any referenced program, including races.
-            $program->delete();
+            $this->locked(function () use ($program) {
+                // Restrictive foreign keys reject deletion of any referenced program, including races.
+                $program = Program::query()->findOrFail($program->id);
+                if ($program->delete()) {
+                    $this->normalizeOrder(Program::query()->orderBy('sort_order')->orderBy('id')->pluck('id')->all());
+                }
+            });
         } catch (QueryException $error) {
             if (in_array((string) $error->getCode(), ['23503', '23000'], true)) {
                 throw ValidationException::withMessages(['program' => 'Program memiliki relasi atau histori. Gunakan Nonaktifkan.']);
@@ -81,5 +103,29 @@ class ProgramController extends Controller
         }
 
         return response()->json(['data' => null]);
+    }
+
+    private function locked(callable $operation): mixed
+    {
+        return DB::transaction(function () use ($operation) {
+            // Global lock also serializes inserts when no program exists yet.
+            DB::select('SELECT pg_advisory_xact_lock(hashtext(?))', ['program-sort-order']);
+
+            return $operation();
+        });
+    }
+
+    private function validatePosition(int $position, int $maximum): void
+    {
+        if ($position < 0 || $position > $maximum) {
+            throw ValidationException::withMessages(['sort_order' => "Posisi harus antara 0 dan {$maximum}."]);
+        }
+    }
+
+    private function normalizeOrder(array $ids): void
+    {
+        foreach ($ids as $position => $id) {
+            Program::query()->whereKey($id)->where('sort_order', '!=', $position)->update(['sort_order' => $position]);
+        }
     }
 }

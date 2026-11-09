@@ -47,7 +47,7 @@ use App\Services\PublicContentService;
 use App\Services\ScheduleReplayService;
 use Illuminate\Support\Facades\Route;
 
-Route::prefix('api')->middleware(['throttle:api', 'auth.session'])->group(function () {
+Route::prefix('api')->middleware(['throttle:api', \Laravel\Sanctum\Http\Middleware\AuthenticateSession::class])->group(function () {
     Route::middleware(['auth:sanctum', 'active', 'role:admin'])->prefix('admin')->group(function () {
         Route::prefix('checkpoint-packages')->group(function () {
             Route::get('/', [AdminCheckpointController::class, 'index']);
