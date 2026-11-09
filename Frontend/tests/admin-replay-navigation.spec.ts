@@ -8,7 +8,7 @@ for (const width of [1440, 768, 390]) test(`Replay separate from Journey ${width
   await page.getByRole("navigation", { name: "Navigasi admin" }).getByRole("link", { name: "Replay Rekaman", exact: true }).click();
   await expect(page).toHaveURL(/\/admin\/replay-rekaman$/);
   await expect(page.getByRole("heading", { name: "Replay Rekaman", exact: true })).toBeVisible();
-  await expect(page.getByRole("table", { name: "Daftar Replay Rekaman", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Playlist", exact: true })).toBeVisible();
   await page.goto("/admin/kurikulum-materi?tab=Replay%20Rekaman");
   await expect(page).toHaveURL(/\/admin\/replay-rekaman$/);
 });

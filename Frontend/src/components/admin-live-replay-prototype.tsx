@@ -7,7 +7,7 @@ import { validVideoReference } from "@/lib/admin-media";
 import { useClassAdmin } from "@/components/class-admin-hooks";
 import { AdminReplayPlaylists } from "@/components/admin-replay-playlists";
 import { LuSearch } from "react-icons/lu";
-import { AdminDataTable, AdminDialog, AdminFilterToolbar, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge, AdminTabs } from "@/components/admin-primitives";
+import { AdminDataTable, AdminDialog, AdminFilterToolbar, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge } from "@/components/admin-primitives";
 import { emptyLiveReplay, liveReplayLevels, liveStatuses, replayStatuses, type LiveReplayRecord } from "@/lib/admin-live-replay-fixtures";
 
 function safeUrl(value: string) {
@@ -29,10 +29,9 @@ function StudentPreview({ item }: { item: LiveReplayRecord }) {
   return <section className="alr-preview replay-page-container"><p className="dash-kicker">BELAJAR DENGAN SENSEI • REPLAY KELAS</p><h2>Rekaman Sesi Kelas Bersama Sensei</h2><section className="replay-featured-card"><ReplayMedia item={item} /><div className="replay-featured-info"><div className="replay-featured-badges"><span>{item.program || "Level OPEN"}</span><AdminStatusBadge status={item.status} /></div><h3>{item.title || "Judul OPEN"}</h3><p>{item.description}</p><small>{item.chapter || "Chapter OPEN"} • {date} • {item.sensei || "Sensei OPEN"}</small></div></section></section>;
 }
 
-export function AdminLiveReplayPrototype() {
-  const store = useClassAdmin();
+export function AdminLiveReplayPrototype({ kind = "live" }: { kind?: "live" | "replay" }) {
+  const store = useClassAdmin(kind);
   const rows = store.rows;
-  const [tab, setTab] = useState("Jadwal Live");
   const [draft, setDraft] = useState<LiveReplayRecord | null>(null);
   const [view, setView] = useState<LiveReplayRecord | null>(null);
   const [deleting, setDeleting] = useState<LiveReplayRecord | null>(null);
@@ -45,7 +44,6 @@ export function AdminLiveReplayPrototype() {
   const closeEditor = useCallback(() => { setDraft(null); setError(""); }, []);
   const closeView = useCallback(() => setView(null), []);
   const closeDelete = useCallback(() => setDeleting(null), []);
-  const kind = tab === "Jadwal Live" ? "live" : "replay";
   const statuses = kind === "live" ? ["Draft", ...liveStatuses.filter(value => value !== "Selesai")] : replayStatuses;
   const query = search.trim().toLowerCase();
   const filtered = rows.filter((item) => item.kind === kind && (!program || item.program === program) && (!status || item.status === status) && [item.title, item.chapter, item.sensei, item.description, item.program].some((value) => value.toLowerCase().includes(query)));
@@ -96,19 +94,19 @@ export function AdminLiveReplayPrototype() {
     { key: "status", header: "Status", cell: (item) => <AdminStatusBadge status={item.status} /> },
   ]} actions={{ cell: actions }} />;
 
-  return <AdminShell current="/admin/kelas-jadwal"><main className="admin-public-prototype admin-live-replay-prototype">
-    <AdminPageHeader title="Jadwal & Replay" description="Kelola jadwal dan replay kelas." actions={<button type="button" className="button button-primary" onClick={() => edit({ ...emptyLiveReplay(kind), id: crypto.randomUUID(), order: String(rows.filter((item) => item.kind === "replay").length + 1) })}>{kind === "live" ? "Tambah Jadwal Live" : "Tambah Replay"}</button>} />
+  return <AdminShell current={kind === "live" ? "/admin/kelas-jadwal" : "/admin/replay-rekaman"}><main className="admin-public-prototype admin-live-replay-prototype">
+    <AdminPageHeader title={kind === "live" ? "Jadwal Live" : "Replay Rekaman"} description={kind === "live" ? "Kelola jadwal kelas live." : "Kelola playlist dan video replay dari API. Data lokal lama tidak dipindahkan atau disinkronkan otomatis."} actions={<button type="button" className="button button-primary" onClick={() => edit({ ...emptyLiveReplay(kind), id: crypto.randomUUID(), order: String(rows.filter((item) => item.kind === "replay").length + 1) })}>{kind === "live" ? "Tambah Jadwal Live" : "Tambah Replay"}</button>} />
     <p role="status">{message}</p>{(store.error || store.mutationError) && <p role="alert">{store.error || store.mutationError}</p>}{store.error && <button className="button" onClick={store.retry}>Coba Lagi</button>}
     {kind === "replay" && <AdminReplayPlaylists store={store} />}
-    <AdminTabs tabs={["Jadwal Live", "Replay"]} active={tab} onChange={(value) => { setTab(value); setStatus(""); }} label="Jadwal dan replay">
+    <>
       <AdminFilterToolbar><label className="alr-search"><input type="search" aria-label="Cari judul, chapter, atau Sensei" placeholder="Cari judul, chapter, atau Sensei" value={search} onChange={(event) => setSearch(event.target.value)} /><LuSearch aria-hidden="true" /></label><label className="admin-field">Program<select value={program} onChange={(event) => setProgram(event.target.value)}><option value="">Semua program</option>{liveReplayLevels.map((level) => <option key={level}>{level}</option>)}</select></label><label className="admin-field">Status<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Semua status</option>{statuses.map((value) => <option key={value}>{value}</option>)}</select></label></AdminFilterToolbar>
       {store.loading && !store.data ? <LoadingSkeleton variant="table" rows={5} /> : kind === "live" ? <><AdminSection title="Kalender"><label className="admin-field">Bulan<input type="month" value={calendarMonth} onChange={(event) => setMonth(event.target.value)} /></label>{calendarDate ? <div className="alr-calendar">{["Sen", "Sel", "Rab", "Kam", "Jum", "Sab", "Min"].map((day) => <strong key={day}>{day}</strong>)}{Array.from({ length: offset }, (_, index) => <div key={`blank-${index}`} aria-hidden="true" />)}{Array.from({ length: calendarDays }, (_, index) => { const date = `${calendarMonth}-${String(index + 1).padStart(2, "0")}`; return <div key={date}><time dateTime={date}>{index + 1}</time>{visible.filter((item) => item.date === date).map((item) => <button type="button" key={item.id} onClick={() => setView(item)} aria-label={`${item.title}, ${date}, ${item.status}`}><span>{item.start} {item.title}</span><small>{item.status}</small></button>)}</div>; })}</div> : <p>Tanggal fixture belum ditentukan. Kalender muncul setelah tanggal diisi.</p>}</AdminSection><AdminSection title="Daftar Jadwal Live">{table(visible, "Jadwal Live")}</AdminSection></> : liveReplayLevels.filter((level) => !program || program === level).map((level) => <AdminSection key={level} title={level}>{table(visible.filter((item) => item.program === level), `Replay ${level}`)}</AdminSection>)}
-    </AdminTabs>
+    </>
     <AdminDialog open={Boolean(draft)} title={draft?.kind === "live" ? "Jadwal Live" : "Replay"} close={closeEditor}>{draft && <form className="admin-prototype-form alr-form" onSubmit={save} noValidate>
       <label className="admin-field">Judul<input required placeholder={draft.kind === "live" ? "Contoh: Kelas N4 — Pola Kalimat Dasar" : "Contoh: Replay Kelas N4 — Pola Kalimat Dasar"} value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></label>
       <label className="admin-field">Program<select required value={draft.program} onChange={(event) => setDraft({ ...draft, program: event.target.value })}><option value="">Pilih program</option>{liveReplayLevels.map((level) => <option key={level}>{level}</option>)}</select></label>
       <label className="admin-field">Chapter / Sesi<input required placeholder="Contoh: Chapter 1 / Sesi 1" value={draft.chapter} onChange={(event) => setDraft({ ...draft, chapter: event.target.value })} /></label>
-      <label className="admin-field">Tanggal<input required type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} /></label>
+      <label className="admin-field">Tanggal<input required={draft.kind === "live"} type="date" value={draft.date} onChange={(event) => setDraft({ ...draft, date: event.target.value })} /></label>
       {draft.kind === "live" && <div className="alr-times"><label className="admin-field">Jam mulai (WIB)<input type="time" required value={draft.start} onChange={(event) => setDraft({ ...draft, start: event.target.value })} /></label><label className="admin-field">Jam selesai (WIB, opsional)<input type="time" value={draft.end} onChange={(event) => setDraft({ ...draft, end: event.target.value })} /></label></div>}
       <label className="admin-field">Sensei<input required placeholder="Contoh: Sensei Sakura" value={draft.sensei} onChange={event => setDraft({ ...draft, sensei: event.target.value })} /></label>
       {draft.kind === "replay" && <label className="admin-field">Playlist<select required value={draft.playlistId || ""} onChange={event => { const playlist = store.playlists.find(item => String(item.id) === event.target.value); setDraft({ ...draft, playlistId: event.target.value, program: store.programs.find(item => item.id === playlist?.program_id)?.code.toUpperCase() || "" }); }}><option value="">Pilih playlist</option>{store.playlists.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>}

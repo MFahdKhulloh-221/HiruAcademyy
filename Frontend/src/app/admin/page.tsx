@@ -13,7 +13,7 @@ const quickActions = [
   { label: "Kelola Pengguna", href: "/admin/pengguna-akses", detail: "Tinjau pengguna dan hak akses.", icon: LuUsers, tone: "navy", highlight: true },
   { label: "Kelola Artikel", href: "/admin/blog-seo", detail: "Buka area artikel publik.", icon: LuNewspaper, tone: "orange", highlight: false },
   { label: "Kelola Materi", href: "/admin/video-lesson", detail: "Buka area materi pembelajaran.", icon: LuFolder, tone: "navy", highlight: false },
-  { label: "Kelola Jadwal", href: "/admin/kelas-jadwal", detail: "Buka jadwal dan replay.", icon: LuCalendar, tone: "orange", highlight: false },
+  { label: "Kelola Jadwal", href: "/admin/kelas-jadwal", detail: "Buka jadwal kelas live.", icon: LuCalendar, tone: "orange", highlight: false },
   { label: "Kelola Placement Test", href: "/admin/placement-hasil", detail: "Buka area Placement Test.", icon: LuClipboardCheck, tone: "navy", highlight: false },
 ];
 

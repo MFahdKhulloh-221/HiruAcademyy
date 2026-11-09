@@ -114,8 +114,7 @@ test("E: server overlapping Sensei validation keeps schedule editor open without
 test("F-G: replay videos belong to canonical playlist and inactive Sensei cannot be selected for new session", async ({ page }) => {
   await page.route("**/api/admin/replay-playlists", route => route.fulfill({ json: { data: [{ id: 7, program_id: 1, title: "N5 Replay Playlist", status: "published", sort_order: 0 }] } }));
   await page.route("**/api/admin/sensei-profiles", route => route.fulfill({ json: { data: [{ id: 11, name: "Sensei Inaktif", role: "Pengajar", bio: "", photo: "", expertise: ["N4"], level: "n4", active: false, sort_order: 0 }] } }));
-  await page.goto("/admin/kelas-jadwal");
-  await page.getByRole("tab", { name: "Replay" }).click();
+  await page.goto("/admin/replay-rekaman");
   await expect(page.getByRole("table").getByText("N5 Replay Playlist")).toBeVisible();
   await page.goto("/sensei");
   await expect(page.getByText("Sensei Inaktif")).toHaveCount(0);
