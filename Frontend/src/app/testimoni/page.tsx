@@ -8,7 +8,6 @@ import { PublicPage } from "@/components/public-shell";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { useEffect, useState } from "react";
 import { VideoRecommendation } from "./video-recommendation";
-import { ScrollList } from "./scroll-list";
 import styles from "./testimoni.module.css";
 
 
@@ -19,8 +18,9 @@ export default function TestimonialsPage() {
   const [order, setOrder] = useState("default");
   useEffect(() => {
     const reveal = () => {
-      if (/^#testimoni-\d+$/.test(window.location.hash)) setFilter("all");
+      if (/^#testimoni-\d+$/.test(window.location.hash)) setFilter("text");
     };
+    reveal();
     window.addEventListener("hashchange", reveal);
     return () => window.removeEventListener("hashchange", reveal);
   }, []);
@@ -30,7 +30,8 @@ export default function TestimonialsPage() {
   const mergedTestimonials = records.filter(item => item.type === "text" || (!item.type && !item.video_url));
   const testimonialVideos = records.filter(item => item.type === "video" || (!item.type && item.video_url));
   const showTexts = filter !== "video";
-  const showVideos = filter !== "text" && testimonialVideos.length > 0;
+  const showVideos = filter !== "text";
+  const preview = filter === "all" || filter === "latest";
 
   return (
     <PublicPage active="Testimoni">
@@ -49,20 +50,22 @@ export default function TestimonialsPage() {
           </div>
           {content.loading ? <LoadingSkeleton variant="cards" label="Memuat testimoni?" /> : content.error ? <div role="alert">{content.error} <button type="button" onClick={content.reload}>Coba lagi</button></div> : <>
             {!content.data.length && <p>Belum ada testimoni.</p>}
-            {filter === "video" && !testimonialVideos.length && <p>Belum ada video testimoni yang dipublikasikan.</p>}
             <div className={`${styles.layout} ${showTexts && showVideos ? styles.withVideos : ""}`}>
-              {showVideos && <aside className={styles.videos} aria-labelledby="testimonial-videos-heading">
-                <h2 id="testimonial-videos-heading">Video Testimoni <span>({testimonialVideos.length})</span></h2>
-                <ScrollList className={filter === "video" ? styles.videoGrid : styles.videoList} label="Daftar video testimoni">
-                  {testimonialVideos.map(item => <VideoRecommendation key={item.id} item={item} />)}
-                </ScrollList>
-              </aside>}
-              {showTexts && <section className={styles.texts} aria-label="Testimoni siswa">
-                <h2>Testimoni <span>({mergedTestimonials.length})</span></h2>
-                {!mergedTestimonials.length && content.data.length > 0 && <p>Belum ada testimoni teks yang dipublikasikan.</p>}
-                <ScrollList className={`testimonial-grid ${styles.textGrid}`} label="Daftar testimoni teks">
-                  {mergedTestimonials.map(item => <TestimonialCard key={item.id} testimonial={item} />)}
-                </ScrollList>
+              {showTexts && <section className={styles.texts} aria-label="Testimoni Komentar">
+                <h2>Testimoni Komentar <span>({mergedTestimonials.length})</span></h2>
+                {!mergedTestimonials.length && <p>Belum ada testimoni komentar yang dipublikasikan.</p>}
+                <div className={`testimonial-grid ${styles.textGrid} ${preview ? styles.previewTexts : ""}`}>
+                  {(preview ? mergedTestimonials.slice(0, 3) : mergedTestimonials).map(item => <TestimonialCard key={item.id} testimonial={item} />)}
+                </div>
+                {preview && mergedTestimonials.length > 0 && <button type="button" className={`button button-primary ${styles.more}`} onClick={() => setFilter("text")}>Lihat Semua Komentar</button>}
+              </section>}
+              {showVideos && <section className={styles.videos} aria-labelledby="testimonial-videos-heading">
+                <h2 id="testimonial-videos-heading">Testimoni Video <span>({testimonialVideos.length})</span></h2>
+                {!testimonialVideos.length && <p>Belum ada video testimoni yang dipublikasikan.</p>}
+                <div className={filter === "video" ? styles.videoGrid : styles.videoList}>
+                  {(preview ? testimonialVideos.slice(0, 2) : testimonialVideos).map(item => <VideoRecommendation key={item.id} item={item} />)}
+                </div>
+                {preview && testimonialVideos.length > 0 && <button type="button" className={`button button-primary ${styles.more}`} onClick={() => setFilter("video")}>Lihat Semua Video</button>}
               </section>}
             </div>
           </>}

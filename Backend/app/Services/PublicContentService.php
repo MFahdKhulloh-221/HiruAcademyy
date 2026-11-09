@@ -53,7 +53,7 @@ class PublicContentService
     private function saveContent(string $resource, array $input, ?Model $model): Model
     {
         $class = $this->model($resource);
-        if (in_array($resource, ['testimonials', 'blog-articles'], true) && $model?->exists) {
+        if (in_array($resource, ['testimonials', 'blog-articles', 'sensei-profiles'], true) && $model?->exists) {
             $model = $class::query()->lockForUpdate()->findOrFail($model->getKey());
         }
         $model ??= new $class;
@@ -241,9 +241,36 @@ class PublicContentService
                 }
             }
         }
-        $model->save();
+        if ($model instanceof SenseiProfile) {
+            $others = SenseiProfile::query()->when($model->exists, fn ($query) => $query->whereKeyNot($model->id))
+                ->orderBy('sort_order')->orderBy('id')->lockForUpdate()->get();
+            $position = $data['sort_order'] ?? ($model->exists ? max(1, min($model->sort_order, $others->count() + 1)) : $others->count() + 1);
+            if ($position > $others->count() + 1) {
+                throw ValidationException::withMessages(['sort_order' => 'Urutan melebihi jumlah Sensei yang tersedia.']);
+            }
+            $others->splice($position - 1, 0, [$model]);
+            foreach ($others as $index => $profile) {
+                $profile->sort_order = $index + 1;
+                $profile->save();
+            }
+        } else {
+            $model->save();
+        }
 
         return $model->fresh();
+    }
+
+    public function deleteSensei(string $id): void
+    {
+        // Same transaction/advisory lock as save(): includes empty-list creation races.
+        app(MediaService::class)->locked(function () use ($id) {
+            SenseiProfile::query()->lockForUpdate()->findOrFail($id)->delete();
+            $profiles = SenseiProfile::query()->orderBy('sort_order')->orderBy('id')->lockForUpdate()->get();
+            foreach ($profiles as $index => $profile) {
+                $profile->sort_order = $index + 1;
+                $profile->save();
+            }
+        });
     }
 
     public function ordered(string $resource): Builder

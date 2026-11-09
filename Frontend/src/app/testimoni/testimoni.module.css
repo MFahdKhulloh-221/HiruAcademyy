@@ -40,8 +40,12 @@
 @media (min-width: 700px) {
   .videoGrid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-@media (min-width: 1100px) {
-  .withVideos { grid-template-columns: minmax(0, 3fr) minmax(0, 1fr); }
+.more { margin-top: 20px; }
+@media (max-width: 1023px) {
+  .previewTexts > :nth-child(n + 3) { display: none; }
+}
+@media (min-width: 1024px) {
+  .withVideos { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
   .withVideos .texts { grid-column: 1; grid-row: 1; }
   .withVideos .videos { grid-column: 2; grid-row: 1; }
 }

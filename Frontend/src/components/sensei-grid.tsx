@@ -27,6 +27,7 @@ export function SenseiGrid({ limit, reveal = false, carousel = false }: { limit?
         <div className="sensei-card-body">
           <h3>{sensei.name}</h3>
           <p>{sensei.role}</p>
+          {sensei.bio?.trim() && <p className="line-clamp-3" style={{ overflowWrap: "anywhere" }}>{sensei.bio}</p>}
           <ul aria-label={`Fokus pembelajaran ${sensei.name}`}>
             {sensei.expertise.slice(0, carousel ? 3 : undefined).map((expertise) => <li key={expertise}>{expertise}</li>)}
           </ul>

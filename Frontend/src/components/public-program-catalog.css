@@ -120,6 +120,10 @@
 .program-journey .public-level li svg { color: #954900; flex-shrink: 0; }
 .program-journey .public-level > .button { width: 100%; min-height: 46px; margin-top: auto; white-space: normal; }
 .program-journey .public-level.selected > .button { background: #f48220; border-color: #f48220; color: #5a2a00; }
+.program-journey .public-level:not(.selected) > .button { background: #fff; border: 1px solid #e4e5ec; box-shadow: 0 1px 3px rgb(32 39 51 / 5%); }
+.program-journey .public-levels > .public-level { min-height: 0; gap: 8px; }
+.program-journey .level-section .journey-level-title { margin-top: 12px; }
+.program-journey .public-levels > .public-level > p { margin-bottom: 12px; }
 .program-journey .public-levels > .journey-placement { border-style: dashed; background: #fff; }
 .program-journey .journey-other-program { order: 1; }
 .program-journey .journey-compass { width: 40px; height: 40px; color: #f48220; }

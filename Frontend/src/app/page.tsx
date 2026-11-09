@@ -1,7 +1,11 @@
 "use client";
 
 import Image from "next/image";
+import { useAuth } from "@/components/auth-provider";
+import { freeChapterPath } from "@/lib/free-chapter";
 import { LandingPriceCard } from "@/components/landing-price-card";
+import { BlogThumbnail } from "@/components/blog-thumbnail";
+import styles from "./landing-blog.module.css";
 import { landingOffers as offers } from "@/lib/landing-offers";
 import Link from "next/link";
 import { type SVGProps } from "react";
@@ -14,7 +18,7 @@ import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { SenseiGrid } from "@/components/sensei-grid";
 import { TestimonialCard } from "@/components/testimonial-card";
 import { usePublishedLandingRequest } from "@/lib/website-store";
-import { contentMedia, offerPrice, useContent, type PublicOffer, type PublicProgram, type ShowcaseContent, type TestimonialContent } from "@/lib/public-content-api";
+import { contentMedia, offerPrice, useContent, type ArticleContent, type PublicOffer, type PublicProgram, type ShowcaseContent, type TestimonialContent } from "@/lib/public-content-api";
 
 type IconName = "arrow" | "book" | "check" | "compass" | "layers" | "play" | "sparkle" | "target" | "users";
 
@@ -68,8 +72,14 @@ function ArrowLink({ href, children, dark = false }: { href: string; children: R
 
 export default function Home() {
   const { landing, loading: heroLoading, error: heroError, retry: retryHero } = usePublishedLandingRequest();
+  const { authenticated } = useAuth();
   const testimonialContent = useContent<TestimonialContent>("/api/testimonials?landing=true");
   const showcase = useContent<ShowcaseContent>("/api/showcase");
+  const articles = useContent<ArticleContent>("/api/blog");
+  const latestArticles = articles.data
+    .filter(article => article.published !== false)
+    .sort((a, b) => (Date.parse(b.published_at || "") || 0) - (Date.parse(a.published_at || "") || 0) || b.id - a.id)
+    .slice(0, 3);
   const pricing = useContent<PublicOffer>("/api/public/offers");
 
   const programs = useContent<PublicProgram>("/api/public/programs");
@@ -129,7 +139,16 @@ export default function Home() {
 
         <section className="section landing-testimonials" data-reveal><div className="container"><div className="section-heading landing-section-heading"><p className="kicker">CERITA PEMBELAJAR</p><h2>{landing.testimonial?.heading || "Cerita dari Pembelajar Hiru Academy"}</h2></div>{testimonialContent.loading ? <LoadingSkeleton variant="cards" label="Memuat testimoni…" /> : testimonialContent.error ? <div role="alert">{testimonialContent.error} <button type="button" onClick={testimonialContent.reload}>Coba lagi</button></div> : !testimonialContent.data.length && <p>Belum ada testimoni.</p>}<div className="testimonial-grid">{testimonialContent.data.filter(testimonial => testimonial.type === "text" && !testimonial.video_url).slice(0, 6).map(testimonial => <TestimonialCard key={testimonial.id} testimonial={testimonial} landing />)}</div><div className="landing-testimonials-action"><Link className="button button-primary" href="/testimoni">Lihat lebih banyak</Link></div></div></section>
 
-        <section className="final-cta" id="tentang" data-reveal><div className="container"><div className="cta-panel"><div className="cta-pattern" aria-hidden="true">あ <span>日</span> 語</div><h2>{landing.finalCta?.heading || "Belum tahu harus mulai dari level mana?"}</h2><p>{landing.finalCta?.support || "Belum yakin levelmu? Gunakan Placement Test. Sudah punya target? Coba Chapter 1 gratis pada level pilihanmu."}</p><ArrowLink href={landing.finalCta?.ctaPath || "/placement"}>{landing.finalCta?.ctaLabel || "Mulai Sekarang"}</ArrowLink></div></div></section>
+        {latestArticles.length > 0 && <section className="section" aria-labelledby="landing-blog-heading"><div className="container">
+          <div className="section-heading landing-section-heading"><h2 id="landing-blog-heading">Artikel Terbaru</h2></div>
+          <div className={styles.grid}>{latestArticles.map(article => <Link className={`blog-card ${styles.card}`} href={`/blog/${encodeURIComponent(article.slug)}`} key={article.id}>
+            <div className="blog-card-thumb"><BlogThumbnail article={article} sizes="(max-width: 1023px) 100vw, 33vw" /></div>
+            <div className="blog-card-body"><h3>{article.title}</h3><p className="line-clamp-3">{article.excerpt}</p></div>
+          </Link>)}</div>
+          <div className={styles.action}><Link className="button button-primary" href="/blog">Lihat Semua Artikel</Link></div>
+        </div></section>}
+
+        <section className="final-cta" id="tentang" data-reveal><div className="container"><div className="cta-panel"><div className="cta-pattern" aria-hidden="true">あ <span>日</span> 語</div><h2>{landing.finalCta?.heading || "Belum tahu harus mulai dari level mana?"}</h2><p>Mulai belajar bahasa Jepang dari DASAR dengan Chapter 1 gratis.</p><ArrowLink href={authenticated ? freeChapterPath : `/login?next=${encodeURIComponent(freeChapterPath)}`}>Coba Chapter 1 Gratis</ArrowLink></div></div></section>
       </main>
     </PublicPage>
   );

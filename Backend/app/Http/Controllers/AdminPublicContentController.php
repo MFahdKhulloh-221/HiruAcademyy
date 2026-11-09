@@ -42,7 +42,11 @@ class AdminPublicContentController extends Controller
     public function destroy(Request $request): JsonResponse
     {
         $class = $this->content->model($request->route('resource'));
-        $class::findOrFail($this->id($request))->delete();
+        if ($request->route('resource') === 'sensei-profiles') {
+            $this->content->deleteSensei($this->id($request));
+        } else {
+            $class::findOrFail($this->id($request))->delete();
+        }
 
         return response()->json(null, 204);
     }

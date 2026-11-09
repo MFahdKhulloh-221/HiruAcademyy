@@ -42,7 +42,7 @@
   height: 100%;
   display: flex;
   align-items: center;
-  padding: 36px clamp(24px, 6.8vw, 124px);
+  padding: 48px clamp(24px, 6.8vw, 124px);
 }
 .copy { width: min(40vw, 540px); max-width:100%; }
 @container (min-width: 768px) {
@@ -74,12 +74,12 @@
 .headlineOrange { color:#f48220; }
 .description {
   max-width:500px;
-  margin:16px 0 0;
+  margin:20px 0 0;
   color:#596273;
   font-size:clamp(13px, 1.05vw, 17px);
   line-height:1.55;
 }
-.actions { position:relative; --cta-offset:var(--cta-desktop,0); width:fit-content;max-width:100%; display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-top:24px; }
+.actions { position:relative; --cta-offset:var(--cta-desktop,0); width:fit-content;max-width:100%; display:flex; flex-wrap:wrap; align-items:center; gap:12px; margin-top:28px; }
 .primary,.secondary {
   display:inline-flex;
   align-items:center;
@@ -124,7 +124,7 @@
   .viewport {height:auto;display:grid;}
   .viewport.skeleton {min-height:540px;}
   .slide {position:relative;inset:auto;grid-area:1 / 1;display:flex;flex-direction:column;}
-  .content {order:-1;height:auto;flex:1;padding:24px 20px;background:#fff;align-items:flex-start;}
+  .content {order:-1;height:auto;flex:1;padding:32px 20px;background:#fff;align-items:flex-start;}
   .copy {width:100%;max-width:none;}
   .content[data-mobile-position="center"] {justify-content:center;text-align:center;}
   .content[data-mobile-position="right"] {justify-content:flex-end;text-align:right;}
@@ -132,8 +132,8 @@
   .content[data-mobile-position="right"] .actions {justify-content:flex-end;margin-left:auto;}
   .eyebrow {margin-bottom:10px;font-size:10px;line-height:1.5;}
   .copy h1 {font-size:clamp(27px,7.2cqw,36px);line-height:1.18;}
-  .description {margin-top:14px;font-size:13px;line-height:1.6;max-width:none;}
-  .actions {--cta-offset:var(--cta-mobile,0);gap:8px;margin-top:20px;}
+  .description {margin-top:18px;font-size:13px;line-height:1.6;max-width:none;}
+  .actions {--cta-offset:var(--cta-mobile,0);gap:12px;margin-top:24px;}
   .primary,.secondary {font-size:12px;padding:10px 14px;min-height:44px;}
   .art {position:relative;inset:auto;height:clamp(240px,66cqw,360px);flex-shrink:0;}
   .image {object-position:73% center;}

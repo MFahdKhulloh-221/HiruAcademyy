@@ -15,9 +15,9 @@ export function LandingPriceCard({ offer, price, normalPrice, months, discountPe
       <p className="pricing-desc">{offer.description}</p>
     </div>
     {priceText ? <div className="pricing-price-box">{priceText}</div> : <ProgramPriceDisplay price={price} normalPrice={normalPrice} months={months} discountPercent={discountPercent} minimum />}
-    <ul className="pricing-features" aria-label={`Fitur paket ${offer.title}`}>
+    {offer.points.length > 0 && <ul className="pricing-features" aria-label={`Fitur paket ${offer.title}`}>
       {offer.points.map(point => <li key={point}><span className="feature-check" aria-hidden="true"><svg width="14" height="14" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" strokeWidth="1.8" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6" /></svg></span><span>{point}</span></li>)}
-    </ul>
+    </ul>}
     <div className="pricing-card-footer">
       {unavailable ? <p role="status">Paket belum tersedia.</p> : onSelect ? <button type="button" className="button button-primary pricing-cta-btn" aria-pressed={selected} onClick={onSelect}>{offer.cta}</button> : preview ? <button type="button" className="button button-primary pricing-cta-btn" aria-disabled="true">{offer.cta}</button> : <Link className="button button-primary pricing-cta-btn" href={offer.href}>{offer.cta}</Link>}
     </div>
