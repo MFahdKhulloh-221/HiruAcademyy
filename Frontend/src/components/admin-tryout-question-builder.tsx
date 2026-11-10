@@ -176,7 +176,17 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
                 <section className={styles.answerSection} aria-label="Pilihan Jawaban"><h3>Pilihan Jawaban</h3><div className={styles.studioGrid}>{active.answers.map((answer, index) => <div key={index} className={`${styles.studioAnswer} ${index === active.correctAnswer ? styles.correctAnswer : ""}`}><PlacementTextEditor shared disabled={busy} label={`Pilihan ${assessmentLetters[index]}`} value={answer} onChange={value => update({ ...active, answers: active.answers.map((answer, position) => index === position ? value : answer) })} /></div>)}</div></section>
                 <label className="admin-field">Kunci Jawaban<select aria-label="Jawaban Benar" value={active.correctAnswer} onChange={event => update({ ...active, correctAnswer: Number(event.target.value) })}><option value={-1}>Pilih kunci jawaban</option>{active.answers.map((_, index) => <option key={index} value={index}>{assessmentLetters[index]}</option>)}</select></label>
                 <PlacementTextEditor shared disabled={busy} label="Pembahasan" value={active.explanation} onChange={explanation => update({ ...active, explanation })} />
-                <details className={styles.settings}><summary>Pengaturan soal</summary><div className={styles.studioGrid}>{!readingOnly && <label className="admin-field">Bobot poin<input type="number" min="1" max="180" step="1" value={active.pointValue ?? ""} onChange={event => update({ ...active, pointValue: event.target.value === "" ? undefined : Number(event.target.value) })} /></label>}{draft.kind === "tryout" && !readingOnly && <p role="note">Bobot poin saat ini hanya bilangan bulat. Poin desimal menunggu keputusan bisnis dan schema.</p>}<label className="admin-field">Status soal<select value={active.status} onChange={event => update({ ...active, status: event.target.value as AdminAssessmentQuestion["status"] })}><option>Draft</option><option>Published</option></select></label></div></details>
+                <details className={styles.settings}>
+                  <summary>Pengaturan soal</summary>
+                  <div className={styles.studioGrid}>
+                    {!readingOnly && <label className="admin-field">Bobot poin
+                      <input type="number" min="1" max="180" step={draft.kind === "tryout" ? 0.25 : 1} aria-describedby={draft.kind === "tryout" ? "tryout-point-hint" : undefined} value={active.pointValue ?? ""} onChange={event => update({ ...active, pointValue: event.target.value === "" ? undefined : Number(event.target.value) })} />
+                      {draft.kind === "tryout" && <span id="tryout-point-hint" className={styles.settingsHint}>Rentang 1–180. Contoh: 2 · 2,50 · 2,75.</span>}
+                    </label>}
+                    <label className="admin-field">Status soal<select value={active.status} onChange={event => update({ ...active, status: event.target.value as AdminAssessmentQuestion["status"] })}><option>Draft</option><option>Published</option></select></label>
+                  </div>
+                  {draft.kind === "tryout" && !readingOnly && <p className={styles.settingsNote}>Nilai sesi dan total dibulatkan setelah penjumlahan. Contoh: <strong>81,75 menjadi 82.</strong></p>}
+                </details>
               </fieldset>
               {questionNavigation}
             </section>

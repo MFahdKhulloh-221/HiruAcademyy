@@ -58,7 +58,7 @@ class TryOutBuilderImageTest extends TryOutGrammarPassageTest
     {
         $service = app(TryOutService::class);
         $parent = $this->fixture();
-        $this->assertSame(['images' => false, 'decimal_points' => false], $service->builderCapabilities());
+        $this->assertSame(['images' => false, 'decimal_points' => true], $service->builderCapabilities());
         $question = $service->saveQuestion($parent, $this->imageQuestion());
         $this->assertArrayNotHasKey('image', $service->adminQuestion($question));
         $this->assertSame([], $service->adminPassages($parent));
@@ -69,8 +69,24 @@ class TryOutBuilderImageTest extends TryOutGrammarPassageTest
         $this->assertFalse($service->builderCapabilities()['images']);
         $fractional = $this->imageQuestion();
         $fractional['point_value'] = 1.75;
+        $saved = $service->saveQuestion($parent, $fractional);
+        $this->assertSame(1.75, $saved->fresh()->point_value);
+        $fractional['point_value'] = 1.25;
         $this->rejectsImage(fn () => $service->saveQuestion($parent, $fractional), 'point_value');
         $this->rejectsImage(fn () => $service->saveQuestion($parent, ['image' => null], $question));
+    }
+
+    public function test_checkpoint_decimal_capability_and_integer_validation_remain_unchanged(): void
+    {
+        $service = app(\App\Services\CheckpointPackageService::class);
+        $parent = \App\Models\CheckpointPackage::create(['program_id' => 1, 'title' => 'Integer checkpoint']);
+        $this->assertFalse($service->builderCapabilities()['decimal_points']);
+        $question = $service->saveQuestion($parent, $this->imageQuestion());
+        $this->assertSame(1, $question->fresh()->point_value);
+        foreach ([1.5, 1.75] as $points) {
+            $this->rejectsImage(fn () => $service->saveQuestion($parent, ['point_value' => $points], $question), 'point_value');
+        }
+        $this->assertSame(1, $question->fresh()->point_value);
     }
 
     public function test_real_storage_image_rules_all_sessions_reload_clear_and_alt_validation(): void

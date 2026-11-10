@@ -95,7 +95,7 @@ class TryOutService
     {
         return ['images' => $this->assessmentModel === TryOut::class
             && Schema::hasColumns('try_out_questions', ['image', 'image_alt', 'image_position'])
-            && Schema::hasColumns('try_out_passages', ['image', 'image_alt', 'image_position']), 'decimal_points' => false];
+            && Schema::hasColumns('try_out_passages', ['image', 'image_alt', 'image_position']), 'decimal_points' => $this->assessmentModel === TryOut::class];
     }
 
     public function imageFields(): array
@@ -154,7 +154,14 @@ class TryOutService
             'options' => ['required', 'array:A,B,C,D', 'size:4'],
             'correct_option' => ['required', Rule::in(['A', 'B', 'C', 'D'])],
             'explanation' => ['nullable', 'string'],
-            'point_value' => ['required', 'integer', 'min:1', 'max:180'],
+            'point_value' => $this->assessmentModel === TryOut::class
+                ? ['required', 'numeric', 'min:1', 'max:180', function ($attribute, $value, $fail) {
+                    if (! is_numeric($value) || ! is_finite((float) $value)
+                        || ! in_array(fmod((float) $value, 1), [0.0, 0.5, 0.75], true)) {
+                        $fail('Bobot poin harus bilangan bulat atau berakhiran ,50 / ,75.');
+                    }
+                }]
+                : ['required', 'integer', 'min:1', 'max:180'],
             'reading_passage' => ['nullable', 'string'],
             'passage_id' => ['sometimes', 'nullable', 'integer'],
             'audio_url' => ['nullable', 'string', app(MediaService::class)->rule('audio')],
@@ -272,12 +279,16 @@ class TryOutService
             $this->assertQuestion($question);
         }
         $sessions = $questions->pluck('session')->unique()->all();
-        if (count($sessions) !== 4 || array_diff(array_keys(self::SESSIONS), $sessions) !== [] || $questions->sum('point_value') !== $tryOut->max_score) {
+        if (count($sessions) !== 4 || array_diff(array_keys(self::SESSIONS), $sessions) !== [] || $questions->sum('point_value') != $tryOut->max_score) {
             throw ValidationException::withMessages(['status' => 'Publish requires all four sessions and explicit question points matching max_score.']);
         }
         if ($tryOut->session_passing_scores !== null) {
             foreach (array_keys(self::SESSIONS) as $session) {
-                if (! array_key_exists($session, $tryOut->session_passing_scores) || $tryOut->session_passing_scores[$session] > $questions->where('session', $session)->sum('point_value')) {
+                $maximum = $questions->where('session', $session)->sum('point_value');
+                if ($this->assessmentModel === TryOut::class) {
+                    $maximum = (int) round($maximum, 0, PHP_ROUND_HALF_UP);
+                }
+                if (! array_key_exists($session, $tryOut->session_passing_scores) || $tryOut->session_passing_scores[$session] > $maximum) {
                     throw ValidationException::withMessages(['session_passing_scores' => 'Each session requires an achievable passing score in points.']);
                 }
             }

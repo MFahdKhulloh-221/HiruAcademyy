@@ -159,15 +159,23 @@ class TryOutAttemptService
                 $section['max'] += $grade['point_value'];
                 $section['earned'] += $outcome === 'correct' ? $grade['point_value'] : 0;
             }
+            // Sum raw points before rounding sections so total is rounded only once.
+            foreach (['earned', 'correct', 'wrong', 'unanswered'] as $key) {
+                $result[$key] += $section[$key];
+            }
+            if ($this->assessmentModel === TryOut::class) {
+                $section['earned'] = (int) round($section['earned'], 0, PHP_ROUND_HALF_UP);
+                $section['max'] = (int) round($section['max'], 0, PHP_ROUND_HALF_UP);
+            }
             // ponytail: null preserves legacy 19-correct-answer attempts; explicit admin thresholds use points.
             $configured = $locked->grading_snapshot['session_passing_scores'][$session] ?? null;
             $section['passing_score'] = $configured ?? 19;
             $section['passing_score_basis'] = $configured === null ? 'correct_answers' : 'points';
             $section['pass'] = ($configured === null ? $section['correct'] : $section['earned']) >= $section['passing_score'];
             $result['sessions'][] = $section;
-            foreach (['earned', 'correct', 'wrong', 'unanswered'] as $key) {
-                $result[$key] += $section[$key];
-            }
+        }
+        if ($this->assessmentModel === TryOut::class) {
+            $result['earned'] = (int) round($result['earned'], 0, PHP_ROUND_HALF_UP);
         }
         $result['overall_pass'] = ! in_array(false, array_column($result['sessions'], 'pass'), true)
             && ($result['total_passing_score'] === null || $result['earned'] >= $result['total_passing_score']);

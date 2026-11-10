@@ -157,6 +157,9 @@
 .questionBuilder :global(.placement-furigana-panel) { grid-column:1 / -1; display:grid; gap:8px; padding:12px; background:#f9f9ff; }
 .questionBuilder :global(.placement-furigana-panel > div) { display:flex; flex-wrap:wrap; gap:8px; }
 .settings, .actionMenu { min-width:0; border-top:1px solid #e2e5ec; }
+.settings > .studioGrid { align-items:start; padding-top:8px; }
+.settingsHint { color:#596579; font-size:12px; font-weight:400; line-height:1.6; }
+.settingsNote { margin:12px 0 0; padding:12px 14px; border:1px solid #e2e5ec; border-radius:8px; background:#F9F9FF; color:#596579; font-size:13px; line-height:1.6; }
 .secondaryActions { display:flex; flex-wrap:wrap; gap:8px; padding:8px 0; }
 .questionBuilder .danger { color:#b42318; }
 .editorFooter { display:flex; align-items:center; justify-content:space-between; gap:8px; border-top:1px solid #e2e5ec; padding-top:12px; }

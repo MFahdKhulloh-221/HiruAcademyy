@@ -13,7 +13,14 @@ class TryOutQuestion extends Model
 
     protected function casts(): array
     {
-        return ['try_out_id' => 'integer', 'options' => 'array', 'japanese' => 'array', 'point_value' => 'integer', 'sort_order' => 'integer'];
+        return ['try_out_id' => 'integer', 'options' => 'array', 'japanese' => 'array', 'sort_order' => 'integer'];
+    }
+
+    public function getPointValueAttribute($value): int|float
+    {
+        $points = (float) $value;
+
+        return floor($points) === $points ? (int) $points : $points;
     }
 
     public function tryOut(): BelongsTo

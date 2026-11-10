@@ -76,7 +76,7 @@ final class TryOutImageMigrationTest extends TestCase
             $this->assertSame('before', $definitions[2]->default);
             $this->assertNull($definitions[2]->nullable);
         }
-        $this->assertSame(['images' => true, 'decimal_points' => false], (new TryOutService)->builderCapabilities());
+        $this->assertSame(['images' => true, 'decimal_points' => true], (new TryOutService)->builderCapabilities());
         $this->assertSame(['images' => false, 'decimal_points' => false], (new CheckpointPackageService)->builderCapabilities());
     }
 
