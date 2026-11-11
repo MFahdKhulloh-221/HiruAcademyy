@@ -81,7 +81,7 @@ export function assessmentImageError(content: AssessmentImage) {
 }
 export function assessmentPointValueError(value: number | undefined, kind: AdminAssessmentKind) {
   if (value === undefined || !Number.isFinite(value) || value < 1 || value > 180) return "Point value harus antara 1 dan 180.";
-  if (kind === "tryout" ? ![0, 0.5, 0.75].includes(value % 1) : !Number.isInteger(value)) return kind === "tryout" ? "Point value harus bilangan bulat atau berakhiran .50 atau .75." : "Point value harus bilangan bulat.";
+  if (kind === "tryout" ? ![0, 0.25, 0.5, 0.75].includes(value % 1) : !Number.isInteger(value)) return kind === "tryout" ? "Point value harus bilangan bulat atau berakhiran ,25 / ,50 / ,75." : "Point value harus bilangan bulat.";
   return "";
 }
 export function assessmentQuestionError(question: AdminAssessmentQuestion, item: AdminAssessment) {

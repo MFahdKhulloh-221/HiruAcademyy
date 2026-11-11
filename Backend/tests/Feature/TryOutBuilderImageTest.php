@@ -72,8 +72,34 @@ class TryOutBuilderImageTest extends TryOutGrammarPassageTest
         $saved = $service->saveQuestion($parent, $fractional);
         $this->assertSame(1.75, $saved->fresh()->point_value);
         $fractional['point_value'] = 1.25;
+        $this->assertSame(1.25, $service->saveQuestion($parent, $fractional)->fresh()->point_value);
+        $fractional['point_value'] = 1.1;
         $this->rejectsImage(fn () => $service->saveQuestion($parent, $fractional), 'point_value');
         $this->rejectsImage(fn () => $service->saveQuestion($parent, ['image' => null], $question));
+    }
+
+    public function test_quarter_weights_round_trip_and_reject_other_fractions_through_sqlite_api(): void
+    {
+        $admin = new User;
+        $admin->forceFill(['id' => 1, 'role' => 'admin', 'account_status' => 'active']);
+        $this->actingAs($admin)->withoutMiddleware(\Laravel\Sanctum\Http\Middleware\AuthenticateSession::class);
+        $parent = $this->fixture();
+        $base = '/api/admin/try-outs/'.$parent->id;
+        foreach ([1, 1.25, 1.5, 1.75, 179.25, 179.5, 179.75, 180] as $points) {
+            \Illuminate\Support\Facades\RateLimiter::clear(md5('apiwrite:user:1'));
+            $id = $this->postJson($base.'/questions', array_replace($this->imageQuestion(), ['point_value' => $points]))
+                ->assertCreated()->assertJsonPath('data.point_value', $points)->json('data.id');
+            $this->assertSame($points, $parent->questions()->findOrFail($id)->point_value);
+        }
+        foreach ([0.25, 0.5, 0.75, 1.1, 1.2, 1.3, 1.6, 1.9, 180.25, 181, true, null, 'bad'] as $points) {
+            \Illuminate\Support\Facades\RateLimiter::clear(md5('apiwrite:user:1'));
+            $this->postJson($base.'/questions', array_replace($this->imageQuestion(), ['point_value' => $points]))
+                ->assertUnprocessable()->assertJsonValidationErrors('point_value');
+            $this->patchJson($base.'/questions/'.$id, ['point_value' => $points])
+                ->assertUnprocessable()->assertJsonValidationErrors('point_value');
+        }
+        $this->patchJson($base.'/questions/'.$id, ['point_value' => 2.25])->assertOk()->assertJsonPath('data.point_value', 2.25);
+        $this->getJson($base)->assertOk()->assertJsonPath('data.questions.7.point_value', 2.25);
     }
 
     public function test_checkpoint_decimal_capability_and_integer_validation_remain_unchanged(): void
@@ -83,7 +109,7 @@ class TryOutBuilderImageTest extends TryOutGrammarPassageTest
         $this->assertFalse($service->builderCapabilities()['decimal_points']);
         $question = $service->saveQuestion($parent, $this->imageQuestion());
         $this->assertSame(1, $question->fresh()->point_value);
-        foreach ([1.5, 1.75] as $points) {
+        foreach ([1.25, 1.5, 1.75] as $points) {
             $this->rejectsImage(fn () => $service->saveQuestion($parent, ['point_value' => $points], $question), 'point_value');
         }
         $this->assertSame(1, $question->fresh()->point_value);

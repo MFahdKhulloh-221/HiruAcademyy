@@ -15,9 +15,9 @@ const fixtures = vm.createContext({ exports: {}, require: () => ({}) });
 vm.runInContext(compile(readFileSync(new URL("../src/components/admin-assessment-fixtures.ts", import.meta.url), "utf8")), fixtures);
 const { assessmentPointValueError } = fixtures.exports;
 
-test("Try Out weights accept only integers, .50 and .75 within 1–180; Checkpoint stays integer", () => {
-  for (const value of [1, 1.5, 1.75, 90, 179.5, 179.75, 180]) assert.equal(assessmentPointValueError(value, "tryout"), "", String(value));
-  for (const value of [undefined, NaN, Infinity, -Infinity, 0, 0.75, 1.25, 1.1, 179.25, 180.5, 181]) assert.ok(assessmentPointValueError(value, "tryout"), String(value));
+test("Try Out weights accept only integers, .25, .50 and .75 within 1–180; Checkpoint stays integer", () => {
+  for (const value of [1, 1.25, 1.5, 1.75, 90, 179.25, 179.5, 179.75, 180]) assert.equal(assessmentPointValueError(value, "tryout"), "", String(value));
+  for (const value of [undefined, NaN, Infinity, -Infinity, 0, 0.25, 0.5, 0.75, 1.1, 1.2, 1.3, 1.6, 1.9, 180.25, 180.5, 181]) assert.ok(assessmentPointValueError(value, "tryout"), String(value));
   for (const value of [1, 90, 180]) assert.equal(assessmentPointValueError(value, "checkpoint"), "", String(value));
   for (const value of [undefined, NaN, Infinity, -Infinity, 0, 1.25, 1.5, 1.75, 181]) assert.ok(assessmentPointValueError(value, "checkpoint"), String(value));
 });
@@ -43,10 +43,12 @@ test("Try Out adapter preserves server decimal capability and enforces weight ru
   }
   const api = adapterHarness(true);
   const item = { id: "1", context: "N5", duration: "", status: "Draft", questions: [{ answers: [], order: "1", status: "Draft", pointValue: 1.75 }] };
-  await api.saveAdminTryOut(item);
-  const payload = JSON.parse(api.calls.find(call => call.path.endsWith("/studio")).options.body);
-  assert.equal(payload.questions[0].content.point_value, 1.75);
-  for (const value of [1.25, 1.1, NaN, Infinity, -Infinity, 0, 181]) {
+  for (const value of [1, 1.25, 1.5, 1.75, 179.25, 179.5, 179.75, 180]) {
+    await api.saveAdminTryOut({ ...item, questions: [{ ...item.questions[0], pointValue: value }] });
+    const payload = JSON.parse(api.calls.findLast(call => call.path.endsWith("/studio")).options.body);
+    assert.equal(payload.questions[0].content.point_value, value);
+  }
+  for (const value of [1.1, 1.2, 1.3, 1.6, 1.9, NaN, Infinity, -Infinity, 0, 0.25, 0.5, 0.75, 180.25, 181]) {
     const before = api.calls.filter(call => call.options?.method).length;
     await assert.rejects(api.saveAdminTryOut({ ...item, questions: [{ ...item.questions[0], pointValue: value }] }), /Point value/);
     assert.equal(api.calls.filter(call => call.options?.method).length, before);

@@ -183,7 +183,7 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
                   <div className={styles.studioGrid}>
                     {!readingOnly && <label className="admin-field">Bobot poin
                       <input type="number" aria-label="Bobot poin" min="1" max="180" step={draft.kind === "tryout" ? 0.25 : 1} aria-describedby={draft.kind === "tryout" ? "tryout-point-hint" : undefined} value={active.pointValue ?? ""} onChange={event => update({ ...active, pointValue: event.target.value === "" ? undefined : Number(event.target.value) })} />
-                      {draft.kind === "tryout" && <span id="tryout-point-hint" className={styles.settingsHint}>Rentang 1–180. Contoh: 2 · 2,50 · 2,75.</span>}
+                      {draft.kind === "tryout" && <span id="tryout-point-hint" className={styles.settingsHint}>Rentang 1–180. Contoh: 2 · 2,25 · 2,50 · 2,75.</span>}
                     </label>}
                     <label className="admin-field">Status soal<select value={active.status} onChange={event => update({ ...active, status: event.target.value as AdminAssessmentQuestion["status"] })}><option>Draft</option><option>Published</option></select></label>
                   </div>

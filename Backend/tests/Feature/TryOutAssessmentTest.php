@@ -58,6 +58,7 @@ class TryOutAssessmentTest extends TestCase
         }
         $this->assertGreaterThan(0, DB::transactionLevel());
         (require database_path('migrations/2026_11_10_000001_allow_decimal_try_out_question_points.php'))->up();
+        (require database_path('migrations/2026_11_11_120002_allow_quarter_try_out_question_points.php'))->up();
         $this->seed(ProgramSeeder::class);
         $this->student = $this->user('student');
         $this->admin = $this->user('admin');
@@ -246,13 +247,13 @@ class TryOutAssessmentTest extends TestCase
     public function test_decimal_weights_round_trip_preserve_integer_types_and_reject_other_fractions(): void
     {
         $this->actingAs($this->admin);
-        foreach ([1, 1.5, 1.75, 180] as $points) {
+        foreach ([1, 1.25, 1.5, 1.75, 179.25, 179.5, 179.75, 180] as $points) {
             $id = $this->postJson($this->adminBase.'/questions', $this->question('grammar', $points))
                 ->assertCreated()->assertJsonPath('data.point_value', $points)->json('data.id');
             $this->assertSame($points, $this->tryOut->questions()->findOrFail($id)->point_value);
             $this->patchJson($this->adminBase.'/questions/'.$id, ['point_value' => 2.5])
                 ->assertOk()->assertJsonPath('data.point_value', 2.5);
-            foreach ([0.5, 0.75, 1.25, 1.1, 180.5, true, 'bad'] as $invalid) {
+            foreach ([0, 0.25, 0.5, 0.75, 1.1, 1.2, 1.3, 1.6, 1.9, 180.25, 180.5, 181, true, 'bad'] as $invalid) {
                 $this->postJson($this->adminBase.'/questions', $this->question('grammar', 1, ['point_value' => $invalid]))
                     ->assertUnprocessable()->assertJsonValidationErrors('point_value');
                 $this->patchJson($this->adminBase.'/questions/'.$id, ['point_value' => $invalid])
@@ -266,7 +267,7 @@ class TryOutAssessmentTest extends TestCase
     {
         $this->actingAs($this->admin);
         $thresholds = array_combine(array_keys(TryOutService::SESSIONS), [21, 21, 21, 20]);
-        foreach (array_combine(array_keys(TryOutService::SESSIONS), [[10.75, 9.75], [20.5, 96.5], [20.75, 1.75], [20]]) as $session => $weights) {
+        foreach (array_combine(array_keys(TryOutService::SESSIONS), [[10.25, 10.25], [20.5, 96.5], [20.75, 1.75], [20]]) as $session => $weights) {
             foreach ($weights as $index => $points) {
                 $this->postJson($this->adminBase.'/questions', $this->question($session, $points, ['sort_order' => $index]))
                     ->assertCreated()->assertJsonPath('data.point_value', $points);
@@ -276,7 +277,7 @@ class TryOutAssessmentTest extends TestCase
         $this->actingAs($this->student);
         $attempt = $this->start();
         $snapshot = TryOutAttempt::findOrFail($attempt['id'])->grading_snapshot;
-        $this->assertSame([10.75, 9.75, 20.5, 96.5, 20.75, 1.75, 20], array_column(array_values($snapshot['questions']), 'point_value'));
+        $this->assertSame([10.25, 10.25, 20.5, 96.5, 20.75, 1.75, 20], array_column(array_values($snapshot['questions']), 'point_value'));
         $path = $this->base.'/attempts/'.$attempt['id'];
         foreach (array_keys(TryOutService::SESSIONS) as $session) {
             $answers = [];
@@ -299,7 +300,22 @@ class TryOutAssessmentTest extends TestCase
         $this->getJson($path)->assertOk()->assertJsonPath('data.result', $result);
         $this->getJson($this->base.'/history')->assertOk()->assertJsonPath('data.best_score', 82);
         $review = $this->getJson($path.'/review')->assertOk()->json('data.questions');
-        $this->assertSame([10.75, 9.75, 20.5, 96.5, 20.75, 1.75, 20], array_column($review, 'point_value'));
+        $this->assertSame([10.25, 10.25, 20.5, 96.5, 20.75, 1.75, 20], array_column($review, 'point_value'));
+    }
+
+    public function test_quarter_scoring_rounds_81_25_down_and_compares_rounded_total_to_threshold(): void
+    {
+        $this->actingAs($this->admin);
+        foreach (array_combine(array_keys(TryOutService::SESSIONS), [20.25, 20, 41, 98.75]) as $session => $points) {
+            $this->postJson($this->adminBase.'/questions', $this->question($session, $points))->assertCreated();
+        }
+        $this->patchJson($this->adminBase, ['status' => 'published', 'total_passing_score' => 82, 'session_passing_scores' => array_fill_keys(array_keys(TryOutService::SESSIONS), 0)])->assertOk();
+        $this->actingAs($this->student);
+        $result = $this->finish($this->start(), ['B', 'B', 'B', 'A'])['result'];
+        $this->assertSame(81, $result['earned']); // Raw 81.25 rounds down.
+        $this->assertSame([20, 20, 41, 0], array_column($result['sessions'], 'earned'));
+        $this->assertSame(180, $result['max']);
+        $this->assertFalse($result['overall_pass']);
     }
 
     public function test_decimal_session_threshold_accepts_rounded_max_and_total_does_not_sum_rounded_maxima(): void
@@ -327,11 +343,11 @@ class TryOutAssessmentTest extends TestCase
         $this->assertSame(5, $column->numeric_precision);
         $this->assertSame(2, $column->numeric_scale);
         $question = app(TryOutService::class)->saveQuestion($this->tryOut, $this->question('grammar', 1));
-        foreach ([1, 1.5, 1.75, 180] as $points) {
+        foreach ([1, 1.25, 1.5, 1.75, 179.25, 179.5, 179.75, 180] as $points) {
             DB::table('try_out_questions')->where('id', $question->id)->update(['point_value' => $points]);
             $this->assertSame($points, $question->fresh()->point_value);
         }
-        foreach ([0, 0.75, -1, 1.25, 1.1, 180.5, 181] as $points) {
+        foreach ([0, 0.25, 0.5, 0.75, -1, 1.1, 1.2, 1.3, 1.6, 1.9, 180.25, 180.5, 181] as $points) {
             try {
                 DB::transaction(fn () => DB::table('try_out_questions')->where('id', $question->id)->update(['point_value' => $points]));
                 $this->fail('Invalid decimal weight accepted: '.$points);
@@ -339,6 +355,35 @@ class TryOutAssessmentTest extends TestCase
                 $this->assertSame('23514', $exception->errorInfo[0]);
             }
         }
+    }
+
+    public function test_quarter_migration_rollback_guards_data_and_restores_previous_constraint(): void
+    {
+        $migration = require database_path('migrations/2026_11_11_120002_allow_quarter_try_out_question_points.php');
+        $question = app(TryOutService::class)->saveQuestion($this->tryOut, $this->question('grammar', 1.25));
+        $before = $question->fresh()->getAttributes();
+        try {
+            $migration->down();
+            $this->fail('Rollback must refuse existing quarter-point weights.');
+        } catch (\RuntimeException $exception) {
+            $this->assertSame('Quarter-point Try Out weights exist; convert them explicitly before rollback.', $exception->getMessage());
+        }
+        $this->assertSame($before, $question->fresh()->getAttributes());
+        DB::table('try_out_questions')->where('id', $question->id)->update(['point_value' => 2.25]);
+        $this->assertSame(2.25, $question->fresh()->point_value);
+        DB::table('try_out_questions')->where('id', $question->id)->update(['point_value' => 2]);
+        $migration->down();
+        $this->assertSame(2, $question->fresh()->point_value);
+        try {
+            DB::transaction(fn () => DB::table('try_out_questions')->where('id', $question->id)->update(['point_value' => 1.25]));
+            $this->fail('Previous constraint must reject quarter-point weights.');
+        } catch (QueryException $exception) {
+            $this->assertSame('23514', $exception->errorInfo[0]);
+        }
+        $this->assertSame(2, $question->fresh()->point_value);
+        $migration->up();
+        DB::table('try_out_questions')->where('id', $question->id)->update(['point_value' => 1.25]);
+        $this->assertSame(1.25, $question->fresh()->point_value);
     }
 
     public function test_builder_rejects_unachievable_scores_and_malformed_japanese(): void
@@ -469,7 +514,7 @@ class TryOutAssessmentTest extends TestCase
     public function test_authoring_rejects_malformed_options_points_sessions_media_and_tampering(): void
     {
         $this->actingAs($this->admin);
-        foreach ([['point_value' => 0], ['point_value' => -1], ['point_value' => 1.25], ['point_value' => 1.1], ['point_value' => 180.5], ['point_value' => null], ['session' => 'listening'], ['correct_option' => 'E'], ['options' => ['A' => 'One', 'B' => 'Two', 'C' => 'Three']], ['options' => ['A' => 'One', 'B' => 'Two', 'C' => 'Three', 'D' => 'Four', 'E' => 'Extra']], ['options' => ['A' => ['key' => 'B'], 'B' => 'Two', 'C' => 'Three', 'D' => 'Four']], ['options' => ['A' => ' ', 'B' => 'Two', 'C' => 'Three', 'D' => 'Four']], ['audio_url' => 'javascript:alert(1)'], ['try_out_id' => 999], ['section_passing_score' => 1]] as $extra) {
+        foreach ([['point_value' => 0], ['point_value' => -1], ['point_value' => 1.2], ['point_value' => 1.1], ['point_value' => 180.5], ['point_value' => null], ['session' => 'listening'], ['correct_option' => 'E'], ['options' => ['A' => 'One', 'B' => 'Two', 'C' => 'Three']], ['options' => ['A' => 'One', 'B' => 'Two', 'C' => 'Three', 'D' => 'Four', 'E' => 'Extra']], ['options' => ['A' => ['key' => 'B'], 'B' => 'Two', 'C' => 'Three', 'D' => 'Four']], ['options' => ['A' => ' ', 'B' => 'Two', 'C' => 'Three', 'D' => 'Four']], ['audio_url' => 'javascript:alert(1)'], ['try_out_id' => 999], ['section_passing_score' => 1]] as $extra) {
             $this->postJson($this->adminBase.'/questions', $this->question('grammar', 20, $extra))->assertUnprocessable();
         }
         $missing = $this->question('grammar', 20);

@@ -200,8 +200,8 @@ class TryOutService
             'point_value' => $this->assessmentModel === TryOut::class
                 ? ['required', 'numeric', 'min:1', 'max:180', function ($attribute, $value, $fail) {
                     if (! is_numeric($value) || ! is_finite((float) $value)
-                        || ! in_array(fmod((float) $value, 1), [0.0, 0.5, 0.75], true)) {
-                        $fail('Bobot poin harus bilangan bulat atau berakhiran ,50 / ,75.');
+                        || ! in_array(fmod((float) $value, 1), [0.0, 0.25, 0.5, 0.75], true)) {
+                        $fail('Bobot poin harus bilangan bulat atau berakhiran ,25 / ,50 / ,75.');
                     }
                 }]
                 : ['required', 'integer', 'min:1', 'max:180'],
