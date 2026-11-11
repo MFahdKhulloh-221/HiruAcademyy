@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { dashboardFixture } from "./canonical-fixture";
+import { dashboardFixture, gamificationFixture, leaderboardFixture } from "./canonical-fixture";
 
 test.beforeEach(async ({ page }) => {
   await page.route(/\/(api\/|sanctum\/csrf-cookie)/, async route => {
@@ -97,19 +97,36 @@ test("free dashboard bento uses full-width mobile cards", async ({ page }) => {
   await page.screenshot({ path: "C:/Users/Tulo/AppData/Local/Temp/opencode/dashboard-393.png", fullPage: true, animations: "disabled" });
 });
 
-test("dashboard membership lock keeps upgrade action and close control", async ({ page }) => {
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await page.goto("/dashboard?membership=free");
-  const tryout = page.getByRole("button", { name: "Try Out, akses terkunci" });
-  await expect(tryout).toHaveCSS("display", "flex");
-  await expect(tryout.locator("svg")).toBeVisible();
-  await tryout.click();
-  const dialog = page.getByRole("dialog");
-  await expect(dialog.getByRole("heading", { name: "Akses Terkunci" })).toBeVisible();
-  await expect(dialog.getByRole("link", { name: "Upgrade", exact: true })).toHaveAttribute("href", "/#program");
-  await dialog.locator(".locked-modal-close").click();
-  await expect(dialog).toHaveCount(0);
-});
+for (const membership of ["free", "lms", "sensei"] as const) {
+  for (const width of [1440, 390]) test(`Try Out catalog entry ${membership} ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 900 });
+    await page.route("**/api/student/gamification", route => route.fulfill({ json: { data: gamificationFixture } }));
+    await page.route("**/api/student/leaderboard**", route => route.fulfill({ json: { data: leaderboardFixture() } }));
+    await page.route("**/api/student/try-outs", route => route.fulfill({ json: { data: [
+      { id: 7, program_id: 2, level: "N5", title: "Gratis N5", access_type: "free", can_access: true, max_score: 180, sessions: {} },
+      { id: 8, program_id: 6, level: "N1", title: "Membership N1", access_type: "membership", can_access: false, max_score: 180, sessions: {} },
+    ] } }));
+    await page.goto(`/dashboard?membership=${membership}`);
+    if (membership !== "sensei") {
+      const action = page.getByRole("region", { name: "Akses cepat", exact: true }).getByRole("link", { name: /Try Out/ });
+      await expect(action).toHaveAttribute("href", "/tryout");
+      await action.click();
+      await expect(page).toHaveURL(/\/tryout$/);
+      await expect(page.getByRole("dialog")).toHaveCount(0);
+      await page.goto(`/dashboard?membership=${membership}`);
+    }
+    if (width < 1024) await page.getByRole("button", { name: "Buka navigasi", exact: true }).click();
+    const navigation = page.locator(width < 1024 ? "#student-mobile-panel" : ".student-nav-desktop");
+    const classes = navigation.getByRole("button", { name: "Kelas Saya", exact: true });
+    if (await classes.getAttribute("aria-expanded") === "false") await classes.click();
+    await navigation.getByRole("link", { name: "Try Out", exact: true }).click();
+    await expect(page).toHaveURL(new RegExp(`/tryout\\?membership=${membership}$`));
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    await expect(page.getByText("Gratis N5", { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Mulai Try Out", exact: true })).toHaveCount(1);
+    await expect(page.getByRole("link", { name: "Upgrade Membership", exact: true })).toHaveAttribute("href", "/renewal?target=N1");
+  });
+}
 
 test("tryout runner uses canonical questions in clean focus workspace without answer keys", async ({ page }) => {
   await page.route("**/api/student/try-outs", route => route.fulfill({ json: { data: [{ id: 7, program_id: 2, title: "Canonical Try Out", max_score: 180, section_passing_score: 19, total_passing_score: null, sessions: {} }] } }));

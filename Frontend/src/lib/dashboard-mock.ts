@@ -75,8 +75,8 @@ const defaultLeaderboard: LeaderboardEntry[] = [
 ];
 
 export function getStudentFeatureAccess(membership: Membership, feature: StudentFeature): FeatureAccess {
-  if (feature === "tryout" || feature === "schedule" || feature === "replay" || feature === "mini-checkpoint" || feature === "ask-sensei" || feature === "certificate") {
-    if (feature === "tryout" || feature === "certificate") return membership === "free" ? "locked" : "available";
+  if (feature === "schedule" || feature === "replay" || feature === "mini-checkpoint" || feature === "ask-sensei" || feature === "certificate") {
+    if (feature === "certificate") return membership === "free" ? "locked" : "available";
     return membership === "sensei" ? "available" : "locked";
   }
   if (feature === "journey" || feature === "practice" || feature === "flashcards" || feature === "library" || feature === "community") {

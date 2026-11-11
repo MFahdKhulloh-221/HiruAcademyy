@@ -58,7 +58,7 @@ function itemsFor(membership: Membership, current: StudentNavKey | null): NavIte
       { key: "practice", label: "Latihan Harian", href: `/practice${query}`, entitlement: free ? "limited" : "available" },
       { key: "flashcards", label: "Kumpulan Flashcard", href: `/flashcards${query}`, entitlement: free ? "limited" : "available" },
       { key: "library", label: "Perpustakaan", href: `/library${query}`, entitlement: free ? "limited" : "available" },
-      { key: "tryout", label: "Try Out", href: `/tryout${query}`, entitlement: free ? "locked" : "available" },
+      { key: "tryout", label: "Try Out", href: `/tryout${query}`, entitlement: "available" },
       { key: "schedule", label: "Jadwal", href: `/schedule${query}`, entitlement: sensei ? "available" : "locked" },
       { key: "replay", label: "Replay", href: `/replay${query}`, entitlement: sensei ? "available" : "locked" },
       { key: "checkpoint", label: "Checkpoint", href: `/checkpoint${query}`, entitlement: "available" },
