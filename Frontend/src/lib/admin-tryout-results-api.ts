@@ -1,11 +1,12 @@
 import { apiDownload, apiRequest } from "@/lib/api";
+import type { AssessmentImage, AssessmentPassageBlock } from "@/lib/assessment-image";
 
 export type ReportFilters = { search: string; status: "all" | "passed" | "failed"; date_from: string; date_to: string };
 export type ReportParticipant = { id: number; user_id: number; name: string; whatsapp: string | null; started_at: string; completed_at: string; status: string; raw_score: number; final_score: number; max_score: number; overall_pass: boolean; sessions: { code: string; label: string; earned: number; max: number; correct: number; wrong: number; unanswered: number; pass: boolean }[] };
 export type ReportQuestion = { version: string; id: number; fingerprint: string; section: string; number: number; question: string; options: Record<string, string>; correct_option: string; received: number; not_received: number; correct: number; wrong: number; unanswered: number; correct_percentage: number | null; distribution: Record<string, { count: number; percentage: number }> };
 export type ReportOverview = { try_out: { id: number; title: string; level: string }; summary: { responses: number; unique_participants: number; mean: number | null; median: number | null; min: number | null; max: number | null; passed: number; failed: number }; histogram: { label: string; count: number }[]; questions: ReportQuestion[]; hardest: ReportQuestion[] };
 export type ReportParticipants = { data: ReportParticipant[]; meta: { current_page: number; last_page: number; total: number; per_page: number } };
-export type ReportAttempt = { participant: ReportParticipant; try_out: ReportOverview["try_out"]; questions: { id: number; number: number; session: string; question: string; options: Record<string, string>; reading_passage?: string | null; passage?: { body?: string; title?: string } | null; answer: string | null; correct_option: string; explanation: string | null; point_value: number; earned: number; outcome: string }[]; attempts: { id: number; started_at: string; completed_at: string; raw_score: number }[] };
+export type ReportAttempt = { participant: ReportParticipant; try_out: ReportOverview["try_out"]; questions: { id: number; number: number; session: string; question: string; options: Record<string, string>; reading_passage?: string | null; passage?: (AssessmentImage & { body?: string; title?: string; blocks?: AssessmentPassageBlock[] | null }) | null; answer: string | null; correct_option: string; explanation: string | null; point_value: number; earned: number; outcome: string }[]; attempts: { id: number; started_at: string; completed_at: string; raw_score: number }[] };
 
 export function reportQuery(filters: ReportFilters, page?: number) {
   const query = new URLSearchParams();

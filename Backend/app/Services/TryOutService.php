@@ -136,10 +136,53 @@ class TryOutService
         }
     }
 
+    public function passageFields(): array
+    {
+        return array_merge(['id', 'title', 'body'], $this->imageFields(), $this->assessmentModel === TryOut::class && Schema::hasColumn('try_out_passages', 'blocks') ? ['blocks'] : []);
+    }
+
+    private function blockRules(): array
+    {
+        return $this->assessmentModel === TryOut::class ? [
+            'blocks' => ['sometimes', 'nullable', 'array', 'min:1', function ($attribute, $value, $fail) {
+                if (! is_array($value) || ! array_is_list($value)) {
+                    $fail('Blocks must be an ordered array.');
+                }
+            }],
+            'blocks.*' => ['required', 'array:type,text,image,image_alt'],
+            'blocks.*.type' => ['required', 'string', Rule::in(['text', 'image'])],
+            'blocks.*.text' => ['required_if:blocks.*.type,text', 'prohibited_unless:blocks.*.type,text', 'string'],
+            'blocks.*.image' => ['required_if:blocks.*.type,image', 'prohibited_unless:blocks.*.type,image', 'string', app(MediaService::class)->rule('image')],
+            'blocks.*.image_alt' => ['required_if:blocks.*.type,image', 'prohibited_unless:blocks.*.type,image', 'string', 'max:1000'],
+        ] : [];
+    }
+
+    private function sanitizeBlocks(array $passage): array
+    {
+        $data = $this->validateInput($passage, $this->blockRules());
+        foreach ($data['blocks'] ?? [] as $index => $block) {
+            $keys = $block['type'] === 'text' ? ['type', 'text'] : ['type', 'image', 'image_alt'];
+            if (array_diff(array_keys($block), $keys) !== [] || ($block['type'] === 'image' && trim($block['image_alt']) === '')) {
+                throw ValidationException::withMessages(["blocks.{$index}" => 'Use only fields required for this block type, with nonempty alternative text.']);
+            }
+            if ($block['type'] === 'text') {
+                $data['blocks'][$index]['text'] = PlacementRichText::sanitize($block['text']);
+                if (trim(strip_tags($data['blocks'][$index]['text'])) === '') {
+                    throw ValidationException::withMessages(["blocks.{$index}.text" => 'Text must remain nonempty after sanitization.']);
+                }
+            }
+        }
+        if (isset($data['blocks']) && ! in_array('text', array_column($data['blocks'], 'type'), true)) {
+            throw ValidationException::withMessages(['blocks' => 'At least one text block is required.']);
+        }
+
+        return $data;
+    }
+
     public function adminPassages(Model $tryOut): array
     {
-        return $this->passageModel::where($this->parentKey, $tryOut->id)->get(array_merge(['id', 'title', 'body'], $this->imageFields()))
-            ->map(fn ($passage) => app(MediaService::class)->payload($passage->getAttributes()))->all();
+        return $this->passageModel::where($this->parentKey, $tryOut->id)->get($this->passageFields())
+            ->map(fn ($passage) => app(MediaService::class)->payload($passage->toArray()))->all();
     }
 
     private function questionRules(): array
@@ -358,7 +401,10 @@ class TryOutService
                 $this->validateInput($passage, [
                     'id' => ['required', 'string'], 'title' => ['required', 'string', 'max:255'],
                     'body' => ['required', 'string'],
-                ] + $this->imageRules());
+                ] + $this->imageRules() + $this->blockRules());
+                if (array_key_exists('blocks', $passage)) {
+                    $this->sanitizeBlocks(['blocks' => $passage['blocks']]);
+                }
             }
         }
         $data = $this->validateInput($input, [
@@ -376,8 +422,8 @@ class TryOutService
             'deleted_passage_ids' => ['present', 'array'],
             'deleted_passage_ids.*' => ['integer', 'distinct'],
         ] + array_combine(
-            array_map(fn ($field) => 'passages.*.'.$field, array_keys($this->imageRules())),
-            array_values($this->imageRules()),
+            array_map(fn ($field) => 'passages.*.'.$field, array_keys($this->imageRules() + array_intersect_key($this->blockRules(), ['blocks' => true]))),
+            array_values($this->imageRules() + array_intersect_key($this->blockRules(), ['blocks' => true])),
         ));
 
         return app(MediaService::class)->locked(function () use ($tryOut, $data) {
@@ -391,6 +437,9 @@ class TryOutService
                     ? $this->passageModel::where($this->parentKey, $parent->id)->whereKey($passage['id'])->firstOrFail()
                     : new $this->passageModel([$this->parentKey => $parent->id]);
                 $model->fill(array_intersect_key($passage, array_flip($this->imageFields())) + ['title' => $passage['title'], 'body' => PlacementRichText::sanitize($passage['body'])]);
+                if (array_key_exists('blocks', $passage)) {
+                    $model->fill($this->sanitizeBlocks(['blocks' => $passage['blocks']]));
+                }
                 $this->assertImage($model);
                 $model->save();
                 $ids[$passage['id']] = $model->id;

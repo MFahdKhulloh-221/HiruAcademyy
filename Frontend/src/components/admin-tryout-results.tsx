@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AdminDataTable, AdminPageHeader, AdminSection, AdminTabs } from "@/components/admin-primitives";
 import { PlacementRichText } from "@/components/placement-rich-text";
+import { AssessmentPassageContent } from "@/components/assessment-passage-content";
 import { useLearningRequest } from "@/components/learning-hooks";
 import { downloadReport, loadReport, loadReportAttempt, loadReportParticipants, reportQuery, type ReportFilters, type ReportQuestion } from "@/lib/admin-tryout-results-api";
 import { assessmentSessions, assessmentSessionLabels } from "@/lib/assessment-attempt";
@@ -107,7 +108,7 @@ export function AdminTryoutResults({ id, title, level, packages, onPackageChange
           <header className={styles.snapshotHeading}><div><h3>Snapshot jawaban</h3><p className={styles.note}>Jawaban peserta dan kunci dari attempt ini.</p></div><span className={styles.note}>{detail.questions.length} soal</span></header>
           {detail.questions.map(question => <article className={styles.question} key={`${question.number}:${question.id}`}>
             <header className={styles.questionHeading}><div><p className={styles.note}>{sectionLabel(question.session)}</p><h4>Soal {question.number}</h4></div><div className={styles.answerMeta}><span className={`${styles.badge} ${question.answer === null ? styles.unanswered : question.answer === question.correct_option ? styles.passed : styles.failed}`}>{question.answer === null ? "Kosong" : question.answer === question.correct_option ? "Benar" : "Salah"}</span><strong>Poin {score(question.earned)} / {score(question.point_value)}</strong></div></header>
-            {(question.reading_passage || question.passage?.body) && <div className={styles.passage}><PlacementRichText value={question.reading_passage || question.passage?.body || ""} /></div>}
+            {(question.reading_passage || question.passage?.body || question.passage?.blocks?.length) && <div className={styles.passage}><AssessmentPassageContent passage={question.passage ? { ...question.passage, body: question.passage.body ?? "" } : { body: question.reading_passage ?? "" }} /></div>}
             <PlacementRichText value={question.question} />
             <ul className={styles.options}>{Object.entries(question.options).map(([letter, text]) => <li key={letter} className={letter === question.correct_option ? styles.correct : letter === question.answer ? styles.wrongAnswer : undefined}><div className={styles.optionHeading}><strong>{letter}.</strong><div className={styles.answerMeta}>{letter === question.answer && <span className={styles.badge}>Dipilih</span>}{letter === question.correct_option && <span className={`${styles.badge} ${styles.passed}`}>Kunci benar</span>}</div></div><PlacementRichText value={text} /></li>)}</ul>
             <p className={styles.note}>Jawaban: {question.answer ?? "Kosong"} · Kunci: {question.correct_option}</p>

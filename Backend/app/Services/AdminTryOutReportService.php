@@ -102,7 +102,7 @@ class AdminTryOutReportService
         }
 
         return ['participant' => $this->participant($attempt), 'try_out' => $this->tryOut($tryOut),
-            'questions' => $questions, 'attempts' => $history, 'content_snapshot' => $attempt->content_snapshot,
+            'questions' => app(MediaService::class)->payload($questions), 'attempts' => $history, 'content_snapshot' => $attempt->content_snapshot,
             'grading_snapshot' => $attempt->grading_snapshot, 'answers' => $attempt->answers,
             'result_snapshot' => $attempt->result_snapshot];
     }

@@ -230,6 +230,24 @@ class AdminTryOutReportTest extends TestCase
         $this->assertSame($before, DB::table('try_out_attempts')->orderBy('id')->get()->toJson());
     }
 
+    public function test_individual_resolves_ordered_passage_blocks_without_mutating_snapshot(): void
+    {
+        $blocks = [['type' => 'text', 'text' => '<p>Before</p>'], ['type' => 'image', 'image' => 'https://example.test/diagram.png', 'image_alt' => 'Diagram'], ['type' => 'text', 'text' => '<p>After</p>']];
+        $attempt = $this->attempt([$this->question() + ['passage_id' => 7]], [10 => 'A']);
+        $grading = $attempt->grading_snapshot;
+        $grading['passages'][7] = ['id' => 7, 'title' => 'Group', 'body' => 'Legacy fallback', 'blocks' => $blocks];
+        DB::table('try_out_attempts')->where('id', $attempt->id)->update(['grading_snapshot' => json_encode($grading)]);
+        $attempt->refresh();
+        $before = $attempt->getAttributes();
+        $response = $this->actingAs($this->admin)->getJson($this->base.'/attempts/'.$attempt->id)->assertOk();
+        $response->assertJsonPath('data.questions.0.passage.blocks.0.text', '<p>Before</p>')
+            ->assertJsonPath('data.questions.0.passage.blocks.1.image', 'https://example.test/diagram.png')
+            ->assertJsonPath('data.questions.0.passage.blocks.1.image_resolved_url', 'https://example.test/diagram.png')
+            ->assertJsonPath('data.questions.0.passage.blocks.2.text', '<p>After</p>')
+            ->assertJsonPath('data.grading_snapshot.passages.7.blocks', $blocks);
+        $this->assertSame($before, $attempt->fresh()->getAttributes());
+    }
+
     public function test_individual_uses_authoritative_grading_not_injected_content_fields(): void
     {
         $attempt = $this->attempt([array_replace($this->question(), ['correct_option' => 'D', 'point_value' => 999, 'earned' => 999])], [10 => 'A']);

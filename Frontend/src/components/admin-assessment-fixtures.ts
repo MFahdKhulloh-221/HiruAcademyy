@@ -1,5 +1,6 @@
 import { assessmentSessions } from "@/lib/assessment-attempt";
-import type { AssessmentImage } from "@/lib/assessment-image";
+import type { AssessmentImage, AssessmentPassageBlock } from "@/lib/assessment-image";
+import { passageBlocksError } from "@/lib/assessment-passage-blocks";
 import { placementText } from "@/lib/placement-rich-text";
 import type { AssessmentQuestion } from "@/lib/assessment-mock";
 import { miniCheckpointConfig } from "@/lib/sensei-mock";
@@ -31,7 +32,7 @@ export type AdminAssessmentQuestion = AssessmentImage & {
 export type AdminAssessment = {
   studioRevision?: string;
   builderCapabilities?: { images: boolean; decimal_points: boolean };
-  passages?: ({ id: string; title: string; body: string } & AssessmentImage)[];
+  passages?: ({ id: string; title: string; body: string; blocks?: AssessmentPassageBlock[] | null } & AssessmentImage)[];
   accessType?: "free" | "membership";
   id: string;
   kind: AdminAssessmentKind;
@@ -58,7 +59,7 @@ export function orderedAssessmentQuestions(item: AdminAssessment) {
   return sections.flatMap((section) => sorted.filter((question) => question.section === section)).concat(sorted.filter((question) => !sections.includes(question.section)));
 }
 export function copyAssessment(item: AdminAssessment): AdminAssessment {
-  return { ...item, passages: item.passages?.map(passage => ({ ...passage })), questions: item.questions.map((question) => ({ ...question, answers: [...question.answers], japanese: question.japanese ? { ...question.japanese } : undefined })) };
+  return { ...item, passages: item.passages?.map(passage => ({ ...passage, ...(passage.blocks ? { blocks: passage.blocks.map(block => ({ ...block })) } : {}) })), questions: item.questions.map((question) => ({ ...question, answers: [...question.answers], japanese: question.japanese ? { ...question.japanese } : undefined })) };
 }
 function adaptQuestion(question: AssessmentQuestion, section: string, index: number): AdminAssessmentQuestion {
   return { id: question.id, section, type: section === jlptTryoutSessions[2] ? "Reading" : section === jlptTryoutSessions[3] ? "Audio" : "Multiple choice", prompt: question.prompt, japanese: question.japanese ? { ...question.japanese } : undefined, instruction: "", answers: question.options.map((option) => option.label), correctAnswer: question.options.findIndex((option) => option.id === question.correctOptionId), explanation: question.explanation, passage: "", file: null, order: String(index + 1), status: "Published" };
@@ -107,7 +108,9 @@ export function assessmentQuestionLocation(question: AdminAssessmentQuestion, it
   const siblings = orderedAssessmentQuestions(item).filter(current => current.section === question.section);
   return `Sesi ${question.section || "belum dipilih"} — Soal ${siblings.findIndex(current => current.id === question.id) + 1}`;
 }
-export function assessmentPassageError(passage: { title: string; body: string }) {
+export function assessmentPassageError(passage: { title: string; body: string; blocks?: AssessmentPassageBlock[] | null }) {
+  const blocksError = passageBlocksError(passage.blocks);
+  if (blocksError) return blocksError;
   if (!passage.title.trim()) return "Isi judul internal bacaan.";
   if ([...passage.title.trim()].length > 255) return "Judul internal bacaan maksimal 255 karakter. Pendekkan judul.";
   if (!placementText(passage.body).trim()) return "Isi teks bacaan bersama.";

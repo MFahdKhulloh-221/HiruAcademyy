@@ -58,7 +58,7 @@ class TryOutAttemptService
 
             $startedAt = now();
 
-            return $this->attemptModel::create(['user_id' => $user->id, $this->parentKey => $parent->id, 'status' => 'in_progress', 'content_snapshot' => $questions, 'grading_snapshot' => ['passages' => $this->passageModel::where($this->parentKey, $parent->id)->get(array_merge(['id', 'title', 'body'], $imageFields))->keyBy('id')->toArray(), 'questions' => $grading, 'total_passing_score' => $parent->total_passing_score, 'max_score' => $parent->max_score, 'session_passing_scores' => $parent->session_passing_scores], 'answers' => [], 'completed_sessions' => [], 'current_session' => 0, 'revision' => 0, 'started_at' => $startedAt, 'expires_at' => $parent->duration_minutes === null ? null : $startedAt->copy()->addMinutes($parent->duration_minutes)])->fresh();
+            return $this->attemptModel::create(['user_id' => $user->id, $this->parentKey => $parent->id, 'status' => 'in_progress', 'content_snapshot' => $questions, 'grading_snapshot' => ['passages' => $this->passageModel::where($this->parentKey, $parent->id)->get($this->content->passageFields())->keyBy('id')->toArray(), 'questions' => $grading, 'total_passing_score' => $parent->total_passing_score, 'max_score' => $parent->max_score, 'session_passing_scores' => $parent->session_passing_scores], 'answers' => [], 'completed_sessions' => [], 'current_session' => 0, 'revision' => 0, 'started_at' => $startedAt, 'expires_at' => $parent->duration_minutes === null ? null : $startedAt->copy()->addMinutes($parent->duration_minutes)])->fresh();
         }, 3);
     }
 
@@ -212,7 +212,7 @@ class TryOutAttemptService
             if (isset($question['passage_id'])) {
                 $passage = $attempt->grading_snapshot['passages'][$question['passage_id']] ?? null;
                 $item['passage'] = $passage !== null && $this->assessmentModel === TryOut::class
-                    ? array_intersect_key($passage, array_flip(['id', 'title', 'body', 'image', 'image_alt', 'image_position']))
+                    ? array_intersect_key($passage, array_flip(['id', 'title', 'body', 'image', 'image_alt', 'image_position', 'blocks']))
                     : $passage;
             }
             $item['options'] = array_intersect_key($question['options'], array_flip(['A', 'B', 'C', 'D']));

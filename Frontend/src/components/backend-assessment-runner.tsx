@@ -8,6 +8,7 @@ import { tryoutStudyRecommendations } from "@/lib/tryout-study-recommendation";
 
 import { PlacementRichText } from "@/components/placement-rich-text";
 import { AssessmentContent } from "@/components/assessment-content";
+import { AssessmentPassageContent } from "@/components/assessment-passage-content";
 
 import Link from "next/link";
 
@@ -610,7 +611,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
           {examReading && question && <section className="exam-reading-passage" key={question.passage?.id ?? question.id} aria-label="Teks bacaan"><h2><FiBookOpen aria-hidden="true" /> Teks Bacaan</h2><div className="exam-reading-scroll" role="region" aria-label="Isi teks bacaan" tabIndex={0} lang="ja">
 
-            {question.passage ? <><h3><PlacementRichText value={question.passage.title} /></h3><AssessmentContent content={tryoutImages ? question.passage : {}}><PlacementRichText value={question.passage.body} /></AssessmentContent></> : <PlacementRichText value={question.reading_passage ?? ""} />}
+            {question.passage ? <><h3><PlacementRichText value={question.passage.title} /></h3><AssessmentPassageContent passage={tryoutImages ? question.passage : { body: question.passage.body }} /></> : <PlacementRichText value={question.reading_passage ?? ""} />}
 
           </div></section>}
 
@@ -620,7 +621,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
               <p className="dash-kicker">{tryoutExperience ? <>{sessionLabel && <span>{sessionLabel}</span>}<span>Soal {sessionPosition + 1}</span></> : <>SOAL {Math.min(index + 1, questions.length)} DARI {questions.length}</>}</p>
 
-              {!isReading && !examReading && question.passage && <section className="reading-passage" aria-label={tryoutImages && question.session === "grammar" ? "Kelompok soal tata bahasa" : undefined}><h2><PlacementRichText value={question.passage.title} /></h2><AssessmentContent content={tryoutImages ? question.passage : {}}><p><PlacementRichText value={question.passage.body} /></p></AssessmentContent></section>}
+              {!isReading && !examReading && question.passage && <section className="reading-passage" aria-label={tryoutImages && question.session === "grammar" ? "Kelompok soal tata bahasa" : undefined}><h2><PlacementRichText value={question.passage.title} /></h2><AssessmentPassageContent passage={tryoutImages ? question.passage : { body: question.passage.body }} /></section>}
 
               {!isReading && !examReading && question.reading_passage && <p><PlacementRichText value={question.reading_passage} /></p>}
 

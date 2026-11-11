@@ -31,16 +31,16 @@ test("mocked Try Out grammar shared stimulus creates, edits, reorders, deletes, 
   const api = await mockStudio(page);
   await openStudio(page);
   await expect(page.getByRole("region", { name: "HIRU TRY OUT STUDIO", exact: true })).toHaveAttribute("data-assessment-kind", "tryout");
-  await expect(page.getByLabel("Hubungkan ke grup stimulus")).toHaveText(/Grammar only/);
-  await expect(page.getByLabel("Hubungkan ke grup stimulus")).not.toHaveText(/Reading only/);
+  await expect(page.getByLabel("Hubungkan ke grup bacaan")).toHaveText(/Grammar only/);
+  await expect(page.getByLabel("Hubungkan ke grup bacaan")).not.toHaveText(/Reading only/);
   await expect(page.getByRole("textbox", { name: "Bacaan Mandiri", exact: true })).toHaveCount(0);
   await page.getByRole("tab", { name: "Pratinjau Siswa", exact: true }).click();
   await expect(page.getByRole("region", { name: "Pratinjau Siswa" }).getByLabel("Teks bacaan")).toHaveCount(0);
   await page.getByRole("tab", { name: "Editor", exact: true }).click();
-  await page.getByRole("button", { name: "Tambah Grup Stimulus", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Grup Stimulus Tata Bahasa", exact: true });
-  await dialog.getByLabel("Judul internal stimulus", { exact: true }).fill("Grammar new");
-  await dialog.getByRole("textbox", { name: "Teks stimulus grup", exact: true }).fill("Stimulus baru");
+  await page.getByRole("button", { name: "Tambah Grup Bacaan", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Grup Bacaan Tata Bahasa", exact: true });
+  await dialog.getByLabel("Judul internal bacaan", { exact: true }).fill("Grammar new");
+  await dialog.getByRole("textbox", { name: "Teks bacaan grup", exact: true }).fill("Stimulus baru");
   await dialog.getByLabel("Jumlah soal awal").fill("2");
   await dialog.getByRole("button", { name: "Buat Grup", exact: true }).click();
   for (const prompt of ["Grammar pertama", "Grammar kedua"]) {
@@ -51,25 +51,25 @@ test("mocked Try Out grammar shared stimulus creates, edits, reorders, deletes, 
     await page.getByLabel("Bobot poin", { exact: true }).fill("1");
     if (prompt === "Grammar pertama") await page.getByRole("button", { name: "Soal Berikutnya", exact: true }).click();
   }
-  await page.getByRole("textbox", { name: "Stimulus Bersama", exact: true }).fill("Stimulus diubah");
+  await page.getByRole("textbox", { name: "Bacaan Bersama", exact: true }).fill("Stimulus diubah");
   await page.getByText("Aksi soal", { exact: true }).click();
   await page.getByRole("button", { name: "Naikkan Soal", exact: true }).click();
-  await page.getByText("Aksi grup stimulus", { exact: true }).click();
+  await page.getByText("Aksi grup bacaan", { exact: true }).click();
   await page.getByRole("button", { name: "Grup Sebelumnya", exact: true }).click();
   await page.getByRole("tab", { name: "Pratinjau Siswa", exact: true }).click();
-  await expect(page.getByLabel("Teks stimulus", { exact: true })).toContainText("Stimulus diubah");
+  await expect(page.getByLabel("Teks bacaan", { exact: true })).toContainText("Stimulus diubah");
   await page.getByRole("button", { name: "Simpan Try Out", exact: true }).click();
   await expect.poll(() => api.writes.length).toBe(1);
   const group = api.saved().passages.find(item => item.title === "Grammar new")!;
   expect(api.saved().questions.filter(item => item.passage_id === group.id).sort((a, b) => a.sort_order - b.sort_order).map(item => item.question)).toEqual(["Grammar kedua", "Grammar pertama"]);
   await openStudio(page);
   await page.getByRole("button").filter({ hasText: "Grammar kedua" }).click();
-  await expect(page.getByRole("textbox", { name: "Stimulus Bersama", exact: true })).toContainText("Stimulus diubah");
+  await expect(page.getByRole("textbox", { name: "Bacaan Bersama", exact: true })).toContainText("Stimulus diubah");
   await page.getByText("Aksi soal", { exact: true }).click();
   await page.getByRole("button", { name: "Hapus Soal", exact: true }).click();
   await page.getByRole("button", { name: "Hapus dari Editor", exact: true }).click();
   await page.getByRole("button").filter({ hasText: "Grammar pertama" }).click();
-  await page.getByText("Aksi grup stimulus", { exact: true }).click();
+  await page.getByText("Aksi grup bacaan", { exact: true }).click();
   await page.getByRole("button", { name: "Hapus Grup", exact: true }).click();
   await page.getByRole("button", { name: "Hapus dari Editor", exact: true }).click();
   await page.getByRole("tab", { name: "Reading (Dokkai)", exact: true }).click();
@@ -91,8 +91,8 @@ test("mocked Try Out grammar shared stimulus creates, edits, reorders, deletes, 
 test("mocked Checkpoint grammar keeps existing standalone behavior", async ({ page }) => {
   await mockStudio(page, true);
   await openStudio(page, true);
-  await expect(page.getByRole("button", { name: "Tambah Grup Stimulus", exact: true })).toHaveCount(0);
-  await expect(page.getByLabel("Hubungkan ke grup stimulus")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Tambah Grup Bacaan", exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Hubungkan ke grup bacaan")).toHaveCount(0);
   await page.getByRole("tab", { name: "Reading (Dokkai)", exact: true }).click();
   await expect(page.getByRole("button", { name: "Tambah Grup Bacaan", exact: true })).toBeVisible();
 });

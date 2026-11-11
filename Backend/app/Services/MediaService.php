@@ -206,6 +206,9 @@ class MediaService
                 abort_if(DB::table($table)->where('image', $path)->exists(), 409, 'Media is still referenced by Try Out content.');
             }
         }
+        if (\Illuminate\Support\Facades\Schema::hasColumn('try_out_passages', 'blocks')) {
+            abort_if(DB::table('try_out_passages')->whereRaw('REPLACE(CAST(blocks AS TEXT), ?, ?) LIKE ?', ['\\/', '/', '%'.$path.'%'])->exists(), 409, 'Media is still referenced by Try Out content.');
+        }
         // Passage images live in grading_snapshot, including attempts made before later schema changes.
         abort_if(DB::table('try_out_attempts')->where(function ($query) use ($path) {
             $query->whereRaw('REPLACE(CAST(grading_snapshot AS TEXT), ?, ?) LIKE ?', ['\\/', '/', '%'.$path.'%'])

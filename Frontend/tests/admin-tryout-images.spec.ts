@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "./canonical-fixture";
 import type { Locator } from "@playwright/test";
+import type { AssessmentPassageBlock } from "../src/lib/assessment-image";
 
 // In-memory API only. Save/reload assertions do not prove backend or database persistence.
 const sessions = ["vocabulary_kanji", "grammar", "reading", "audio"];
@@ -25,7 +26,7 @@ async function mockStudio(page: Page, capabilities = true) {
       point_value: 1, sort_order: index, status: "draft", ...emptyImage,
     })),
   };
-  type Write = { revision: string; settings: Record<string, unknown>; passages: (Image & { id: string; title: string; body: string })[]; questions: { id: string; content: Omit<typeof saved.questions[number], "id"> }[] };
+  type Write = { revision: string; settings: Record<string, unknown>; passages: (Image & { id: string; title: string; body: string; blocks?: AssessmentPassageBlock[] })[]; questions: { id: string; content: Omit<typeof saved.questions[number], "id"> }[] };
   const writes: Write[] = [];
   const uploads: string[] = [];
   const mediaMethods: string[] = [];
@@ -48,7 +49,7 @@ async function mockStudio(page: Page, capabilities = true) {
       expect(body.revision).toBe(saved.studio_revision);
       writes.push(body);
       saved = { ...saved, ...body.settings, studio_revision: `r${writes.length + 1}`,
-        passages: body.passages.map(item => ({ ...item, id: Number(item.id), image_resolved_url: item.image ? `https://images.example.test/${item.image}` : null })),
+        passages: body.passages.map(item => ({ ...item, id: Number(item.id), image_resolved_url: item.image ? `https://images.example.test/${item.image}` : null, ...(item.blocks == null ? {} : { blocks: item.blocks.map(block => block.type === "image" ? { ...block, image_resolved_url: `https://images.example.test/${block.image}` } : block) }) })),
         questions: body.questions.map(item => ({ ...item.content, id: Number(item.id), passage_id: item.content.passage_id == null ? null : Number(item.content.passage_id), image_resolved_url: item.content.image ? `https://images.example.test/${item.content.image}` : null })),
       };
       return route.fulfill({ json: { data: saved } });
@@ -170,6 +171,46 @@ test("question and group positions control actual preview DOM order and survive 
     await expect(preview.getByRole("img", { name: `Question order ${tab}`, exact: true })).toBeVisible();
     await expect(preview.getByRole("img", { name: `Group order ${tab}`, exact: true })).toBeVisible();
   }
+});
+
+for (const tab of ["Tata Bahasa", "Reading (Dokkai)"]) test(`ordered text-image-text passage saves, reloads and previews in ${tab} (mock API)`, async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 1000 });
+  const api = await mockStudio(page);
+  await openStudio(page);
+  await page.getByRole("tab", { name: tab, exact: true }).click();
+  await page.getByRole("button", { name: "Susun teks dan gambar", exact: true }).click();
+  const editor = page.getByRole("group", { name: "Susunan teks dan gambar bacaan", exact: true });
+  await editor.getByRole("textbox", { name: "Teks bacaan 1", exact: true }).fill("Awal bacaan berurutan");
+  await editor.getByRole("button", { name: "Tambah teks", exact: true }).click();
+  await editor.getByRole("textbox", { name: "Teks bacaan 2", exact: true }).fill("Akhir bacaan berurutan");
+  await editor.getByRole("button", { name: "Tambah gambar", exact: true }).click();
+  await editor.getByLabel("Gambar bacaan 3", { exact: true }).setInputFiles({ name: "diagram.png", mimeType: "image/png", buffer: png });
+  await editor.getByLabel("Teks alternatif gambar 3", { exact: true }).fill("Diagram tengah bacaan");
+  await expect(editor.getByRole("img", { name: "Diagram tengah bacaan", exact: true })).toBeVisible();
+  await editor.getByRole("button", { name: "Naikkan blok 3", exact: true }).click();
+  await expect(editor.getByRole("textbox", { name: "Teks bacaan 3", exact: true })).toHaveText("Akhir bacaan berurutan");
+  await noOverflow(page);
+  await save(page);
+  const blocks = api.writes[0].passages.find(item => item.id === (tab === "Tata Bahasa" ? "51" : "50"))!.blocks!;
+  expect(blocks.map(block => block.type)).toEqual(["text", "image", "text"]);
+  expect(blocks[1]).toEqual({ type: "image", image: api.uploads[0], image_alt: "Diagram tengah bacaan" });
+  expect(JSON.stringify(blocks)).not.toContain("image_resolved_url");
+  await page.reload();
+  await openStudio(page);
+  await page.getByRole("tab", { name: tab, exact: true }).click();
+  await expect(editor.getByRole("textbox", { name: "Teks bacaan 1", exact: true })).toHaveText("Awal bacaan berurutan");
+  await expect(editor.getByLabel("Teks alternatif gambar 2", { exact: true })).toHaveValue("Diagram tengah bacaan");
+  await expect(editor.getByRole("textbox", { name: "Teks bacaan 3", exact: true })).toHaveText("Akhir bacaan berurutan");
+  await page.getByRole("tab", { name: "Pratinjau Siswa", exact: true }).click();
+  const preview = page.getByRole("region", { name: "Pratinjau Siswa", exact: true });
+  const image = preview.getByRole("img", { name: "Diagram tengah bacaan", exact: true });
+  await expect(image).toBeVisible();
+  for (const [text, before] of [["Awal bacaan berurutan", true], ["Akhir bacaan berurutan", false]] as const) {
+    const element = preview.getByText(text, { exact: true });
+    await expect(element).toBeVisible();
+    expect(await element.evaluate((node, other) => Boolean(node.compareDocumentPosition(other!) & Node.DOCUMENT_POSITION_FOLLOWING), await image.elementHandle())).toBe(before);
+  }
+  await noOverflow(page);
 });
 
 test("Admin preview Runner preserves question and group image order outside builder", async ({ page }) => {

@@ -1,11 +1,13 @@
 import { apiRequest, ApiError } from "@/lib/api";
+import type { AssessmentPassageBlock } from "@/lib/assessment-image";
+import { passageBlocksBody, passageBlocksError } from "@/lib/assessment-passage-blocks";
 import { assessmentSessions } from "@/lib/assessment-attempt";
 import { jlptTryoutSessions as assessmentSessionLabels } from "@/lib/tryout-mock";
 import { assessmentImageError, assessmentPointValueError, assessmentQuestionLocation, type AssessmentImage, type AdminAssessment, type AdminAssessmentQuestion } from "@/components/admin-assessment-fixtures";
 
 export type AdminTryOut = AdminAssessment & { sessionPassingScores?: Record<string, number> | null };
 type Question = AssessmentImage & { passage_id?: number | null; instruction?: string | null; japanese?: AdminAssessmentQuestion["japanese"] | null; id: number; session: string; question: string; options: Record<string, string>; correct_option: string; explanation: string | null; reading_passage: string | null; audio_url: string | null; point_value: number; sort_order: number; status: string };
-type Assessment = { builder_capabilities?: { images: boolean; decimal_points: boolean }; studio_revision?: string; passages?: ({ id: number; title: string; body: string } & AssessmentImage)[]; access_type?: "free" | "membership"; max_score: number; sort_order: number; session_passing_scores: Record<string, number> | null; id: number; program_id: number; title: string; status: string; total_passing_score: number | null; duration_minutes?: number | null; questions?: Question[] };
+type Assessment = { builder_capabilities?: { images: boolean; decimal_points: boolean }; studio_revision?: string; passages?: ({ id: number; title: string; body: string; blocks?: AssessmentPassageBlock[] | null } & AssessmentImage)[]; access_type?: "free" | "membership"; max_score: number; sort_order: number; session_passing_scores: Record<string, number> | null; id: number; program_id: number; title: string; status: string; total_passing_score: number | null; duration_minutes?: number | null; questions?: Question[] };
 export function adminAssessmentApi(kind: "tryout" | "checkpoint" = "tryout") {
 const endpoint = kind === "checkpoint" ? "/api/admin/checkpoint-packages" : "/api/admin/try-outs";
 const title = kind === "checkpoint" ? "Checkpoint" : "Try Out";
@@ -51,6 +53,10 @@ async function saveAdminTryOut(item: AdminTryOut, baseline?: AdminTryOut) {
   const pointError = item.questions.map(question => assessmentPointValueError(question.pointValue, kind)).find(Boolean);
   if (pointError) throw new Error(pointError);
   if (item.duration !== "" && (!Number.isSafeInteger(Number(item.duration)) || Number(item.duration) < 1 || Number(item.duration) > 2147483647)) throw new ApiError(422, { duration_minutes: ["Durasi harus berupa bilangan bulat positif."] });
+  if (kind === "tryout") {
+    const blocksError = (item.passages ?? []).map(passage => passageBlocksError(passage.blocks)).find(Boolean);
+    if (blocksError) throw new Error(blocksError);
+  }
   const images = kind === "tryout" && item.builderCapabilities?.images === true;
   if (images && [...item.questions, ...item.passages ?? []].some(content => assessmentImageError(content))) throw new Error("Isi teks alternatif gambar dan pilih posisi gambar yang valid sebelum menyimpan.");
   const existing = /^\d+$/.test(item.id);
@@ -59,7 +65,7 @@ async function saveAdminTryOut(item: AdminTryOut, baseline?: AdminTryOut) {
   const id = existing ? item.id : String((await apiRequest<{ data: Assessment }>(path, { method: "POST", body: JSON.stringify({ ...settings, status: "draft" }) })).data.id);
   const revision = existing ? baseline?.studioRevision ?? item.studioRevision : (await apiRequest<{ data: Assessment }>(`${endpoint}/${id}`)).data.studio_revision;
   await apiRequest(`${endpoint}/${id}/studio`, { method: "PUT", body: JSON.stringify({
-    revision, settings, passages: (item.passages ?? []).map(passage => ({ id: passage.id, title: passage.title, body: passage.body, ...(images ? imagePayload(passage) : {}) })), questions: item.questions.map(question => ({ id: question.id, content: { ...questionPayload(question), ...(images ? imagePayload(question) : {}) } })),
+    revision, settings, passages: (item.passages ?? []).map(passage => ({ id: passage.id, title: passage.title, body: kind === "tryout" && passage.blocks != null ? passageBlocksBody(passage.blocks) : passage.body, ...(images ? imagePayload(passage.blocks != null ? {} : passage) : {}), ...(kind === "tryout" && passage.blocks !== undefined ? { blocks: passage.blocks?.map(block => block.type === "text" ? { type: block.type, text: block.text } : { type: block.type, image: block.image, image_alt: block.image_alt.trim() }) ?? null } : {}) })), questions: item.questions.map(question => ({ id: question.id, content: { ...questionPayload(question), ...(images ? imagePayload(question) : {}) } })),
     deleted_question_ids: (baseline?.questions ?? []).filter(question => !item.questions.some(current => current.id === question.id)).map(question => Number(question.id)),
     deleted_passage_ids: (baseline?.passages ?? []).filter(passage => !item.passages?.some(current => current.id === passage.id)).map(passage => Number(passage.id)),
   }) });

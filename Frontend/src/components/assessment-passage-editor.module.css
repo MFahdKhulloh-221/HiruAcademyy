@@ -1,0 +1,45 @@
+.editor {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  width: 100%;
+  padding: 0;
+  border: 0;
+}
+
+.block {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid #d6d6e5;
+  border-radius: 12px;
+}
+
+.block fieldset {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+
+.block input {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.controls strong {
+  margin-right: auto;
+}
+
+.controls button,
+.editor input[type="file"] {
+  min-height: 44px;
+  min-width: 44px;
+}

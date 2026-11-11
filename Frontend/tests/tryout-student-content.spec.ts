@@ -1,9 +1,10 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import type { AssessmentPassageBlock } from "../src/lib/assessment-image";
 import { assessmentSessionLabels, assessmentSessions, type AttemptQuestion, type ServerAttempt } from "../src/lib/assessment-attempt";
 
 // Browser transport fixtures only. No Laravel persistence or DB integration claimed.
 type ImageContent = { image?: string | null; image_alt?: string | null; image_position?: "before" | "after" | null; image_resolved_url?: string | null };
-type ContentQuestion = AttemptQuestion & ImageContent & { passage?: { id: number; title: string; body: string } & ImageContent };
+type ContentQuestion = AttemptQuestion & ImageContent & { passage?: { id: number; title: string; body: string; blocks?: AssessmentPassageBlock[] } & ImageContent };
 const media = (name: string, position?: "before" | "after" | null): ImageContent => ({ image: `assessment/${name}.svg`, image_alt: `${name} snapshot image`, image_resolved_url: `https://assessment-media.test/${name}.svg`, ...(position === undefined ? {} : { image_position: position }) });
 const options = { A: "First", B: "Second", C: "Third", D: "Fourth" };
 function questions(): ContentQuestion[] {
@@ -146,6 +147,34 @@ for (const width of [1440, 768, 390]) test(`snapshot images and grouped navigati
   await expect(card(page).locator("audio")).toHaveAttribute("src", "https://assessment-media.test/listening.wav");
   await imageOrder(page.getByAltText("audio snapshot image", { exact: true }), card(page).getByRole("heading", { name: "Audio question with image", exact: true }), "before");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  expect(mock.errors).toEqual([]);
+  expect(mock.calls.submits).toBe(0);
+});
+
+test("ordered shared passage snapshots render text-image-text at narrow width (mock API)", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 1000 });
+  const mock = await mockContent(page);
+  for (const item of mock.server().questions as ContentQuestion[]) {
+    if (!item.passage || !["grammar", "reading"].includes(String(item.session))) continue;
+    item.passage.blocks = [
+      { type: "text", text: "<p>Awal snapshot berurutan</p>" },
+      { type: "image", image: "assessment/ordered.svg", image_alt: "Diagram snapshot tengah", image_resolved_url: "https://assessment-media.test/ordered.svg" },
+      { type: "text", text: "<p>Akhir snapshot berurutan</p>" },
+    ];
+  }
+  await open(page);
+  for (const session of ["Tata Bahasa", "Reading (Dokkai)"]) {
+    await page.getByRole("button", { name: session, exact: true }).click();
+    const image = page.getByRole("img", { name: "Diagram snapshot tengah", exact: true });
+    await expect(image).toHaveCount(1);
+    await imageOrder(image, page.getByText("Awal snapshot berurutan", { exact: true }), "after");
+    await imageOrder(image, page.getByText("Akhir snapshot berurutan", { exact: true }), "before");
+    await fits(page);
+    await next(page);
+    await expect(image).toHaveCount(1);
+    await expect(page.getByText("Awal snapshot berurutan", { exact: true })).toHaveCount(1);
+    await fits(page);
+  }
   expect(mock.errors).toEqual([]);
   expect(mock.calls.submits).toBe(0);
 });
