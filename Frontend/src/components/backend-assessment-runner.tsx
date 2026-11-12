@@ -24,7 +24,7 @@ import { useLearningRequest } from "@/components/learning-hooks";
 
 import { apiRequest } from "@/lib/api";
 
-import { FiClock, FiList, FiBarChart2, FiFileText, FiAlertTriangle, FiBookOpen, FiHeadphones, FiCheckSquare, FiArrowLeft, FiArrowRight, FiMenu } from "react-icons/fi";
+import { FiClock, FiList, FiBarChart2, FiFileText, FiAlertTriangle, FiBookOpen, FiHeadphones, FiCheckSquare, FiArrowLeft, FiArrowRight, FiMenu, FiX } from "react-icons/fi";
 
 import "./assessment-layout.css";
 
@@ -70,6 +70,15 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
   const [checking, setChecking] = useState(false);
 
   const [navigatorVisible, setNavigatorVisible] = useState(true);
+  const mobileNavigator = useRef<HTMLDialogElement>(null);
+  const [mobileSession, setMobileSession] = useState<string | null>(null);
+
+  useEffect(() => {
+    const desktop = window.matchMedia("(min-width: 640px)");
+    const closeOnDesktop = () => { if (desktop.matches) mobileNavigator.current?.close(); };
+    desktop.addEventListener("change", closeOnDesktop);
+    return () => desktop.removeEventListener("change", closeOnDesktop);
+  }, []);
 
   const [confirming, setConfirming] = useState<false | "sync" | "submit">(false);
 
@@ -534,6 +543,9 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
   const saveStatus = flow.busy ? "Menyimpan…" : flow.error ? "—" : "Tersimpan";
 
+  const mobileTryout = domain === "tryout" && !reviewing && attempt.status === "in_progress";
+  const mobileQuestions = questions.filter(item => item.session === (mobileSession ?? question?.session));
+  const answeredCount = questions.filter(item => flow.answers[item.id]).length;
   const answerReview = reviewing && attempt.status === "completed";
   const reviewAnswerAvailable = answerReview && question?.correct_option !== undefined && Object.hasOwn(question.options, question.correct_option);
 
@@ -559,13 +571,39 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
   return (
 
-    <div className={tryoutExperience ? `${className} tryout-runner-polished${tryoutExperience ? " tryout-placement-style" : ""}` : `${className}${readingLayout ? " reading-workspace" : ""}${domain === "learning" && (attempt.kind === "audio" || attempt.kind === "reading") && !answerReview ? " daily-practice-runner" : ""}`}>
+    <div className={tryoutExperience ? `${className} tryout-runner-polished${tryoutExperience ? " tryout-placement-style" : ""}${mobileTryout ? " tryout-mobile-exam" : ""}` : `${className}${readingLayout ? " reading-workspace" : ""}${domain === "learning" && (attempt.kind === "audio" || attempt.kind === "reading") && !answerReview ? " daily-practice-runner" : ""}`}>
 
       {examDialog}
+
+      {mobileTryout && <>
+        <nav className="tryout-mobile-footer" aria-label="Navigasi pengerjaan Try Out">
+          <button type="button" className="button button-secondary" disabled={isFirst} onClick={() => setIndex(index - 1)}><FiArrowLeft aria-hidden="true" />Sebelumnya</button>
+          <button type="button" className="button button-secondary" aria-haspopup="dialog" aria-controls="tryout-mobile-navigator" onClick={() => { setMobileSession(String(question?.session ?? assessmentSessions[0])); mobileNavigator.current?.showModal(); }}><FiMenu aria-hidden="true" /><span>Navigator<small>{sessionPosition + 1} / {sessionQuestions.length}</small></span></button>
+          <button type="button" className="button button-secondary" disabled={isLast} onClick={() => setIndex(index + 1)}>Selanjutnya<FiArrowRight aria-hidden="true" /></button>
+        </nav>
+        <dialog ref={mobileNavigator} id="tryout-mobile-navigator" className="tryout-mobile-sheet" aria-labelledby="tryout-mobile-navigator-title" aria-describedby="tryout-mobile-navigator-description" onClick={event => { if (event.target === event.currentTarget) { const box = event.currentTarget.getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) event.currentTarget.close(); } }}>
+          <header><div><h2 id="tryout-mobile-navigator-title">Navigator Soal</h2><p id="tryout-mobile-navigator-description">Pilih sesi atau nomor soal</p></div><button type="button" className="button button-secondary" aria-label="Tutup Navigator" autoFocus onClick={() => mobileNavigator.current?.close()}><FiX aria-hidden="true" /></button></header>
+          <div className="tryout-mobile-sheet-content">
+            <div className="tryout-mobile-sessions" role="group" aria-label="Pilihan sesi">
+              {assessmentSessions.map((session, position) => {
+                const items = questions.filter(item => item.session === session);
+                return <button type="button" key={session} aria-pressed={(mobileSession ?? question?.session) === session} disabled={!items.length} onClick={() => setMobileSession(session)}><span>{assessmentSessionLabels[position]}</span><small>{items.filter(item => flow.answers[item.id]).length}/{items.length} dijawab</small></button>;
+              })}
+            </div>
+            <nav className="tryout-mobile-numbers" aria-label="Nomor soal sesi">
+              {mobileQuestions.map((item, position) => <button type="button" key={item.id} aria-label={`Soal ${position + 1}`} aria-current={item.id === question?.id ? "step" : undefined} className={item.id === question?.id ? "active" : flow.answers[item.id] ? "answered" : ""} onClick={() => { setIndex(questions.findIndex(candidate => candidate.id === item.id)); mobileNavigator.current?.close(); }}>{position + 1}</button>)}
+            </nav>
+            <p className="tryout-mobile-legend"><span>Aktif</span><span>Terjawab</span><span>Belum dijawab</span></p>
+          </div>
+          <footer><p>{answeredCount} / {questions.length} dijawab</p><button type="button" className="button button-primary tryout-check-answer" disabled={flow.submitting} onClick={() => { mobileNavigator.current?.close(); navigateTryOut(index, true); }}>Periksa Jawaban</button></footer>
+        </dialog>
+      </>}
 
       <header className={`learning-question-head${tryoutExperience ? " tryout-exam-topbar" : ""}`} aria-label={tryoutExperience ? `Informasi pengerjaan ${examName}` : undefined}>
 
         {readingLayout ? <div><h1>{answerReview ? `Review Jawaban · ${title}` : title}</h1>{readingContext && <p>{readingContext.label}</p>}</div> : tryoutExperience ? <h1>{reviewing ? "Review Jawaban · " : ""}<strong>{title.split(" - ")[0]}</strong><span>{title.includes(" - ") ? ` | ${title.split(" - ").slice(1).join(" - ")}` : ""}{sessionLabel ? ` - ${sessionLabel}` : ""}</span></h1> : tryoutExperience ? <><h1>{reviewing ? "Review Jawaban · " : ""}Soal {Math.min(index + 1, questions.length)} dari {questions.length}</h1><p>{title}{sessionLabel ? ` • ${sessionLabel}` : ""}</p><p className="tryout-runner-status">{questions.filter(item => flow.answers[item.id]).length} / {questions.length} Terjawab<span role="status">{saveStatus}</span></p></> : <h1>{answerReview ? `Review Jawaban ? ${title}` : title}</h1>}
+
+        {mobileTryout && <div className="tryout-mobile-status"><span>{sessionLabel}</span><strong>Soal {sessionPosition + 1} dari {sessionQuestions.length}</strong><progress aria-label="Progress jawaban Try Out" value={answeredCount} max={questions.length || 1} /></div>}
 
         {tryOutTimer ?? (tryoutExperience && <div className="checkpoint-timer" role="timer"><span>Sisa waktu</span><strong>—</strong><small>Durasi belum tersedia</small></div>)}
 

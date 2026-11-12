@@ -1232,6 +1232,88 @@
 
 .tryout-placement-style .tryout-shared-reading > main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; }
 
+.tryout-mobile-footer, .tryout-mobile-status { display: none; }
+.tryout-mobile-sheet { display: none; }
+@media (max-width: 639px) {
+  body:has(.tryout-mobile-sheet[open]) { overflow: hidden; }
+  .tryout-mobile-exam { padding-bottom: calc(88px + env(safe-area-inset-bottom)); }
+  .tryout-mobile-exam .learning-question-sidebar,
+  .tryout-mobile-exam .learning-question-actions,
+  .tryout-mobile-exam .tryout-navigator-toggle,
+  .tryout-mobile-exam .tryout-exam-topbar > h1 > span { display: none; }
+  .tryout-mobile-exam .learning-question-head.tryout-exam-topbar { margin-bottom: 12px; }
+  .tryout-mobile-exam .tryout-mobile-status { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 6px; grid-column: 1 / -1; grid-row: 2; font-size: 11px; color: var(--muted); }
+  .tryout-mobile-status strong { color: var(--navy); font-weight: 600; }
+  .tryout-mobile-status progress { flex-basis: 100%; width: 100%; height: 3px; border: 0; border-radius: 999px; overflow: hidden; background: var(--line); accent-color: #f48220; }
+  .tryout-mobile-status progress::-webkit-progress-bar { background: var(--line); }
+  .tryout-mobile-status progress::-webkit-progress-value { background: #f48220; }
+  .tryout-mobile-status progress::-moz-progress-bar { background: #f48220; }
+  .tryout-mobile-exam .tryout-mobile-footer { position: fixed; inset: auto 0 0; z-index: 40; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; padding: 10px 12px calc(10px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: #fff; }
+  .tryout-mobile-exam .tryout-mobile-footer .button { display: flex; justify-content: center; align-items: center; gap: 6px; min-width: 0; min-height: 48px; padding: 6px 4px; font-size: 11px; }
+  .tryout-mobile-footer svg { flex-shrink: 0; width: 14px; height: 14px; }
+  .tryout-mobile-footer small { display: block; font-size: 10px; color: var(--orange-dark); }
+  .tryout-mobile-sheet[open] { display: flex; flex-direction: column; position: fixed; inset: auto 0 0; width: 100%; max-width: 100%; max-height: 85dvh; margin: 0; padding: 0; border: 0; border-radius: 20px 20px 0 0; background: #fff; color: var(--navy); box-shadow: 0 -8px 32px #20273326; }
+  .tryout-mobile-sheet::backdrop { background: #11182766; }
+  .tryout-mobile-sheet > header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 16px; border-bottom: 1px solid var(--line); }
+  .tryout-mobile-sheet h2 { margin: 0; font-size: 18px; }
+  .tryout-mobile-sheet header p { margin: 4px 0 0; font-size: 12px; color: var(--muted); }
+  .tryout-mobile-sheet header .button { width: 44px; height: 44px; padding: 10px; }
+  .tryout-mobile-sheet-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 16px; }
+  .tryout-mobile-sessions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-bottom: 20px; }
+  .tryout-mobile-sessions button { display: grid; gap: 4px; min-height: 52px; padding: 8px; font-size: 12px; text-align: left; }
+  .tryout-mobile-sessions small { color: var(--muted); font-size: 11px; }
+  .tryout-mobile-sheet :is(.tryout-mobile-sessions, .tryout-mobile-numbers) button { border: 1px solid var(--line); border-radius: 10px; background: #fff; color: var(--navy); cursor: pointer; }
+  .tryout-mobile-sheet button:focus-visible { outline: 3px solid #954900; outline-offset: 2px; }
+  .tryout-mobile-sheet .tryout-mobile-sessions button[aria-pressed="true"] { border-color: #f48220; background: #fff1e6; color: #5a2a00; }
+  .tryout-mobile-numbers { display: grid; grid-template-columns: repeat(5, minmax(44px, 1fr)); gap: 8px; }
+  .tryout-mobile-numbers button { min-height: 44px; font: inherit; font-size: 14px; font-weight: 700; }
+  .tryout-mobile-sheet .tryout-mobile-numbers .answered { background: #eaf3e7; border-color: #55784b; color: #30502a; }
+  .tryout-mobile-sheet .tryout-mobile-numbers .active { background: #f48220; border-color: #f48220; color: #5a2a00; }
+  .tryout-mobile-legend { display: flex; flex-wrap: wrap; gap: 12px; margin: 16px 0 0; font-size: 11px; }
+  .tryout-mobile-legend span { display: inline-flex; align-items: center; gap: 5px; }
+  .tryout-mobile-legend span::before { content: ""; width: 10px; height: 10px; border: 1px solid var(--line); border-radius: 3px; background: #fff; }
+  .tryout-mobile-legend span:first-child::before { background: #f48220; border-color: #f48220; }
+  .tryout-mobile-legend span:nth-child(2)::before { background: #eaf3e7; border-color: #55784b; }
+  .tryout-mobile-sheet > footer { padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); }
+  .tryout-mobile-sheet footer p { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
+  .tryout-mobile-sheet footer .button { width: 100%; }
+}
+
+/* Mobile exam controls stay compact without shrinking touch targets below 44px. */
+@media (max-width: 639px) {
+  .tryout-placement-style .learning-question-head.tryout-exam-topbar { gap: 8px; padding: 12px 12px 12px 64px; margin-bottom: 12px; }
+  .tryout-placement-style .tryout-exam-topbar > h1 { font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+  .tryout-placement-style .tryout-exam-topbar > h1 > span { font-size: 12px; }
+  .tryout-placement-style .tryout-exam-topbar .checkpoint-timer { gap: 6px; padding: 8px; justify-self: end; }
+  .tryout-placement-style .tryout-exam-topbar .checkpoint-timer > strong { font-size: 15px; }
+  .tryout-placement-style .tryout-exam-topbar .checkpoint-timer > svg { width: 16px; height: 16px; }
+  .tryout-placement-style .learning-question-layout { gap: 16px; }
+  .tryout-placement-style .learning-question-layout > main { display: block; }
+  .tryout-placement-style .learning-question-card { padding: 16px; border-radius: 16px; }
+  .tryout-placement-style .learning-question-card > .dash-kicker { gap: 6px; margin-bottom: 14px; font-size: 10px; }
+  .tryout-placement-style .learning-question-card > .dash-kicker > span:first-child { padding: 5px 8px; font-size: 10px; letter-spacing: .04em; }
+  .tryout-placement-style .learning-question-card h2 { font-size: 18px; line-height: 1.7; margin-bottom: 16px; }
+  .tryout-placement-style .learning-question-card fieldset { gap: 8px; margin-top: 16px; }
+  .tryout-placement-style .learning-question-card label { min-height: 44px; padding: 8px 10px; gap: 8px; border-radius: 10px; }
+  .tryout-placement-style .learning-question-card .tryout-option-letter { flex-basis: 28px; height: 28px; }
+  .tryout-placement-style .learning-question-card .tryout-option-text { font-size: 14px; }
+  .tryout-placement-style .button { min-height: 44px; padding: 10px 12px; border-radius: 10px; font-size: 13px; line-height: 1.4; }
+  .tryout-placement-style .learning-question-actions { flex-direction: row; align-items: center; gap: 8px; margin-top: 12px; }
+  .tryout-placement-style .learning-question-actions > .button { flex: 1 1 0; height: auto; }
+  .tryout-placement-style .learning-question-sidebar { position: static; padding: 16px; gap: 12px; border-radius: 16px; }
+  .tryout-placement-style .learning-question-sidebar > nav { padding: 0; }
+  .tryout-placement-style .tryout-navigator-heading { margin-bottom: 12px; }
+  .tryout-placement-style .tryout-navigator-heading h2 { margin: 0; font-size: 12px; }
+  .tryout-placement-style .tryout-navigator-heading > button,
+  .tryout-placement-style .tryout-navigator-toggle > button { width: 44px; height: 44px; padding: 10px; }
+  .tryout-placement-style .tryout-navigator-group { margin-bottom: 12px; }
+  .tryout-placement-style .tryout-group-number-grid { grid-template-columns: repeat(auto-fit, 44px); gap: 8px; }
+  .tryout-placement-style .tryout-group-number-grid button { font-size: 14px; }
+  .tryout-placement-style .learning-question-sidebar > h2 { margin: 4px 0 0; font-size: 12px; }
+  .tryout-placement-style .tryout-session-list button { min-height: 44px; padding: 8px; font-size: 12px; border-radius: 10px; }
+  .tryout-placement-style .tryout-sidebar-actions { gap: 8px; }
+}
+
 @media (min-width: 1024px) {
   .tryout-placement-style .tryout-shared-reading > main { gap: 12px; }
   .tryout-placement-style .exam-reading-passage { padding: 16px; margin-bottom: 0; }

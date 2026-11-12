@@ -86,8 +86,67 @@ async function open(page: Page, query = "") {
   await page.clock.install({ time: new Date("2026-10-11T00:00:00Z") });
   await page.goto(`/tryout?tryout=2&attempt=9${query}`);
 }
+for (const width of [320, 390, 500]) test(`mobile exam controls stay compact at ${width}px (mock API)`, async ({ page }) => {
+  await page.setViewportSize({ width, height: 844 });
+  await mockContent(page);
+  await open(page);
+  const question = page.locator(".learning-question-card");
+  await expect(question).toBeVisible();
+  await fits(page);
+  for (const control of [
+    page.getByRole("button", { name: "Selanjutnya", exact: true }),
+    page.getByRole("button", { name: /^Navigator/ }),
+    page.getByRole("button", { name: "Sebelumnya", exact: true }),
+  ]) {
+    const box = await control.boundingBox();
+    expect(box).not.toBeNull();
+    expect(box!.height).toBeGreaterThanOrEqual(44);
+    expect(box!.height).toBeLessThanOrEqual(52);
+  }
+  expect((await page.locator(".tryout-exam-topbar").boundingBox())!.height).toBeLessThan(150);
+  await page.getByRole("button", { name: "Selanjutnya", exact: true }).click();
+  await expect(question).toContainText("Legacy vocabulary without image");
+  expect((await page.getByRole("button", { name: "Sebelumnya", exact: true }).boundingBox())!.height).toBeLessThanOrEqual(52);
+  await expect(page.locator(".learning-question-sidebar")).toBeHidden();
+  await expect(page.getByText("Soal 2 dari 2", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: /^Navigator/ }).click();
+  const sheet = page.getByRole("dialog", { name: "Navigator Soal", exact: true });
+  await expect(sheet).toBeVisible();
+  await sheet.getByRole("button", { name: /Tata Bahasa/ }).click();
+  await expect(sheet.getByRole("button", { name: /^Soal / })).toHaveCount(4);
+  await sheet.getByRole("button", { name: "Soal 2", exact: true }).click();
+  await expect(sheet).toBeHidden();
+  await expect(question).toContainText("Grammar second question");
+  await question.locator("label").filter({ has: page.getByRole("radio", { name: "B. Second", exact: true }) }).click();
+  await page.getByRole("button", { name: /^Navigator/ }).click();
+  await expect(sheet.getByRole("button", { name: /Tata Bahasa/ })).toContainText("1/4 dijawab");
+  await sheet.getByRole("button", { name: /Kosakata & Kanji/ }).click();
+  await sheet.getByRole("button", { name: "Soal 1", exact: true }).click();
+  await page.getByRole("button", { name: /^Navigator/ }).click();
+  await sheet.getByRole("button", { name: /Tata Bahasa/ }).click();
+  await sheet.getByRole("button", { name: "Soal 2", exact: true }).click();
+  await expect(question.getByRole("radio", { name: "B. Second", exact: true })).toBeChecked();
+  await page.getByRole("button", { name: /^Navigator/ }).click();
+  await sheet.getByRole("button", { name: "Tutup Navigator" }).click();
+  await expect(sheet).toBeHidden();
+  await page.getByRole("button", { name: /^Navigator/ }).click();
+  await page.mouse.click(width / 2, 5);
+  await expect(sheet).toBeHidden();
+  await page.getByRole("button", { name: /^Navigator/ }).click();
+  await sheet.getByRole("button", { name: "Periksa Jawaban", exact: true }).click();
+  await expect(page.getByRole("heading", { name: /Periksa Jawaban/ })).toBeVisible();
+});
+
 async function next(page: Page) {
   await page.getByRole("button", { name: "Selanjutnya", exact: true }).click();
+}
+async function chooseSession(page: Page, name: string) {
+  if ((page.viewportSize()?.width ?? 1440) < 640) {
+    await page.getByRole("button", { name: /^Navigator/ }).click();
+    const sheet = page.getByRole("dialog", { name: "Navigator Soal", exact: true });
+    await sheet.getByRole("button", { name: new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")) }).click();
+    await sheet.getByRole("button", { name: "Soal 1", exact: true }).click();
+  } else await page.getByRole("button", { name, exact: true }).click();
 }
 async function imageOrder(image: Locator, text: Locator, position: "before" | "after") {
   await expect(image).toBeVisible();
@@ -113,7 +172,7 @@ for (const width of [1440, 768, 390]) test(`snapshot images and grouped navigati
   await next(page);
   await expect(card(page)).toContainText("Legacy vocabulary without image");
   await expect(card(page).locator("img")).toHaveCount(0);
-  await page.getByRole("button", { name: "Tata Bahasa", exact: true }).click();
+  await chooseSession(page, "Tata Bahasa");
   await expect(card(page)).toContainText("Grammar first question");
   await expect(page.getByAltText("grammar-one snapshot image", { exact: true })).toHaveCount(1);
   await imageOrder(page.getByAltText("grammar-one snapshot image", { exact: true }), page.getByText("Historical grammar stimulus one", { exact: true }), "after");
@@ -133,7 +192,7 @@ for (const width of [1440, 768, 390]) test(`snapshot images and grouped navigati
   await expect(page.getByText("Historical grammar stimulus two", { exact: true })).toHaveCount(0);
   await expect(page.getByAltText("grammar-two snapshot image", { exact: true })).toHaveCount(0);
   await imageOrder(page.getByAltText("standalone snapshot image", { exact: true }), card(page).getByRole("heading", { name: "Grammar standalone", exact: true }), "before");
-  await page.getByRole("button", { name: "Reading (Dokkai)", exact: true }).click();
+  await chooseSession(page, "Reading (Dokkai)");
   await imageOrder(page.getByAltText("reading snapshot image", { exact: true }), page.getByText("Historical reading", { exact: false }), "before");
   await imageOrder(page.getByAltText("reading-question snapshot image", { exact: true }), card(page).getByRole("heading", { name: "Reading first question", exact: true }), "after");
   await expect(page.locator(".exam-reading-passage ruby rt")).toHaveText("やま");
@@ -142,7 +201,7 @@ for (const width of [1440, 768, 390]) test(`snapshot images and grouped navigati
   await expect(card(page)).toContainText("Reading second question");
   await expect(page.getByAltText("reading snapshot image", { exact: true })).toHaveCount(1);
   await expect(page.getByAltText("reading-question snapshot image", { exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "Audio (Choukai)", exact: true }).click();
+  await chooseSession(page, "Audio (Choukai)");
   await expect(card(page).locator("audio")).toHaveAttribute("controls", "");
   await expect(card(page).locator("audio")).toHaveAttribute("src", "https://assessment-media.test/listening.wav");
   await imageOrder(page.getByAltText("audio snapshot image", { exact: true }), card(page).getByRole("heading", { name: "Audio question with image", exact: true }), "before");
@@ -194,7 +253,7 @@ test("completed result and review retain historical content and answer states (m
   await expect(card(page).getByRole("radio", { name: /^A\. First/ })).toBeChecked();
   await expect(card(page).locator(".review-wrong")).toContainText("Jawaban kamu · Salah");
   await expect(card(page).locator(".review-correct")).toContainText("Second");
-  await page.getByRole("button", { name: "Tata Bahasa", exact: true }).click();
+  await chooseSession(page, "Tata Bahasa");
   await expect(card(page).locator("input:checked")).toHaveCount(0);
   await expect(card(page).locator(".review-correct")).toContainText("Second");
   await expect(card(page).locator(".review-wrong")).toHaveCount(0);
@@ -204,10 +263,10 @@ test("completed result and review retain historical content and answer states (m
   await imageOrder(page.getByAltText("grammar-question snapshot image", { exact: true }), card(page).getByRole("heading", { name: "Grammar first question", exact: true }), "after");
   await imageOrder(page.getByAltText("grammar-one snapshot image", { exact: true }), page.getByText("Historical grammar stimulus one", { exact: true }), "after");
   await expect(card(page).getByRole("radio").first()).toBeDisabled();
-  await page.getByRole("button", { name: "Reading (Dokkai)", exact: true }).click();
+  await chooseSession(page, "Reading (Dokkai)");
   await expect(page.getByAltText("reading snapshot image", { exact: true })).toHaveCount(1);
   await expect(page.getByAltText("reading-question snapshot image", { exact: true })).toHaveCount(1);
-  await page.getByRole("button", { name: "Audio (Choukai)", exact: true }).click();
+  await chooseSession(page, "Audio (Choukai)");
   await expect(card(page).locator("audio")).toHaveCount(1);
   await expect(page.getByAltText("audio snapshot image", { exact: true })).toHaveCount(1);
   expect(mock.calls.reviews).toBe(1);
