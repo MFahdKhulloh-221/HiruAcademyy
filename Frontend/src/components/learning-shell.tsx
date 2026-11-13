@@ -19,7 +19,7 @@ export function LearningShell({ membership, level, chapter, current, breadcrumbL
   return (
     <div className="learning-shell student-shell">
       <StudentNavigation membership={membership} />
-      <div className="learning-main"><header className="learning-topbar"><Link href={journeyHref}>← Journey</Link><StudentHeaderActions membership={membership} /></header><main className={current === "flashcards" ? "learning-content flashcard-page" : "learning-content"}><StudentBreadcrumb items={breadcrumbs} />{children}</main></div>
+      <div className="learning-main"><header className="learning-topbar"><Link href={journeyHref}>← Journey</Link><StudentHeaderActions membership={membership} /></header><main className={current === "flashcards" ? "learning-content flashcard-page" : "learning-content"}>{current !== "flashcards" && <StudentBreadcrumb items={breadcrumbs} />}{children}</main></div>
     </div>
   );
 }

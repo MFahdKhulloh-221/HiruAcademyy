@@ -89,6 +89,7 @@ for (const kind of ["audio", "reading"] as const) {
       if (method === "OPTIONS") { await route.fulfill({ status: 204, headers }); return; }
       if (path === "/sanctum/csrf-cookie") { await route.fulfill({ status: 204, headers: { ...headers, "set-cookie": "XSRF-TOKEN=testing; Path=/" } }); return; }
       if (path === "/api/me") { await reply({ id: 71, name: "Practice Student", email: "practice@example.test", whatsapp: "081234567890", role: "student", account_status: "active" }); return; }
+      if (path === "/api/student/dashboard") { await reply({ programs: [{ id: 5, code: "n5", name: "JLPT N5", family: "jlpt" }], access: { learning: { n5: "full" }, replay_levels: [], source_grants: [{ plan_code: "lms", program_code: "n5" }] } }); return; }
       if (path === "/api/public/programs") { await reply([{ id: 5, code: "n5", name: "JLPT N5", family: "jlpt" }]); return; }
       if (path === "/api/student/access") { await reply({ learning: { n5: "full" }, replay_levels: [], source_grants: [{ plan_code: "lms", program_code: "n5" }] }); return; }
       if (path === "/api/student/try-outs") { await reply([{ id: 2, level: "N5", title: "Server Try Out", max_score: 140, sessions: { grammar: "Tata Bahasa", audio: "Audio (Choukai)" } }]); return; }
@@ -128,26 +129,24 @@ for (const kind of ["audio", "reading"] as const) {
     await expect(page.getByRole("heading", { name: `Hasil ${kind === "audio" ? "Audio" : "Reading"}` })).toBeVisible();
     await expect(page.getByText("73", { exact: true })).toBeVisible();
     await expect(page.getByText("Jawaban benar:")).toHaveCount(0);
-    await page.goto(`/practice?practice_level=n5&practice_chapter=chapter-1&practice_kind=${kind}&attempt=4`);
+    await page.goto(`/learn/n5/chapter-1/${kind}?attempt=4`);
     await expect(page.getByRole("heading", { name: `Hasil ${kind === "audio" ? "Audio" : "Reading"}` })).toBeVisible();
     await page.reload();
     await expect(page.getByRole("heading", { name: `Hasil ${kind === "audio" ? "Audio" : "Reading"}` })).toBeVisible();
     expect(starts).toBe(1);
     expect(submits).toBe(1);
-    await page.goto("/practice?membership=sensei&attempt=4");
+    await page.goto(`/learn/n5/chapter-1/${kind}?membership=sensei&attempt=4`);
     await expect(page.getByRole("heading", { name: `Hasil ${kind === "audio" ? "Audio" : "Reading"}` })).toBeVisible();
-    await expect(page).toHaveURL(/\/practice\?membership=sensei&attempt=4$/);
+    await expect(page).toHaveURL(new RegExp(`/learn/n5/chapter-1/${kind}\\?membership=sensei&attempt=4$`));
     await page.reload();
     await expect(page.getByRole("heading", { name: `Hasil ${kind === "audio" ? "Audio" : "Reading"}` })).toBeVisible();
     expect(starts).toBe(1);
-    await page.getByRole("button", { name: "Kembali ke Daftar Latihan" }).click();
     server = { ...server, status: "in_progress", answers: {}, result: null };
-    await page.getByRole("tab", { name: kind === "audio" ? "Audio" : "Reading", exact: true }).click();
-    await page.getByRole("article").filter({ has: page.getByRole("heading", { name: `JLPT N5 | Practice chapter | ${kind === "audio" ? "Audio" : "Reading"}`, exact: true }) }).getByRole("button", { name: "Kerjakan Latihan", exact: true }).click();
+    await page.goto(`/learn/n5/chapter-1/${kind}?attempt=4`);
     await expect(page.getByRole("heading", { name: "Practice server question" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Mulai", exact: true })).toHaveCount(0);
     await expect(page).toHaveURL(/attempt=4/);
-    expect(starts).toBe(2);
+    expect(starts).toBe(1);
     await page.goto("/tryout?tryout=2");
     await expect(page.getByText("INFORMASI SIMULASI", { exact: true })).toBeVisible();
     await expect(page.getByText("140", { exact: true })).toBeVisible();

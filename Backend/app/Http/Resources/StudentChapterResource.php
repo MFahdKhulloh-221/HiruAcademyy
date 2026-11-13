@@ -17,18 +17,19 @@ class StudentChapterResource extends JsonResource
         if (! $this->resource->relationLoaded('videoLessons')) {
             return $data;
         }
-        $data['mini_checkpoints'] = $this->resource->miniCheckpointQuestions
-            ->groupBy(fn ($question) => $question->session.':'.$question->part)
-            ->map(function ($questions) {
-                $first = $questions->first();
-                try {
-                    $configuration = app(LearningAttemptService::class)->miniConfiguration($questions->map(fn ($question) => $question->only(['session', 'part', 'duration_minutes', 'passing_score']))->values()->all());
-                } catch (ValidationException) {
-                    $configuration = null;
-                }
-
-                return ['session' => $first->session, 'part' => $first->part, 'duration_minutes' => $configuration['duration_minutes'] ?? null, 'passing_score' => $configuration['passing_score'] ?? null, 'question_count' => $questions->count(), 'configuration_valid' => $configuration !== null];
-            })->sortBy(['session', 'part'])->values()->all();
+        try {
+            $configuration = app(LearningAttemptService::class)->chapterMiniConfiguration($this->resource);
+        } catch (ValidationException) {
+            $configuration = null;
+        }
+        $questions = $this->resource->miniCheckpointQuestions;
+        $data['mini_checkpoints'] = $questions->isEmpty() ? [] : [[
+            'session' => 1, 'part' => 1,
+            'duration_minutes' => $configuration['duration_minutes'] ?? null,
+            'passing_score' => $configuration['passing_score'] ?? null,
+            'question_count' => $questions->count(),
+            'configuration_valid' => $configuration !== null,
+        ]];
         foreach ([
             'video_lessons' => ['videoLessons', ['id', 'title', 'video_url', 'description', 'sort_order']],
             'modules' => ['modules', ['id', 'title', 'module_type', 'file_url', 'description', 'sort_order']],

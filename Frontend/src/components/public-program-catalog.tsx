@@ -16,7 +16,7 @@ import { commercialCode } from "@/lib/commercial-api";
 import { useContent, type PublicOffer, type PublicProgram } from "@/lib/public-content-api";
 
 export function PublicProgramCatalog({ program: detailProgram }: { program?: string }) {
-  const programs = useContent<PublicProgram>("/api/public/programs");
+  const programs = useContent<PublicProgram>("/api/public/programs?catalog=programs");
   const pricing = useContent<PublicOffer>("/api/public/offers");
   const catalogPrograms = programs.data.filter(item => item.family === "jlpt" && levelCatalog.some(level => level.code.toLowerCase() === item.code.toLowerCase())).sort((a, b) => {
     const rank = (item: PublicProgram) => item.family === "jlpt" ? levelCatalog.findIndex(level => level.code.toLowerCase() === item.code.toLowerCase()) : levelCatalog.length;
@@ -64,11 +64,11 @@ export function PublicProgramCatalog({ program: detailProgram }: { program?: str
     {!programs.loading && !programs.error && !programs.data.length && <p role="status">Belum ada program tersedia.</p>}
 
     {selected && !programs.loading && !programs.error && <>
-      <section className="public-section level-section">
-        <div className="journey-section-heading">
-          <h1>Mulai perjalanan bahasa Jepangmu</h1>
-          <p>Pilih satu level, lalu tentukan metode belajar yang paling sesuai.</p>
-        </div>
+      <header className="public-section journey-section-heading">
+        <h1>Mulai perjalanan bahasa Jepangmu</h1>
+        <p>Pilih program, lalu tentukan metode belajar yang paling sesuai.</p>
+      </header>
+      {catalogPrograms.length > 0 && <section className="public-section level-section" aria-label="Program JLPT">
         <div className="public-levels">{catalogPrograms.map(item => {
           const level = item.family === "jlpt" ? levelCatalog.find(level => level.code.toLowerCase() === item.code.toLowerCase()) : undefined;
           return <article className={`public-level${item.family !== "jlpt" ? " journey-other-program" : ""}${selected.code === item.code ? " selected" : ""}`} key={item.code}>
@@ -85,7 +85,7 @@ export function PublicProgramCatalog({ program: detailProgram }: { program?: str
             <Link className="button button-secondary" href="/placement">Tes Level Gratis</Link>
           </article>}
         </div>
-      </section>
+      </section>}
 
       {otherPrograms.length > 0 && <section className="public-section" aria-labelledby="other-programs-heading">
         <div className="journey-section-heading"><h2 id="other-programs-heading">Program Lainnya</h2></div>
@@ -100,7 +100,7 @@ export function PublicProgramCatalog({ program: detailProgram }: { program?: str
       <section id="program-pricing" className="public-section program-pricing-section">
         <div className="journey-section-heading"><h2>Pilih metode belajar — {selected.name}</h2><p>{selected.description}</p></div>
         {pricing.loading && <LoadingSkeleton variant="cards" label="Memuat harga…" />}
-        {pricing.error && <div role="alert">{pricing.error} <button type="button" onClick={pricing.reload}>Coba lagi</button></div>}
+        {pricing.error && <div role="alert">Harga belum dapat dimuat. {pricing.error} <button type="button" onClick={pricing.reload}>Coba lagi</button></div>}
         {ready && !availableOffers.length && <p role="status">Paket program ini belum tersedia.</p>}
         {ready && selected.family !== "jlpt" && <div className="pricing-grid">{availableOffers.map(price => {
           const template = landingOffers.find(offer => offer.id === price.plan_code);

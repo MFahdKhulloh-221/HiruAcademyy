@@ -25,6 +25,7 @@ export type AdminAssessmentQuestion = AssessmentImage & {
   passage: string;
   file: File | null;
   audioUrl?: string;
+  audioTitle?: string;
   pointValue?: number;
   order: string;
   status: "Draft" | "Published";
@@ -151,7 +152,7 @@ export function assessmentError(item: AdminAssessment) {
   if (item.status === "Published") {
     if (item.kind === "mini" && (!item.duration || item.passingScore === "")) return "OPEN: isi durasi dan passing score sebelum publish.";
     if (!item.questions.some((question) => question.status === "Published")) return "Tambahkan soal Published sebelum publish.";
-    if (item.kind !== "mini" && assessmentSections(item).some((section) => !item.questions.some((question) => question.section === section && question.status === "Published"))) return "Setiap sesi membutuhkan soal Published.";
+    if (item.kind !== "mini" && assessmentSections(item).filter(section => item.kind !== "checkpoint" || section !== jlptTryoutSessions[3]).some((section) => !item.questions.some((question) => question.section === section && question.status === "Published"))) return "Setiap sesi membutuhkan soal Published.";
     const missingMedia = orderedAssessmentQuestions(item).filter(question => question.status === "Published" && ((question.type === "Audio" && !question.file && !question.audioUrl?.trim()) || (question.type === "Reading" && !question.passageId && !placementText(question.passage).trim())));
     if (missingMedia.length) return missingMedia.map(question => `${assessmentQuestionLocation(question, item)}: ${question.type === "Audio" ? "Unggah audio atau isi URL audio" : "Isi teks bacaan"} sebelum publish.`).join("\n");
   }

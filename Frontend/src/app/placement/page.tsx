@@ -29,7 +29,7 @@ export default function PlacementPage() {
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const isReady = Boolean(publishedConfig && publishedConfig.isReady && !loadError);
   const unavailableNotice = loadError || (!publishedConfig || !publishedConfig.isReady ? "Placement Test sedang disiapkan. Silakan coba lagi nanti." : undefined);
-  const valid = Boolean(name.trim() && whatsapp.trim() && target && privacy && whatsappConsent && isReady && !busy);
+  const valid = isReady && !busy && Object.keys(validate()).length === 0;
 
   function validate(): Record<string, string> {
     const errors: Record<string, string> = {};
@@ -42,6 +42,11 @@ export default function PlacementPage() {
     if (!privacy) errors.privacy = "Kamu perlu menyetujui Kebijakan Privasi untuk melanjutkan.";
     if (!whatsappConsent) errors.whatsappConsent = "Kamu perlu menyetujui komunikasi melalui WhatsApp untuk melanjutkan.";
     return errors;
+  }
+
+  function validateField(field: string) {
+    const message = validate()[field];
+    setFieldErrors(previous => ({ ...previous, [field]: message || "" }));
   }
 
   function clearFieldError(field: string) {
@@ -171,12 +176,12 @@ export default function PlacementPage() {
             <p className="kicker">DATA SEBELUM TES</p>
             <label>
               Nama
-              <input name="name" placeholder="Masukkan nama" value={name} onChange={(event) => { setName(event.target.value); clearFieldError("name"); }} required aria-invalid={!!fieldErrors.name || undefined} aria-describedby={fieldErrors.name ? "err-name" : undefined} />
+              <input name="name" onBlur={() => validateField("name")} placeholder="Masukkan nama" value={name} onChange={(event) => { setName(event.target.value); clearFieldError("name"); }} required aria-invalid={!!fieldErrors.name || undefined} aria-describedby={fieldErrors.name ? "err-name" : undefined} />
               {fieldErrors.name && <em id="err-name" role="alert">{fieldErrors.name}</em>}
             </label>
             <label>
               Nomor WhatsApp
-              <input name="whatsapp" type="tel" inputMode="tel" autoComplete="tel" placeholder="+62 8xx xxxx xxxx" value={whatsapp} onChange={(event) => { setWhatsapp(event.target.value); clearFieldError("whatsapp"); }} required aria-invalid={!!fieldErrors.whatsapp || undefined} aria-describedby={fieldErrors.whatsapp ? "err-whatsapp" : undefined} />
+              <input name="whatsapp" onBlur={() => validateField("whatsapp")} type="tel" inputMode="tel" autoComplete="tel" placeholder="+62 8xx xxxx xxxx" value={whatsapp} onChange={(event) => { setWhatsapp(event.target.value); clearFieldError("whatsapp"); }} required aria-invalid={!!fieldErrors.whatsapp || undefined} aria-describedby={fieldErrors.whatsapp ? "err-whatsapp" : undefined} />
               {fieldErrors.whatsapp && <em id="err-whatsapp" role="alert">{fieldErrors.whatsapp}</em>}
             </label>
             <label>

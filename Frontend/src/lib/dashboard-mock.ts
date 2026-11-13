@@ -79,7 +79,7 @@ export function getStudentFeatureAccess(membership: Membership, feature: Student
     if (feature === "certificate") return membership === "free" ? "locked" : "available";
     return membership === "sensei" ? "available" : "locked";
   }
-  if (feature === "journey" || feature === "practice" || feature === "flashcards" || feature === "library" || feature === "community") {
+  if (feature === "journey" || feature === "flashcards" || feature === "library" || feature === "community") {
     return membership === "free" ? "limited" : "available";
   }
   return "available";
@@ -99,12 +99,12 @@ const quickActionsFor = (membership: Membership): DashboardAction[] => (membersh
   : [
       action(membership, "journey", "Journey", "Perjalanan Level", "journey", "/journey"),
       action(membership, "library", "Perpustakaan", "Materi & Modul", "library", "/library"),
-      action(membership, "practice", "Latihan", "Soal Audio/Reading & materi chapter", "practice", "/practice"),
+      action(membership, "practice", "Latihan Harian", "Latihan terjadwal dari Sensei", "practice", "/practice"),
       action(membership, "tryout", "Try Out", "Simulasi Ujian", "tryout", "/tryout"),
       action(membership, "community", "Komunitas", "Diskusi Pembelajar", "community", "/community"),
       action(membership, "affiliate", "Affiliate", "Ajak Teman & Diskon", "affiliate", "/affiliate"),
     ]).concat(
-      membership === "sensei" ? [action(membership, "practice", "Latihan", "Soal Audio/Reading & materi chapter", "practice", "/practice")] : [],
+      membership === "sensei" ? [action(membership, "practice", "Latihan Harian", "Latihan terjadwal dari Sensei", "practice", "/practice")] : [],
       action(membership, "flashcards", "Flashcard", "Hafalan kosakata dengan kartu belajar", "library", "/flashcards"),
     );
 

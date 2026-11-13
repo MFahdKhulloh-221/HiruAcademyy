@@ -2,7 +2,6 @@
 
 namespace App\Services;
 
-use App\Models\TryOut;
 use App\Models\TryOutAttempt;
 use App\Models\User;
 use Carbon\CarbonImmutable;
@@ -10,9 +9,12 @@ use Illuminate\Database\Eloquent\Builder;
 
 class AdminTryOutReportService
 {
+    protected string $attemptModel = TryOutAttempt::class;
+    protected string $attemptTable = 'try_out_attempts';
+    protected string $parentKey = 'try_out_id';
     public function readSnapshot(callable $read): mixed
     {
-        $connection = (new TryOutAttempt)->getConnection();
+        $connection = (new $this->attemptModel)->getConnection();
 
         return $connection->transaction(function () use ($connection, $read) {
             if ($connection->getDriverName() === 'pgsql') {
@@ -26,9 +28,9 @@ class AdminTryOutReportService
         });
     }
 
-    public function cohort(TryOut $tryOut, array $filters): Builder
+    public function cohort(\Illuminate\Database\Eloquent\Model $tryOut, array $filters): Builder
     {
-        $query = TryOutAttempt::query()->where('try_out_id', $tryOut->id)
+        $query = $this->attemptModel::query()->where($this->parentKey, $tryOut->id)
             ->where('status', 'completed')->whereNull('abandoned_at')->whereNotNull('completed_at');
         if (! empty($filters['user_id'])) {
             $query->where('user_id', $filters['user_id']);
@@ -50,17 +52,17 @@ class AdminTryOutReportService
         return $query;
     }
 
-    public function attempts(TryOut $tryOut, array $filters): \Generator
+    public function attempts(\Illuminate\Database\Eloquent\Model $tryOut, array $filters): \Generator
     {
         foreach ($this->cohort($tryOut, $filters)->orderBy('id')->lazyById(200) as $attempt) {
             yield $attempt;
         }
     }
 
-    public function participantsQuery(TryOut $tryOut, array $filters): Builder
+    public function participantsQuery(\Illuminate\Database\Eloquent\Model $tryOut, array $filters): Builder
     {
-        return $this->cohort($tryOut, $filters)->leftJoin('users', 'users.id', '=', 'try_out_attempts.user_id')
-            ->select(['try_out_attempts.*', 'users.name as participant_name', 'users.whatsapp as participant_whatsapp']);
+        return $this->cohort($tryOut, $filters)->leftJoin('users', 'users.id', '=', $this->attemptTable.'.user_id')
+            ->select([$this->attemptTable.'.*', 'users.name as participant_name', 'users.whatsapp as participant_whatsapp']);
     }
 
     public function participant(TryOutAttempt $attempt): array
@@ -76,9 +78,9 @@ class AdminTryOutReportService
             'overall_pass' => $result['overall_pass'] ?? null, 'result' => $result];
     }
 
-    public function individual(TryOut $tryOut, array $filters, int $id): array
+    public function individual(\Illuminate\Database\Eloquent\Model $tryOut, array $filters, int $id): array
     {
-        $attempt = $this->participantsQuery($tryOut, $filters)->where('try_out_attempts.id', $id)->firstOrFail();
+        $attempt = $this->participantsQuery($tryOut, $filters)->where($this->attemptTable.'.id', $id)->firstOrFail();
 
         $questions = [];
         foreach ($attempt->content_snapshot ?? [] as $index => $question) {
@@ -107,7 +109,7 @@ class AdminTryOutReportService
             'result_snapshot' => $attempt->result_snapshot];
     }
 
-    public function tryOut(TryOut $tryOut): array
+    public function tryOut(\Illuminate\Database\Eloquent\Model $tryOut): array
     {
         $tryOut->loadMissing('program');
 
@@ -142,7 +144,7 @@ class AdminTryOutReportService
         return $answer === null || $answer === '' ? 'blank' : ($answer === ($grade['correct_option'] ?? null) ? 'correct' : 'wrong');
     }
 
-    public function overview(TryOut $tryOut, array $filters, bool $includeSnapshots = false): array
+    public function overview(\Illuminate\Database\Eloquent\Model $tryOut, array $filters, bool $includeSnapshots = false): array
     {
         $total = 0;
         $passed = 0;

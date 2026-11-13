@@ -24,7 +24,7 @@ for (const width of [390, 1440]) {
     await page.goto("/admin/invoice");
     await expect(page.getByRole("cell", { name: "Siswa Sakura", exact: true })).toBeVisible();
     await expect(page.getByRole("cell", { name: "Nama siswa tidak tersedia", exact: true })).toBeVisible();
-    const search = page.getByRole("textbox", { name: "Cari invoice" });
+    const search = page.getByRole("searchbox", { name: "Cari invoice" });
     for (const term of ["Sakura", "42", "N4"]) {
       await search.fill(term);
       await expect(page.getByRole("cell", { name: "Siswa Sakura", exact: true })).toBeVisible();

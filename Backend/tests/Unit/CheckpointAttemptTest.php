@@ -55,6 +55,9 @@ class CheckpointAttemptTest extends TestCase
         $policy = $this->createMock(ChapterAccessPolicy::class);
         $policy->method('canAccessProgram')->willReturn(true);
         $policy->method('canAccessChapter')->willReturn(false);
+        $entitlements = $this->createMock(\App\Services\EntitlementService::class);
+        $entitlements->method('effectiveAccess')->willReturnCallback(fn ($user) => ['replay_levels' => $user->id === 1 ? ['n5'] : []]);
+        $this->app->instance(\App\Services\EntitlementService::class, $entitlements);
         $service = new CheckpointAttemptService($policy, new CheckpointPackageService);
         $package = (new CheckpointPackage)->forceFill(['id' => 7, 'program_id' => 3, 'status' => 'published', 'access_type' => 'free']);
         $package->setRelation('program', new Program(['code' => 'n5', 'status' => 'active']));
@@ -70,7 +73,7 @@ class CheckpointAttemptTest extends TestCase
                 'foreign_user' => $a->user_id = 2,
                 'foreign_package' => $a->checkpoint_package_id = 8,
                 'draft' => $p->status = 'draft',
-                'membership' => $p->access_type = 'membership',
+                'membership' => $p->setRelation('program', new Program(['code' => 'n4', 'status' => 'active'])),
                 'inactive_account' => $u->account_status = 'inactive',
             };
             try {

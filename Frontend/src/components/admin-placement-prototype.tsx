@@ -3,14 +3,14 @@
 import Image from "next/image";
 import { PlacementRichText, PlacementTextEditor } from "@/components/placement-rich-text";
 import { placementText } from "@/lib/placement-rich-text";
-import { LuCircleCheck, LuSettings, LuTriangleAlert } from "react-icons/lu";
+import { LuCircleCheck, LuCopy, LuSettings, LuTriangleAlert } from "react-icons/lu";
 import { type FormEvent, useState } from "react";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { AdminMediaUpload } from "@/components/admin-media-upload";
-import { AdminDataTable, AdminDialog, AdminEmptyState, AdminFilterToolbar, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge } from "@/components/admin-primitives";
+import { AdminDataTable, AdminDialog, AdminEmptyState, AdminFilterToolbar, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge, AdminTabs } from "@/components/admin-primitives";
 import type { PlacementQuestion, PlacementSettings } from "@/components/admin-placement-preview";
 import { useLearningRequest } from "@/components/learning-hooks";
-import { loadAdminPlacement, loadAdminPlacementLeads, saveAdminPlacement, saveAdminPlacementQuestion, placementQuestionView, deleteAdminPlacementQuestion, updateAdminPlacementLead, type PlacementLead } from "@/lib/admin-placement-api";
+import { loadAdminPlacement, loadAdminPlacementLeads, saveAdminPlacement, saveAdminPlacementQuestion, placementQuestionView, deleteAdminPlacementQuestion } from "@/lib/admin-placement-api";
 import { adminMediaUrl } from "@/lib/admin-media";
 import { studentWhatsAppUrl } from "@/lib/admin-whatsapp";
 import styles from "./admin-placement-builder.module.css";
@@ -61,17 +61,13 @@ function PlacementEditor({ initial }: { initial: Awaited<ReturnType<typeof loadA
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const leadsRequest = useLearningRequest(loadAdminPlacementLeads, "admin-placement-leads");
-  const [leadStatusOverrides, setLeadStatusOverrides] = useState<Record<number, "new" | "contacted">>({});
-  const [leadBusyId, setLeadBusyId] = useState<number | null>(null);
+  const [tab, setTab] = useState("Soal");
+  const [copyMessage, setCopyMessage] = useState("");
   const [leadSearch, setLeadSearch] = useState("");
-  const [leadStatusFilter, setLeadStatusFilter] = useState("all");
   const [leadPage, setLeadPage] = useState(1);
   const [selectedLeadId, setSelectedLeadId] = useState<number | null>(null);
-  const leads = (leadsRequest.data ?? [])
-    .filter(lead => !lead.attempt_status || lead.attempt_status === "completed")
-    .map(lead => ({ ...lead, status: leadStatusOverrides[lead.id] ?? lead.status }));
+  const leads = (leadsRequest.data ?? []).filter(lead => !lead.attempt_status || lead.attempt_status === "completed");
   const filteredLeads = leads.filter(lead => {
-    if (leadStatusFilter !== "all" && lead.status !== leadStatusFilter) return false;
     const query = leadSearch.trim().toLocaleLowerCase("id-ID");
     if (!query) return true;
     const wa = lead.whatsapp_consent === false ? "" : lead.whatsapp;
@@ -84,16 +80,14 @@ function PlacementEditor({ initial }: { initial: Awaited<ReturnType<typeof loadA
   const selectedLead = leads.find(lead => lead.id === selectedLeadId) ?? null;
   const ready = rows.filter(row => row.published && !questionError(row)).length;
 
-  async function toggleLeadStatus(lead: PlacementLead) {
-    if (leadBusyId !== null) return;
-    const next = lead.status === "new" ? "contacted" : "new";
-    setLeadBusyId(lead.id); setError("");
+  async function copyWhatsApp(value: string) {
+    setCopyMessage("");
     try {
-      const saved = await updateAdminPlacementLead(lead.id, next);
-      setLeadStatusOverrides(current => ({ ...current, [lead.id]: saved.status === "contacted" ? "contacted" : "new" }));
-      setMessage(saved.status === "contacted" ? "Status kontak diperbarui: Sudah Dihubungi." : "Status kontak diperbarui: Baru.");
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Status kontak gagal diperbarui."); }
-    finally { setLeadBusyId(null); }
+      await navigator.clipboard.writeText(value);
+      setCopyMessage("Nomor WhatsApp berhasil disalin.");
+    } catch {
+      setCopyMessage("Gagal menyalin. Pilih nomor WhatsApp dan salin secara manual.");
+    }
   }
 
   function close() {
@@ -143,6 +137,8 @@ function PlacementEditor({ initial }: { initial: Awaited<ReturnType<typeof loadA
   return <AdminShell current="/admin/placement-hasil"><main className={styles.builder}>
     <AdminPageHeader title="Placement Test" actions={<button type="button" className="button button-primary" onClick={() => { setError(""); setSettingsDraft({ ...settings }); }}><LuSettings aria-hidden="true" />Pengaturan Tes</button>} />
     {message && <p role="status">{message}</p>}
+    <AdminTabs tabs={["Soal", "Hasil Placement Test"]} active={tab} onChange={setTab} label="Placement Test">
+    {tab === "Soal" ? <>
     <div className={styles.readinessRow}><section className={`${styles.summary} ${ready < 15 ? styles.warning : styles.ready}`} role="note" aria-label="Informasi kesiapan tes">{ready < 15 ? <LuTriangleAlert aria-hidden="true" /> : <LuCircleCheck aria-hidden="true" />}<p>{ready < 15 ? `Agar tes dapat tampil di halaman Placement Test, buat minimal 15 soal siap pakai. Saat ini ${ready} soal siap; tambahkan ${15 - ready} soal lagi.` : `${ready} soal siap. Semua soal aktif digunakan pada tes baru.`}</p></section>
     </div>
     <section aria-label="Kelompok bank soal" className={`${styles.summary} ${styles.bank}`}>
@@ -162,10 +158,9 @@ function PlacementEditor({ initial }: { initial: Awaited<ReturnType<typeof loadA
       <div className={styles.actions}><button type="button" className="button button-secondary" aria-label={`Edit soal ${index + 1}`} onClick={() => { setError(""); setDraft({ ...row, answers: [...row.answers], mediaType: mediaType(row), order: row.order }); }}>Edit</button><button type="button" className="button button-secondary" aria-label={`Hapus soal ${index + 1}`} onClick={() => { setError(""); setDeleting(row); }}>Hapus</button></div>
     </li>)}</ol>}
 
-    <AdminSection title="Hasil & Leads Peserta" description="Daftar peserta yang telah menyelesaikan Placement Test.">
+    </> : <AdminSection title="Hasil Placement Test" description="Daftar peserta yang telah menyelesaikan Placement Test.">
       <AdminFilterToolbar>
         <label className="admin-field">Cari peserta<input type="search" placeholder="Nama, WhatsApp, target, atau rekomendasi" value={leadSearch} onChange={event => { setLeadSearch(event.target.value); setLeadPage(1); }} /></label>
-        <label className="admin-field">Status kontak<select value={leadStatusFilter} onChange={event => { setLeadStatusFilter(event.target.value); setLeadPage(1); }}><option value="all">Semua status</option><option value="new">Baru</option><option value="contacted">Sudah Dihubungi</option></select></label>
       </AdminFilterToolbar>
       {leadsRequest.error && <p role="alert">{leadsRequest.error} <button type="button" className="button" onClick={leadsRequest.retry}>Coba Lagi</button></p>}
       <AdminDataTable
@@ -185,17 +180,16 @@ function PlacementEditor({ initial }: { initial: Awaited<ReturnType<typeof loadA
           { key: "target", header: "Target JLPT", cell: lead => lead.target || "—" },
           { key: "score", header: "Nilai", cell: lead => lead.score !== null && lead.score !== undefined ? `${lead.score}%` : "—" },
           { key: "level", header: "Rekomendasi", cell: lead => lead.recommended_level ? <div><AdminStatusBadge status={lead.recommended_level} />{lead.recommended_program?.title && <div><small>{lead.recommended_program.title}</small></div>}</div> : "—" },
-          { key: "status", header: "Status Kontak", cell: lead => <AdminStatusBadge status={lead.status === "contacted" ? "Sudah Dihubungi" : "Baru"} /> },
         ]}
         actions={{
           cell: lead => <div className={styles.actions}>
-            <button type="button" className="button button-secondary" onClick={() => setSelectedLeadId(lead.id)}>Detail</button>
-            <button type="button" className="button" disabled={leadBusyId === lead.id} onClick={() => void toggleLeadStatus(lead)}>{lead.status === "new" ? "Tandai Dihubungi" : "Tandai Baru"}</button>
+            <button type="button" className="button button-secondary" onClick={() => { setCopyMessage(""); setSelectedLeadId(lead.id); }}>Detail</button>
           </div>
         }}
       />
       {filteredLeads.length > 10 && <div className={styles.bankFooter}><span role="status">Halaman {currentLeadPage} / {leadPages} · {filteredLeads.length} peserta</span><div className={styles.actions}><button type="button" className="button button-secondary" disabled={currentLeadPage <= 1} onClick={() => setLeadPage(currentLeadPage - 1)}>Sebelumnya</button><button type="button" className="button button-secondary" disabled={currentLeadPage >= leadPages} onClick={() => setLeadPage(currentLeadPage + 1)}>Berikutnya</button></div></div>}
-    </AdminSection>
+    </AdminSection>}
+    </AdminTabs>
 
     <AdminDialog open={Boolean(selectedLead)} title="Detail Hasil Placement" close={close}>
       {selectedLead && <div className={styles.deleteConfirmation}>
@@ -204,18 +198,17 @@ function PlacementEditor({ initial }: { initial: Awaited<ReturnType<typeof loadA
           <div><dt>WhatsApp</dt><dd>{(() => {
             const raw = selectedLead.whatsapp_consent === false ? "" : selectedLead.whatsapp;
             const url = studentWhatsAppUrl(raw);
-            return url ? <a href={url} target="_blank" rel="noopener noreferrer">{raw}</a> : "Belum tersedia";
+            return url ? <span className={styles.actions}><span>{raw}</span><button type="button" className={`button button-secondary ${styles.copyWhatsApp}`} style={{ minWidth: 44, minHeight: 44 }} aria-label="Salin nomor WhatsApp" title="Salin nomor WhatsApp" onClick={() => void copyWhatsApp(raw)}><LuCopy aria-hidden="true" /></button></span> : "Belum tersedia";
           })()}</dd></div>
           <div><dt>Nilai Placement</dt><dd>{selectedLead.score !== null && selectedLead.score !== undefined ? `${selectedLead.score}%` : "—"}</dd></div>
           <div><dt>Waktu Pengerjaan (WIB)</dt><dd>{formatLeadDate(selectedLead.completed_at ?? selectedLead.date)}</dd></div>
           <div><dt>Target JLPT</dt><dd>{selectedLead.target || "—"}</dd></div>
           <div><dt>Rekomendasi Level</dt><dd>{selectedLead.recommended_level || "—"}</dd></div>
           <div><dt>Rekomendasi Program</dt><dd>{selectedLead.recommended_program?.title || "Belum tersedia"}</dd></div>
-          <div><dt>Status Kontak</dt><dd>{selectedLead.status === "contacted" ? "Sudah Dihubungi" : "Baru"}</dd></div>
         </dl>
+        <p role="status">{copyMessage}</p>
         <div className={styles.actions}>
           <button type="button" className="button button-secondary" onClick={() => setSelectedLeadId(null)}>Tutup</button>
-          <button type="button" className="button button-primary" disabled={leadBusyId === selectedLead.id} onClick={() => void toggleLeadStatus(selectedLead)}>{selectedLead.status === "new" ? "Tandai Dihubungi" : "Tandai Baru"}</button>
         </div>
       </div>}
     </AdminDialog>

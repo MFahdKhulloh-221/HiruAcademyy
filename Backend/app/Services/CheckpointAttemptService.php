@@ -21,7 +21,58 @@ class CheckpointAttemptService extends TryOutAttemptService
 
     public function canAccess(User $user, Model $tryOut): bool
     {
-        return app(ChapterAccessPolicy::class)->canAccessChapter($user, $tryOut->program->code, 2);
+        return in_array($tryOut->program->code, app(EntitlementService::class)->effectiveAccess($user)['replay_levels'], true);
+    }
+
+    protected function snapshotMetadata(Model $assessment, array $questions): array
+    {
+        $sessions = array_keys(TryOutService::SESSIONS);
+        if (! in_array('audio', array_column($questions, 'session'), true)) {
+            $sessions = array_values(array_diff($sessions, ['audio']));
+        }
+
+        return ['session_policy' => 'checkpoint-optional-audio-v1', 'active_sessions' => $sessions];
+    }
+
+    protected function attemptSessions(Model $attempt): array
+    {
+        if (($attempt->grading_snapshot['session_policy'] ?? null) !== 'checkpoint-optional-audio-v1') {
+            return parent::attemptSessions($attempt);
+        }
+        $sessions = $attempt->grading_snapshot['active_sessions'] ?? null;
+        $all = array_keys(TryOutService::SESSIONS);
+        if ($sessions !== $all && $sessions !== array_values(array_diff($all, ['audio']))) {
+            throw new \LogicException('Invalid checkpoint active sessions snapshot.');
+        }
+
+        return array_intersect_key(TryOutService::SESSIONS, array_flip($sessions));
+    }
+
+    public function completed(User $user, Model $package, Model $attempt): Model
+    {
+        abort_unless($user->role === 'student' && $user->account_status === 'active', 403);
+        abort_unless($attempt->user_id === $user->id && $attempt->checkpoint_package_id === $package->id, 404);
+        abort_unless($attempt->status === 'completed' && $attempt->abandoned_at === null, 403);
+
+        return $attempt;
+    }
+
+    public function history(User $user, Model $tryOut): array
+    {
+        abort_unless($user->role === 'student' && $user->account_status === 'active', 403);
+        if ($this->canAccess($user, $tryOut)) {
+            return parent::history($user, $tryOut);
+        }
+        $history = [];
+        $best = null;
+        foreach ($this->attemptModel::where('user_id', $user->id)->where($this->parentKey, $tryOut->id)
+            ->where('status', 'completed')->whereNull('abandoned_at')->orderByDesc('id')->get() as $attempt) {
+            $payload = $this->payload($this->completed($user, $tryOut, $attempt));
+            $history[] = array_intersect_key($payload, array_flip(['id', 'status', 'started_at', 'expires_at', 'server_now', 'completed_at', 'result']));
+            $best = $best === null ? $payload['result']['earned'] : max($best, $payload['result']['earned']);
+        }
+
+        return ['attempts' => $history, 'best_score' => $best];
     }
 
     public function abandon(User $user, Model $tryOut, Model $attempt): void

@@ -35,9 +35,9 @@ class LearningContentService
     ];
 
     public const ACTIVITIES = [
-        'foundation' => ['video', 'module', 'flashcard', 'audio', 'reading', 'mini_checkpoint'],
+        'foundation' => ['video', 'module', 'audio', 'reading', 'mini_checkpoint'],
         'jlpt' => ['video', 'module', 'flashcard', 'audio', 'reading', 'mini_checkpoint'],
-        'ssw' => ['video', 'module', 'flashcard', 'mini_checkpoint'],
+        'ssw' => ['video', 'module', 'mini_checkpoint'],
         'interview' => ['video', 'module'],
     ];
 
@@ -66,6 +66,8 @@ class LearningContentService
                 'program_id' => [$required, 'required', 'integer', 'exists:programs,id'],
                 'chapter_number' => [$required, 'required', 'integer', 'min:1', 'max:2147483647'],
                 'title' => $title,
+                'mini_checkpoint_duration_minutes' => ['sometimes', 'nullable', 'integer', 'min:1', 'max:2147483647'],
+                'mini_checkpoint_passing_score' => ['sometimes', 'nullable', 'integer', 'min:0', 'max:100'],
             ];
         }
         $parent = $resource === 'reading-questions' ? 'reading_passage_id' : 'chapter_id';
@@ -74,7 +76,7 @@ class LearningContentService
         $rules += match ($resource) {
             'video-lessons' => ['title' => $title, 'video_url' => ['sometimes', 'nullable', 'string', app(MediaService::class)->rule('video')]],
             'modules' => ['title' => $title, 'file_url' => ['sometimes', 'nullable', 'string', app(MediaService::class)->rule()], 'module_type' => [$required, 'required', Rule::in(['grammar', 'kanji', 'general'])]],
-            'flashcards' => ['japanese' => $text, 'reading' => $text, 'meaning' => $text, 'example' => ['sometimes', 'nullable', 'string']],
+            'flashcards' => ['japanese' => $text, 'reading' => ['sometimes', 'nullable', 'string'], 'meaning' => $text, 'example' => ['sometimes', 'nullable', 'string']],
             'reading-passages' => ['title' => $title, 'body' => $text],
             'audio-questions' => ['title' => ['sometimes', 'nullable', 'string', 'max:255'], 'audio_url' => ['sometimes', 'nullable', 'string', app(MediaService::class)->rule('audio')]],
             default => [],
@@ -96,10 +98,9 @@ class LearningContentService
         }
 
         if ($resource === 'mini-checkpoint-questions') {
-            $rules['session'] = ['sometimes', 'required', 'integer', 'min:1', 'max:2147483647'];
-            $rules['part'] = ['sometimes', 'required', 'integer', 'min:1', 'max:2147483647'];
-            $rules['duration_minutes'] = ['sometimes', 'nullable', 'integer', 'min:1', 'max:2147483647'];
-            $rules['passing_score'] = ['sometimes', 'nullable', 'integer', 'min:0', 'max:100'];
+            foreach (['session', 'part', 'duration_minutes', 'passing_score'] as $field) {
+                $rules[$field] = ['prohibited'];
+            }
         }
 
         return $rules;
@@ -151,8 +152,26 @@ class LearningContentService
                     $model = $model->newQuery()->whereKey($model->getKey())->lockForUpdate()->firstOrFail();
                 }
                 $model->fill($data);
+                if ($resource === 'flashcards' && $model->reading === null) {
+                    $model->reading = '';
+                }
                 if ($resource === 'chapters') {
-                    $family = Program::findOrFail($model->program_id)->family;
+                    $duration = $model->mini_checkpoint_duration_minutes;
+                    $score = $model->mini_checkpoint_passing_score;
+                    if (($duration === null) !== ($score === null)) {
+                        throw ValidationException::withMessages(['mini_checkpoint_duration_minutes' => 'Set both Mini Checkpoint settings together.']);
+                    }
+                    if ($duration === null && $model->exists && $model->miniCheckpointQuestions()->where('status', 'published')->exists()) {
+                        throw ValidationException::withMessages(['mini_checkpoint_duration_minutes' => 'Published Mini Checkpoint questions require chapter settings.']);
+                    }
+                    $program = Program::findOrFail($model->program_id);
+                    if ($model->exists && $model->isDirty('program_id') && ! in_array($program->code, ['n5', 'n4', 'n3', 'n2'], true) && $model->miniCheckpointQuestions()->exists()) {
+                        throw ValidationException::withMessages(['program_id' => 'Mini Checkpoint requires an N5–N2 program.']);
+                    }
+                    if ($model->exists && $model->isDirty('program_id') && ! $this->allowsFlashcards($program) && $model->flashcards()->exists()) {
+                        throw ValidationException::withMessages(['program_id' => 'Flashcards require a JLPT N5–N1 program.']);
+                    }
+                    $family = $program->family;
                     $duplicate = Chapter::where('program_id', $model->program_id)
                         ->where('chapter_number', $model->chapter_number)
                         ->when($model->exists, fn ($query) => $query->whereKeyNot($model->getKey()))->exists();
@@ -183,17 +202,25 @@ class LearningContentService
                         ->when($model->exists, fn ($query) => $query->whereKeyNot($model->getKey()))->exists()) {
                         throw ValidationException::withMessages(['chapter_id' => 'Only one video is allowed per chapter.']);
                     }
-                    if ($resource !== 'checkpoint-questions' && ! $this->allowed($chapter->program()->firstOrFail()->family, self::RESOURCES[$resource][1])) {
+                    $program = $chapter->program()->firstOrFail();
+                    if ($resource === 'flashcards' && ! $this->allowsFlashcards($program)) {
+                        throw ValidationException::withMessages(['chapter_id' => 'Flashcards require a JLPT N5–N1 program.']);
+                    }
+                    if ($resource !== 'checkpoint-questions' && ! $this->allowed($program->family, self::RESOURCES[$resource][1])) {
                         throw ValidationException::withMessages([$parent => 'Content is not allowed in this program family.']);
                     }
                 }
-                if ($resource === 'mini-checkpoint-questions' && $model->status === 'published') {
-                    $group = MiniCheckpointQuestion::where('chapter_id', $model->chapter_id)
-                        ->where('session', $model->session)->where('part', $model->part)->where('status', 'published')
-                        ->when($model->exists, fn ($query) => $query->whereKeyNot($model->getKey()))->get()
-                        ->map(fn ($question) => $question->only(['session', 'part', 'duration_minutes', 'passing_score']))->all();
-                    $group[] = $model->only(['session', 'part', 'duration_minutes', 'passing_score']);
-                    app(LearningAttemptService::class)->miniConfiguration($group);
+                if ($resource === 'mini-checkpoint-questions') {
+                    $model->session = 1;
+                    $model->part = 1;
+                    $model->duration_minutes = $chapter->mini_checkpoint_duration_minutes;
+                    $model->passing_score = $chapter->mini_checkpoint_passing_score;
+                    if ($model->status === 'published') {
+                        if (! in_array($chapter->program->code, ['n5', 'n4', 'n3', 'n2'], true)) {
+                            throw ValidationException::withMessages(['chapter_id' => 'Mini Checkpoint requires an N5–N2 program.']);
+                        }
+                        app(LearningAttemptService::class)->chapterMiniConfiguration($chapter);
+                    }
                 }
                 $reorderChapter = $resource === 'chapters'
                     && (! $model->exists || $model->isDirty('program_id') || array_key_exists('sort_order', $data));
@@ -270,6 +297,11 @@ class LearningContentService
                 $chapter->save();
             }
         }
+    }
+
+    private function allowsFlashcards(Program $program): bool
+    {
+        return $program->family === 'jlpt' && in_array($program->code, ['n5', 'n4', 'n3', 'n2', 'n1'], true);
     }
 
     private function allowed(string $family, string $activity): bool

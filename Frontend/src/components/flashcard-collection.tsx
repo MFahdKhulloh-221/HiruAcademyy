@@ -8,12 +8,9 @@ import {
   LuBookOpen,
   LuChevronDown,
   LuCircleCheck,
-  LuFlame,
-  LuGraduationCap,
   LuLock,
   LuRotateCcw,
   LuSearch,
-  LuSparkles,
 } from "react-icons/lu";
 import { StudentNavigation } from "@/components/student-navigation";
 import { parseMembership } from "@/lib/dashboard-mock";
@@ -25,7 +22,7 @@ export function FlashcardCollection() {
   const request = useLearningRequest(studentFlashcards, "student-flashcards");
 
   const [search, setSearch] = useState("");
-  const [filterMode, setFilterMode] = useState<"all" | "level" | "chapter" | "review">("all");
+  const [filterMode, setFilterMode] = useState<"all" | "level" | "chapter">("all");
   const [selectedLevel, setSelectedLevel] = useState("N5");
   const [selectedChapter, setSelectedChapter] = useState("Chapter 1");
   const [levelOpen, setLevelOpen] = useState(false);
@@ -72,12 +69,6 @@ export function FlashcardCollection() {
       note: "Selesai dipelajari",
       icon: LuCircleCheck,
     },
-    {
-      label: "KONSISTENSI",
-      value: `${metrics.streak_days} hari`,
-      note: metrics.streak_days > 0 ? "Tetap konsisten" : "Mulai belajar hari ini",
-      icon: LuFlame,
-    },
   ];
 
   const visible = decks.filter((deck) => {
@@ -87,9 +78,6 @@ export function FlashcardCollection() {
     if (!matchesSearch) return false;
 
     if (filterMode === "all") return true;
-    if (filterMode === "review") {
-      return deck.action === "Review" || (deck.progress > 0 && deck.progress < 100);
-    }
     if (filterMode === "level") {
       return deck.level === selectedLevel;
     }
@@ -111,8 +99,6 @@ export function FlashcardCollection() {
             <button type="button" onClick={request.retry}>Coba Lagi</button>
           </p>
         )}
-
-        <header className="supporting-header max-lg:pt-16"><h1>Flashcard Kosakata</h1><p>Hafalkan dan ulangi kosakata melalui kartu belajar. Balik kartu untuk melihat arti dan contoh kalimat.</p></header>
 
         {/* 1. Summary Statistics */}
         <section className="fc-summary-grid" aria-label="Ringkasan Flashcard">
@@ -237,17 +223,6 @@ export function FlashcardCollection() {
               )}
             </div>
 
-            <button
-              className={`fc-filter-pill${filterMode === "review" ? " active" : ""}`}
-              type="button"
-              onClick={() => {
-                setFilterMode("review");
-                setLevelOpen(false);
-                setChapterOpen(false);
-              }}
-            >
-              Perlu Diulang
-            </button>
           </div>
         </section>
 
@@ -324,40 +299,6 @@ export function FlashcardCollection() {
           </div>
         </section>
 
-        {/* 4. Sensei Access Banner */}
-        <aside className="fc-sensei-banner" aria-label="Informasi Akses Member">
-          <div className="fc-sensei-banner-content">
-            <div className="fc-sensei-banner-icon" aria-hidden="true">
-              {membership === "sensei" ? (
-                <LuGraduationCap />
-              ) : membership === "lms" ? (
-                <LuSparkles />
-              ) : (
-                <LuLock />
-              )}
-            </div>
-            <div className="fc-sensei-banner-text">
-              <h3>
-                {membership === "free"
-                  ? "Akses Free Member"
-                  : membership === "lms"
-                  ? "Akses Belajar Mandiri"
-                  : "Akses Belajar dengan Sensei"}
-              </h3>
-              <p>
-                {membership === "free"
-                  ? "Buka akses ke semua deck chapter dan nikmati bimbingan materi intensif."
-                  : "Buka akses tak terbatas ke semua deck dan bimbingan langsung bersama Sensei."}
-              </p>
-            </div>
-          </div>
-          <Link
-            className="fc-sensei-banner-btn"
-            href={membership === "free" ? `/membership${query}` : `/progress${query}`}
-          >
-            {membership === "free" ? "Pelajari Lebih Lanjut" : "Lihat Progress"}
-          </Link>
-        </aside>
       </main>
     </div>
   );

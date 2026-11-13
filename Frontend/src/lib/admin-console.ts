@@ -12,6 +12,7 @@ export const adminMenu: readonly MenuItem[] = [
   { label: "Journey / Program", href: "/admin/kurikulum-materi?tab=Program", group: "PEMBELAJARAN" },
   { label: "Checkpoint", href: "/admin/checkpoint", group: "PEMBELAJARAN" },
   { label: "Try Out", href: "/admin/try-out", group: "PEMBELAJARAN" },
+  { label: "Latihan Harian", href: "/admin/latihan-harian", group: "PEMBELAJARAN" },
   { label: "Jadwal Live", href: "/admin/kelas-jadwal", group: "PEMBELAJARAN" },
   { label: "Replay Rekaman", href: "/admin/replay-rekaman", group: "PEMBELAJARAN" },
   { label: "Sertifikat", href: "/admin/sertifikat", group: "PEMBELAJARAN" },

@@ -26,17 +26,38 @@ test("notification editor persists canonical payload without demo rows", async (
   await expect(page.getByText("Materi Chapter 4 tersedia", { exact: true })).toHaveCount(0);
 });
 
-test("certificate template persists without claiming student issuance", async ({ page }) => {
-  const rows = await adminApi(page);
+test("certificate settings persist without claiming student issuance", async ({ page }) => {
+  await adminApi(page);
+  const row = { program: { id: 1, code: "n5", name: "JLPT N5" }, settings: { automatic_enabled: true, title: "Default title", description: "Default description", background_image: null, presentation_version: 1 }, is_default: true };
+  const writes: { method: string; path: string; body: unknown }[] = [];
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    const method = route.request().method();
+    if (path === "/api/me") return route.fulfill({ json: { data: { id: 91, name: "Admin", email: "admin@example.test", whatsapp: "081234567890", role: "admin", account_status: "active" } } });
+    if (method !== "GET") writes.push({ method, path, body: route.request().postDataJSON() });
+    if (path === "/api/admin/program-achievements" && method === "GET") return route.fulfill({ json: { data: [row], meta: { current_page: 1, last_page: 1, total: 1, per_page: 20 } } });
+    if (path === "/api/admin/program-achievements/1" && method === "PATCH") {
+      row.settings = { ...row.settings, ...route.request().postDataJSON() };
+      row.is_default = false;
+      return route.fulfill({ json: { data: row } });
+    }
+    throw new Error(`Unmocked certificate API: ${method} ${path}`);
+  });
   await page.goto("/admin/sertifikat");
-  await page.getByRole("button", { name: "Tambah Sertifikat", exact: true }).click();
+  await page.getByRole("switch", { name: "Penerbitan otomatis JLPT N5" }).click();
+  await expect(page.getByRole("switch")).not.toBeChecked();
+  await page.getByRole("button", { name: "Edit JLPT N5", exact: true }).click();
   const dialog = page.getByRole("dialog");
-  await dialog.getByLabel("Program", { exact: true }).fill("JLPT N5");
-  await dialog.getByLabel("Judul", { exact: true }).fill("Canonical template");
-  await dialog.getByLabel("Deskripsi", { exact: true }).fill("Template only");
-  await dialog.getByRole("button", { name: "Simpan Sertifikat" }).click();
+  await dialog.getByLabel("Judul", { exact: true }).fill("Canonical settings");
+  await dialog.getByRole("textbox", { name: "Deskripsi", exact: true }).fill("Settings only");
+  await dialog.getByRole("button", { name: "Simpan Pengaturan" }).click();
   await expect(dialog).toHaveCount(0);
-  expect(rows()[0]).toMatchObject({ program: "JLPT N5", sort_order: 1, status: "draft", image: null });
+  expect(writes).toEqual([
+    { method: "PATCH", path: "/api/admin/program-achievements/1", body: { automatic_enabled: false } },
+    { method: "PATCH", path: "/api/admin/program-achievements/1", body: { title: "Canonical settings", description: "Settings only" } },
+  ]);
+  expect(row.settings).toMatchObject({ automatic_enabled: false, title: "Canonical settings", description: "Settings only" });
+  await expect(page.getByRole("cell", { name: "Canonical settings", exact: true })).toBeVisible();
   await expect(page.getByText("Issued", { exact: true })).toHaveCount(0);
 });
 

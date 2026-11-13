@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-for (const width of [390, 1440]) {
+for (const width of [390, 768, 1440]) {
   test(`B6 dynamic programs and offers ${width}px, API mocked`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
     const programs = [

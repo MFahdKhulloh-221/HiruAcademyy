@@ -239,6 +239,17 @@ class MediaService
             DB::statement('LOCK TABLE try_out_passages IN SHARE ROW EXCLUSIVE MODE');
         }
         $this->assertTryOutImagesUnreferenced($path);
+        foreach (['daily_practice_questions' => ['audio_url', 'image'], 'daily_practice_passages' => ['image', 'blocks'], 'daily_practice_attempts' => ['content_snapshot', 'grading_snapshot']] as $table => $fields) {
+            if (! \Illuminate\Support\Facades\Schema::hasTable($table)) continue;
+            DB::statement('LOCK TABLE '.$table.' IN SHARE ROW EXCLUSIVE MODE');
+            foreach ($fields as $field) {
+                $query = DB::table($table);
+                $referenced = in_array($field, ['blocks', 'content_snapshot', 'grading_snapshot'], true)
+                    ? $query->whereRaw('REPLACE(CAST('.$field.' AS TEXT), ?, ?) LIKE ?', ['\\/', '/', '%'.$path.'%'])->exists()
+                    : $query->where($field, $path)->exists();
+                abort_if($referenced, 409, 'Media is retained in daily practice content or an assessment snapshot.');
+            }
+        }
         foreach (['learning_attempts', 'placement_attempts', 'try_out_attempts'] as $table) {
             if (DB::table($table)->whereRaw('content_snapshot::text LIKE ?', ['%'.$path.'%'])->exists()) {
                 abort(409, 'Media is retained in an assessment snapshot.');

@@ -62,25 +62,26 @@ test("Scenario B — WHATSAPP: inspect 'Buka WhatsApp' href starts with https://
   await expect(dialog.getByText("Membership Siswa Aktif")).toHaveCount(0);
 });
 
-test("Scenario C — canonical adjacent invoice transitions persist on reload", async ({ page }) => {
+test("Scenario C — payment confirmation activates invoice and persists on reload", async ({ page }) => {
   const invoice = { id: 42, user_id: 901, program_id: 2, program_code: "n4", plan_code: "lms", base_price: 99000, total_price: 99000, discount_amount: 0, status: "awaiting_payment", created_at: "2026-10-01T00:00:00Z" };
   const transitions: string[] = [];
   await page.route("**/api/admin/invoices**", route => {
-    if (route.request().method() === "POST") { const status = route.request().postDataJSON().status; expect(status).toBe(({ awaiting_payment: "paid", paid: "verified", verified: "active" } as Record<string, string>)[invoice.status]); transitions.push(status); invoice.status = status; }
+    if (route.request().method() === "POST") { const status = route.request().postDataJSON().status; expect(status).toBe("paid"); transitions.push(status); invoice.status = "active"; }
     return route.fulfill({ json: { data: route.request().url().endsWith("/invoices") ? [invoice] : invoice } });
   });
   await page.goto("/admin/invoice");
   const row = page.getByRole("row").filter({ has: page.getByRole("cell", { name: "42", exact: true }) });
-  for (const label of ["Sudah Bayar", "Diverifikasi", "Aktif"]) {
-    await row.getByRole("button", { name: label, exact: true }).click();
-    await page.getByRole("dialog").getByRole("button", { name: "Konfirmasi", exact: true }).click();
-    await expect(page.getByRole("dialog")).toHaveCount(0);
-    await expect(row).toContainText(label);
-  }
+  await expect(row.getByRole("button")).toHaveCount(1);
+  await row.getByRole("button", { name: "Detail", exact: true }).click();
+  const detail = page.getByRole("dialog", { name: "Detail Invoice", exact: true });
+  await detail.getByRole("button", { name: "Konfirmasi Sudah Bayar", exact: true }).click();
+  await page.getByRole("dialog", { name: "Ubah Status Invoice?", exact: true }).getByRole("button", { name: "Konfirmasi", exact: true }).click();
+  await expect(detail.getByText("Sudah Bayar", { exact: true })).toBeVisible();
+  await expect(detail.getByRole("button", { name: "Konfirmasi Sudah Bayar", exact: true })).toHaveCount(0);
   await page.reload();
-  await expect(row).toContainText("Aktif");
-  expect(transitions).toEqual(["paid", "verified", "active"]);
-  await expect(row.getByRole("button", { name: "Aktif", exact: true })).toHaveCount(0);
+  await expect(row).toContainText("Sudah Bayar");
+  expect(transitions).toEqual(["paid"]);
+  await expect(row.getByRole("button")).toHaveCount(1);
 });
 
 test("Scenario D — MEMBERSHIP ACTIVATION: N4 Belajar Mandiri activated, access shows DASAR, N5, N4 available; N3, N2, SSW, Interview locked", async ({ page }) => {

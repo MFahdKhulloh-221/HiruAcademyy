@@ -9,7 +9,7 @@ import type { IconType } from "react-icons";
 import { BrandLogo } from "@/components/brand-logo";
 import type { Membership } from "@/lib/dashboard-mock";
 
-export type StudentNavKey = "dashboard" | "journey" | "practice" | "flashcards" | "library" | "tryout" | "schedule" | "replay" | "checkpoint" | "mini-checkpoint" | "community" | "ask-sensei" | "progress" | "leaderboard" | "certificate" | "notifications" | "profile" | "testimonial" | "membership" | "affiliate";
+export type StudentNavKey = "dashboard" | "journey" | "practice" | "flashcards" | "library" | "tryout" | "schedule" | "replay" | "checkpoint" | "mini-checkpoint" | "community" | "ask-sensei" | "progress" | "leaderboard" | "certificate" | "notifications" | "profile" | "testimonial" | "membership" | "invoice" | "affiliate";
 type Entitlement = "available" | "limited" | "readOnly" | "locked";
 type Implementation = "implemented" | "notImplemented";
 type NavChild = { key: StudentNavKey; label: string; href: string; entitlement: Entitlement };
@@ -43,6 +43,7 @@ export function resolveStudentNavKey(pathname: string): StudentNavKey | null {
   if (pathname === "/profile/testimoni") return "testimonial";
   if (pathname === "/profile") return "profile";
   if (matchesFamily(pathname, "/renewal") || pathname === "/membership") return "membership";
+  if (pathname === "/invoice") return "invoice";
   if (pathname === "/affiliate") return "affiliate";
   return null;
 }
@@ -55,14 +56,13 @@ function itemsFor(membership: Membership, current: StudentNavKey | null): NavIte
     { key: "dashboard", label: "Dashboard", icon: LuHouse, href: `/dashboard${query}`, entitlement: "available", implementation: "implemented" },
     { label: "Kelas Saya", icon: LuRoute, entitlement: "available", implementation: "implemented", children: [
       { key: "journey", label: "Perjalanan Level", href: `/journey${query}`, entitlement: "available" },
-      { key: "practice", label: "Latihan Harian", href: `/practice${query}`, entitlement: free ? "limited" : "available" },
+      { key: "practice", label: "Latihan Harian", href: `/practice${query}`, entitlement: "available" },
       { key: "flashcards", label: "Kumpulan Flashcard", href: `/flashcards${query}`, entitlement: free ? "limited" : "available" },
       { key: "library", label: "Perpustakaan", href: `/library${query}`, entitlement: free ? "limited" : "available" },
       { key: "tryout", label: "Try Out", href: `/tryout${query}`, entitlement: "available" },
       { key: "schedule", label: "Jadwal", href: `/schedule${query}`, entitlement: sensei ? "available" : "locked" },
       { key: "replay", label: "Replay", href: `/replay${query}`, entitlement: sensei ? "available" : "locked" },
       { key: "checkpoint", label: "Checkpoint", href: `/checkpoint${query}`, entitlement: "available" },
-      { key: "mini-checkpoint", label: "Mini Checkpoint", href: `/mini-checkpoint${query}`, entitlement: sensei ? "available" : "locked" },
     ] },
     { label: "Komunitas", icon: LuMessagesSquare, entitlement: free ? "readOnly" : "available", implementation: "implemented", children: [
       { key: "community", label: "Diskusi Member", href: `/community${query}`, entitlement: free ? "readOnly" : "available" },
@@ -77,6 +77,7 @@ function itemsFor(membership: Membership, current: StudentNavKey | null): NavIte
       { key: "profile", label: "Profil Saya", href: `/profile${query}`, entitlement: "available" },
       { key: "testimonial", label: "Testimoni Saya", href: `/profile/testimoni${query}`, entitlement: "available" },
       { key: "membership", label: "Membership", href: `/renewal${query}`, entitlement: "available" },
+      { key: "invoice", label: "Pesanan Saya", href: "/invoice", entitlement: "available" },
       { key: "affiliate", label: "Ajak Teman", href: `/affiliate${query}`, entitlement: "available" },
     ] },
   ];

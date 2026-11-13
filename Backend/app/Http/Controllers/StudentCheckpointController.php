@@ -69,17 +69,19 @@ class StudentCheckpointController extends Controller
 
     public function result(Request $request, CheckpointPackage $package, CheckpointAttempt $attempt, CheckpointAttemptService $attempts)
     {
-        $current = $attempts->refresh($request->user(), $package, $attempt);
+        $current = $attempt->status === 'completed'
+            ? $attempts->completed($request->user(), $package, $attempt)
+            : $attempts->refresh($request->user(), $package, $attempt);
         abort_unless($current->status === 'completed', 403);
         return response()->json(['data' => $attempts->payload($current)]);
     }
 
     public function review(Request $request, CheckpointPackage $package, CheckpointAttempt $attempt, CheckpointAttemptService $attempts, CheckpointPackageService $content)
     {
-        $attempts->authorize($request->user(), $package, $attempt);
+        $current = $attempts->completed($request->user(), $package, $attempt);
         $content->validateInput($request->all(), ['incorrect_only' => ['sometimes', 'boolean']]);
 
-        return response()->json(['data' => $attempts->payload($attempts->refresh($request->user(), $package, $attempt), true, $request->boolean('incorrect_only'))]);
+        return response()->json(['data' => $attempts->payload($current, true, $request->boolean('incorrect_only'))]);
     }
 
     public function history(Request $request, CheckpointPackage $package, CheckpointAttemptService $attempts)

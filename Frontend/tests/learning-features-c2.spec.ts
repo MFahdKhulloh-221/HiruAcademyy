@@ -32,6 +32,7 @@ for (const width of [1440, 390]) {
       if (path === "/api/me") return reply({ id: 71, name: "Siswa C2", email: "c2@example.test", whatsapp: "6281999000071", role: "student", account_status: "active" });
       if (path === "/api/public/programs") return reply(programs);
       if (path === "/api/student/access") return reply(access);
+      if (path === "/api/student/daily-practices") return reply([]);
       if (path === "/api/student/dashboard") return reply(dashboardFixture(programs, access, () => [chapter], () => progress));
       if (path === "/api/student/gamification") return reply(gamificationFixture);
       if (path === "/api/student/leaderboard") return reply({ scope: "all", entries: [], self: null });
@@ -42,31 +43,30 @@ for (const width of [1440, 390]) {
       return reply([]);
     });
     await page.goto("/dashboard");
-    const practice = page.locator('main a[href^="/practice"]').filter({ hasText: 'Soal Audio/Reading' });
+    const practice = page.locator('main a[href^="/practice"]').filter({ hasText: 'Latihan Harian' });
     const flashcards = page.locator('main a[href^="/flashcards"]');
-    await expect(practice).toContainText("Soal Audio/Reading & materi chapter");
+    await expect(practice).toContainText("Latihan terjadwal dari Sensei");
     await expect(flashcards).toContainText("Hafalan kosakata dengan kartu belajar");
     await page.screenshot({ path: testInfo.outputPath(`dashboard-${width}.png`), fullPage: true });
     await practice.click();
     await expect(page.getByRole("heading", { name: "Latihan Harian" })).toBeVisible();
-    const cards = page.locator(".practice-journey-card");
-    await expect(cards).toHaveCount(2);
+    await expect(page.getByLabel("Tanggal (WIB)")).toBeVisible();
+    await expect(page.locator(".practice-journey-card")).toHaveCount(0);
     await expect(page.getByRole("link", { name: "Belajar Flashcard", exact: true })).toHaveCount(0);
     await page.screenshot({ path: testInfo.outputPath(`practice-${width}.png`), fullPage: true });
-    for (const category of ["Audio", "Reading"]) {
-      await cards.filter({ hasText: `| ${category}` }).getByRole("button", { name: "Kerjakan Latihan" }).click();
+    for (const category of ["audio", "reading"]) {
+      await page.goto(`/learn/n5/chapter-1/${category}?start=1`);
       await expect(page.getByRole("heading", { name: "Soal latihan existing" })).toBeVisible();
-      await page.getByRole("button", { name: "Kembali ke Daftar Latihan" }).click();
     }
     expect(starts).toEqual(["audio", "reading"]);
-    await cards.filter({ hasText: "| Audio" }).getByRole("button", { name: "Kerjakan Latihan" }).click();
+    await page.goto("/learn/n5/chapter-1/audio?attempt=4");
     await expect(page.getByRole("heading", { name: "Soal latihan existing" })).toBeVisible();
     const saved = page.waitForResponse(response => response.request().method() === "PUT" && response.url().endsWith("/attempts/4/answers"));
     await page.getByRole("radio", { name: "A. Satu" }).check();
     await saved;
     await expect(page.getByRole("status").filter({ hasText: "Tersimpan" })).toBeVisible();
-    await page.getByRole("button", { name: "Kembali ke Daftar Latihan" }).click();
-    await cards.filter({ hasText: "| Audio" }).getByRole("button", { name: "Kerjakan Latihan" }).click();
+    await page.goto("/learn/n5/chapter-1");
+    await page.goto("/learn/n5/chapter-1/audio?attempt=4");
     await expect(page.getByRole("radio", { name: "A. Satu" })).toBeChecked();
     answers = { "81": "B" };
     await page.reload();

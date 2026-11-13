@@ -9,6 +9,7 @@ for (const width of [1440, 768, 390]) {
     const bank = page.getByRole("region", { name: "Kelompok bank soal" });
     await expect(bank.getByRole("combobox", { name: "Level kelompok", exact: true })).toHaveCount(0);
     await expect(bank.getByRole("combobox", { name: "Kategori kelompok", exact: true })).toBeVisible();
+    await expect(bank).toHaveCSS("margin-bottom", "24px");
     await expect(bank.getByRole("button", { name: "+ Tambah Soal", exact: true })).toBeDisabled();
     const card = page.getByRole("list", { name: "Daftar soal Placement Test" }).getByRole("listitem");
     await expect(card.getByRole("button", { name: "Edit soal 1" })).toBeVisible();
@@ -29,15 +30,6 @@ test("Admin Placement results display full data, fallback WhatsApp, 0/100 scores
   await page.route("**/api/admin/placement-configs", route => route.fulfill({ json: { data: [{ id: 7, title: "Placement", intro_heading: "Intro", duration_minutes: 7, description: "Desc", status: "draft" }] } }));
   await page.route("**/api/admin/placement-questions**", route => route.fulfill({ json: { data: [] } }));
   await page.route("**/api/admin/placement-leads**", async route => {
-    const req = route.request();
-    if (req.method() === "PATCH") {
-      const id = Number(new URL(req.url()).pathname.split("/").at(-1));
-      const body = req.postDataJSON();
-      const target = leads.find(item => item.id === id);
-      if (target) target.status = body.status;
-      await route.fulfill({ json: { data: { id, status: body.status } } });
-      return;
-    }
     if (mode === "error") {
       await route.fulfill({ status: 500, json: { message: "Gagal memuat hasil placement." } });
       return;
@@ -47,7 +39,13 @@ test("Admin Placement results display full data, fallback WhatsApp, 0/100 scores
 
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/admin/placement-hasil");
+  await expect(page.getByRole("heading", { name: "Bank Soal", exact: true })).toBeVisible();
+  await expect(page.getByRole("region", { name: "Data Hasil Placement Test" })).toHaveCount(0);
+  await page.getByRole("tab", { name: "Hasil Placement Test", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Bank Soal", exact: true })).toHaveCount(0);
   const table = page.getByRole("region", { name: "Data Hasil Placement Test" });
+  await expect(table.getByRole("columnheader", { name: "Status Kontak" })).toHaveCount(0);
+  await expect(page.locator(".admin-filter-toolbar")).toHaveCSS("margin-bottom", "24px");
   await expect(table).toContainText("Siswa Lengkap");
   await expect(table).toContainText("081234567890");
   await expect(table).toContainText("100%");
@@ -66,8 +64,21 @@ test("Admin Placement results display full data, fallback WhatsApp, 0/100 scores
   await expect(dialog).toContainText("081234567890");
   await expect(dialog).toContainText("100%");
   await expect(dialog).toContainText("JLPT N1");
-  await dialog.getByRole("button", { name: "Tandai Dihubungi", exact: true }).click();
-  await expect(dialog).toContainText("Sudah Dihubungi");
+  const copyIcon = dialog.getByRole("button", { name: "Salin nomor WhatsApp", exact: true }).locator("svg");
+  await expect(copyIcon).toHaveCSS("width", "16px");
+  await expect(copyIcon).toHaveCSS("height", "16px");
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (value: string) => { document.documentElement.dataset.copiedWhatsapp = value; } } });
+  });
+  await dialog.getByRole("button", { name: "Salin nomor WhatsApp", exact: true }).click();
+  await expect(dialog.getByRole("status")).toHaveText("Nomor WhatsApp berhasil disalin.");
+  expect(await page.evaluate(() => document.documentElement.dataset.copiedWhatsapp)).toBe("081234567890");
+  await page.evaluate(() => {
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async () => { throw new Error("Denied"); } } });
+  });
+  await dialog.getByRole("button", { name: "Salin nomor WhatsApp", exact: true }).click();
+  await expect(dialog.getByRole("status")).toHaveText("Gagal menyalin. Pilih nomor WhatsApp dan salin secara manual.");
+  await expect(dialog.getByText("Status Kontak", { exact: true })).toHaveCount(0);
   await dialog.getByRole("button", { name: "Tutup", exact: true }).click();
 
   await page.setViewportSize({ width: 390, height: 844 });
@@ -75,10 +86,12 @@ test("Admin Placement results display full data, fallback WhatsApp, 0/100 scores
 
   mode = "empty";
   await page.reload();
+  await page.getByRole("tab", { name: "Hasil Placement Test", exact: true }).click();
   await expect(page.getByText("Belum ada hasil Placement selesai.")).toBeVisible();
 
   mode = "error";
   await page.reload();
+  await page.getByRole("tab", { name: "Hasil Placement Test", exact: true }).click();
   await expect(page.getByText("Data gagal dimuat.")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 });

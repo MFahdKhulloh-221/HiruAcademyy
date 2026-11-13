@@ -64,6 +64,7 @@ async function request(path: string, options: RequestInit): Promise<Response> {
     }
     const errors: Record<string, string[]> = {};
     const studentTryOut = /^\/api\/student\/try-outs\/\d+\/attempts\/\d+(?:\/(?:answers|submit))?$/.test(path);
+    const dailyPractice = /^\/api\/(?:admin|student)\/daily-practices(?:\/|\?|$)/.test(path);
     const placement = /^\/api\/(?:admin\/placement-(?:configs|questions|previews)(?:\/.*)?|placement(?:\/.*)?)$/.test(path);
     const body = response.status === 422 || studentTryOut ? await response.json().catch(() => null) : null;
     if (response.status === 422) {
@@ -76,8 +77,10 @@ async function request(path: string, options: RequestInit): Promise<Response> {
           else if (path === "/api/auth/register" && field === "email" && Array.isArray(body.errors[key]) && body.errors[key].includes("Email ini sudah terdaftar. Silakan masuk dengan akun tersebut atau gunakan email lain.")) errors[field] = ["Email ini sudah terdaftar. Silakan masuk dengan akun tersebut atau gunakan email lain."];
           else if (Object.hasOwn(fieldMessages, field)) errors[field] = [fieldMessages[field]];
           else if (path === "/api/student/testimonial" && ["type", "title", "video_title", "video_url", "video_thumbnail", "quote", "consent_public", "file"].includes(key) && Array.isArray(body.errors[key])) errors[key] = body.errors[key].filter((message: unknown): message is string => typeof message === "string").slice(0, 3);
+          else if (/^\/api\/admin\/invoices\/\d+(?:\/cancel)?$/.test(path) && ["invoice", "status", "reason", "confirmation"].includes(field) && Array.isArray(body.errors[key])) errors[field] = body.errors[key].filter((message: unknown): message is string => typeof message === "string").slice(0, 3);
+          else if (path === "/api/admin/certificate-issuer" && ["signature", "signature_position", "remove_signature"].includes(field) && Array.isArray(body.errors[key])) errors[field] = body.errors[key].filter((message: unknown): message is string => typeof message === "string").slice(0, 3);
           else if (placement && Object.keys(errors).length < 25 && Array.isArray(body.errors[key])) errors[field] = body.errors[key].filter((message: unknown): message is string => typeof message === "string").slice(0, 3);
-          else if ((path.startsWith("/api/admin/mini-checkpoint-questions") || path.startsWith("/api/admin/try-outs")) && Array.isArray(body.errors[key])) errors[field] = body.errors[key].filter((message: unknown): message is string => typeof message === "string");
+          else if ((path.startsWith("/api/admin/mini-checkpoint-questions") || path.startsWith("/api/admin/try-outs") || path.startsWith("/api/admin/daily-practices")) && Array.isArray(body.errors[key])) errors[field] = body.errors[key].filter((message: unknown): message is string => typeof message === "string");
         }
       }
       if (path === "/api/auth/login" && !Object.keys(errors).length) errors.identity = [fieldMessages.identity];
@@ -86,6 +89,7 @@ async function request(path: string, options: RequestInit): Promise<Response> {
       const statusMessage = response.status === 401 || response.status === 419 ? "Sesi berakhir. Silakan masuk kembali." : response.status === 403 ? "Akses Try Out ditolak. Periksa hak akses akun." : response.status === 409 ? body?.message === "Stale answer revision." ? "Revisi jawaban berubah. Muat ulang untuk mengambil revisi terbaru sebelum mengumpulkan." : "Status attempt berubah. Muat ulang untuk memeriksa jawaban atau hasil." : response.status === 422 ? "Data Try Out tidak valid." : response.status === 429 ? "Terlalu banyak permintaan. Tunggu sebelum mencoba kembali." : response.status >= 500 ? "Permintaan belum berhasil karena gangguan server. Status pengumpulan belum dapat dipastikan; coba kembali untuk memeriksa dan melanjutkan attempt yang sama." : "Permintaan Try Out belum berhasil. Periksa kembali attempt.";
       throw new ApiError(response.status, errors, `Try Out (HTTP ${response.status}): ${statusMessage}${Object.values(errors).length ? ` ${Object.values(errors).flat().slice(0, 3).join(" ")}` : ""}`);
     }
+    if (dailyPractice && response.status === 409) throw new ApiError(409, errors, "Data latihan berubah. Muat ulang untuk memeriksa jawaban atau hasil yang tersimpan sebelum mencoba kembali.");
     if (placement) {
       const detail = Object.values(errors).flat().slice(0, 5).join(" ");
       throw new ApiError(response.status, errors, response.status === 403 && path === "/api/placement/attempts" && options.method === "POST" ? "Kamu sedang masuk sebagai Admin. Silakan keluar dari akun Admin terlebih dahulu untuk mengikuti Placement Test." : response.status === 409 ? "Jawaban atau sesi berubah. Muat ulang halaman untuk melanjutkan data yang tersimpan." : detail || undefined);

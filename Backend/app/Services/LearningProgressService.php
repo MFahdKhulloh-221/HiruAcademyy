@@ -84,6 +84,7 @@ class LearningProgressService
         }
 
         $required = $program->family === 'jlpt' ? $activities : array_filter($activities, fn ($activity) => $activity['total'] > 0);
+
         return ['chapter_id' => $chapter->id, 'activities' => $activities, 'mini_eligible' => $miniEligible, 'mini_completed' => $miniCompleted, 'mini_unlocked' => $miniEligible && $required !== [] && ! in_array(false, array_column($required, 'complete'), true)];
     }
 
@@ -170,6 +171,8 @@ class LearningProgressService
             if ($fresh && ! $wasComplete) {
                 app(GamificationService::class)->chapterBonus($user, $chapter);
             }
+
+            app(ProgramAchievementReconciliationService::class)->schedule((int) $user->id, (int) $program->id);
 
             return $this->progress($user, $program, $chapter);
         });

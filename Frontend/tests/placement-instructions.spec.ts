@@ -4,7 +4,7 @@ async function mockPlacement(page: Page, adaptive: boolean | undefined, descript
   const state = { starts: 0, fail: false, reads: 0 };
   await page.route(/\/(api\/|sanctum\/csrf-cookie)/, async route => {
     const path = new URL(route.request().url()).pathname;
-    const headers = { "access-control-allow-origin": "http://localhost:3000", "access-control-allow-credentials": "true", "access-control-allow-methods": "GET, POST, OPTIONS", "access-control-allow-headers": "accept, content-type, x-xsrf-token" };
+    const headers = { "access-control-allow-origin": new URL(page.url()).origin === "null" ? "http://localhost:3033" : new URL(page.url()).origin, "access-control-allow-credentials": "true", "access-control-allow-methods": "GET, POST, OPTIONS", "access-control-allow-headers": "accept, content-type, x-xsrf-token" };
     const reply = (data: unknown, status = 200) => route.fulfill({ status, headers, json: { data } });
     if (route.request().method() === "OPTIONS") return route.fulfill({ status: 204, headers });
     if (path === "/api/me") return reply(null, 401);
@@ -24,7 +24,7 @@ async function mockPlacement(page: Page, adaptive: boolean | undefined, descript
   return state;
 }
 
-for (const width of [1440, 390]) {
+for (const width of [1440, 768, 390]) {
   for (const adaptive of [false, true]) {
     test(`B2-B instructions ${width} adaptive ${adaptive}`, async ({ page }, testInfo) => {
       await page.setViewportSize({ width, height: 1000 });
@@ -55,11 +55,20 @@ for (const width of [1440, 390]) {
       await page.locator('input[name="privacy"]').uncheck();
       await expect(start).toBeDisabled();
       await page.locator('input[name="privacy"]').check();
-      await expect(start).toBeEnabled();
-      await start.click();
+      await expect(start).toBeDisabled();
       await expect(page.getByText("Mohon isi nama lengkap kamu (minimal 2 huruf).", { exact: true })).toBeVisible();
       expect(state.starts).toBe(0);
       await page.getByPlaceholder("Masukkan nama").fill("Siswa Hiru");
+      await expect(start).toBeEnabled();
+      await page.locator('input[name="whatsappConsent"]').uncheck();
+      await expect(start).toBeDisabled();
+      await page.locator('input[name="whatsappConsent"]').check();
+      await page.getByRole("textbox", { name: "Nomor WhatsApp", exact: true }).fill("123");
+      await page.getByRole("combobox", { name: "Target Ujian" }).focus();
+      await expect(start).toBeDisabled();
+      await expect(page.locator("#err-whatsapp")).toBeVisible();
+      expect(state.starts).toBe(0);
+      await page.getByRole("textbox", { name: "Nomor WhatsApp", exact: true }).fill("081234567890");
       state.fail = true;
       await start.click();
       await expect(page.locator(".placement-error-alert")).toBeVisible();

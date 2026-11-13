@@ -43,7 +43,7 @@ for (const plan of ["lms", "sensei"] as const) {
     await expect(dialog.getByRole("combobox", { name: "Status", exact: true })).toBeDisabled();
     await dialog.getByRole("button", { name: "Simpan", exact: true }).click();
     await expect(dialog).toHaveCount(0);
-    expect(writes).toEqual([{ name: `Custom ${plan}`, description: "Program regression", sort_order: 1, slug: expect.stringMatching(new RegExp(`^custom-${plan}-[0-9a-f-]{36}$`)), plan_code: plan, duration_months: 7, base_price: 123456 }]);
+    expect(writes).toEqual([{ name: `Custom ${plan}`, description: "Program regression", show_on_programs: true, sort_order: 1, slug: expect.stringMatching(new RegExp(`^custom-${plan}-[0-9a-f-]{36}$`)), plan_code: plan, duration_months: 7, base_price: 123456 }]);
     await expect(page.getByRole("table", { name: "Daftar Program" }).getByRole("row").filter({ hasText: `Custom ${plan}` })).toContainText("Draft");
 
     await page.goto("/admin/program-harga");

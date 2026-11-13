@@ -19,6 +19,7 @@ import { PracticeScreen } from "@/components/practice-screen";
 import { useCommercialInvoice, useCommercialOrder } from "@/components/commercial-hooks";
 import { commercialCode } from "@/lib/commercial-api";
 import { invoiceWhatsAppUrl } from "@/lib/admin-whatsapp";
+import { useAuth } from "@/components/auth-provider";
 import type { LearningAccess, LearningProgram } from "@/lib/learning-api";
 import { supportingData, type SupportingKind } from "@/lib/supporting-mock";
 
@@ -33,7 +34,7 @@ export function SupportingScreen(props: Props) {
   if (kind === "practice") return <PracticeScreen membership={membership} resolvedCatalog={props} />;
   return <div className="supporting-shell student-shell"><StudentNavigation membership={membership} /><main className={`supporting-main ${kind === "renewal" ? "renewal" : kind}-page`}>
     <StudentHeaderActions membership={membership} />
-    {kind === "notifications" ? <StudentNotificationsScreen /> : kind === "community" ? <StudentCommunityScreen membership={membership} /> : kind === "progress" ? <StudentProgressScreen membership={membership} /> : kind === "leaderboard" ? <StudentLeaderboardScreen /> : kind === "certificate" ? <StudentCertificateCenter /> : kind === "profile" ? <ProfileScreen access={props.access} programs={props.programs} /> : kind === "affiliate" ? <StudentAffiliateScreen /> : kind === "renewal" ? <RenewalScreen {...props} /> : <EmptySupportingScreen kind={kind} />}
+    {kind === "notifications" ? <StudentNotificationsScreen /> : kind === "community" ? <StudentCommunityScreen membership={membership} /> : kind === "progress" ? <StudentProgressScreen /> : kind === "leaderboard" ? <StudentLeaderboardScreen /> : kind === "certificate" ? <StudentCertificateCenter /> : kind === "profile" ? <ProfileScreen access={props.access} programs={props.programs} /> : kind === "affiliate" ? <StudentAffiliateScreen /> : kind === "renewal" ? <RenewalScreen {...props} /> : <EmptySupportingScreen kind={kind} />}
   </main></div>;
 }
 
@@ -75,7 +76,11 @@ function RenewalScreen({ membership, access, programs, targetProgram, breadcrumb
     }
   }
 
-  const liveSenseiGrants = access.source_grants.filter(g => g.plan_code === "sensei");
+  const learningCodes = Object.entries(access.learning).filter(([, state]) => state === (isFree ? "preview" : "full")).map(([code]) => code);
+  const replayCodes = [...new Set(access.replay_levels)];
+  const liveCodes = [...new Set(access.source_grants.filter(grant => grant.plan_code === "sensei").map(grant => grant.program_code))];
+  const programName = (code: string) => programs.find(item => item.code === code)?.name ?? commercialCode(code);
+  const dateFormat = new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" });
 
   return <>
     <div className="renewal-top-nav">
@@ -84,69 +89,59 @@ function RenewalScreen({ membership, access, programs, targetProgram, breadcrumb
     </div>
 
     <header className="supporting-header renewal-header">
-      <p className="dash-kicker">MEMBERSHIP RENEWAL</p>
+      <p className="dash-kicker">MEMBERSHIP</p>
       <h1>Lanjutkan Akses Tanpa Kehilangan Progres</h1>
-      <p>Harga resmi dan periode belajar aktif terhubung langsung dengan sistem HIRU Academy.</p>
+      <p>Kelola akses dan perpanjang membership tanpa kehilangan progres.</p>
     </header>
 
-    <section className="renewal-current-banner">
-      <div className="banner-left">
-        <div className="banner-shield-icon" aria-hidden="true"><LuShieldCheck /></div>
-        <div className="banner-copy">
-          <div className="banner-status-pill">
-            <LuCircleCheck aria-hidden="true" />
-            <span>{isFree ? "Tidak ada membership aktif" : "Akses membership saat ini"}</span>
+    <section className="renewal-membership" aria-labelledby="renewal-membership-title">
+      <h2 id="renewal-membership-title">Membership &amp; Akses Belajar</h2>
+      <div className="renewal-membership-overview">
+        <div className="renewal-membership-icon" aria-hidden="true"><LuShieldCheck /></div>
+        <div>
+          <div className="renewal-membership-package">
+            <h3>{planLabel(membership)}</h3>
+            <span className={`renewal-membership-status${isFree ? " is-free" : ""}`}>{isFree ? "Preview" : "Aktif"}</span>
           </div>
-          <h2>
-            {planLabel(membership)}
-            {isFree ? " · Coba Gratis / Preview" : ""}
-          </h2>
-          <div style={{ marginTop: "10px", fontSize: "13px", lineHeight: 1.6, color: "var(--muted)" }}>
-            {isFree ? (
-              <p>Akses: Coba Gratis / Preview Chapter 1 seluruh level (Dasar s/d N1, SSW, Interview).</p>
-            ) : membership === "lms" ? (
-              <p>
-                <strong>Akses Belajar Mandiri:</strong>{" "}
-                {Object.entries(access.learning).filter(([, st]) => st === "full").map(([c]) => commercialCode(c)).join(", ")}
-              </p>
-            ) : (
-              <>
-                <p>
-                  <strong>Akses Pembelajaran:</strong>{" "}
-                  {Object.entries(access.learning).filter(([, st]) => st === "full").map(([c]) => commercialCode(c)).join(", ")}
-                </p>
-                <p>
-                  <strong>Akses Replay:</strong>{" "}
-                  {access.replay_levels.map(l => l.toUpperCase()).join(", ")}
-                </p>
-                <p>
-                  <strong>Live Zoom Sensei:</strong>{" "}
-                  {liveSenseiGrants.map(g => commercialCode(g.program_code)).join(", ")} (Tatap Muka Sesuai Level)
-                </p>
-              </>
-            )}
-          </div>
+          <p>{isFree ? "Coba gratis / preview Chapter 1." : membership === "sensei" ? "Pembelajaran mandiri, replay, dan tatap muka sesuai level." : "Belajar mandiri sesuai akses membership."}</p>
         </div>
+        <p className="renewal-membership-count"><strong>{new Set(access.source_grants.map(grant => grant.program_code)).size}</strong> program dimiliki</p>
       </div>
-    </section>
 
-    <section className="renewal-step-section renewal-owned" aria-label="Membership milik siswa">
-      <div className="renewal-step-header">
-        <h2>Membership milik siswa</h2>
-        <p>Program, paket, dan periode akses belajarmu.</p>
+      <div className="renewal-access-facilities">
+        <div><LuBookOpen aria-hidden="true" /><h3>Pembelajaran</h3><strong>{learningCodes.length} program{isFree ? " preview" : ""}</strong><p>{learningCodes.slice(0, 3).map(programName).join(", ") || "Belum tersedia"}{learningCodes.length > 3 ? `, +${learningCodes.length - 3} lainnya` : ""}</p></div>
+        <div><LuReceipt aria-hidden="true" /><h3>Replay</h3><strong>{replayCodes.length} level</strong><p>{replayCodes.slice(0, 3).map(programName).join(", ") || "Belum tersedia"}{replayCodes.length > 3 ? `, +${replayCodes.length - 3} lainnya` : ""}</p></div>
+        <div><LuGraduationCap aria-hidden="true" /><h3>Live Zoom Sensei</h3><strong>{liveCodes.length ? "Tatap muka sesuai level" : "Belum tersedia"}</strong><p>{liveCodes.map(programName).join(", ") || "Tidak ada akses Live Zoom Sensei."}</p></div>
       </div>
-      {access.source_grants.length ? <ul className="renewal-owned-grid">{access.source_grants.map((grant, index) => <li className="renewal-owned-card" key={index}>
-        <h3>{programs.find(item => item.code === grant.program_code)?.name ?? commercialCode(grant.program_code)}</h3>
-        <p>{planLabel(grant.plan_code === "sensei" ? "sensei" : "lms")}</p>
-        <dl>
-          {([["Mulai", grant.starts_at], ["Berakhir", grant.ends_at]] as const).map(([title, date]) => <div key={title}>
-            <dt>{title}</dt>
-            <dd>{date ? <time dateTime={date}>{new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric", timeZone: "Asia/Jakarta" }).format(new Date(date))}</time> : "Belum tersedia"}</dd>
+      <details className="renewal-access-details">
+        <summary>Lihat rincian akses</summary>
+        <div className="renewal-access-detail-grid">
+          {([["Pembelajaran", learningCodes], ["Replay", replayCodes]] as const).map(([title, codes]) => <div key={title}>
+            <h3>{title}{title === "Pembelajaran" && isFree ? " · Preview Chapter 1" : ""}</h3>
+            {codes.length ? <ul className="renewal-access-chips">{codes.map(code => <li key={code}>{programName(code)}</li>)}</ul> : <p>Belum tersedia</p>}
           </div>)}
-        </dl>
-      </li>)}</ul> : <p role="status">Belum ada membership aktif. Pilih program dan paket untuk melanjutkan belajar.</p>}
-      <p className="renewal-owned-note">Perpanjangan JLPT berlaku untuk program dan paket yang sama. Membership aktif diperpanjang dari tanggal berakhir; membership kedaluwarsa dimulai saat pembayaran terverifikasi. Program atau paket berbeda dihitung sebagai pembelian baru.</p>
+        </div>
+      </details>
+
+      <div className="renewal-membership-programs">
+        <h3>Program &amp; masa aktif</h3>
+        {access.source_grants.length ? <ul className="renewal-membership-rows">{access.source_grants.map((grant, index) => <li key={index}>
+          <h4>{programName(grant.program_code)}</h4>
+          <dl>
+            <div><dt>Paket</dt><dd>{planLabel(grant.plan_code === "sensei" ? "sensei" : "lms")}</dd></div>
+            <div className="renewal-membership-period"><dt>Masa aktif</dt><dd>{grant.starts_at && grant.ends_at ? `${Math.max(0, Math.ceil((new Date(grant.ends_at).getTime() - new Date(grant.starts_at).getTime()) / 86_400_000))} hari` : "Belum tersedia"}</dd></div>
+            {([["Mulai", grant.starts_at], ["Berakhir", grant.ends_at]] as const).map(([title, date]) => <div key={title}>
+              <dt>{title}</dt>
+              <dd>{date ? <time dateTime={date}>{dateFormat.format(new Date(date))}</time> : "Belum tersedia"}</dd>
+            </div>)}
+          </dl>
+        </li>)}</ul> : <p role="status">Belum ada membership aktif. Pilih program dan paket untuk melanjutkan belajar.</p>}
+      </div>
     </section>
+    <aside className="renewal-membership-note" aria-label="Ketentuan perpanjangan membership">
+      <LuCircleCheck aria-hidden="true" />
+      <p>Perpanjangan JLPT berlaku untuk program dan paket yang sama. Membership aktif diperpanjang dari tanggal berakhir; membership kedaluwarsa dimulai saat pembayaran terverifikasi. Program atau paket berbeda dihitung sebagai pembelian baru.</p>
+    </aside>
 
     {selectedInvoice ? <RenewalInvoice key={selectedInvoice} id={selectedInvoice} /> : <>
       {(
@@ -281,6 +276,7 @@ function RenewalScreen({ membership, access, programs, targetProgram, breadcrumb
 }
 
 function RenewalInvoice({ id }: { id: string }) {
+  const { user } = useAuth();
   const request = useCommercialInvoice(id);
   const [refreshError, setRefreshError] = useState("");
   const invoice = request.invoice;
@@ -289,6 +285,6 @@ function RenewalInvoice({ id }: { id: string }) {
     try { await request.refresh(); }
     catch (cause) { setRefreshError(cause instanceof Error ? cause.message : "Permintaan belum berhasil."); }
   }
-  const labels: Record<string, string> = { draft: "Draft", awaiting_payment: "Menunggu Pembayaran", paid: "Sudah Bayar", verified: "Diverifikasi", active: "Aktif", cancelled: "Dibatalkan" };
-  return <section className="renewal-summary-card"><header className="renewal-summary-head"><h2>Invoice</h2></header>{(request.error || refreshError) && <p role="alert">{refreshError || request.error}</p>}{!invoice && !request.error && <LoadingSkeleton variant="form" label="Memuat…" />}{invoice && <><dl><div><dt>Invoice ID</dt><dd>{invoice.id}</dd></div><div><dt>Program</dt><dd>{commercialCode(invoice.program_code)}</dd></div><div><dt>Jenis Transaksi</dt><dd>{invoice.renewal_grant_id ? "Perpanjangan Membership" : "Pembelian Baru"}</dd></div><div><dt>Paket Belajar</dt><dd>{planLabel(invoice.plan_code)}</dd></div><div><dt>Harga</dt><dd>{money(invoice.base_price)}</dd></div><div><dt>Diskon</dt><dd>{money(invoice.discount_amount)}</dd></div><div><dt>Total</dt><dd>{money(invoice.total_price)}</dd></div><div><dt>Status</dt><dd>{labels[invoice.status] ?? invoice.status}</dd></div>{invoice.access_grant && <div><dt>Akses aktif</dt><dd>{new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta" }).format(new Date(invoice.access_grant.ends_at))}</dd></div>}</dl><div className="button-group">{invoice.status === "draft" && <button className="button button-primary" type="button" disabled={request.busy} onClick={() => void request.submit()}>Buat Invoice</button>}{invoice.status === "awaiting_payment" && <button className="button button-primary" type="button" disabled={request.busy} onClick={() => void request.markPaid()}>Sudah Bayar</button>}<a className="button button-primary" href={invoiceWhatsAppUrl(invoice)} target="_blank" rel="noopener noreferrer">Hubungi Admin via WhatsApp</a><button className="button button-secondary" type="button" disabled={request.busy} onClick={() => void refresh()}>Perbarui Status</button></div></>}</section>;
+  const labels: Record<string, string> = { draft: "Draft", awaiting_payment: "Menunggu Pembayaran", paid: "Menunggu Konfirmasi Admin", verified: "Menunggu Aktivasi", active: "Sudah Bayar", cancelled: "Dibatalkan" };
+  return <section className="renewal-summary-card"><header className="renewal-summary-head"><h2>Invoice</h2></header>{(request.error || refreshError) && <p role="alert">{refreshError || request.error}</p>}{!invoice && !request.error && <LoadingSkeleton variant="form" label="Memuat…" />}{invoice && <><dl><div><dt>Invoice ID</dt><dd>{invoice.id}</dd></div><div><dt>Program</dt><dd>{commercialCode(invoice.program_code)}</dd></div><div><dt>Jenis Transaksi</dt><dd>{invoice.renewal_grant_id ? "Perpanjangan Membership" : "Pembelian Baru"}</dd></div><div><dt>Paket Belajar</dt><dd>{planLabel(invoice.plan_code)}</dd></div><div><dt>Harga</dt><dd>{money(invoice.base_price)}</dd></div><div><dt>Diskon</dt><dd>{money(invoice.discount_amount)}</dd></div><div><dt>Total</dt><dd>{money(invoice.total_price)}</dd></div><div><dt>Status</dt><dd>{labels[invoice.status] ?? invoice.status}</dd></div>{invoice.access_grant && <div><dt>Akses aktif</dt><dd>{new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta" }).format(new Date(invoice.access_grant.ends_at))}</dd></div>}</dl><div className="button-group">{invoice.status === "draft" && <button className="button button-primary" type="button" disabled={request.busy} onClick={() => void request.submit()}>Buat Invoice</button>}<a className="button button-primary" href={invoiceWhatsAppUrl(invoice, user?.email)} target="_blank" rel="noopener noreferrer">Hubungi Admin via WhatsApp</a><button className="button button-secondary" type="button" disabled={request.busy} onClick={() => void refresh()}>Perbarui Status</button></div></>}</section>;
 }

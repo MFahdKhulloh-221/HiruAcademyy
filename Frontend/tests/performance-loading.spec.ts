@@ -46,6 +46,7 @@ async function harness(page: Page, id: number, admin = false) {
     }
     if (path === "/api/me") data = { id, name: `Fixture User ${id}`, email: `fixture-${id}@example.test`, whatsapp: "081234567890", role: admin ? "admin" : "student", account_status: "active", target_jlpt: "N5" };
     else if (path === "/api/public/programs") data = programs;
+    else if (path === "/api/student/daily-practices") data = [{ id: 1, title: "Fixture Daily Audio", category: "audio", target_level: "n5", starts_at: new Date().toISOString(), ends_at: new Date(Date.now() + 3600000).toISOString(), question_count: 1, status: "open" }];
     else if (path === "/api/student/access" || path === "/api/student/dashboard") {
       const access = { learning: Object.fromEntries(programs.map(p => [p.code, "full" as const])), source_grants: programs.map(p => ({ plan_code: "sensei", program_code: p.code })), replay_levels: [] };
       data = path.endsWith("dashboard") ? dashboardFixture(programs, access, chapters, chapter_id => ({ chapter_id, activities: { flashcard: { total: 2, completed: id === 71 ? 1 : 0, complete: false } }, mini_unlocked: false })) : access;
@@ -90,8 +91,8 @@ async function harness(page: Page, id: number, admin = false) {
 async function ready(page: Page, path: string) {
   await expect(page).toHaveURL(new RegExp(`${path.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(?:\\?|$)`));
   if (path === "/practice") {
-    await expect(page.getByRole("heading", { name: "JLPT N1 | Fixture JLPT N1 Chapter 3 | Kosakata", exact: true })).toBeVisible();
-    await expect(page.locator(".practice-journey-card")).toHaveCount(75);
+    await expect(page.getByRole("heading", { name: "Fixture Daily Audio", exact: true })).toBeVisible();
+    await expect(page.locator(".practice-journey-card")).toHaveCount(0);
   } else if (path === "/mini-checkpoint") {
     await expect(page.getByRole("heading", { name: "JLPT N2 • Mini Checkpoint Chapter 3", exact: true })).toBeVisible();
     await expect(page.locator(".mini-checkpoint-card")).toHaveCount(12);

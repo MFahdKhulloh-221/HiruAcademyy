@@ -8,7 +8,7 @@ import { AdminFlashcardPrototype } from "@/components/admin-flashcard-prototype"
 import { AdminAudioPrototype, AdminReadingPrototype } from "@/components/admin-learning-question-prototype";
 
 import { AdminMiniCheckpointPrototype, AdminTryoutPrototype } from "@/components/admin-assessment-prototype";
-import { AdminCertificatePrototype } from "@/components/admin-certificate-prototype";
+import { AdminProgramAchievementScreen } from "@/components/admin-program-achievement-screen";
 import { AdminNotificationPrototype } from "@/components/admin-notification-prototype";
 
 export const dynamicParams = false;
@@ -28,7 +28,7 @@ export default async function Page({ params }: { params: Promise<{ section: stri
   if (section === "reading-question") return <AdminReadingPrototype />;
   if (section === "mini-checkpoint") return <AdminMiniCheckpointPrototype />;
   if (section === "try-out") return <AdminTryoutPrototype />;
-  if (section === "sertifikat") return <AdminCertificatePrototype />;
+  if (section === "sertifikat") return <AdminProgramAchievementScreen />;
   if (section === "notifikasi") return <AdminNotificationPrototype />;
   const page = adminPlaceholderPages[section];
 

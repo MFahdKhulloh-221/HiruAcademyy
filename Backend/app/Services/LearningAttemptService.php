@@ -20,16 +20,16 @@ class LearningAttemptService
     {
         return DB::transaction(function () use ($user, $program, $chapter, $kind, $session, $part) {
             app(GamificationService::class)->lock($user);
-            $chapter->newQuery()->whereKey($chapter->id)->lockForUpdate()->firstOrFail();
+            $chapter = $chapter->newQuery()->whereKey($chapter->id)->lockForUpdate()->firstOrFail();
             $this->progress->authorize($user, $program, $chapter);
             abort_unless(in_array($kind, ['audio', 'reading', 'mini'], true), 404);
             if ($kind === 'mini') {
                 abort_unless($this->progress->progress($user, $program, $chapter)['mini_unlocked'], 403);
-                if ($session === null || $session < 1 || $part === null || $part < 1) {
-                    throw ValidationException::withMessages(['session' => 'Mini requires positive integer session and part.']);
+                if ($session !== 1 || $part !== 1) {
+                    throw ValidationException::withMessages(['session' => 'Mini Checkpoint requires session=1 and part=1.']);
                 }
-                $questions = $chapter->miniCheckpointQuestions()->where('status', 'published')->where('session', $session)->where('part', $part)->get();
-                $this->miniConfiguration($questions->map(fn ($question) => $question->only(['session', 'part', 'duration_minutes', 'passing_score']))->all());
+                $configuration = $this->chapterMiniConfiguration($chapter);
+                $questions = $chapter->miniCheckpointQuestions()->where('status', 'published')->get();
             } else {
                 abort_unless(in_array($program->family, ['foundation', 'jlpt'], true), 404);
                 $questions = $this->progress->resources($chapter, $kind);
@@ -46,10 +46,7 @@ class LearningAttemptService
                     $passage = $question->readingPassage;
                     $item['passage'] = ['id' => $passage->id, 'title' => $passage->title, 'body' => $passage->body];
                 } elseif ($kind === 'mini') {
-                    $item['session'] = $question->session;
-                    $item['part'] = $question->part;
-                    $item['duration_minutes'] = $question->duration_minutes;
-                    $item['passing_score'] = $question->passing_score;
+                    $item += $configuration;
                 }
                 $content[] = $item;
                 $grading[$question->id] = ['correct_option' => $question->correct_option, 'explanation' => $question->explanation];
@@ -107,6 +104,9 @@ class LearningAttemptService
             app(GamificationService::class)->lock($user);
             $locked = LearningAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
             $this->authorize($user, $program, $chapter, $locked);
+            if ($locked->status === 'completed' && in_array($locked->kind, ['audio', 'reading'], true)) {
+                app(ProgramAchievementReconciliationService::class)->schedule((int) $user->id, (int) $program->id);
+            }
             $locked = $this->expire($user, $program, $chapter, $locked);
             if ($locked->status === 'completed') {
                 return $locked;
@@ -173,14 +173,27 @@ class LearningAttemptService
         }
 
         if (count($answers) > 0 && ($locked->kind === 'mini' || $eligible->count() === $total)) {
-            $day = now('Asia/Jakarta')->toDateString();
-            app(GamificationService::class)->award($user, 'exercise:'.$locked->kind.':'.$chapter->id.':'.$day, 20);
+            app(GamificationService::class)->award($user, 'exercise:'.$locked->kind.':'.$chapter->id, 20);
             if (! $wasComplete) {
                 app(GamificationService::class)->chapterBonus($user, $chapter);
             }
         }
 
+        if (in_array($locked->kind, ['audio', 'reading'], true)) {
+            app(ProgramAchievementReconciliationService::class)->schedule((int) $user->id, (int) $program->id);
+        }
+
         return $locked;
+    }
+
+    public function chapterMiniConfiguration(Chapter $chapter): array
+    {
+        return $this->miniConfiguration([[
+            'session' => 1,
+            'part' => 1,
+            'duration_minutes' => $chapter->mini_checkpoint_duration_minutes,
+            'passing_score' => $chapter->mini_checkpoint_passing_score,
+        ]]);
     }
 
     public function miniConfiguration(array $questions): array

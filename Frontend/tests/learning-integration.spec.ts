@@ -276,20 +276,20 @@ test("video completion retries failures, blocks duplicate clicks and survives re
   expect(writes).toBe(2);
 });
 
-test("practice screen filters by category and level tabs", async ({ page }) => {
+test("practice screen filters scheduled daily practices by category and level", async ({ page }) => {
   await mockLearning(page);
+  const schedule = { starts_at: new Date().toISOString(), ends_at: new Date(Date.now() + 3600000).toISOString(), question_count: 1, status: "open" };
+  await page.route("**/api/student/daily-practices?**", route => route.fulfill({ json: { data: [
+    { ...schedule, id: 1, title: "Daily Audio", category: "audio", target_level: "n5" },
+    { ...schedule, id: 2, title: "Daily Kosakata", category: "vocabulary", target_level: "n4" },
+  ] } }));
   await page.goto("/practice");
   await expect(page.getByRole("heading", { name: "Latihan Harian" })).toBeVisible();
-
-  for (const cat of ["Semua", "Kosakata", "Kanji", "Tata Bahasa", "Audio", "Reading"]) {
-    await expect(page.getByRole("tab", { name: cat, exact: true })).toBeVisible();
-  }
-
-  await page.getByRole("tab", { name: "Audio" }).click();
-  await expect(page.getByRole("heading", { name: /Audio/ })).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Kosakata/ })).toHaveCount(0);
-
-  await page.getByRole("tab", { name: "Kosakata" }).click();
-  await expect(page.getByRole("heading", { name: /Kosakata/ })).toBeVisible();
-  await expect(page.getByRole("heading", { name: /Audio/ })).toHaveCount(0);
+  await page.getByRole("combobox", { name: "Kategori", exact: true }).selectOption("audio");
+  await expect(page.getByRole("heading", { name: "Daily Audio" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Daily Kosakata" })).toHaveCount(0);
+  await page.getByRole("combobox", { name: "Kategori", exact: true }).selectOption("all");
+  await page.getByRole("combobox", { name: "Filter Level", exact: true }).selectOption("n4");
+  await expect(page.getByRole("heading", { name: "Daily Kosakata" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Daily Audio" })).toHaveCount(0);
 });

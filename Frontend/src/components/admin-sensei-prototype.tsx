@@ -7,6 +7,7 @@ import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
 import { AdminDataTable, AdminDialog, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge } from "@/components/admin-primitives";
 import { adminMediaUrl as contentMedia } from "@/lib/admin-media";
 import { useAdminContent } from "@/lib/admin-content-api";
+import { apiRequest } from "@/lib/api";
 import { AdminSenseiPreview } from "@/components/admin-profile-preview";
 import styles from "./admin-showcase.module.css";
 
@@ -22,6 +23,23 @@ export function AdminSenseiPrototype() {
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
+  const [reordering, setReordering] = useState(false);
+  const reorderLock = useRef(false);
+  async function move(row: Sensei, order: number) {
+    if (reorderLock.current || busy) return;
+    reorderLock.current = true;
+    setReordering(true);
+    try {
+      await apiRequest(`/api/admin/sensei-profiles/${row.id}`, { method: "PATCH", body: JSON.stringify({ sort_order: order }) });
+      reload();
+      setMessage(`${row.name} dipindahkan ke urutan ${order}. Urutan Sensei lain disesuaikan otomatis.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Urutan gagal disimpan.");
+    } finally {
+      reorderLock.current = false;
+      setReordering(false);
+    }
+  }
   const query = search.trim().toLowerCase();
   const visibleRows = rows.filter((row) => [row.name, row.role, row.bio, row.level, ...row.expertise].some((value) => value.toLowerCase().includes(query)));
   const temporaryUrls = useRef(new Set<string>());
@@ -76,8 +94,7 @@ export function AdminSenseiPrototype() {
       { key: "role", header: "Peran", cell: (row) => row.role },
       { key: "bio", header: "Bio singkat", cell: (row) => row.bio },
       { key: "expertise", header: "Keahlian", cell: (row) => row.expertise.join(", ") },
-      { key: "level", header: "Level utama", cell: (row) => row.level || "—" },
-      { key: "order", header: "Urutan Tampil", cell: (row) => row.order },
+      { key: "order", header: "Urutan Tampil", cell: (row) => <select aria-label={`Urutan tampil ${row.name}`} className="button" style={{ minHeight: 44 }} value={row.order} disabled={busy || reordering || loading} onChange={(event) => void move(row, Number(event.target.value))}>{Array.from({ length: rows.length }, (_, index) => <option key={index + 1} value={index + 1}>{index + 1}</option>)}</select> },
       { key: "status", header: "Status", cell: (row) => <AdminStatusBadge status={row.active ? "Aktif" : "Nonaktif"} /> },
     ]} actions={{ cell: (row) => <>
       <button type="button" className={`button ${styles.trigger}`} popoverTarget={`sensei-actions-${row.id}`} aria-label={`Tindakan ${row.name}`} onClick={event => {

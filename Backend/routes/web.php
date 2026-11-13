@@ -11,6 +11,7 @@ use App\Http\Controllers\AdminNotificationController;
 use App\Http\Controllers\AdminPayoutController;
 use App\Http\Controllers\AdminPlacementController;
 use App\Http\Controllers\AdminPlacementLeadController;
+use App\Http\Controllers\AdminProgramAchievementController;
 use App\Http\Controllers\AdminPublicContentController;
 use App\Http\Controllers\AdminScheduleReplayController;
 use App\Http\Controllers\AdminSettingsController;
@@ -37,6 +38,7 @@ use App\Http\Controllers\StudentGamificationController;
 use App\Http\Controllers\StudentLearningController;
 use App\Http\Controllers\StudentNotificationController;
 use App\Http\Controllers\StudentProfileAvatarController;
+use App\Http\Controllers\StudentProgramAchievementController;
 use App\Http\Controllers\StudentScheduleReplayController;
 use App\Http\Controllers\StudentTestimonialController;
 use App\Http\Controllers\StudentTryOutController;
@@ -46,9 +48,15 @@ use App\Services\PlacementService;
 use App\Services\PublicContentService;
 use App\Services\ScheduleReplayService;
 use Illuminate\Support\Facades\Route;
+use Laravel\Sanctum\Http\Middleware\AuthenticateSession;
 
-Route::prefix('api')->middleware(['throttle:api', \Laravel\Sanctum\Http\Middleware\AuthenticateSession::class])->group(function () {
+Route::prefix('api')->middleware(['throttle:api', AuthenticateSession::class])->group(function () {
     Route::middleware(['auth:sanctum', 'active', 'role:admin'])->prefix('admin')->group(function () {
+        Route::get('certificate-issuer', [\App\Http\Controllers\AdminCertificateIssuerController::class, 'show']);
+        Route::post('certificate-issuer', [\App\Http\Controllers\AdminCertificateIssuerController::class, 'update']);
+        Route::get('program-achievements', [AdminProgramAchievementController::class, 'index']);
+        Route::patch('program-achievements/{program}', [AdminProgramAchievementController::class, 'update'])->whereNumber('program');
+        Route::get('program-achievements/{program}/preview', [AdminProgramAchievementController::class, 'preview'])->whereNumber('program');
         Route::prefix('checkpoint-packages')->group(function () {
             Route::get('/', [AdminCheckpointController::class, 'index']);
             Route::post('/', [AdminCheckpointController::class, 'store']);
@@ -117,6 +125,18 @@ Route::prefix('api')->middleware(['throttle:api', \Laravel\Sanctum\Http\Middlewa
         Route::post('invoices/{invoice}/affiliate-attribution', [AdminAffiliateController::class, 'attribute']);
         Route::get('commissions', [AdminCommissionController::class, 'index']);
         Route::get('commissions/{commission}', [AdminCommissionController::class, 'show']);
+        Route::prefix('daily-practices')->group(function () {
+            $controller = \App\Http\Controllers\AdminDailyPracticeController::class;
+            Route::get('/', [$controller, 'index']);
+            Route::post('/', [$controller, 'store']);
+            Route::get('{practice}', [$controller, 'show']);
+            Route::patch('{practice}', [$controller, 'update']);
+            Route::delete('{practice}', [$controller, 'destroy']);
+            Route::put('{practice}/studio', [$controller, 'studio']);
+            Route::get('{practice}/reports', [$controller, 'reports']);
+            Route::get('{practice}/reports/participants', [$controller, 'participants']);
+            Route::get('{practice}/reports/attempts/{attempt}', [$controller, 'reportAttempt'])->whereNumber('attempt');
+        });
         Route::prefix('try-outs')->group(function () {
             Route::get('/', [AdminTryOutController::class, 'index']);
             Route::post('/', [AdminTryOutController::class, 'store']);
@@ -156,6 +176,8 @@ Route::prefix('api')->middleware(['throttle:api', \Laravel\Sanctum\Http\Middlewa
         Route::get('invoices', [InvoiceController::class, 'index']);
         Route::get('invoices/{invoice}', [InvoiceController::class, 'show']);
         Route::post('invoices/{invoice}/transition', [InvoiceController::class, 'transition']);
+        Route::delete('invoices/{invoice}', [InvoiceController::class, 'destroy']);
+        Route::post('invoices/{invoice}/cancel', [InvoiceController::class, 'cancel']);
         Route::get('users/{user}/effective-access', [EffectiveAccessController::class, 'admin']);
         Route::get('users/{user}/access', [AccessGrantController::class, 'index']);
         Route::post('users/{user}/access', [AccessGrantController::class, 'store']);
@@ -171,6 +193,9 @@ Route::prefix('api')->middleware(['throttle:api', \Laravel\Sanctum\Http\Middlewa
         Route::patch('community/replies/{reply}', [CommunityController::class, 'adminUpdateReply']);
     });
     Route::middleware(['auth:sanctum', 'active', 'role:student'])->prefix('student')->group(function () {
+        Route::get('program-achievements', [StudentProgramAchievementController::class, 'index']);
+        Route::get('program-achievements/{achievement}', [StudentProgramAchievementController::class, 'show'])->whereNumber('achievement');
+        Route::post('program-achievements/programs/{program}/reconcile', [StudentProgramAchievementController::class, 'reconcile'])->whereNumber('program')->middleware('throttle:20,1');
         Route::get('checkpoint-packages', [StudentCheckpointController::class, 'index']);
         Route::get('checkpoint-packages/{package}', [StudentCheckpointController::class, 'show']);
         Route::post('checkpoint-packages/{package}/attempts', [StudentCheckpointController::class, 'start'])->name('assessment.checkpoint.start');
@@ -209,6 +234,16 @@ Route::prefix('api')->middleware(['throttle:api', \Laravel\Sanctum\Http\Middlewa
             Route::put('attempts/{attempt}/answers', [StudentAssessmentController::class, 'save'])->name('assessment.learning.answers');
             Route::post('attempts/{attempt}/submit', [StudentAssessmentController::class, 'submit'])->name('assessment.learning.submit');
             Route::get('attempts/{attempt}/review', [StudentAssessmentController::class, 'review']);
+        });
+        Route::prefix('daily-practices')->group(function () {
+            $controller = \App\Http\Controllers\StudentDailyPracticeController::class;
+            Route::get('/', [$controller, 'index']);
+            Route::get('{practice}', [$controller, 'show']);
+            Route::post('{practice}/attempt', [$controller, 'start'])->name('assessment.daily.start');
+            Route::get('{practice}/attempt', [$controller, 'attempt']);
+            Route::put('{practice}/answers', [$controller, 'answers'])->name('assessment.daily.answers');
+            Route::post('{practice}/submit', [$controller, 'submit'])->name('assessment.daily.submit');
+            Route::get('{practice}/review', [$controller, 'review']);
         });
         Route::prefix('try-outs')->group(function () {
             Route::get('/', [StudentTryOutController::class, 'index']);

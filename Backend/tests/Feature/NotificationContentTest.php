@@ -9,8 +9,6 @@ use App\Models\Program;
 use App\Models\User;
 use App\Services\NotificationService;
 use Carbon\CarbonImmutable;
-use Database\Seeders\ProgramOfferSeeder;
-use Database\Seeders\ProgramSeeder;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Bus;
@@ -34,7 +32,11 @@ class NotificationContentTest extends TestCase
         $this->withoutMiddleware(ThrottleRequests::class);
         $this->assertSame('hiru_academy_test', DB::connection()->getDatabaseName());
         $this->travelTo(CarbonImmutable::parse('2026-10-04T12:00:00Z'));
-        $this->seed([ProgramSeeder::class, ProgramOfferSeeder::class]);
+        $this->assertMatchesRegularExpression('/^hiru_backend_test_[a-z0-9_]+$/D', (string) getenv('HIRU_TEST_SCHEMA'));
+        foreach (['n5', 'n4', 'n3', 'n2', 'ssw-food'] as $code) {
+            Program::firstOrCreate(['code' => $code], ['slug' => $code, 'name' => 'Notification fixture '.$code,
+                'family' => $code === 'ssw-food' ? 'ssw' : 'jlpt', 'status' => 'active', 'sort_order' => 0]);
+        }
         $this->admin = $this->user('admin');
         $this->student = $this->user('student');
         Mail::fake();
@@ -72,6 +74,10 @@ class NotificationContentTest extends TestCase
 
     private function grant(string $code, string $plan, array $overrides = []): AccessGrant
     {
+        \App\Models\ProgramOffer::firstOrCreate([
+            'program_id' => Program::where('code', $code)->firstOrFail()->id, 'plan_code' => $plan,
+        ], ['base_price' => 100000, 'currency' => 'IDR', 'duration_months' => 1, 'status' => 'active']);
+
         return AccessGrant::create(array_replace([
             'user_id' => $this->student->id,
             'program_id' => Program::where('code', $code)->firstOrFail()->id,
@@ -108,6 +114,28 @@ class NotificationContentTest extends TestCase
         $this->patchJson($url.'/'.$id, ['title' => 'Missing'])->assertNotFound();
         $this->deleteJson($url.'/'.$id)->assertNotFound();
         $this->getJson('/api/public/notifications')->assertNotFound();
+    }
+
+    public function test_audience_only_creation_and_legacy_edits_preserve_visibility(): void
+    {
+        $this->actingAs($this->admin);
+        $url = '/api/admin/notifications';
+        foreach (NotificationService::AUDIENCES as $audience) {
+            $this->postJson($url, $this->payload(['audience' => $audience, 'level' => null]))
+                ->assertCreated()->assertJsonPath('data.audience', $audience)->assertJsonPath('data.level', null);
+        }
+        $legacy = $this->content(['audience' => 'Mandiri', 'level' => 'n4']);
+        $this->grant('n3', 'lms');
+        foreach ([['title' => 'Edited title', 'body' => 'Edited body'], ['status' => 'draft'], ['status' => 'published', 'level' => 'n4']] as $update) {
+            $this->actingAs($this->admin)->patchJson($url.'/'.$legacy->id, $update)
+                ->assertOk()->assertJsonPath('data.level', 'n4');
+            $this->actingAs($this->student);
+            $this->assertNotContains($legacy->id, $this->visibleIds());
+        }
+        $this->actingAs($this->admin)->patchJson($url.'/'.$legacy->id, ['level' => null])
+            ->assertOk()->assertJsonPath('data.level', null);
+        $this->actingAs($this->student);
+        $this->assertContains($legacy->id, $this->visibleIds());
     }
 
     public function test_auth_and_role_boundaries(): void

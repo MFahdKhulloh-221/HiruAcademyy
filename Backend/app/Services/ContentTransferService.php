@@ -116,7 +116,7 @@ final class ContentTransferService
                     if (isset($row['attributes']['chapter_id'])) $chapterIds[] = $row['attributes']['chapter_id'];
                 }
                 foreach (Chapter::whereIn('id', array_unique($chapterIds))->get() as $chapter) {
-                    $data['chapters'][] = ['source_id' => $chapter->id, 'program_id' => $chapter->program_id, 'chapter_number' => $chapter->chapter_number];
+                    $data['chapters'][] = ['source_id' => $chapter->id, 'program_id' => $chapter->program_id, 'chapter_number' => $chapter->chapter_number, 'mini_checkpoint_duration_minutes' => $chapter->mini_checkpoint_duration_minutes, 'mini_checkpoint_passing_score' => $chapter->mini_checkpoint_passing_score];
                     $programIds[] = $chapter->program_id;
                 }
                 foreach (Program::whereIn('id', array_unique($programIds))->get() as $program) $data['programs'][] = ['source_id' => $program->id, 'code' => $program->code];
@@ -188,7 +188,12 @@ final class ContentTransferService
                 $ids[$table][$id] = $row;
             }
         }
-        foreach ($data['chapters'] as $chapter) $this->require(isset($ids['programs'][$chapter['program_id'] ?? 0]) && is_int($chapter['chapter_number'] ?? null), 'Relasi chapter tidak valid.');
+        foreach ($data['chapters'] as $chapter) {
+            $this->require(isset($ids['programs'][$chapter['program_id'] ?? 0]) && is_int($chapter['chapter_number'] ?? null), 'Relasi chapter tidak valid.');
+            $duration = $chapter['mini_checkpoint_duration_minutes'] ?? null;
+            $score = $chapter['mini_checkpoint_passing_score'] ?? null;
+            $this->require(($duration === null && $score === null) || (is_int($duration) && $duration > 0 && $duration <= 2147483647 && is_int($score) && $score >= 0 && $score <= 100), 'Konfigurasi Mini Checkpoint chapter tidak valid.');
+        }
         foreach (self::MODELS as $table => $model) {
             $this->require(Schema::hasTable($table), 'Schema target belum mendukung '.$table.'; jalankan migration aplikasi yang sesuai terlebih dahulu.');
             $columns = Schema::getColumnListing($table);
@@ -260,6 +265,12 @@ final class ContentTransferService
                     $matches = Chapter::where('program_id', $map['programs'][$chapter['program_id']])->where('chapter_number', $chapter['chapter_number'])->pluck('id');
                     $this->require($matches->count() === 1, 'Chapter tidak ditemukan/ambigu: '.$chapter['chapter_number']);
                     $map['chapters'][$chapter['source_id']] = $matches->first();
+                    if (array_key_exists('mini_checkpoint_duration_minutes', $chapter)) {
+                        $target = Chapter::findOrFail($matches->first());
+                        $settings = array_intersect_key($chapter, array_flip(['mini_checkpoint_duration_minutes', 'mini_checkpoint_passing_score']));
+                        $this->require($target->only(array_keys($settings)) === $settings || ($target->mini_checkpoint_duration_minutes === null && $target->mini_checkpoint_passing_score === null), 'Konfigurasi Mini Checkpoint target berbeda; tidak ditimpa.');
+                        if ($apply) $target->update($settings);
+                    }
                 }
                 $inserted = $skipped = array_fill_keys(array_keys(self::MODELS), 0);
                 foreach (self::MODELS as $table => $model) foreach ($data['records'][$table] as $row) {

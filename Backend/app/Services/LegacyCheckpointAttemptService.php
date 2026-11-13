@@ -15,7 +15,7 @@ class LegacyCheckpointAttemptService
     public function canAccess(User $user, CheckpointPackage $package): bool
     {
         return $this->access->canAccessProgram($user, $package->program)
-            && $this->access->canAccessChapter($user, $package->program->code, 2);
+            && in_array($package->program->code, app(EntitlementService::class)->effectiveAccess($user)['replay_levels'], true);
     }
 
     public function authorize(User $user, CheckpointPackage $package, ?CheckpointAttempt $attempt = null): void

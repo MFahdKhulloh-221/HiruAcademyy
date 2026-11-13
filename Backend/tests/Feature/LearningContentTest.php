@@ -70,6 +70,8 @@ class LearningContentTest extends TestCase
             'program_id' => $this->program($code)->id,
             'chapter_number' => $number,
             'title' => 'Fixture chapter '.$number,
+            'mini_checkpoint_duration_minutes' => 5,
+            'mini_checkpoint_passing_score' => 70,
             'status' => 'published',
             'sort_order' => 0,
         ], $overrides));
@@ -100,7 +102,7 @@ class LearningContentTest extends TestCase
             'flashcards' => ['japanese' => '猫', 'reading' => 'ねこ', 'meaning' => 'Cat', 'example' => '猫です。'],
             'audio-questions' => ['title' => 'Fixture audio', 'audio_url' => 'https://media.example.test/audio.mp3', ...$question],
             'reading-passages' => ['title' => 'Fixture passage', 'body' => 'Fixture body'],
-            'mini-checkpoint-questions' => [...$question, 'session' => 1, 'part' => 1, 'duration_minutes' => 5],
+            'mini-checkpoint-questions' => $question,
         }];
     }
 
@@ -209,9 +211,9 @@ class LearningContentTest extends TestCase
     public static function familyMatrix(): array
     {
         $allowed = [
-            'dasar' => ['chapters', 'video-lessons', 'modules', 'flashcards', 'audio-questions', 'reading-passages', 'reading-questions', 'mini-checkpoint-questions'],
+            'dasar' => ['chapters', 'video-lessons', 'modules', 'audio-questions', 'reading-passages', 'reading-questions', 'mini-checkpoint-questions'],
             'n5' => array_keys(self::MODELS),
-            'ssw-food' => ['chapters', 'video-lessons', 'modules', 'flashcards', 'mini-checkpoint-questions'],
+            'ssw-food' => ['chapters', 'video-lessons', 'modules', 'mini-checkpoint-questions'],
             'interview' => ['chapters', 'video-lessons', 'modules'],
         ];
         $cases = [];
@@ -551,7 +553,7 @@ class LearningContentTest extends TestCase
             $table = (new $class)->getTable();
             $columns[$table] = Schema::getColumnListing($table);
             foreach ($columns[$table] as $column) {
-                $this->assertDoesNotMatchRegularExpression('/progress|completed|unlocked|attempt|score|user_id/', $column);
+                $this->assertDoesNotMatchRegularExpression('/progress|completed|unlocked|attempt|user_id/', $column);
             }
         }
         $this->actingAs($this->student);
@@ -607,22 +609,18 @@ class LearningContentTest extends TestCase
             'question' => 'Pertanyaan Mini Sesi 1 Part 2',
             'options' => ['A' => 'Opt A', 'B' => 'Opt B', 'C' => 'Opt C', 'D' => 'Opt D'],
             'correct_option' => 'C',
-            'session' => 1,
-            'part' => 2,
-            'duration_minutes' => 25,
+
             'status' => 'published',
             'sort_order' => 1,
         ];
         $response = $this->actingAs($this->admin)->postJson('/api/admin/mini-checkpoint-questions', $payload)->assertCreated();
         $response->assertJsonPath('data.session', 1)
-            ->assertJsonPath('data.part', 2)
-            ->assertJsonPath('data.duration_minutes', 25);
+            ->assertJsonPath('data.part', 1)
+            ->assertJsonPath('data.duration_minutes', 5);
 
         $this->actingAs($this->admin)->patchJson('/api/admin/mini-checkpoint-questions/'.$response->json('data.id'), [
             'part' => 3,
             'duration_minutes' => 30,
-        ])->assertOk()
-            ->assertJsonPath('data.part', 3)
-            ->assertJsonPath('data.duration_minutes', 30);
+        ])->assertUnprocessable()->assertJsonValidationErrors(['part', 'duration_minutes']);
     }
 }

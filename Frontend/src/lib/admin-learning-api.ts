@@ -1,7 +1,7 @@
 import { apiRequest } from "@/lib/api";
 import type { CanonicalChapter, LearningModule, LearningProgram, LearningResource } from "@/lib/learning-api";
 
-export type AdminChapter = CanonicalChapter & { program_id: number; status: "draft" | "published" };
+export type AdminChapter = CanonicalChapter & { program_id: number; status: "draft" | "published"; mini_checkpoint_duration_minutes?: number | null; mini_checkpoint_passing_score?: number | null };
 export type AdminMedia = LearningResource & { chapter_id: number; status: "draft" | "published"; video_url?: string; file_url?: string; module_type?: LearningModule["module_type"] };
 export type AdminFlashcard = { id: number; chapter_id: number; japanese: string; reading: string; meaning: string; example: string | null; sort_order: number; status: "draft" | "published" };
 export type LearningAdminResource = "chapters" | "video-lessons" | "modules" | "flashcards";

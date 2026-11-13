@@ -191,15 +191,14 @@ test("Scenario D — RULES: Admin -> Aturan Hasil -> add recommendation rule -> 
   await expect(page.locator(".placement-notice")).toContainText("Aturan rekomendasi disimpan.");
 });
 
-test("Scenario E — LEADS: Admin -> Leads -> view leads and update contact status", async ({ page }) => {
+test("Scenario E — Admin views Placement results and participant detail", async ({ page }) => {
   await page.goto("/admin/placement-hasil");
-  await page.getByRole("tab", { name: "Leads" }).click();
-  await expect(page.getByText("Budi Santoso")).toBeVisible();
-  await expect(page.getByText("6281234567890")).toBeVisible();
-
-  const toggleBtn = page.getByRole("row", { name: /Budi Santoso/ }).getByRole("button", { name: "Tandai Dihubungi" });
-  await toggleBtn.click();
-  await expect(page.getByRole("row", { name: /Budi Santoso/ }).getByText("Sudah Dihubungi")).toBeVisible();
+  await page.getByRole("tab", { name: "Hasil Placement Test", exact: true }).click();
+  const row = page.getByRole("row", { name: /Budi Santoso/ });
+  await expect(row).toContainText("6281234567890");
+  await expect(row.getByRole("button")).toHaveCount(1);
+  await row.getByRole("button", { name: "Detail", exact: true }).click();
+  await expect(page.getByRole("dialog").getByRole("button", { name: "Salin nomor WhatsApp" })).toBeVisible();
 });
 
 for (const width of responsiveWidths) {

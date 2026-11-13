@@ -1,0 +1,36 @@
+.workspace { display: grid; gap: 16px; }
+.toolbar { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.toolbar h2 { margin: 0; font-size: 20px; font-weight: 700; }
+.toolbar p, .program p { margin: 6px 0 0; color: #596174; line-height: 1.6; }
+.help { margin: 0; padding: 14px 18px; border: 1px solid #dce2ef; border-radius: 12px; background: #fff; color: #596174; line-height: 1.6; }
+.help strong { color: #26334d; }
+.alert { margin: 0; padding: 14px 18px; border: 1px solid #efc6c6; border-radius: 12px; background: #fff5f5; color: #9b2525; }
+.alert button { min-height: 44px; padding-inline: 12px; text-decoration: underline; }
+.workspace :global(.admin-data-table) { min-width: 780px; table-layout: fixed; }
+.workspace :global(.admin-data-table th), .workspace :global(.admin-data-table td) { padding: 18px 16px; vertical-align: middle; overflow-wrap: normal; word-break: normal; }
+.workspace :global(.admin-data-table th:first-child) { width: 76px; }
+.workspace :global(.admin-data-table th:nth-child(3)) { width: 136px; }
+.workspace :global(.admin-data-table th:nth-child(4)) { width: 210px; }
+.workspace :global(.admin-data-table th:last-child) { width: 174px; }
+.order { display: inline-grid; place-items: center; min-width: 32px; height: 32px; border-radius: 8px; background: #f1f3fa; color: #596174; font-weight: 700; }
+.program strong { font-size: 14px; color: #26334d; }
+.program p { font-size: 13px; overflow-wrap: anywhere; }
+.visibility { display: grid; gap: 4px; }
+.visibility label { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; font-weight: 600; }
+.visibility input { width: 20px; height: 20px; accent-color: #954900; cursor: pointer; }
+.visibility small { color: #596174; font-size: 12px; line-height: 1.5; }
+.actions { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+.actions :global(.button) { min-height: 44px; padding: 0 14px; border: 1px solid #dce2ef; border-radius: 9px; background: #fff; color: #26334d; font-size: 13px; white-space: nowrap; box-shadow: none; }
+.actions :global(.button:hover) { transform: none; background: #f1f3fa; box-shadow: none; }
+.actions :global(.button).delete { border-color: transparent; color: #ae2929; }
+.actions :global(.button).delete:hover { background: #fff1f1; }
+.workspace :global(button:focus-visible), .workspace input:focus-visible { outline: 2px solid #954900; outline-offset: 3px; }
+.deleteDialog :global(.admin-dialog-content) { display: grid; gap: 12px; }
+.deleteDialog :global(.admin-dialog-content) p { margin: 0; line-height: 1.65; overflow-wrap: anywhere; }
+.deleteDialog > footer { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 12px; }
+.deleteDialog > footer :global(.button) { flex: 0 0 auto; min-width: 100px; min-height: 44px; padding: 12px 20px; white-space: nowrap; word-break: normal; overflow-wrap: normal; }
+.deleteDialog > footer .confirmDelete { background: #ae2929; color: #fff; border-color: #ae2929; }
+@media (max-width: 639px) {
+  .toolbar { align-items: stretch; flex-direction: column; }
+  .toolbar > :global(.button) { width: 100%; }
+}

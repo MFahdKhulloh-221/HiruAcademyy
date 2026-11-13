@@ -148,17 +148,17 @@ test("tryout uses breadcrumb and level filter", async ({ page }) => {
   await expect(page.getByText("N3 | Simulasi Nasional", { exact: true })).toBeVisible();
 });
 
-test("canonical practice flow advances through chapter assessments", async ({ page }) => {
+test("canonical daily practice starts scheduled assessment without answer keys", async ({ page }) => {
+  const practice = { id: 9, title: "Scheduled Audio", category: "audio", target_level: "n5", starts_at: new Date().toISOString(), ends_at: new Date(Date.now() + 3600000).toISOString(), question_count: 1, status: "open" };
+  await page.route("**/api/student/daily-practices?**", route => route.fulfill({ json: { data: [practice] } }));
   await page.route("**/sanctum/csrf-cookie", route => route.fulfill({ status: 204, headers: { "set-cookie": "XSRF-TOKEN=test; Path=/" } }));
-  await page.route("**/api/student/programs/*/chapters/*/attempts", route => route.fulfill({ status: 201, json: { data: { id: 9, status: "in_progress", revision: 0, answers: {}, result: null, questions: [{ id: 1, question: "Practice question", options: { A: "First", B: "Second", C: "Third", D: "Fourth" } }] } } }));
+  await page.route("**/api/student/daily-practices/9/attempt", route => route.fulfill({ json: { data: { id: 9, daily_practice_id: 9, status: "in_progress", revision: 0, answers: {}, result: null, questions: [{ id: 1, question: "Practice question", options: { A: "First", B: "Second", C: "Third", D: "Fourth" } }] } } }));
   await page.goto("/practice?membership=lms");
   await expect(page.getByRole("heading", { name: "Latihan Harian", exact: true })).toBeVisible();
-  const startBtn = page.getByRole("button", { name: "Mulai Latihan" }).first();
-  await expect(startBtn).toBeVisible();
-  await startBtn.click();
+  await page.getByRole("button", { name: "Mulai Latihan", exact: true }).click();
   await expect(page.getByRole("button", { name: "Kembali ke Daftar Latihan" })).toBeVisible();
-  await page.getByRole("button", { name: "Mulai", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Practice question", level: 2 })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "1. Practice question", level: 3 })).toBeVisible();
+  await expect(page.getByText("Jawaban benar:")).toHaveCount(0);
 });
 
 test("student navigation resolves active routes and preserves membership access", async ({ page }) => {

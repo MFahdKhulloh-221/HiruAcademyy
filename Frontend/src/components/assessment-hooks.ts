@@ -5,7 +5,7 @@ import { useAuth } from "@/components/auth-provider";
 import { apiRequest, ApiError } from "@/lib/api";
 import { AttemptPersistence, readAttempt, startAttempt, type AttemptDomain, type ServerAttempt } from "@/lib/assessment-attempt";
 
-export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?: string, resumeAudio = false) {
+export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?: string, resumeAudio = false, resultOnly = false) {
   const { user, loading } = useAuth();
   const identity = loading ? undefined : domain === "placement" ? `placement:${user?.id ?? "guest"}` : user?.id;
   const persistence = useRef<AttemptPersistence | null>(null);
@@ -15,7 +15,7 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
   const saveVersion = useRef(0);
   // ponytail: tab-session reference only; cross-device resume needs backend attempt discovery.
   const resumeKey = resumeAudio && identity ? `audio-attempt:${identity}:${path}` : undefined;
-  const requestKey = JSON.stringify([identity, path, domain, scope, resumeAudio]);
+  const requestKey = JSON.stringify([identity, path, domain, scope, resumeAudio, resultOnly]);
   const [state, setState] = useState<{ requestKey: string; attempt?: ServerAttempt; answers: Record<string, string>; loadingAttempt: boolean; busy: boolean; error?: string }>({ requestKey: "", answers: {}, loadingAttempt: true, busy: false });
   const current = state.requestKey === requestKey && !loading ? state : undefined;
   const loadingAttempt = current?.loadingAttempt ?? true;
@@ -42,13 +42,14 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
       setState({ requestKey, answers: {}, loadingAttempt: true, busy: false });
       const load = discoverPlacement
         ? apiRequest<{ data: ServerAttempt | null }>(`${path}/current`, { signal: controller.signal }).then(({ data }) => data ? readAttempt(`${path}/${data.id}`, controller.signal) : undefined)
-        : readAttempt(`${path}/${id}`, controller.signal);
+        : readAttempt(`${path}/${id}${resultOnly ? "/result" : ""}`, controller.signal);
       load.then(attempt => {
         if (version !== generation.current || controller.signal.aborted) return;
         if (!attempt) {
           setState({ requestKey, answers: {}, loadingAttempt: false, busy: false });
           return;
         }
+        if (resultOnly && (attempt.status !== "completed" || !attempt.result)) throw new ApiError(403);
         if (discoverPlacement) {
           const url = new URL(window.location.href);
           url.searchParams.set("attempt", String(attempt.id));
@@ -63,7 +64,7 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
           url.searchParams.delete("start");
           window.history.replaceState(null, "", url);
         }
-        persistence.current = new AttemptPersistence(attempt, `${path}/${attempt.id}`, domain);
+        if (!resultOnly) persistence.current = new AttemptPersistence(attempt, `${path}/${attempt.id}`, domain);
         latestAnswers.current = attempt.answers;
         setState({ requestKey, attempt, answers: attempt.answers, loadingAttempt: false, busy: false });
       }).catch(error => {
@@ -73,12 +74,13 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
       setState({ requestKey, answers: {}, loadingAttempt: false, busy: false });
     }
     return () => { controller.abort(); if (generation.current === version) generation.current = version + 1; };
-  }, [path, domain, identity, scope, requestKey, resumeAudio, resumeKey, user?.id]);
+  }, [path, domain, identity, scope, requestKey, resumeAudio, resumeKey, user?.id, resultOnly]);
   async function run(action: () => Promise<ServerAttempt>, replaceAnswers = false) {
     const version = generation.current;
     setState(previous => ({ ...previous, requestKey, busy: true, error: undefined }));
     try {
       const attempt = await action();
+      if (resultOnly && (attempt.status !== "completed" || !attempt.result)) throw new ApiError(403);
       if (version === generation.current) {
         if (replaceAnswers || attempt.status === "completed") latestAnswers.current = attempt.answers;
         setState(previous => ({ requestKey, attempt, answers: replaceAnswers || attempt.status === "completed" ? attempt.answers : previous.answers, loadingAttempt: false, busy: false }));
@@ -90,7 +92,7 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
     }
   }
   async function start(body: object = {}) {
-    if (pending.current || loadingAttempt || !identity) return;
+    if (resultOnly || pending.current || loadingAttempt || !identity) return;
     pending.current = true;
     const version = generation.current;
     const attempt = await run(() => startAttempt(path, body), true);
@@ -168,7 +170,7 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
     return result;
   }
   async function abandon() {
-    if ((domain !== "tryout" && domain !== "checkpoint") || !current?.attempt || pending.current) return false;
+    if (resultOnly || (domain !== "tryout" && domain !== "checkpoint") || !current?.attempt || pending.current) return false;
     pending.current = true;
     const version = generation.current;
     setState(previous => ({ ...previous, busy: true, error: undefined }));

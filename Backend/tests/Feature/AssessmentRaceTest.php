@@ -55,7 +55,7 @@ class AssessmentRaceTest extends TestCase
             }
             if ($this->student) {
                 DB::transaction(function () {
-                    foreach (['activity_completions', 'learning_attempts', 'try_out_attempts'] as $table) {
+                    foreach (['program_achievements', 'activity_completions', 'learning_attempts', 'try_out_attempts'] as $table) {
                         if (Schema::hasTable($table)) {
                             DB::table($table)->where('user_id', $this->student->id)->delete();
                         }
@@ -133,7 +133,15 @@ class AssessmentRaceTest extends TestCase
         if ($kind === 'mini') {
             $service->submit($this->student, $program, $this->chapter, $attempt, $attempt->answers, $attempt->revision);
             $question = MiniCheckpointQuestion::create(['chapter_id' => $this->chapter->id, 'question' => 'Mini race', 'options' => $options, 'correct_option' => 'B', 'status' => 'published', 'session' => 2, 'part' => 3, 'duration_minutes' => 1, 'passing_score' => 70]);
-            $attempt = $service->start($this->student, $program, $this->chapter, 'mini', 2, 3);
+            $this->chapter->update(['mini_checkpoint_duration_minutes' => 1, 'mini_checkpoint_passing_score' => 70]);
+            $passage = \App\Models\ReadingPassage::create(['chapter_id' => $this->chapter->id, 'title' => 'Race', 'body' => 'Text', 'status' => 'published']);
+            $reading = \App\Models\ReadingQuestion::create(['reading_passage_id' => $passage->id, 'question' => 'Race', 'options' => $options, 'correct_option' => 'B', 'status' => 'published']);
+            $practice = $service->start($this->student, $program, $this->chapter, 'reading');
+            $service->submit($this->student, $program, $this->chapter, $practice, [$reading->id => 'B'], 0);
+            foreach (['video' => \App\Models\VideoLesson::create(['chapter_id' => $this->chapter->id, 'title' => 'Race', 'status' => 'published']), 'module' => \App\Models\LearningModule::create(['chapter_id' => $this->chapter->id, 'title' => 'Race', 'module_type' => 'general', 'status' => 'published']), 'flashcard' => \App\Models\Flashcard::create(['chapter_id' => $this->chapter->id, 'japanese' => '猫', 'reading' => 'ねこ', 'meaning' => 'Cat', 'status' => 'published'])] as $type => $resource) {
+                app(\App\Services\LearningProgressService::class)->record($this->student, $this->chapter, $type, $resource->id);
+            }
+            $attempt = $service->start($this->student, $program, $this->chapter, 'mini', 1, 1);
             $attempt = $service->save($this->student, $program, $this->chapter, $attempt, [$question->id => 'B'], 0);
             if ($expired) {
                 DB::table('learning_attempts')->where('id', $attempt->id)->update(['created_at' => now()->utc()->subMinutes(2)->format('Y-m-d H:i:sP')]);
@@ -260,7 +268,7 @@ PHP;
             $this->assertSame($fixture['revision'] + 1, $model->revision);
             $this->assertSame($kind === 'try_out' ? 180 : 1, $model->result_snapshot[$kind === 'try_out' ? 'earned' : 'correct']);
             if ($kind === 'learning' || $kind === 'mini') {
-                $this->assertSame(1, DB::table('activity_completions')->where('user_id', $this->student->id)->count());
+                $this->assertSame($kind === 'mini' ? 5 : 1, DB::table('activity_completions')->where('user_id', $this->student->id)->count());
             }
             if ($kind === 'mini') {
                 $this->assertTrue($model->result_snapshot['passed']);

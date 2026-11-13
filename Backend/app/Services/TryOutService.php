@@ -91,11 +91,16 @@ class TryOutService
         }, 3);
     }
 
+    protected function supportsTryOutContent(): bool
+    {
+        return $this->assessmentModel === TryOut::class;
+    }
+
     public function builderCapabilities(): array
     {
-        return ['images' => $this->assessmentModel === TryOut::class
+        return ['images' => $this->supportsTryOutContent()
             && Schema::hasColumns('try_out_questions', ['image', 'image_alt', 'image_position'])
-            && Schema::hasColumns('try_out_passages', ['image', 'image_alt', 'image_position']), 'decimal_points' => $this->assessmentModel === TryOut::class];
+            && Schema::hasColumns('try_out_passages', ['image', 'image_alt', 'image_position']), 'decimal_points' => $this->supportsTryOutContent()];
     }
 
     public function imageFields(): array
@@ -138,12 +143,12 @@ class TryOutService
 
     public function passageFields(): array
     {
-        return array_merge(['id', 'title', 'body'], $this->imageFields(), $this->assessmentModel === TryOut::class && Schema::hasColumn('try_out_passages', 'blocks') ? ['blocks'] : []);
+        return array_merge(['id', 'title', 'body'], $this->imageFields(), $this->supportsTryOutContent() && Schema::hasColumn('try_out_passages', 'blocks') ? ['blocks'] : []);
     }
 
     private function blockRules(): array
     {
-        return $this->assessmentModel === TryOut::class ? [
+        return $this->supportsTryOutContent() ? [
             'blocks' => ['sometimes', 'nullable', 'array', 'min:1', function ($attribute, $value, $fail) {
                 if (! is_array($value) || ! array_is_list($value)) {
                     $fail('Blocks must be an ordered array.');
@@ -197,7 +202,7 @@ class TryOutService
             'options' => ['required', 'array:A,B,C,D', 'size:4'],
             'correct_option' => ['required', Rule::in(['A', 'B', 'C', 'D'])],
             'explanation' => ['nullable', 'string'],
-            'point_value' => $this->assessmentModel === TryOut::class
+            'point_value' => $this->supportsTryOutContent()
                 ? ['required', 'numeric', 'min:1', 'max:180', function ($attribute, $value, $fail) {
                     if (! is_numeric($value) || ! is_finite((float) $value)
                         || ! in_array(fmod((float) $value, 1), [0.0, 0.25, 0.5, 0.75], true)) {
@@ -222,15 +227,15 @@ class TryOutService
         return $rules + $this->imageRules();
     }
 
-    private function assertQuestion(Model $question): void
+    protected function assertQuestion(Model $question): void
     {
         Validator::make($question->only(array_keys($this->questionRules())), $this->questionRules())->validate();
         $this->assertImage($question);
-        $passageSessions = $this->assessmentModel === TryOut::class ? ['grammar', 'reading'] : ['reading'];
+        $passageSessions = $this->supportsTryOutContent() ? ['grammar', 'reading'] : ['reading'];
         if ($question->passage_id !== null && (! in_array($question->session, $passageSessions, true) || ! $this->passageModel::whereKey($question->passage_id)->where($this->parentKey, $question->{$this->parentKey})->exists())) {
             throw ValidationException::withMessages(['passage_id' => 'Shared passage must belong to this assessment and an allowed session.']);
         }
-        if ($question->passage_id !== null && $this->assessmentModel === TryOut::class
+        if ($question->passage_id !== null && $this->supportsTryOutContent()
             && $this->questionModel::where($this->parentKey, $question->{$this->parentKey})->where('passage_id', $question->passage_id)
                 ->when($question->exists, fn ($query) => $query->where('id', '!=', $question->id))
                 ->where('session', '!=', $question->session)->exists()) {
@@ -253,7 +258,7 @@ class TryOutService
     {
         return DB::transaction(function () use ($tryOut, $input, $question) {
             $parent = $this->assessmentModel::whereKey($tryOut->id)->lockForUpdate()->firstOrFail();
-            $this->program($parent->program_id);
+            $this->validateAssessment($parent);
             $model = $question ? $parent->questions()->whereKey($question->id)->lockForUpdate()->firstOrFail() : new $this->questionModel;
             $rules = $this->questionRules();
             if ($model->exists) {
@@ -296,7 +301,7 @@ class TryOutService
 
         return app(MediaService::class)->locked(function () use ($tryOut) {
             $parent = $this->assessmentModel::whereKey($tryOut->id)->lockForUpdate()->firstOrFail();
-            $this->program($parent->program_id);
+            $this->validateAssessment($parent);
             $questions = $parent->questions()->orderBy('id')->lockForUpdate()->get();
             if ($questions->isEmpty()) {
                 throw ValidationException::withMessages(['questions' => 'At least one question required.']);
@@ -314,6 +319,16 @@ class TryOutService
         });
     }
 
+    protected function validateAssessment(Model $assessment): void
+    {
+        $this->program($assessment->program_id);
+    }
+
+    protected function requiredSessions(): array
+    {
+        return array_keys(self::SESSIONS);
+    }
+
     public function assertPublishable(Model $tryOut): void
     {
         $this->program($tryOut->program_id);
@@ -322,13 +337,16 @@ class TryOutService
             $this->assertQuestion($question);
         }
         $sessions = $questions->pluck('session')->unique()->all();
-        if (count($sessions) !== 4 || array_diff(array_keys(self::SESSIONS), $sessions) !== [] || $questions->sum('point_value') != $tryOut->max_score) {
-            throw ValidationException::withMessages(['status' => 'Publish requires all four sessions and explicit question points matching max_score.']);
+        $requiredSessions = $this->requiredSessions();
+        if (array_diff($requiredSessions, $sessions) !== [] || $questions->sum('point_value') != $tryOut->max_score) {
+            throw ValidationException::withMessages(['status' => count($requiredSessions) === 4
+                ? 'Publish requires all four sessions and explicit question points matching max_score.'
+                : 'Publish requires all non-Audio sessions and explicit question points matching max_score.']);
         }
         if ($tryOut->session_passing_scores !== null) {
             foreach (array_keys(self::SESSIONS) as $session) {
                 $maximum = $questions->where('session', $session)->sum('point_value');
-                if ($this->assessmentModel === TryOut::class) {
+                if ($this->supportsTryOutContent()) {
                     $maximum = (int) round($maximum, 0, PHP_ROUND_HALF_UP);
                 }
                 if (! array_key_exists($session, $tryOut->session_passing_scores) || $tryOut->session_passing_scores[$session] > $maximum) {

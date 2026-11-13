@@ -34,7 +34,7 @@ class ContentTransferTest extends TestCase
         Storage::fake('transfer_audio');
         config(['media.disk' => 'transfer_audio', 'filesystems.disks.transfer_audio.driver' => 'local']);
         $program = DB::table('programs')->insertGetId(['code' => 'transfer-test', 'slug' => 'transfer-test', 'name' => 'Transfer', 'family' => 'jlpt', 'status' => 'active', 'sort_order' => 0]);
-        $chapter = DB::table('chapters')->insertGetId(['program_id' => $program, 'chapter_number' => 901, 'title' => 'Transfer', 'status' => 'draft', 'sort_order' => 0]);
+        $chapter = DB::table('chapters')->insertGetId(['program_id' => $program, 'chapter_number' => 901, 'title' => 'Transfer', 'status' => 'draft', 'sort_order' => 0, 'mini_checkpoint_duration_minutes' => 10, 'mini_checkpoint_passing_score' => 60]);
         $passage = DB::table('reading_passages')->insertGetId(['chapter_id' => $chapter, 'title' => 'Transfer passage', 'body' => '日本語', 'status' => 'draft', 'sort_order' => 0]);
         $question = ['question' => 'Transfer question?', 'options' => json_encode(['A' => 'One', 'B' => 'Two', 'C' => 'Three', 'D' => 'Four']), 'correct_option' => 'B', 'explanation' => 'Private answer explanation', 'sort_order' => 0, 'status' => 'draft'];
         DB::table('reading_questions')->insert(['reading_passage_id' => $passage, ...$question]);
@@ -87,6 +87,7 @@ class ContentTransferTest extends TestCase
         Storage::disk('transfer_audio')->assertMissing($audio);
         $report = $service->import($path, true);
         $this->assertSame($dry['projected'], $report['after']);
+        $this->assertDatabaseHas('chapters', ['id' => $newChapter, 'mini_checkpoint_duration_minutes' => 10, 'mini_checkpoint_passing_score' => 60]);
         $this->assertDatabaseHas('reading_passages', ['chapter_id' => $newChapter, 'title' => 'Transfer passage']);
         $this->assertDatabaseHas('reading_questions', ['correct_option' => 'B', 'explanation' => 'Private answer explanation']);
         $this->assertSame(array_fill_keys(array_keys($before), 0), $service->import($path, true)['inserted']);

@@ -30,7 +30,7 @@ function NotificationPreview({ item }: { item: Notification }) {
   const path = destination(item);
   const time = item.time && Number.isFinite(Date.parse(item.time)) ? new Intl.DateTimeFormat("id-ID", { dateStyle: "medium", timeStyle: "short", timeZone: "Asia/Jakarta" }).format(new Date(item.time)) : "";
   return <div className="notification-page" aria-label="Pratinjau notifikasi siswa"><section className="notification-group"><article className="unread">
-    <span className="notification-icon" aria-hidden="true"><Icon /></span><div><small>{item.type}{time && ` • ${time} WIB`}</small><h2>{item.title}</h2><p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{item.body}</p></div>
+    <span className="notification-icon" aria-hidden="true"><Icon /></span><div><small>{item.type}{time && ` • ${time} WIB`}</small>{item.level && <p>Target legacy: {item.audience}, terbatas level {item.level}.</p>}<h2>{item.title}</h2><p style={{ whiteSpace: "pre-wrap", overflowWrap: "anywhere" }}>{item.body}</p></div>
     {item.ctaLabel && (path ? <a href={path} onClick={(event) => event.preventDefault()} aria-label={`${item.ctaLabel} (pratinjau, tanpa navigasi)`}>{item.ctaLabel}</a> : <span className="notification-locked" aria-disabled="true">{item.ctaLabel}</span>)}
   </article></section></div>;
 }
@@ -45,14 +45,13 @@ export function AdminNotificationPrototype() {
   const [type, setType] = useState("");
   const [audience, setAudience] = useState("");
   const [status, setStatus] = useState("");
-  const [level, setLevel] = useState("");
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
   const closeEditor = useCallback(() => { setDraft(null); setError(""); }, []);
   const closeView = useCallback(() => setView(null), []);
   const closeDelete = useCallback(() => setDeleting(null), []);
   const query = search.trim().toLowerCase();
-  const visible = rows.filter((row) => (!type || type === row.type) && (!audience || audience === row.audience) && (!status || status === row.status) && (!level || level === row.level) && [row.title, row.body, row.ctaLabel].some((text) => text.toLowerCase().includes(query)));
+  const visible = rows.filter((row) => (!type || type === row.type) && (!audience || audience === row.audience) && (!status || status === row.status) && [row.title, row.body, row.ctaLabel].some((text) => text.toLowerCase().includes(query)));
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft) return;
@@ -62,6 +61,7 @@ export function AdminNotificationPrototype() {
     if (draft.preset === "None" && draft.ctaLabel.trim()) { setError("Pilih tujuan CTA atau kosongkan label CTA."); return; }
     if (draft.time && (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(?::\d{2})?(?:Z|[+-]\d{2}:\d{2})$/.test(draft.time) || !Number.isFinite(Date.parse(draft.time)))) { setError("Waktu harus berupa timestamp ISO dengan zona waktu, misalnya format YYYY-MM-DDTHH:mm:ss+07:00."); return; }
     const next: Notification = { ...draft, title: draft.title.trim(), body: draft.body.trim(), ctaLabel: draft.ctaLabel.trim(), path: draft.preset === "custom" ? draft.path : "", time: draft.time ? new Date(draft.time).toISOString() : "" };
+    setError("");
     if (!await store.save(next)) return;
     setDraft(null); setError(""); setMessage("Notifikasi disimpan.");
   }
@@ -76,11 +76,10 @@ export function AdminNotificationPrototype() {
     <AdminSection title="Notifikasi"><AdminFilterToolbar>
       <label className="admin-field">Tipe<select value={type} onChange={(event) => setType(event.target.value)}><option value="">Semua</option>{types.map((value) => <option key={value}>{value}</option>)}</select></label>
       <label className="admin-field">Audience<select value={audience} onChange={(event) => setAudience(event.target.value)}><option value="">Semua</option>{audiences.map((value) => <option key={value}>{value}</option>)}</select></label>
-      <label className="admin-field">Level<select value={level} onChange={(event) => setLevel(event.target.value)}><option value="">Semua</option>{levels.map((value) => <option key={value}>{value}</option>)}</select></label>
       <label className="admin-field">Status<select value={status} onChange={(event) => setStatus(event.target.value)}><option value="">Semua</option><option>Draft</option><option>Published</option></select></label>
       <label className="admin-prototype-search"><input type="search" aria-label="Cari notifikasi" value={search} onChange={(event) => setSearch(event.target.value)} /><span aria-hidden="true"><LuSearch /></span></label>
     </AdminFilterToolbar><AdminDataTable loading={store.loading && !store.data} caption="Daftar Notifikasi" rows={visible} rowKey={(row) => row.id} columns={[
-      { key: "type", header: "Tipe", cell: (row) => row.type }, { key: "title", header: "Judul", cell: (row) => row.title }, { key: "body", header: "Isi", cell: (row) => row.body }, { key: "cta", header: "CTA", cell: (row) => row.ctaLabel ? `${row.ctaLabel} • ${destination(row)}` : "—" }, { key: "audience", header: "Audience", cell: (row) => row.audience }, { key: "level", header: "Level", cell: (row) => row.level || "—" }, { key: "time", header: "Waktu", cell: (row) => row.time || "—" }, { key: "status", header: "Status", cell: (row) => <AdminStatusBadge status={row.status} /> },
+      { key: "type", header: "Tipe", cell: (row) => row.type }, { key: "title", header: "Judul", cell: (row) => row.title }, { key: "body", header: "Isi", cell: (row) => row.body }, { key: "cta", header: "CTA", cell: (row) => row.ctaLabel ? `${row.ctaLabel} • ${destination(row)}` : "—" }, { key: "audience", header: "Audience", cell: (row) => row.audience }, { key: "level", header: "Batas legacy", cell: (row) => row.level ? `Terbatas level ${row.level}` : "Tanpa batas level" }, { key: "time", header: "Waktu", cell: (row) => row.time || "—" }, { key: "status", header: "Status", cell: (row) => <AdminStatusBadge status={row.status} /> },
     ]} actions={{ cell: (row) => <div className="admin-page-actions">
       <button type="button" className="button" aria-label={`Lihat ${row.title}`} onClick={() => setView(row)}>Lihat</button><button type="button" className="button" aria-label={`Edit ${row.title}`} onClick={() => { setError(""); setDraft({ ...row }); }}>Edit</button>
       <button type="button" className="button" aria-label={`${row.status === "Draft" ? "Publikasikan" : "Jadikan Draft"} ${row.title}`} disabled={store.busy} onClick={() => void store.save({ ...row, status: row.status === "Draft" ? "Published" : "Draft" })}>{row.status === "Draft" ? "Publikasikan" : "Jadikan Draft"}</button><button type="button" className="button" aria-label={`Hapus ${row.title}`} onClick={() => setDeleting(row)}>Hapus</button>
@@ -92,7 +91,8 @@ export function AdminNotificationPrototype() {
       <label className="admin-field">Label CTA<input placeholder="Contoh: Lihat Jadwal" value={draft.ctaLabel} disabled={draft.preset === "None"} onChange={(event) => setDraft({ ...draft, ctaLabel: event.target.value })} required={draft.preset !== "None"} /></label>
       {draft.preset === "custom" ? <label className="admin-field">Path relatif<input placeholder="Contoh: /schedule" value={draft.path} onChange={(event) => setDraft({ ...draft, path: event.target.value })} required /><small>Hanya path internal berawalan /. Tanpa //, skema, backslash, atau spasi.</small></label> : draft.preset !== "None" && <p>Tujuan: {destination(draft)}</p>}
       <label className="admin-field">Audience<select value={draft.audience} onChange={(event) => setDraft({ ...draft, audience: event.target.value })}>{audiences.map((value) => <option key={value}>{value}</option>)}</select></label>
-      <label className="admin-field">Level (opsional)<select value={draft.level} onChange={(event) => setDraft({ ...draft, level: event.target.value })}><option value="">Semua</option>{levels.map((value) => <option key={value}>{value}</option>)}</select></label>
+      {draft.level && <div><p>Target legacy masih dibatasi level {draft.level}. Edit judul, isi, atau status tetap mempertahankan batas ini.</p><button type="button" className="button" onClick={() => { if (window.confirm(`Hapus batas level ${draft.level}? Setelah disimpan, notifikasi dapat dilihat seluruh Audience ${draft.audience} yang memenuhi syarat, termasuk siswa di luar level ini.`)) setDraft({ ...draft, level: "" }); }}>Hapus batas level legacy</button></div>}
+      {!draft.level && <p>Target berdasarkan Audience saja, tanpa batas level.</p>}
       <label className="admin-field">Status<select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value })}><option>Draft</option><option>Published</option></select></label>
       <label className="admin-field">Waktu (opsional)<input placeholder="Contoh: 2026-10-07T19:00:00+07:00" value={draft.time} onChange={(event) => setDraft({ ...draft, time: event.target.value })} /><small>Timestamp ISO dengan zona waktu. Ditampilkan dalam Asia/Jakarta; tidak menjalankan pengiriman.</small></label>
       <NotificationPreview item={draft} />{(error || store.mutationError) && <p role="alert">{error || store.mutationError}</p>}<div className="admin-page-actions"><button type="button" className="button" onClick={closeEditor}>Batal</button><button type="submit" disabled={store.busy || store.loading} className="button button-primary">Simpan Notifikasi</button></div>
