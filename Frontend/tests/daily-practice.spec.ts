@@ -1,71 +1,82 @@
-import { expect, test } from "./canonical-fixture";
+import { expect, test } from "@playwright/test";
 
-for (const width of [1440, 768, 390]) test(`practice completion updates recommendations ${width}`, async ({ page }) => {
+for (const width of [390, 768, 1440]) test(`standalone daily practice Free schedule and persistence ${width}`, async ({ page, baseURL }) => {
   await page.setViewportSize({ width, height: 1000 });
+  await page.clock.install({ time: new Date("2026-11-13T03:00:00Z") });
+  await page.context().addCookies([{ name: "XSRF-TOKEN", value: "fixture", url: baseURL! }]);
   let complete = false;
-  let answers: Record<string, string> = {};
+  let started = false;
+  let ended = false;
   let revision = 0;
-  let fail = false;
-  let empty = false;
-  let locked = false;
-  const program = { id: 1, code: "n5", name: "JLPT N5", family: "jlpt" };
-  const access = { learning: { n5: "full" }, replay_levels: [], source_grants: [{ plan_code: "lms", program_code: "n5" }] };
-  const chapter = () => ({ id: 11, chapter_number: 1, title: "Practice Chapter", sort_order: 1, access: locked ? "locked" : "full" });
-  const progress = () => ({ chapter_id: 11, activities: { reading: { total: empty ? 0 : 1, completed: complete ? 1 : 0, complete, completed_ids: complete ? [81] : [] }, audio: { total: 0, completed: 0, complete: false } }, mini_unlocked: false });
-  const question = { id: 81, question: "Real bank question", options: { A: "First", B: "Second", C: "Third", D: "Fourth" } };
-  const attempt = () => ({ id: 4, kind: "reading", chapter_id: 11, revision, status: complete ? "completed" : "in_progress", answers, questions: [question], result: complete ? { correct: 1, wrong: 0, unanswered: 0, percentage: 100 } : null });
-  await page.route(/\/api\/student\//, async r => {
-    const path = new URL(r.request().url()).pathname;
-    const reply = (data: unknown) => r.fulfill({ json: { data } });
-    if (path.endsWith("/dashboard")) {
-      if (fail) return r.fulfill({ status: 503, json: {} });
-      return reply({ programs: [program], access, chapters: [{ program_id: 1, chapter: chapter(), ...(locked ? {} : { progress: progress() }) }] });
+  let answers: Record<string, string> = {};
+  let failSave = false;
+  let submits = 0;
+  let reviews = 0;
+  let entitlementReads = 0;
+  const categories = ["vocabulary", "grammar", "reading", "audio"];
+  const row = (id: number) => ({ id, title: `Latihan ${id}`, category: categories[id - 1], target_level: "n2", question_count: 1, starts_at: "2026-11-13T02:00:00Z", ends_at: ended ? "2026-11-13T02:59:00Z" : "2026-11-13T05:00:00Z", status: id === 1 ? complete ? "completed" : started ? "in_progress" : "open" : "upcoming", can_review: ended });
+  const attempt = (review = false) => ({ id: 7, daily_practice_id: 1, revision, status: complete ? "completed" : "in_progress", answers, server_now: "2026-11-13T03:00:00Z", expires_at: row(1).ends_at, questions: [{ id: 81, question: "Pilih jawaban", options: { A: "First", B: "Second", C: "Third", D: "Fourth" }, ...(review ? { correct_option: "A", explanation: "Pembahasan rahasia" } : {}) }], result: complete ? { earned: 1, max: 1, correct: 1, wrong: 0, unanswered: 0 } : null });
+  await page.route(/\/(api\/|sanctum\/csrf-cookie)/, async route => {
+    const request = route.request();
+    const url = new URL(request.url());
+    const path = url.pathname;
+    const headers = { "access-control-allow-origin": baseURL!, "access-control-allow-credentials": "true", "access-control-allow-methods": "GET, POST, PUT, OPTIONS", "access-control-allow-headers": "accept, content-type, x-xsrf-token" };
+    if (request.method() === "OPTIONS") return route.fulfill({ status: 204, headers });
+    const reply = (data: unknown) => route.fulfill({ headers, json: { data } });
+    if (path === "/api/me") return reply({ id: 2, name: "Free Student", email: "free@example.test", whatsapp: "081234567890", role: "student", account_status: "active" });
+    if (path.includes("access") || path.includes("dashboard")) { entitlementReads++; return route.fulfill({ headers, status: 503, json: {} }); }
+    if (path === "/api/student/daily-practices") return reply(url.searchParams.get("date") === "2026-11-13" ? [1, 2, 3, 4].map(row) : []);
+    if (path === "/api/student/daily-practices/1") return reply(row(1));
+    if (path.endsWith("/attempt")) { if (request.method() === "POST") started = true; return reply(attempt()); }
+    if (path.endsWith("/answers")) {
+      if (failSave) return route.fulfill({ status: 503, json: {} });
+      expect(request.postDataJSON().revision).toBe(revision);
+      answers = request.postDataJSON().answers; revision++; return reply(attempt());
     }
-    if (path.endsWith("/chapters")) return reply([chapter()]);
-    if (path.endsWith("/chapters/11")) return reply(chapter());
-    if (path.endsWith("/progress")) return reply(progress());
-    if (path.includes("/attempts")) {
-      if (path.endsWith("/answers")) { answers = r.request().postDataJSON().answers; revision++; }
-      if (path.endsWith("/submit")) {
-        expect(r.request().postDataJSON().answers).toEqual({ "81": "A" });
-        complete = true;
-      }
-      return reply(attempt());
+    if (path.endsWith("/submit")) {
+      expect(request.postDataJSON()).toEqual({ revision });
+      expect(answers).toEqual({ "81": "A" }); complete = true; submits++; return reply(attempt());
     }
-    await r.fallback();
+    if (path.endsWith("/review")) {
+      reviews++; if (!ended) return route.fulfill({ status: 403, json: {} });
+      return reply(attempt(true));
+    }
+    return reply([]);
   });
-  await page.goto("/dashboard");
-  const recommendations = page.getByRole("region", { name: "Rekomendasi latihan", exact: true });
-  await expect(recommendations.getByRole("link")).toHaveCount(1);
-  await expect(recommendations).toContainText("Reading Question");
-  await page.goto("/practice?category=reading");
-  await page.getByRole("button", { name: "Kerjakan Latihan", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Real bank question", exact: true })).toBeVisible();
-  await expect(page.getByText("Jawaban benar:", { exact: false })).toHaveCount(0);
-  const saved = page.waitForResponse(response => response.url().endsWith("/answers") && response.request().method() === "PUT");
-  await page.getByRole("radio", { name: "A. First", exact: true }).check();
-  await saved;
-  await page.getByRole("button", { name: "Kumpulkan Jawaban", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Hasil Reading", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Kembali ke Daftar Latihan", exact: true }).click();
-  await expect(page.locator(".practice-journey-card")).toContainText("1/1 soal selesai");
-  await expect(page.getByRole("button", { name: "Latihan Lagi", exact: true })).toBeVisible();
-  await expect(page.getByRole("tab", { name: "Kosakata", exact: true })).toHaveCount(0);
-  await page.goto("/dashboard");
-  await expect(recommendations.getByRole("link")).toHaveCount(0);
-  await expect(recommendations).toContainText("Aktivitas berikutnya belum tersedia atau masih terkunci.");
+  await page.goto("/practice");
+  await expect(page.getByLabel("Tanggal (WIB)")).toHaveValue("2026-11-13");
+  for (const label of ["Kosakata dan Kanji", "Tata Bahasa", "Reading", "Audio"]) await expect(page.getByRole("option", { name: label, exact: true })).toHaveCount(1);
+  await expect(page.getByRole("region", { name: "Daftar latihan harian" }).getByRole("article")).toHaveCount(4);
+  await expect(page.getByText(/Target N2 · 1 soal/)).toHaveCount(4);
+  await expect(page.getByText(/Jadwal:.*WIB/)).toHaveCount(4);
+  if (width !== 768) await page.screenshot({ path: `C:/Users/Tulo/AppData/Local/Temp/opencode/daily-student-${width}.png`, fullPage: true });
+  await page.getByRole("combobox", { name: /^Kategori/ }).selectOption("reading");
+  await expect(page.getByRole("region", { name: "Daftar latihan harian" }).getByRole("article")).toHaveCount(1);
+  await page.getByRole("combobox", { name: /^Kategori/ }).selectOption("all");
+  await page.getByLabel("Tanggal (WIB)").fill("2026-11-12");
+  await expect(page.getByText("Belum ada latihan untuk tanggal dan filter ini.")).toBeVisible();
+  await page.getByRole("button", { name: "Hari Ini", exact: true }).click();
+  await page.getByRole("button", { name: "Mulai Latihan", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "1. Pilih jawaban" })).toBeVisible();
+  await expect(page.getByText("Pembahasan rahasia")).toHaveCount(0);
+  failSave = true;
+  await page.getByRole("radio", { name: "A. First" }).check();
+  await expect(page.getByRole("alert").filter({ hasText: "Jawaban belum tersimpan" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Kumpulkan Jawaban" })).toBeDisabled();
+  failSave = false;
+  await page.getByRole("button", { name: "Coba Simpan Lagi" }).click();
+  await expect(page.getByRole("status")).toContainText("Semua jawaban tersimpan");
+  await page.reload();
+  await expect(page.getByRole("radio", { name: "A. First" })).toBeChecked();
+  page.once("dialog", dialog => dialog.accept());
+  await page.getByRole("button", { name: "Kumpulkan Jawaban" }).click();
+  await expect(page.getByRole("region", { name: "Hasil latihan" })).toContainText("Skor: 1 / 1");
+  await expect(page.getByRole("button", { name: "Lihat Pembahasan" })).toBeDisabled();
+  expect(reviews).toBe(0); expect(submits).toBe(1);
+  ended = true;
+  await page.reload();
+  await page.getByRole("button", { name: "Lihat Pembahasan" }).click();
+  await expect(page.getByText("Pembahasan rahasia")).toBeVisible();
+  expect(reviews).toBe(1); expect(entitlementReads).toBeGreaterThan(0);
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  fail = true;
-  await page.reload();
-  await expect(page.getByRole("alert").filter({ hasText: "Permintaan belum berhasil" })).toBeVisible();
-  fail = false;
-  empty = true;
-  await page.getByRole("button", { name: "Coba Lagi", exact: true }).click();
-  await expect(recommendations.getByRole("link")).toHaveCount(0);
-  await page.goto("/practice?category=reading");
-  await expect(page.getByRole("status")).toContainText("Belum ada latihan soal");
-  locked = true;
-  empty = false;
-  await page.reload();
-  await expect(page.locator(".practice-journey-card")).toHaveCount(0);
 });
