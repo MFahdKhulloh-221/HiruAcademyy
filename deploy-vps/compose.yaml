@@ -18,7 +18,8 @@ services:
     networks:
       - private
 
-  backend:
+  backend: &backend
+    image: hiruacademy-backend:local
     build:
       context: ../Backend
       dockerfile: Dockerfile
@@ -56,6 +57,15 @@ services:
       start_period: 30s
     networks:
       - private
+
+  scheduler:
+    <<: *backend
+    command: ["php", "artisan", "schedule:work", "--no-interaction"]
+    healthcheck:
+      disable: true
+    depends_on:
+      backend:
+        condition: service_healthy
 
   frontend:
     build:

@@ -49,7 +49,7 @@ Lalu:
 bash deploy-vps/deploy.sh
 ```
 
-Script mencegah deployment jika commit `94bce6e` tidak ditemukan di riwayat git checkout. Perubahan source pada VPS tidak ditarik otomatis; setelah push baru, jalankan `git pull --ff-only origin netlify-ui-baseline` lalu `bash deploy-vps/deploy.sh`.
+Script mencegah deployment jika commit `94bce6e` tidak ditemukan di riwayat git checkout. Script membangun image, menunggu DB sehat, menjalankan migrasi, lalu menyalakan layanan termasuk scheduler latihan harian. **Backup DB dan media sebelum menjalankan script**, karena migrasi mengubah schema/data. Perubahan source pada VPS tidak ditarik otomatis; setelah push baru, jalankan `git pull --ff-only origin netlify-ui-baseline` lalu `bash deploy-vps/deploy.sh`.
 
 ## Tahap D — verifikasi
 

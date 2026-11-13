@@ -24,6 +24,10 @@ if ! git -C .. merge-base --is-ancestor 94bce6e HEAD; then
 fi
 chmod 600 .env backend.env
 sudo docker compose config --quiet
-sudo docker compose up -d --build
+sudo docker compose build backend frontend
+sudo docker compose up -d --wait db
+sudo docker compose run --rm --no-deps backend php artisan migrate --force --no-interaction
+sudo docker compose run --rm --no-deps backend php artisan schedule:list --no-interaction
+sudo docker compose up -d --wait
 sudo docker compose ps
 printf '\nLanjutkan cek: curl -I https://%s/ && curl -i https://%s/up\n' "$domain" "$domain"
