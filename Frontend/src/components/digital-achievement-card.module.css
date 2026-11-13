@@ -1,0 +1,19 @@
+.card{min-width:0;padding:28px;border:1px solid #132e4a;border-top:5px solid #ff7900;border-radius:18px;background:linear-gradient(135deg,#132e4a,#1b405f);overflow-wrap:anywhere;color:#fff;box-shadow:0 12px 24px #132e4a15}
+.brand{display:flex;flex-wrap:wrap;justify-content:space-between;gap:12px;font-weight:700}
+.brand span{color:#ff983b;font-size:12px;letter-spacing:2px}
+.card h2{margin:12px 0;font-size:24px}
+.card p{white-space:pre-wrap;line-height:1.6}
+.card dl{display:grid;gap:16px;margin:24px 0 0}
+.card dt{font-size:13px;color:#cedae6}
+.card dd{margin:4px 0 0;font-weight:700}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:16px;margin:24px 0;min-width:0}
+.controls{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin:20px 0;min-width:0}
+.controls label{display:grid;gap:8px;min-width:0;max-width:100%}
+.controls select{min-height:44px;max-width:100%;padding:8px;border:1px solid #d9dee8;border-radius:8px;background:#fff;color:var(--ink)}
+.controls button,.link{min-height:44px;display:inline-flex;align-items:center;justify-content:center;padding:10px 16px}
+.page{min-width:0;overflow-wrap:anywhere}
+.page>h1{margin-bottom:24px;color:#132e4a;font-size:28px;font-weight:700}
+.page>button{margin:24px 0 16px;min-height:44px}
+.page>p{margin:0 0 24px;line-height:1.6}
+.page>section[aria-label="Achievement digital"]>h2{margin:28px 0 8px;color:#132e4a;font-size:24px;font-weight:700}
+.page>section[aria-label="Achievement digital"]>p{margin-bottom:20px;line-height:1.6}

@@ -1,0 +1,60 @@
+.screen,
+.content,
+.preview {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.screen button,
+.content button {
+  min-width: 44px;
+  min-height: 44px;
+  white-space: normal;
+}
+
+.screen th,
+.screen td {
+  max-width: 24rem;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.content input,
+.content select,
+.content textarea,
+.screen select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.preview {
+  padding: 1rem;
+  border: 1px solid #d8d8e0;
+  border-radius: 12px;
+  background: #f9f9ff;
+}
+
+.screen select,
+.content input[type="file"] {
+  min-height: 44px;
+}
+
+.screen label + .preview {
+  margin-top: 1.5rem;
+}
+
+.preview svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.pagination {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 1rem;
+}

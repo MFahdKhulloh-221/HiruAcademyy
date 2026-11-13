@@ -1,0 +1,9 @@
+.document {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 297 / 210;
+  background: #fff;
+  border: 1px solid #dce3eb;
+  box-shadow: 0 12px 36px #132e4a12;
+}
