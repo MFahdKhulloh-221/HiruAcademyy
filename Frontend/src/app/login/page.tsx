@@ -7,7 +7,8 @@ import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { AuthShell } from "@/components/auth-shell";
 import { authDestination, useAuth } from "@/components/auth-provider";
 import { ApiError } from "@/lib/api";
-import { freeChapterDestination } from "@/lib/free-chapter";
+import { safeAuthDestination } from "@/lib/auth-destination";
+import { commercialCode } from "@/lib/commercial-api";
 
 export default function LoginPage() {
   return <Suspense fallback={<LoadingSkeleton variant="form" label="Memuat formulir…" />}><LoginForm /></Suspense>;
@@ -17,11 +18,15 @@ function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const selection = new URLSearchParams();
-  for (const key of ["program", "level", "placement", "plan"]) {
+  for (const key of ["program", "level", "placement", "plan", "referral"]) {
     const value = params.get(key);
     if (value) selection.set(key, value);
   }
-  const next = freeChapterDestination(params.get("next"));
+  const next = safeAuthDestination(params.get("next"));
+  const program = commercialCode(selection.get("program") ?? selection.get("level") ?? selection.get("placement") ?? "");
+  const plan = selection.get("plan");
+  const checkout = program && (plan === "lms" || plan === "sensei") ? new URLSearchParams({ program, plan }) : null;
+  if (checkout && selection.get("referral")) checkout.set("referral", selection.get("referral")!);
   const registrationQuery = new URLSearchParams(selection);
   if (next) registrationQuery.set("next", next);
   const [visible, setVisible] = useState(false);
@@ -40,7 +45,7 @@ function LoginForm() {
     setError("");
     try {
       const user = await login(String(data.get("identity") ?? "").trim(), String(data.get("password") ?? ""));
-      router.replace(user.role === "student" && next ? next : user.role === "student" && selection.has("plan") && (selection.has("program") || selection.has("level") || selection.has("placement")) ? `/program?${selection}#program-summary` : authDestination(user));
+      router.replace(user.role === "student" ? next ?? (checkout ? `/checkout?${checkout}` : authDestination(user)) : authDestination(user));
     } catch (cause) {
       const failure = cause instanceof ApiError ? cause : new ApiError(0);
       setError(failure.status === 422 || failure.status === 401 ? "Email/WhatsApp atau kata sandi tidak sesuai." : failure.message);

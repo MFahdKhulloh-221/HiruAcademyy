@@ -22,10 +22,11 @@ test("current student identity uses canonical membership without fake expiry or 
   await expect(page.getByRole("heading", { name: student.name, exact: true })).toBeVisible();
   await expect(page.getByText(student.email, { exact: true })).toBeVisible();
   await expect(page.locator(".profile-identity > span")).toHaveText("ST");
-  await expect(page.getByText("N5 • Belajar Mandiri", { exact: true })).toBeVisible();
+  await expect(page.getByText("N5 · Belajar Mandiri", { exact: true })).toBeVisible();
   await expect(page.getByText("Akses aktif hingga 31 Desember 2026. Seluruh progres belajar tersimpan.")).toHaveCount(0);
+  await page.route("**/api/student/program-achievements*", route => route.fulfill({ json: { data: [], meta: { current_page: 1, last_page: 1, total: 0, per_page: 20 } } }));
   await page.goto("/certificate?membership=lms");
-  await expect(page.getByRole("heading", { name: "Sertifikat belum dapat diterbitkan" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Belum ada sertifikat yang diterbitkan pada halaman ini", exact: true })).toBeVisible();
   await expect(page.getByText("Sakura Tanaka • Program JLPT N5", { exact: true })).toHaveCount(0);
 });
 

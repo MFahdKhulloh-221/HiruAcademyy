@@ -20,7 +20,7 @@ export function VideoRecommendation({ item, thumbnailPreview }: { item: Testimon
   return <>
     <button ref={trigger} type="button" className={styles.recommendation} onClick={show} aria-label={`Tonton ${title}`} aria-haspopup="dialog">
       <span className={styles.thumbnail}>
-        {poster && !posterFailed && <Image src={poster} alt="" fill unoptimized sizes="(max-width: 639px) 40vw, 180px" onError={() => setPosterFailed(true)} />}
+        {poster && !posterFailed && <Image src={poster} alt="" fill unoptimized sizes="(max-width: 639px) 90vw, (max-width: 1023px) 50vw, 560px" onError={() => setPosterFailed(true)} />}
         <span className={styles.play} aria-hidden="true">▶</span>
       </span>
       <span className={styles.metadata}><strong>{title}</strong><span>{item.name}</span>{item.context && <small>{item.context}</small>}</span>

@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, type FormEvent } from "react";
-import { LuArrowUp, LuArrowDown } from "react-icons/lu";
+import { useRef, useState, type FormEvent } from "react";
+import { LuArrowUp, LuArrowDown, LuStar, LuPlay, LuPlus } from "react-icons/lu";
 import { AdminDialog, AdminPageHeader, AdminShell } from "@/components/admin-primitives";
 import { StudentAvatar } from "@/components/student-avatar";
 import { AdminMediaUpload } from "@/components/admin-media-upload";
@@ -32,10 +32,10 @@ export function AdminTestimonialPrototype() {
   const [filter, setFilter] = useState("publish");
   const [order, setOrder] = useState("newest");
   const [kind, setKind] = useState("all");
-  const [landingOnly, setLandingOnly] = useState(false);
-  const list = useRef<HTMLDivElement>(null);
+  const [tab, setTab] = useState("collection");
   const [search, setSearch] = useState("");
-  useEffect(() => { list.current?.scrollTo({ top: 0 }); }, [filter, kind, landingOnly, search, order]);
+  const [visible, setVisible] = useState(10);
+  function changeFilter(update: () => void) { update(); setVisible(10); }
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
@@ -43,7 +43,7 @@ export function AdminTestimonialPrototype() {
   const selected = content.data.filter(item => isPublic(item) && item.landing && landingEligible(item)).sort((a, b) => (a.sort_order ?? 1) - (b.sort_order ?? 1) || a.id - b.id);
   const overLimit = selected.length > 6;
   const rows = content.data.filter(item => {
-    return (filter === "publish" ? isPublic(item) : !isPublic(item)) && (kind === "all" || (item.type || (item.video_url ? "video" : "text")) === kind) && (!landingOnly || (isPublic(item) && item.landing)) && `${item.name} ${item.quote} ${item.title || ""}`.toLocaleLowerCase("id").includes(search.trim().toLocaleLowerCase("id"));
+    return (filter === "publish" ? isPublic(item) : !isPublic(item)) && (kind === "all" || (item.type || (item.video_url ? "video" : "text")) === kind) && `${item.name} ${item.quote} ${item.title || ""}`.toLocaleLowerCase("id").includes(search.trim().toLocaleLowerCase("id"));
   }).sort((a, b) => {
     const difference = (Date.parse(a.created_at || "") || 0) - (Date.parse(b.created_at || "") || 0) || a.id - b.id;
     return order === "newest" ? -difference : difference;
@@ -71,34 +71,41 @@ export function AdminTestimonialPrototype() {
   }
   function edit(item: Item) { setError(""); setDraft({ ...item }); }
   return <AdminShell current="/admin/testimoni"><main className={styles.page}>
-    <AdminPageHeader title="Kelola Testimoni" description={`${content.data.length} testimoni tersimpan`} actions={<button className="button button-primary" onClick={() => edit(empty)}>Tambah Testimoni</button>} />
-    <section className={styles.landing} aria-label="Testimoni Pilihan Landing Page"><div className={styles.landingHeader}><h2>Testimoni Pilihan Landing Page</h2><p>Maksimal 6 testimoni teks. Video hanya tampil di halaman /testimoni.</p>{overLimit ? <p role="alert">Perlu penyesuaian: {selected.length} dipilih, maksimal 6. Lepas pilihan sampai tersisa maksimal enam. Penambahan dan pengurutan dinonaktifkan sementara.</p> : <p>{selected.length} dari 6 testimoni dipilih</p>}</div>
+    <AdminPageHeader title="Kelola Testimoni" description="Semua cerita siswa dalam satu tempat." actions={<button className="button button-primary" onClick={() => edit(empty)}><LuPlus aria-hidden="true" /> Tambah<span className={styles.desktopLabel}> Testimoni</span></button>} />
+    <div className={styles.stats} aria-label="Ringkasan testimoni">
+      {[["Tersimpan", content.data.length], ["Testimoni Teks", content.data.filter(item => (item.type || (item.video_url ? "video" : "text")) === "text").length], ["Video", content.data.filter(item => (item.type || (item.video_url ? "video" : "text")) === "video").length], ["Pilihan Landing", `${selected.length}/6`]].map(([label, value]) => <div key={label}><span>{label}</span><strong>{content.loading ? "…" : value}</strong></div>)}
+    </div>
+    <div className={styles.workspace}>
+    <div className={styles.tabs} role="tablist" aria-label="Workspace testimoni">{[["collection", "Koleksi Testimoni"], ["landing", "Pilihan Landing"]].map(([value, label], index) => <button key={value} id={`tab-${value}`} role="tab" type="button" aria-selected={tab === value} aria-controls={`panel-${value}`} tabIndex={tab === value ? 0 : -1} onClick={() => setTab(value)} onKeyDown={event => { if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return; event.preventDefault(); const next = event.key === "Home" ? "collection" : event.key === "End" ? "landing" : index === 0 ? "landing" : "collection"; setTab(next); document.getElementById(`tab-${next}`)?.focus(); }}>{label}</button>)}</div>
+    {content.error && <p role="alert">{content.error} <button onClick={content.reload}>Coba lagi</button></p>}{message && <p role="status">{message}</p>}{error && !draft && !deleting && <p role="alert">{error}</p>}
+    {content.loading && <p role="status">Memuat testimoni…</p>}
+    <section hidden={tab !== "landing"} id="panel-landing" role="tabpanel" aria-labelledby="tab-landing" className={styles.landing}><div className={styles.landingHeader}><div><h2>Kurasi Testimoni Landing</h2><p>Pilih dan urutkan maksimal enam testimoni teks.</p></div><span className={styles.capacity}>{selected.length}/6 Slot</span>{overLimit && <p role="alert">Perlu penyesuaian: {selected.length} dipilih, maksimal 6. Lepas pilihan sampai tersisa maksimal enam. Penambahan dan pengurutan dinonaktifkan sementara.</p>}</div>
       {!selected.length && <p>Belum ada pilihan Landing.</p>}
       <ol className={overLimit ? styles.reconcile : undefined} tabIndex={overLimit ? 0 : undefined} aria-label={overLimit ? "Penyesuaian pilihan Landing" : undefined}>{selected.map((item, index) => <li key={item.id} className={styles.landingItem}>
-        <span aria-label={`Urutan ${index + 1}`}>{index + 1}.</span><div className={styles.owner}><StudentAvatar name={item.name} url={contentMedia(item.image, item.image_resolved_url)} className={styles.avatar} /><div><strong>{item.name}</strong><p>{item.context}</p></div></div><p className={styles.quote}>{item.title || item.quote}</p>
+        <span aria-label={`Urutan ${index + 1}`}>{index + 1}.</span><div className={styles.owner}><StudentAvatar name={item.name} url={contentMedia(item.image, item.image_resolved_url)} className={styles.avatar} /><div><strong>{item.name}</strong><p>{item.context}</p></div></div>
         <div className={styles.actions}><button className="button" aria-label={`Naik ${item.name}`} disabled={busy || overLimit || index === 0} onClick={() => void mutate(item, { landing_position: index })}><LuArrowUp size={18} aria-hidden="true" /></button><button className="button" aria-label={`Turun ${item.name}`} disabled={busy || overLimit || index === selected.length - 1} onClick={() => void mutate(item, { landing_position: index + 2 })}><LuArrowDown size={18} aria-hidden="true" /></button><button className="button" disabled={busy} onClick={() => toggleLanding(item, false)}>Hapus dari Landing</button></div>
       </li>)}</ol>
     </section>
+    <section hidden={tab !== "collection"} id="panel-collection" role="tabpanel" aria-labelledby="tab-collection">
     <div className={styles.toolbar} aria-label="Filter testimoni">
       <div className={styles.toolbarTop}>
-        <div className={styles.statusFilter} role="group" aria-label="Status testimoni">{[["publish", "Publish"], ["archive", "Arsip"]].map(([key, label]) => <button className="button" key={key} aria-pressed={key === filter} onClick={() => setFilter(key)}>{label}</button>)}</div>
-        <label className={styles.searchFilter}>Cari testimoni<input type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Nama atau isi testimoni" /></label>
+        <div className={styles.statusFilter} role="group" aria-label="Status testimoni">{[["publish", "Publish"], ["archive", "Arsip"]].map(([key, label]) => <button className="button" key={key} aria-pressed={key === filter} onClick={() => changeFilter(() => setFilter(key))}>{label}</button>)}</div>
+        <label className={styles.searchFilter}>Cari testimoni<input type="search" value={search} onChange={event => changeFilter(() => setSearch(event.target.value))} placeholder="Nama atau isi testimoni" /></label>
       </div>
       <div className={styles.toolbarBottom}>
-        <label>Jenis testimoni<select value={kind} onChange={event => setKind(event.target.value)}><option value="all">Semua Jenis</option><option value="text">Testimoni Teks</option><option value="video">Testimoni Video</option></select></label>
-        <label>Urutkan<select value={order} onChange={event => setOrder(event.target.value)}><option value="newest">Terbaru dahulu</option><option value="oldest">Terlama dahulu</option></select></label>
-        <label className={styles.landingToggle}><input type="checkbox" checked={landingOnly} onChange={event => setLandingOnly(event.target.checked)} />Hanya Pilihan Landing</label>
-        <button className="button" onClick={() => { setFilter("publish"); setKind("all"); setOrder("newest"); setLandingOnly(false); setSearch(""); }}>Reset Filter</button>
+        <label>Jenis testimoni<select value={kind} onChange={event => changeFilter(() => setKind(event.target.value))}><option value="all">Semua Jenis</option><option value="text">Testimoni Teks</option><option value="video">Testimoni Video</option></select></label>
+        <label>Urutkan<select value={order} onChange={event => changeFilter(() => setOrder(event.target.value))}><option value="newest">Terbaru dahulu</option><option value="oldest">Terlama dahulu</option></select></label>
+        <button className="button" onClick={() => { setFilter("publish"); setKind("all"); setOrder("newest"); setSearch(""); setVisible(10); }}>Reset Filter</button>
       </div>
     </div>
-    {content.error && <p role="alert">{content.error} <button onClick={content.reload}>Coba lagi</button></p>}{message && <p role="status">{message}</p>}{error && !draft && !deleting && <p role="alert">{error}</p>}
-    {content.loading && <p role="status">Memuat testimoni…</p>}
-    <p role="status">{rows.length} hasil filter</p>
-    <div ref={list} className={styles.list} role="region" aria-label="Daftar testimoni" tabIndex={0}>{rows.map((item, index) => <article className={styles.item} key={item.id}>
-      <div className={styles.owner}><span aria-label={`Nomor ${index + 1}`}>{index + 1}.</span><StudentAvatar name={item.name} url={contentMedia(item.image, item.image_resolved_url)} className={styles.avatar} /><div><h2>{item.name}</h2><p>{item.context}</p><small>{item.type === "video" ? "Video" : "Teks"}</small></div></div>
-      <div className={styles.summary}><p className={styles.quote}>{item.title || item.quote}</p><p className={styles.status}>{item.type === "video" ? "Video" : "Teks"} / {publicationLabel(item)}</p>{item.archived_at && item.consent_public !== true && <p>Menunggu izin publikasi siswa</p>}</div>
-      <div className={styles.actions}><label className={styles.landingToggle}><input type="checkbox" checked={!!item.landing && isPublic(item) && landingEligible(item)} disabled={busy || !isPublic(item) || !landingEligible(item) || (!item.landing && selected.length >= 6)} onChange={event => toggleLanding(item, event.target.checked)} />Tampilkan di Landing</label><button className="button" popoverTarget={`testimonial-actions-${item.id}`} aria-label={`Tindakan ${item.name}`} onClick={event => { const box = event.currentTarget.getBoundingClientRect(); const menu = document.getElementById(`testimonial-actions-${item.id}`); menu?.style.setProperty("top", `${Math.min(box.bottom + 4, window.innerHeight - 220)}px`); menu?.style.setProperty("left", `${Math.max(8, Math.min(box.right - 180, window.innerWidth - 188))}px`); }}>{"\u2022\u2022\u2022"}</button><div id={`testimonial-actions-${item.id}`} popover="auto" className={styles.actionMenu} onClick={event => { if ((event.target as HTMLElement).closest("button")) event.currentTarget.hidePopover(); }}><button className="button" onClick={() => setView(item)}>Lihat</button><button className="button" disabled={busy} onClick={() => edit(item)}>Edit</button>{isPublic(item) ? <button className="button" disabled={busy} onClick={() => void mutate(item, { archived_at: new Date().toISOString() })}>Arsipkan</button> : <button className="button" disabled={busy || item.consent_public !== true} title={item.consent_public !== true ? "Menunggu izin publikasi siswa" : undefined} onClick={() => edit({ ...item, archived_at: null, published: false, landing: false, show_on_testimonials: false })}>{item.archived_at ? "Pulihkan" : "Publish"}</button>}<button className="button" disabled={busy} onClick={() => { setError(""); setDeleting(item); }}>Hapus</button></div></div>
-    </article>)}</div>{!content.loading && !rows.length && <p>Belum ada testimoni sesuai filter.</p>}
+    <div className={styles.columnHead} aria-hidden="true"><span>Siswa / Jenis</span><span>Isi Testimoni</span><span>Aksi</span></div>
+    <div className={styles.list} role="region" aria-label="Daftar testimoni">{rows.slice(0, visible).map(item => <article className={styles.item} key={item.id}>
+      <div className={styles.owner}><StudentAvatar name={item.name} url={contentMedia(item.image, item.image_resolved_url)} className={styles.avatar} /><div><h2>{item.name}</h2><p>{item.context}</p><small className={item.type === "video" || item.video_url ? styles.videoBadge : styles.textBadge}>{item.type === "video" || item.video_url ? "Video" : "Teks"}</small></div></div>
+      <div className={styles.summary}><p className={styles.quote}>{item.type === "video" || item.video_url ? item.title || item.video_title || item.quote : item.quote}</p><p className={styles.status}>{item.type === "video" ? "Video" : "Teks"} / {publicationLabel(item)}</p>{item.archived_at && item.consent_public !== true && <p>Menunggu izin publikasi siswa</p>}</div>
+      <div className={styles.actions}>{landingEligible(item) ? <button type="button" className={`button ${styles.star}`} aria-label={`${item.landing && isPublic(item) ? "Hapus dari" : "Pilih untuk"} Landing: ${item.name}`} aria-pressed={!!item.landing && isPublic(item)} disabled={busy || !isPublic(item)} onClick={() => toggleLanding(item, !item.landing)}><LuStar size={20} aria-hidden="true" fill={item.landing && isPublic(item) ? "currentColor" : "none"} /></button> : <button type="button" className="button" onClick={() => setView(item)}><LuPlay aria-hidden="true" /> Preview</button>}<button className="button" popoverTarget={`testimonial-actions-${item.id}`} aria-label={`Tindakan ${item.name}`} onClick={event => { const box = event.currentTarget.getBoundingClientRect(); const menu = document.getElementById(`testimonial-actions-${item.id}`); menu?.style.setProperty("top", `${Math.min(box.bottom + 4, window.innerHeight - 220)}px`); menu?.style.setProperty("left", `${Math.max(8, Math.min(box.right - 180, window.innerWidth - 188))}px`); }}>{"\u2022\u2022\u2022"}</button><div id={`testimonial-actions-${item.id}`} popover="auto" className={styles.actionMenu} onClick={event => { if ((event.target as HTMLElement).closest("button")) event.currentTarget.hidePopover(); }}><button className="button" onClick={() => setView(item)}>Lihat</button><button className="button" disabled={busy} onClick={() => edit(item)}>Edit</button>{isPublic(item) ? <button className="button" disabled={busy} onClick={() => void mutate(item, { archived_at: new Date().toISOString() })}>Arsipkan</button> : <button className="button" disabled={busy || item.consent_public !== true} title={item.consent_public !== true ? "Menunggu izin publikasi siswa" : undefined} onClick={() => edit({ ...item, archived_at: null, published: false, landing: false, show_on_testimonials: false })}>{item.archived_at ? "Pulihkan" : "Publish"}</button>}<button className="button" disabled={busy} onClick={() => { setError(""); setDeleting(item); }}>Hapus</button></div></div>
+    </article>)}</div>{!content.loading && !rows.length && <p className={styles.empty}>Belum ada testimoni sesuai filter.</p>}
+    <div className={styles.loadMore}><p role="status">Menampilkan {Math.min(visible, rows.length)} dari {rows.length} testimoni</p>{visible < rows.length && <button className="button" onClick={() => setVisible(current => current + 10)}>Muat Lainnya</button>}</div>
+    </section></div>
     <AdminDialog className={styles.builderDialog} open={!!draft} title={draft?.id ? "Edit Testimoni" : "Tambah Testimoni"} close={() => { if (!busy) setDraft(null); }}>{draft && <div className={styles.builder}><form onSubmit={save} className={styles.form}>
       <p>{draft.source === "student" ? "Identitas dan kepemilikan siswa tetap. Perubahan isi dilakukan oleh Admin." : "Konten kurasi Admin. Isi atribusi pemilik sebenarnya; jangan mengatasnamakan siswa tanpa dasar."}</p>
       <label>Nama / atribusi pemilik<input required value={draft.name} readOnly={draft.source === "student"} onChange={event => setDraft({ ...draft, name: event.target.value })} /></label><label>Program / konteks<input required value={draft.context} readOnly={draft.source === "student"} onChange={event => setDraft({ ...draft, context: event.target.value })} /></label>

@@ -5,6 +5,8 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState, ty
 import { ApiError, apiRequest, AUTH_EXPIRED_EVENT, setApiAuthenticated } from "@/lib/api";
 import { StudentLoading, type LoadingSkeletonProps } from "@/components/loading-skeleton";
 import { clearRegistrationDraft } from "@/lib/registration-draft";
+import { clearRegistrationIntent } from "@/lib/registration-intent";
+import { safeAuthDestination } from "@/lib/auth-destination";
 
 export type AuthUser = {
   id: number | string;
@@ -20,7 +22,6 @@ export type AuthUser = {
 };
 
 export type RegisterPayload = {
-  referral_code?: string;
   name: string;
   email: string;
   whatsapp: string;
@@ -95,6 +96,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     function expire() {
+      clearRegistrationIntent();
       clearRegistrationDraft();
       version.current += 1;
       pending.current = null;
@@ -139,13 +141,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   function register(payload: RegisterPayload) {
-    const { name, email, whatsapp, password, password_confirmation, country, target_jlpt, referral_code } = payload;
-    return authenticate("/api/auth/register", { name, email, whatsapp, password, password_confirmation, country, target_jlpt, referral_code });
+    const { name, email, whatsapp, password, password_confirmation, country, target_jlpt } = payload;
+    return authenticate("/api/auth/register", { name, email, whatsapp, password, password_confirmation, country, target_jlpt });
   }
 
   async function logout(): Promise<void> {
     if (mutating.current) throw new ApiError(409);
     clearRegistrationDraft();
+    clearRegistrationIntent();
     mutating.current = true;
     const current = ++version.current;
     pending.current = null;
@@ -172,7 +175,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const destination = role && !loading && !error ? !user ? "/login" : user.role !== role ? authDestination(user) : null : null;
 
   useEffect(() => {
-    if (destination) router.replace(destination);
+    if (!destination) return;
+    const next = destination === "/login" ? safeAuthDestination(`${window.location.pathname}${window.location.search}`) : null;
+    router.replace(next ? `/login?${new URLSearchParams({ next })}` : destination);
   }, [destination, router]);
 
   const segment = pathname.split("/")[1];

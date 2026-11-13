@@ -6,9 +6,10 @@ import { StudentAvatar } from "@/components/student-avatar";
 import { contentMedia, type TestimonialContent } from "@/lib/public-content-api";
 import styles from "./testimonial-card.module.css";
 
-export function TestimonialCard({ testimonial, landing = false }: { testimonial: TestimonialContent; landing?: boolean }) {
+export function TestimonialCard({ testimonial, landing = false, previewLines = landing ? 4 : 5, maxWords }: { testimonial: TestimonialContent; landing?: boolean; previewLines?: 4 | 5; maxWords?: number }) {
   const id = `testimoni-${testimonial.id}`;
-  const previewLines = landing ? 4 : 5;
+  const words = testimonial.quote.trim().split(/\s+/);
+  const quoteText = maxWords && words.length > maxWords ? `${words.slice(0, maxWords).join(" ")}…` : testimonial.quote;
   const createdAt = testimonial.created_at ? new Date(testimonial.created_at) : null;
   const dateLabel = createdAt && Number.isFinite(createdAt.getTime()) ? new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "long", year: "numeric", timeZone: "Asia/Jakarta" }).format(createdAt) : null;
   const card = useRef<HTMLElement>(null);
@@ -45,7 +46,7 @@ export function TestimonialCard({ testimonial, landing = false }: { testimonial:
         <StudentAvatar name={testimonial.name} url={contentMedia(testimonial.image, testimonial.image_resolved_url)} className={`testimonial-avatar ${styles.avatar}`} />
         <div className={styles.identity}><strong>{testimonial.name}</strong><small>{testimonial.context}</small>{!landing && dateLabel && <time dateTime={testimonial.created_at!} aria-label={`Ditambahkan ${dateLabel}`}>{dateLabel}</time>}</div>
       </header>
-      <blockquote ref={quote} id={`${id}-quote`} className={expanded ? styles.expanded : `${styles.preview} ${landing ? "" : styles.fiveLines}`}>{testimonial.quote}</blockquote>
+      <blockquote ref={quote} id={`${id}-quote`} className={expanded ? styles.expanded : `${styles.preview} ${previewLines === 5 ? styles.fiveLines : ""}`}>{quoteText}</blockquote>
       {long && (landing && testimonial.show_on_testimonials ? <Link className={styles.toggle} href={`/testimoni#${id}`}>Baca selengkapnya</Link> : <button className={styles.toggle} type="button" aria-expanded={expanded} aria-controls={`${id}-quote`} onClick={() => setExpanded(value => !value)}>{expanded ? "Tampilkan lebih sedikit" : "Baca selengkapnya"}</button>)}
     </article>
   );

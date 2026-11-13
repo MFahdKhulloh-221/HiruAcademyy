@@ -24,9 +24,11 @@
 .editorial-blog .editorial-card h3 { font-size: 19px; line-height: 1.5; margin: 12px 0 10px; font-weight: 800; }
 .editorial-blog .editorial-card-body > p { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; color: #595e70; font-size: 14px; line-height: 1.7; margin: 0 0 20px; }
 .editorial-blog .editorial-read { display: inline-flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; color: #c45100; font-size: 14px; font-weight: 700; margin-top: auto; }
-.editorial-blog .editorial-next { padding: 28px; margin-top: 40px; border: 1px solid #e1e4ec; border-radius: 20px; background: #fff; }
-.editorial-blog .editorial-next h2 { margin-top: 0; }
-.editorial-blog .editorial-next > div { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 20px; }
+.editorial-blog .final-cta { padding: 40px 0 0; }
+.editorial-blog .cta-panel { max-width: 860px; margin-inline: auto; padding: 48px 28px; border-radius: 24px; }
+.editorial-blog .final-cta h2 { font-size: 32px; line-height: 1.2; letter-spacing: -.02em; }
+.editorial-blog .editorial-cta-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; }
+@media (max-width: 767px) { .editorial-blog .final-cta h2 { font-size: 24px; line-height: 1.4; } }
 .editorial-blog .editorial-pagination { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }
 .editorial-blog .editorial-pagination a { display: grid; place-items: center; min-width: 44px; min-height: 44px; border: 1px solid #dce0e8; border-radius: 8px; }
 .editorial-blog .editorial-pagination [aria-current] { background: #f48220; color: #5a2a00; }

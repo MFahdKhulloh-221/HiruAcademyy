@@ -1,0 +1,2 @@
+.page > section:first-of-type { margin-top: clamp(16px, 3vw, 32px); }
+.page:global(#top) > :global(.proof-strip) { margin-block: 24px 0; }

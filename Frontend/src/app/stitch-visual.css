@@ -118,15 +118,13 @@ rt { color: var(--secondary); }
 .dash-content, .journey-content, .learning-content, .sensei-content, .supporting-main { max-width: 1280px; padding: 24px 24px 48px; }
 .student-breadcrumb { display: inline-block; max-width: 100%; margin-bottom: 24px; overflow-x: auto; }
 .learning-content > .student-breadcrumb { margin-left: -32px; }
-.learning-main:has(.flashcard-page) { position: relative; }
-.learning-main:has(.flashcard-page) > .learning-content { padding-top: 76px; }
-.learning-main:has(.flashcard-page) .student-breadcrumb { position: absolute; top: 92px; left: 24px; margin-left: 0; }
+.learning-main:has(.flashcard-page) > .learning-content { padding-top: 32px; }
 .student-breadcrumb ol { display: flex; align-items: center; gap: 10px; min-width: max-content; margin: 0; padding: 8px 0; list-style: none; color: var(--muted); font-size: 14px; white-space: nowrap; }
 .student-breadcrumb li { display: flex; align-items: center; gap: 10px; }
 .student-breadcrumb a { color: var(--orange-dark); text-decoration: none; }
 .student-breadcrumb a:hover { color: var(--orange); }
 .student-breadcrumb li[aria-current="page"] { color: var(--orange-dark); font-weight: 700; }
-@media (max-width: 800px) { .student-breadcrumb { max-width: 100%; } .learning-content > .student-breadcrumb { margin-left: -16px; } .learning-main:has(.flashcard-page) > .learning-content { padding-top: 76px; } .learning-main:has(.flashcard-page) .student-breadcrumb { top: 84px; left: 16px; } }
+@media (max-width: 800px) { .student-breadcrumb { max-width: 100%; } .learning-content > .student-breadcrumb { margin-left: -16px; } .learning-main:has(.flashcard-page) > .learning-content { padding-top: 24px; } }
 .dash-welcome h1, .journey-page-head h1, .chapter-hero h1, .learning-page-head h1, .sensei-page-head h1, .supporting-header h1, .flashcard-collection > header h1 { font-size: 48px; line-height: 1.2; letter-spacing: -.02em; }
 .dash-subgreeting, .dash-welcome > div > p:last-child, .journey-page-head > div > p:last-child { font-size: 18px; line-height: 1.6; }
 .dashboard-bento { gap: 12px; }
@@ -2407,18 +2405,9 @@ rt { color: var(--secondary); }
   flex: 1;
 }
 
-.renewal-current-banner .banner-status-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 12px;
-  border-radius: 999px;
-  background: #fff7ed;
-  color: #ea580c;
-  border: 1px solid var(--line);
-  font-size: 11px;
-  font-weight: 800;
-  margin-bottom: 8px;
+.renewal-access-summary {
+  display: grid;
+  gap: 4px;
 }
 
 .renewal-current-banner h2 {
@@ -2441,12 +2430,12 @@ rt { color: var(--secondary); }
   gap: 16px;
   list-style: none;
   padding: 0;
-  margin: 0;
+  margin: 20px 0 0;
 }
 
 .renewal-owned-card {
   min-width: 0;
-  padding: 20px;
+  padding: 16px;
   border: 1px solid #e2e8f0;
   border-radius: 16px;
   background: #fff;
@@ -2471,7 +2460,61 @@ rt { color: var(--secondary); }
 .renewal-owned-card dl { display: grid; gap: 8px; margin: 0; }
 .renewal-owned-card dl > div { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px 12px; }
 .renewal-owned-card dd { margin: 0; font-size: 13px; font-weight: 600; color: #0f172a; }
-.renewal-owned-note { margin: 16px 0 0; }
+.renewal-owned-note { margin: 16px 0 0; border-top: 1px solid #e2e8f0; padding-top: 8px; }
+.renewal-owned-note summary { min-height: 44px; align-content: center; cursor: pointer; font-weight: 600; }
+.renewal-owned-note summary:focus-visible { outline: 3px solid #954900; outline-offset: 4px; }
+.renewal-owned-note p { color: #475569; }
+
+.renewal-membership { padding: 24px; border: 1px solid #e2e8f0; border-radius: 20px; background: #fff; color: #0f172a; }
+.renewal-membership h2 { margin: 0 0 20px; font-size: 20px; }
+.renewal-membership h3, .renewal-membership h4, .renewal-membership p { margin: 0; }
+.renewal-membership p, .renewal-membership dt { color: #475569; font-size: 13px; line-height: 1.6; }
+.renewal-membership-overview { display: flex; align-items: center; gap: 16px; }
+.renewal-membership-overview > div { min-width: 0; }
+.renewal-membership-icon { display: grid; place-items: center; width: 52px; height: 52px; flex-shrink: 0; border-radius: 16px; background: #F48220; color: #5A2A00; font-size: 28px; }
+.renewal-membership-package { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 4px; }
+.renewal-membership-package h3 { font-size: 18px; }
+.renewal-membership-status { padding: 3px 10px; border-radius: 999px; background: #dcfce7; color: #166534; font-size: 12px; font-weight: 700; }
+.renewal-membership-status.is-free { background: #f1f5f9; color: #475569; }
+.renewal-membership p.renewal-membership-count { margin-left: auto; flex-shrink: 0; text-align: right; }
+.renewal-membership-count strong { color: #0f172a; font-size: 20px; }
+.renewal-access-facilities { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 24px; }
+.renewal-access-facilities > div { padding: 16px; border: 1px solid #e2e8f0; border-radius: 12px; background: #F9F9FF; overflow-wrap: anywhere; }
+.renewal-access-facilities svg { color: #954900; font-size: 20px; margin-bottom: 8px; }
+.renewal-access-facilities h3 { font-size: 13px; color: #475569; margin-bottom: 6px; }
+.renewal-access-facilities strong { display: block; font-size: 15px; margin-bottom: 4px; }
+.renewal-access-details { margin: 8px 0 20px; }
+.renewal-access-details summary { min-height: 44px; align-content: center; cursor: pointer; color: #954900; font-size: 13px; font-weight: 600; }
+.renewal-access-details summary:focus-visible { outline: 3px solid #954900; outline-offset: 2px; border-radius: 4px; }
+.renewal-access-detail-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; padding: 12px 0; }
+.renewal-access-detail-grid h3 { font-size: 13px; margin-bottom: 8px; }
+.renewal-access-chips { display: flex; flex-wrap: wrap; gap: 6px; list-style: none; padding: 0; margin: 0; }
+.renewal-access-chips li { border: 1px solid #e2e8f0; border-radius: 6px; padding: 4px 8px; background: #F9F9FF; font-size: 12px; overflow-wrap: anywhere; }
+.renewal-membership-programs { border-top: 1px solid #e2e8f0; padding-top: 20px; }
+.renewal-membership-programs > h3 { font-size: 16px; margin-bottom: 8px; }
+.renewal-membership-rows { list-style: none; padding: 0; margin: 0; }
+.renewal-membership-rows > li { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 3fr); gap: 16px; align-items: center; padding: 16px 0; border-bottom: 1px solid #e2e8f0; overflow-wrap: anywhere; }
+.renewal-membership-rows > li:last-child { border-bottom: 0; padding-bottom: 0; }
+.renewal-membership-rows h4 { font-size: 14px; }
+.renewal-membership-rows dl { display: grid; grid-template-columns: 1.4fr 1fr 1fr 1fr; gap: 12px; margin: 0; }
+.renewal-membership-rows dd { margin: 4px 0 0; font-size: 13px; font-weight: 600; }
+.renewal-membership-period { order: 1; }
+.renewal-membership-note { display: flex; align-items: flex-start; gap: 10px; margin: 16px 0 32px; padding: 14px 16px; border-radius: 12px; background: #F9F9FF; }
+.renewal-membership-note svg { flex-shrink: 0; color: #954900; margin-top: 3px; }
+.renewal-membership-note p { margin: 0; color: #475569; font-size: 13px; line-height: 1.6; }
+@media (max-width: 1023px) {
+  .renewal-membership-rows > li { grid-template-columns: 1fr; gap: 12px; }
+}
+@media (max-width: 639px) {
+  .renewal-membership { padding: 16px; }
+  .renewal-membership-overview { flex-wrap: wrap; gap: 12px; }
+  .renewal-membership-overview > div:not(.renewal-membership-icon) { flex: 1; }
+  .renewal-membership p.renewal-membership-count { width: 100%; margin: 0; text-align: left; }
+  .renewal-access-facilities, .renewal-access-detail-grid { grid-template-columns: 1fr; }
+  .renewal-access-facilities > div { padding: 12px; }
+  .renewal-membership-rows dl { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .renewal-membership-period { order: 0; }
+}
 
 .renewal-referral { margin-top: 24px; }
 .renewal-referral label { display: block; margin-bottom: 8px; }
@@ -5711,10 +5754,55 @@ video { height: auto; }
   padding-top: 28px !important;
 }
 
+.flashcard-page .flashcard-head { justify-content: flex-end; }
+.flashcard-page .flash-progress strong { display: block; text-align: center; }
+
+.admin-dialog.admin-flashcard-dialog { width: min(1120px, calc(100vw - 32px)); max-width: 1120px; }
+.admin-flashcard-dialog .admin-dialog-content { min-width: 0; }
+.admin-flashcard-context { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.admin-flashcard-preview { min-width: 0; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: #F9F9FF; }
+.admin-flashcard-preview > h3 { margin: 0 0 8px; }
+.admin-flashcard-preview > p { color: var(--muted); font-size: 13px; }
+.admin-flashcard-preview .flashcard-session { max-width: 720px; margin-inline: auto; }
+.admin-flashcard-preview .flashcard-surface { height: 340px; padding: 0; border: 0; background: transparent; font: inherit; text-align: center; }
+.admin-flashcard-preview .flashcard-inner { transition: transform 600ms ease-in-out; }
+.admin-flashcard-preview .flash-front > ruby { font-size: clamp(36px, 6vw, 72px); overflow-wrap: anywhere; }
+.admin-flashcard-preview .flash-back strong { overflow-wrap: anywhere; }
+.admin-flashcard-dialog .admin-flashcard-actions { display: flex; justify-content: space-between; gap: 16px; padding-top: 16px; }
+.admin-flashcard-dialog .admin-flashcard-actions .button-secondary { background: #fff; color: var(--navy); border: 1px solid var(--line); }
+.admin-flashcard-dialog .admin-flashcard-actions .button-primary { background: #F48220; color: #5A2A00; }
+@media (max-width: 639px) {
+  .admin-flashcard-context { grid-template-columns: minmax(0, 1fr); }
+  .admin-flashcard-preview { padding: 12px; }
+  .admin-flashcard-preview .flash-face { padding: 20px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .admin-flashcard-preview .flashcard-inner { transition: none; }
+}
+
+/* Flashcard completion */
+.flashcard-complete { width: 100%; min-width: 0; max-width: 880px; margin-inline: auto; }
+.flashcard-complete > header { text-align: center; }
+.flashcard-complete > header h1 { font-size: clamp(24px, 3vw, 36px); line-height: 1.25; margin: 12px 0; overflow-wrap: anywhere; }
+.flashcard-complete > header p { line-height: 1.6; }
+.flashcard-complete .flashcard-confidence-summary { gap: 12px; margin: 24px 0; }
+.flashcard-complete .flashcard-complete-actions { justify-content: center; margin: 24px 0; }
+.flashcard-complete .flashcard-difficult article { display: grid; gap: 8px; overflow-wrap: anywhere; }
+.flashcard-complete .flashcard-difficult article span { color: var(--muted); font-size: 13px; }
+.flashcard-complete > aside { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+.flashcard-complete > aside p { margin: 0; line-height: 1.6; }
+@media (max-width: 639px) {
+  .flashcard-complete { padding: 20px 16px; }
+  .flashcard-complete .flashcard-confidence-summary { gap: 8px; }
+  .flashcard-complete .flashcard-confidence-summary > div { padding: 14px 6px; }
+  .flashcard-complete .flashcard-complete-actions > * { width: 100%; justify-content: center; text-align: center; }
+  .flashcard-complete .flashcard-difficult > div { grid-template-columns: minmax(0, 1fr); }
+}
+
 /* 1. Summary Cards */
 .fc-summary-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 16px;
   margin-bottom: 24px;
 }
@@ -5757,7 +5845,7 @@ video { height: auto; }
   font-size: 16px;
   flex-shrink: 0;
   background: #f1f3f7;
-  color: var(--navy);
+  color: #F48220;
 }
 
 .fc-summary-icon svg {
@@ -6462,8 +6550,13 @@ video { height: auto; }
 .leaderboard-rows .dash-leaderboard-info { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
 .leaderboard-rows .dash-rank-badge { flex-shrink: 0; }
 .leaderboard-self { margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); }
-.leaderboard-rules ol { padding-left: 24px; }
-.leaderboard-rules li + li { margin-top: 12px; }
+.mini-locked-dialog.leaderboard-rules { text-align: left; }
+.mini-locked-dialog.leaderboard-rules h2 { font-weight: 700; }
+.leaderboard-rules ol { list-style: decimal outside; padding-left: 28px; }
+.leaderboard-rules li { padding-left: 6px; }
+.leaderboard-rules li::marker { font-weight: 700; color: var(--navy); }
+.leaderboard-rules li > strong { display: block; margin-bottom: 4px; }
+.leaderboard-rules li + li { margin-top: 20px; }
 .dashboard-bento-leaderboard .dash-leaderboard-head { flex-wrap: wrap; gap: 8px; }
 .dashboard-bento-leaderboard .leaderboard-title { justify-content: flex-start; }
 .gamification-metrics { display: flex; justify-content: center; flex-wrap: wrap; gap: 12px; margin-top: 20px; width: 100%; }
