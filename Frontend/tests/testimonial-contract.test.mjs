@@ -31,17 +31,18 @@ test("testimonial videos normalize YouTube trailing slashes without accepting ma
   assert.equal(video("testimonials/clip.mp4", "https://media.example.test/clip.mp4")?.src, "https://media.example.test/clip.mp4");
 });
 
-test("landing and testimonial pages render validated videos with existing playback controls", () => {
-  for (const path of ["../src/app/page.tsx", "../src/app/testimoni/page.tsx"]) {
-    const source = read(path);
-    assert.match(source, /<TestimonialVideoCard/);
-    assert.match(source, /className="testimonial-video-grid"/);
-    assert.match(source, /videoResolvedUrl=\{testimonial\.video_url_resolved_url\}/);
-    assert.match(source, /thumbnail=\{testimonial\.video_thumbnail\}/);
-    assert.match(source, /\.type === "text"/);
-    assert.match(source, /\.type === "video"/);
-    assert.match(source, /key=\{testimonial\.id\}/);
-  }
+test("landing keeps six text stories; showcase delegates videos to validated playback controls", () => {
+  const landing = read("../src/app/page.tsx");
+  assert.match(landing, /testimonial\.type === "text" && !testimonial\.video_url\)\.slice\(0, 6\)/);
+  const showcase = read("../src/app/testimoni/page.tsx");
+  assert.match(showcase, /item\.published !== false && item\.show_on_testimonials !== false/);
+  assert.match(showcase, /item\.type === "text"/);
+  assert.match(showcase, /item\.type === "video"/);
+  assert.match(showcase, /<VideoRecommendation key=\{item\.id\} item=\{item\}/);
+  const recommendation = read("../src/app/testimoni/video-recommendation.tsx");
+  assert.match(recommendation, /open && <TestimonialVideoCard/);
+  assert.match(recommendation, /videoResolvedUrl=\{item\.video_url_resolved_url\}/);
+  assert.match(recommendation, /thumbnail=\{item\.video_thumbnail\}/);
   const player = read("../src/components/testimonial-video-card.tsx");
   assert.match(player, /sandbox="allow-scripts allow-same-origin allow-presentation"/);
   assert.match(player, /<video controls autoPlay preload="metadata"/);
@@ -49,24 +50,25 @@ test("landing and testimonial pages render validated videos with existing playba
   assert.match(player, /rel="noopener noreferrer"/);
 });
 
-test("student admin PATCH is restricted, manual save excludes student metadata", () => {
+test("admin save excludes student identity and ownership; approval requires consent", () => {
   const source = read("../src/components/admin-testimonial-prototype.tsx");
   const tree = ts.createSourceFile("testimonials.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
-  let patchFields;
-  let manualFields;
-  let patchBody;
+  let save;
   function visit(node) {
-    if (ts.isTypeAliasDeclaration(node) && node.name.text === "StudentPatch") patchFields = node.type.members.map(member => member.name.getText(tree));
-    if (ts.isVariableDeclaration(node) && node.name.getText(tree) === "next" && ts.isObjectLiteralExpression(node.initializer)) manualFields = node.initializer.properties.map(property => property.name?.getText(tree));
-    if (ts.isFunctionDeclaration(node) && node.name?.text === "patchStudent") patchBody = node.body.getText(tree);
+    if (ts.isFunctionDeclaration(node) && node.name?.text === "save") save = node.getText(tree);
     ts.forEachChild(node, visit);
   }
   visit(tree);
-  assert.deepEqual(patchFields, ["moderation_status", "moderation_note", "published", "landing", "show_on_testimonials", "sort_order"]);
-  assert.deepEqual(manualFields, ["id", "type", "title", "videoThumbnail", "showOnTestimonials", "name", "context", "quote", "image", "videoUrl", "videoTitle", "published", "landing", "order"]);
-  assert.match(patchBody, /row\.source !== "student"/);
-  assert.match(patchBody, /body: JSON\.stringify\(patch\)/);
-  assert.match(source, /patchStudent\(row, \{ moderation_status: "approved" \}\)/);
+  assert.ok(save, "admin save handler found");
+  for (const type of ["text", "video"]) for (const consent of [false, true]) for (const published of [false, true]) {
+    let payload;
+    const draft = { id: 7, source: "student", user_id: 99, name: "Owner", context: "N4", image: "owner.png", type, quote: "Story", title: "Video", video_url: "https://youtu.be/abcdefghijk", video_thumbnail: "poster.png", consent_public: consent, published, landing: false, show_on_testimonials: true };
+    vm.runInNewContext(ts.transpileModule(`${save}\nsave({ preventDefault() {} });`, { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText, { draft, mutate: (_item, body) => { payload = JSON.parse(JSON.stringify(body)); } });
+    assert.ok(payload);
+    const expected = ["quote", "archived_at", "published", "landing", "show_on_testimonials", ...(type === "video" ? ["title", "video_url", "video_thumbnail"] : []), ...(consent && published ? ["moderation_status"] : [])];
+    assert.deepEqual(Object.keys(payload).sort(), expected.sort());
+    assert.equal(payload.moderation_status, consent && published ? "approved" : undefined);
+  }
 });
 
 test("student submission excludes identity and public landing keeps its filter", () => {
@@ -74,14 +76,18 @@ test("student submission excludes identity and public landing keeps its filter",
   const tree = ts.createSourceFile("student.tsx", source, ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   let fields;
   function visit(node) {
-    if (ts.isCallExpression(node) && node.expression.getText(tree) === "JSON.stringify" && ts.isObjectLiteralExpression(node.arguments[0])) fields = node.arguments[0].properties.filter(property => !ts.isSpreadAssignment(property)).map(property => property.name.getText(tree));
+    if (ts.isVariableDeclaration(node) && node.name.getText(tree) === "payload" && ts.isObjectLiteralExpression(node.initializer)) fields = node.initializer.properties.filter(property => !ts.isSpreadAssignment(property)).map(property => property.name.getText(tree));
     ts.forEachChild(node, visit);
   }
   visit(tree);
-  assert.deepEqual(fields, ["type", "context", "quote", "consent_public"]);
-  assert.match(source, /type === "video" \? \{ title: title\.trim\(\), video_url: videoUrl\.trim\(\), video_thumbnail: thumbnail\.trim\(\) \} : \{\}/);
+  assert.deepEqual(fields, ["type", "quote", "consent_public"]);
+  assert.match(source, /type === "video" \? \{ title: draft\.title\.trim\(\), video_url: draft\.videoUrl\.trim\(\) \} : \{\}/);
+  assert.match(source, /JSON\.stringify\(payload\)/);
+  assert.match(source, /Object\.entries\(payload\)/);
   assert.match(source, /cause\.status === 409/);
-  assert.match(source, /if \(submitting\.current \|\| locked\) return/);
+  assert.match(source, /if \(!valid \|\| submitting\.current\) return/);
+  assert.match(source, /const valid = !!user && !locked && draft\.consent/);
+  assert.match(source, /saved\?\.moderation_status === "approved" \|\| !!saved\?\.archived_at/);
   assert.match(read("../src/app/page.tsx"), /\/api\/testimonials\?landing=true/);
-  assert.match(read("../src/app/testimoni/page.tsx"), /<StudentAvatar /);
+  assert.match(read("../src/components/testimonial-card.tsx"), /<StudentAvatar /);
 });
