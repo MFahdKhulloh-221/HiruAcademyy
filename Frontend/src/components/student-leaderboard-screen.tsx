@@ -12,13 +12,15 @@ const scopes: { value: LeaderboardScope; label: string }[] = [
   { value: "all", label: "Semua Siswa" }, { value: "lms", label: "LMS Mandiri" }, { value: "sensei", label: "Sensei" },
 ];
 const rules = [
-  "Ranking dihitung berdasarkan XP dari aktivitas belajar yang diselesaikan.",
-  "Leaderboard diperbarui berdasarkan aktivitas siswa.",
-  "Periode kompetisi Senin–Minggu dan dimulai ulang setiap Senin pukul 00.00 WIB.",
-  "Mengulang aktivitas yang sama tidak memberikan XP tanpa batas.",
-  "Filter Semua Siswa, LMS Mandiri, dan Sensei menggunakan aturan XP yang sama.",
-  "Streak dihitung dari aktivitas belajar harian dan tidak ikut direset setiap minggu.",
-  "Siswa baru memiliki Tantangan 7 Hari Pertama.",
+  { title: "Ranking mingguan", description: "Peringkat diurutkan berdasarkan XP tertinggi pada minggu berjalan, bukan streak. Filter Semua Siswa, LMS Mandiri, dan Sensei memakai aturan XP yang sama." },
+  { title: "Periode kompetisi", description: "XP mingguan dihitung Senin–Minggu dan dimulai ulang setiap Senin pukul 00.00 WIB. Riwayat belajar tidak dihapus." },
+  { title: "XP dari materi", description: "Video dan modul masing-masing memberi 10 XP per materi baru yang selesai. Flashcard memberi 10 XP per deck dalam satu chapter, bukan per kartu. Reward ini hanya diberikan sekali." },
+  { title: "XP dari latihan dan assessment", description: "Latihan audio, reading, Mini Checkpoint, Try Out, dan Checkpoint versi baru masing-masing memberi 20 XP. Reward berlaku sekali per jenis latihan dan chapter, atau per paket assessment. Mengulang aktivitas yang sama pada hari berikutnya tidak memberi XP lagi. Attempt harus selesai dengan minimal satu jawaban tersimpan; submit normal audio dan reading wajib menjawab seluruh soal. Nilai dan kelulusan tidak menambah nominal XP." },
+  { title: "Bonus chapter", description: "Tambahan 30 XP diberikan sekali saat seluruh aktivitas belajar yang dihitung dalam chapter selesai. Kategori tanpa konten dilewati; Mini Checkpoint, Checkpoint, dan Try Out bukan syarat bonus." },
+  { title: "XP tanpa batas harian", description: "Tidak ada batas XP per hari maupun per minggu. Selesaikan aktivitas berbeda untuk menambah XP. Aktivitas yang sudah mendapat reward tidak memberi XP lagi saat diulang, termasuk pada hari atau minggu berikutnya." },
+  { title: "Streak harian", description: "Selesaikan minimal satu aktivitas yang memenuhi syarat setiap hari WIB untuk menjaga streak. Banyak aktivitas dalam sehari tetap dihitung satu hari. Pengerjaan ulang latihan yang memenuhi syarat tetap bisa menjaga streak meski tidak memberi XP lagi. Login, membuka materi, atau attempt yang belum selesai tidak cukup; mengulang video, modul, atau deck lama tidak mencatat hari aktif baru." },
+  { title: "Saat streak terputus", description: "Jika hari ini belum belajar, streak sebelumnya masih bertahan selama hari ini. Jika satu hari penuh terlewat tanpa aktivitas yang memenuhi syarat, streak putus dan aktivitas berikutnya memulai lagi dari satu hari. Streak tidak direset setiap minggu." },
+  { title: "Tantangan 7 Hari Pertama", description: "Aktif belajar minimal 5 hari berbeda dalam 7 hari pertama sejak tanggal pendaftaran untuk mendapat badge Pemula Konsisten. Tidak harus berturut-turut. Tantangan ini hanya sekali, bukan mingguan, dan tidak memberi bonus XP." },
 ];
 
 export function LeaderboardRules() {
@@ -30,7 +32,7 @@ export function LeaderboardRules() {
     <dialog ref={dialog} className="mini-locked-dialog leaderboard-rules" aria-labelledby={titleId} onClose={() => trigger.current?.focus()}>
       <form method="dialog"><button type="submit" className="button button-secondary" aria-label="Tutup" autoFocus>×</button></form>
       <h2 id={titleId}>Aturan Leaderboard HiruAcademy</h2>
-      <ol>{rules.map(rule => <li key={rule}>{rule}</li>)}</ol>
+      <ol>{rules.map(rule => <li key={rule.title}><strong>{rule.title}.</strong> {rule.description}</li>)}</ol>
     </dialog>
   </>;
 }

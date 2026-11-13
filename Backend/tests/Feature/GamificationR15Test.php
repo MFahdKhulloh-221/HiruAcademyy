@@ -47,7 +47,7 @@ class GamificationR15Test extends TestCase
         DB::transaction(fn () => app(GamificationService::class)->award($this->student, $key, $points));
     }
 
-    public function test_record_duplicate_reward_and_daily_cap(): void
+    public function test_record_duplicate_reward_and_uncapped_daily_xp(): void
     {
         $video = VideoLesson::create(['chapter_id' => $this->chapter->id, 'title' => 'R15 video', 'video_url' => 'r15.mp4', 'status' => 'published']);
         $progress = app(LearningProgressService::class);
@@ -60,13 +60,13 @@ class GamificationR15Test extends TestCase
         $this->assertSame(1, DB::table('gamification_rewards')->where('user_id', $this->student->id)->count());
         $this->assertSame(10, (int) DB::table('gamification_rewards')->where('user_id', $this->student->id)->sum('xp'));
 
-        $this->reward('exercise:audio:'.$this->chapter->id.':2026-10-09', 20);
+        $this->reward('exercise:audio:'.$this->chapter->id, 20);
         $this->reward('chapter:'.$this->chapter->id, 30);
-        $this->reward('r15:at-cap', 20);
-        $this->assertSame(50, (int) DB::table('gamification_days')->where('user_id', $this->student->id)->sum('xp'));
-        $this->assertSame(50, (int) DB::table('gamification_rewards')->where('user_id', $this->student->id)->sum('xp'));
-        $this->assertDatabaseHas('gamification_rewards', ['user_id' => $this->student->id, 'reward_key' => 'chapter:'.$this->chapter->id, 'xp' => 20]);
-        $this->assertDatabaseHas('gamification_rewards', ['user_id' => $this->student->id, 'reward_key' => 'r15:at-cap', 'xp' => 0]);
+        $this->reward('r15:extra', 20);
+        $this->assertSame(80, (int) DB::table('gamification_days')->where('user_id', $this->student->id)->sum('xp'));
+        $this->assertSame(80, (int) DB::table('gamification_rewards')->where('user_id', $this->student->id)->sum('xp'));
+        $this->assertDatabaseHas('gamification_rewards', ['user_id' => $this->student->id, 'reward_key' => 'chapter:'.$this->chapter->id, 'xp' => 30]);
+        $this->assertDatabaseHas('gamification_rewards', ['user_id' => $this->student->id, 'reward_key' => 'r15:extra', 'xp' => 20]);
 
         CarbonImmutable::setTestNow('2026-10-09T17:10:00Z');
         $this->reward('video:'.$video->id, 10);

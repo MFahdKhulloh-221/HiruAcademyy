@@ -24,10 +24,20 @@ class GamificationService
             throw new \LogicException('Rewards require the completion transaction.');
         }
         $this->lock($user);
+        $rewards = DB::table('gamification_rewards')->where('user_id', $user->id)
+            ->where(function ($query) use ($key) {
+                $query->where('reward_key', $key);
+                if (preg_match('/^(exercise:(audio|reading|mini)|tryout|checkpoint):[0-9]+$/D', $key)) {
+                    $query->orWhere('reward_key', 'like', $key.':%');
+                }
+            });
+        if ($rewards->exists()) {
+            return;
+        }
         $day = now('Asia/Jakarta')->toDateString();
         DB::table('gamification_days')->insertOrIgnore(['user_id' => $user->id, 'activity_on' => $day, 'xp' => 0]);
         $daily = DB::table('gamification_days')->where('user_id', $user->id)->where('activity_on', $day)->lockForUpdate()->first();
-        $xp = min($points, max(0, 50 - $daily->xp));
+        $xp = $points;
         $inserted = DB::table('gamification_rewards')->insertOrIgnore(['user_id' => $user->id, 'reward_key' => $key, 'activity_on' => $day, 'xp' => $xp, 'created_at' => now()->utc()]);
         if ($inserted) {
             DB::table('gamification_days')->where('id', $daily->id)->increment('xp', $xp);

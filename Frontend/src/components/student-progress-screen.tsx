@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { GamificationChallenge } from "@/components/gamification-challenge";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { useCallback } from "react";
@@ -8,16 +7,12 @@ import {
   LuAward,
   LuBookOpen,
   LuCircleCheck,
-  LuClipboardCheck,
   LuFlame,
-  LuLayers3,
 } from "react-icons/lu";
 import { useLearningRequest } from "@/components/learning-hooks";
 import { studentGamification, studentOverallProgress, type OverallProgressData } from "@/lib/learning-api";
-import type { Membership } from "@/lib/dashboard-mock";
 
-export function StudentProgressScreen({ membership }: { membership: Membership }) {
-  const query = `?membership=${membership}`;
+export function StudentProgressScreen() {
   const load = useCallback((signal: AbortSignal) => studentOverallProgress(signal), []);
   const request = useLearningRequest(load, "student-progress");
   const gamification = useLearningRequest(studentGamification, "progress-gamification");
@@ -143,48 +138,6 @@ export function StudentProgressScreen({ membership }: { membership: Membership }
         </section>
       )}
 
-      {/* 4. Achievements / Leaderboard Tab */}
-      <section className="progress-achievements">
-        <div className="progress-tabs">
-          <button className="active" type="button">Pencapaian</button>
-          <Link href={`/leaderboard${query}`}>Leaderboard</Link>
-        </div>
-        <div>
-          {[
-            {
-              icon: LuFlame,
-              title: "Streak Belajar",
-              desc: "Belajar konsisten secara berturut-turut.",
-              status: data.streak_days >= 7 ? "Terbuka" : `${data.streak_days}/7 Hari`,
-            },
-            {
-              icon: LuLayers3,
-              title: "Latihan Pertama",
-              desc: "Menyelesaikan sesi latihan pertama.",
-              status: data.practice_completed > 0 ? "Terbuka" : "Belum terbuka",
-            },
-            {
-              icon: LuClipboardCheck,
-              title: "Kanji Master",
-              desc: "Menyelesaikan modul huruf & kanji.",
-              status: data.kanji_mastered > 0 ? "Terbuka" : "Belum terbuka",
-            },
-            {
-              icon: LuAward,
-              title: "Evaluasi Chapter",
-              desc: "Menyelesaikan Mini Checkpoint terarah.",
-              status: data.practice_completed > 0 ? "Terbuka" : "Belum terbuka",
-            },
-          ].map(({ icon: Icon, title, desc, status }) => (
-            <article key={title}>
-              <span aria-hidden="true"><Icon /></span>
-              <h2>{title}</h2>
-              <p>{desc}</p>
-              <b>{status}</b>
-            </article>
-          ))}
-        </div>
-      </section>
     </>
   );
 }

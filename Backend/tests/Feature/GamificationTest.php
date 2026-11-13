@@ -54,26 +54,50 @@ class GamificationTest extends TestCase
         DB::transaction(fn () => app(GamificationService::class)->award($this->student, $key, $xp));
     }
 
-    public function test_daily_cap_dedup_bonus_and_week_retention(): void
+    public function test_uncapped_daily_xp_lifetime_dedup_and_week_retention(): void
     {
         $this->reward('module:1', 10);
         $this->reward('module:1', 10);
-        $this->reward('exercise:audio:1:2026-10-09', 20);
+        $this->reward('exercise:audio:1', 20);
         $this->reward('chapter:1', 30);
-        $this->reward('tryout:1:2026-10-09', 20);
-        $this->assertSame(50, (int) DB::table('gamification_days')->sum('xp'));
+        $this->reward('tryout:1', 20);
+        $this->assertSame(80, (int) DB::table('gamification_days')->sum('xp'));
         $this->assertSame(4, DB::table('gamification_rewards')->count());
-        $this->assertDatabaseHas('gamification_rewards', ['reward_key' => 'chapter:1', 'xp' => 20]);
-        $this->assertDatabaseHas('gamification_rewards', ['reward_key' => 'tryout:1:2026-10-09', 'xp' => 0]);
-        $this->getJson('/api/student/gamification')->assertOk()->assertJsonPath('data.weekly_xp', 50)->assertJsonPath('data.streak_days', 0);
+        $this->assertDatabaseHas('gamification_rewards', ['reward_key' => 'chapter:1', 'xp' => 30]);
+        $this->assertDatabaseHas('gamification_rewards', ['reward_key' => 'tryout:1', 'xp' => 20]);
+        $this->getJson('/api/student/gamification')->assertOk()->assertJsonPath('data.weekly_xp', 80)->assertJsonPath('data.streak_days', 0);
         CarbonImmutable::setTestNow('2026-10-11T17:00:00Z');
         $this->getJson('/api/student/gamification')->assertJsonPath('data.weekly_xp', 0);
         $this->reward('module:1', 10);
         $this->reward('chapter:1', 30);
-        $this->assertSame(50, (int) DB::table('gamification_rewards')->sum('xp'));
-        $this->reward('exercise:audio:1:2026-10-12', 20);
+        $this->reward('exercise:audio:1', 20);
+        $this->reward('tryout:1', 20);
+        $this->assertSame(80, (int) DB::table('gamification_rewards')->sum('xp'));
+        $this->assertSame(1, DB::table('gamification_days')->count());
+        $this->reward('exercise:audio:2', 20);
         $this->getJson('/api/student/gamification')->assertJsonPath('data.weekly_xp', 20);
-        $this->getJson('/api/student/leaderboard')->assertJsonPath('data.week_start', '2026-10-12T00:00:00+07:00')->assertJsonPath('data.week_end', '2026-10-19T00:00:00+07:00');
+        $this->getJson('/api/student/leaderboard')->assertJsonPath('data.week_start', '2026-10-12T00:00:00+07:00')->assertJsonPath('data.week_end', '2026-10-19T00:00:00+07:00')->assertJsonPath('data.self.weekly_xp', 20);
+    }
+
+    public function test_legacy_dated_rewards_deduplicate_without_backfilling_capped_xp(): void
+    {
+        $keys = ['exercise:audio:1', 'exercise:reading:1', 'exercise:mini:1', 'tryout:1', 'checkpoint:1'];
+        foreach ($keys as $index => $key) {
+            DB::table('gamification_rewards')->insert(['user_id' => $this->student->id, 'reward_key' => $key.':2026-10-08', 'activity_on' => '2026-10-08', 'xp' => $index === 0 ? 10 : 0, 'created_at' => now()->utc()]);
+        }
+        DB::table('gamification_days')->insert(['user_id' => $this->student->id, 'activity_on' => '2026-10-08', 'xp' => 10]);
+        foreach ($keys as $key) {
+            $this->reward($key, 20);
+            $this->assertDatabaseMissing('gamification_rewards', ['user_id' => $this->student->id, 'reward_key' => $key]);
+        }
+        $this->assertSame(5, DB::table('gamification_rewards')->count());
+        $this->assertSame(10, (int) DB::table('gamification_rewards')->sum('xp'));
+        $this->assertSame(10, (int) DB::table('gamification_days')->sum('xp'));
+        $this->assertSame(1, DB::table('gamification_days')->count());
+        $this->reward('exercise:audio:10', 20);
+        $this->reward('tryout:10', 20);
+        $this->reward('checkpoint:10', 20);
+        $this->assertSame(70, (int) DB::table('gamification_rewards')->sum('xp'));
     }
 
     public function test_historical_attempt_days_jakarta_streak_challenge_and_shared_endpoints(): void
@@ -112,10 +136,11 @@ class GamificationTest extends TestCase
         $this->assertSame(1, app(GamificationService::class)->streak($this->student));
     }
 
-    public function test_mini_submission_empty_exclusion_daily_dedup_fresh_activity_at_cap(): void
+    public function test_mini_submission_empty_exclusion_lifetime_dedup_and_fresh_activity(): void
     {
+        AccessGrant::create(['user_id' => $this->student->id, 'program_id' => $this->chapter->program_id, 'plan_code' => 'sensei', 'starts_at' => '2026-10-08', 'ends_at' => '2026-10-11', 'status' => 'active']);
         $service = app(LearningAttemptService::class);
-        $make = fn () => LearningAttempt::create(['user_id' => $this->student->id, 'chapter_id' => $this->chapter->id, 'kind' => 'mini', 'status' => 'in_progress', 'content_snapshot' => [['id' => 1, 'session' => 1, 'part' => 1, 'duration_minutes' => 5]], 'grading_snapshot' => [1 => ['correct_option' => 'A']], 'answers' => [], 'revision' => 0]);
+        $make = fn () => LearningAttempt::create(['user_id' => $this->student->id, 'chapter_id' => $this->chapter->id, 'kind' => 'mini', 'status' => 'in_progress', 'content_snapshot' => [['id' => 1, 'session' => 1, 'part' => 1, 'duration_minutes' => 5, 'passing_score' => 80]], 'grading_snapshot' => [1 => ['correct_option' => 'A']], 'answers' => [], 'revision' => 0]);
         $service->submit($this->student, $this->chapter->program, $this->chapter, $make(), [], 0);
         $this->assertSame(0, app(GamificationService::class)->streak($this->student));
         $attempt = $make();
@@ -125,10 +150,12 @@ class GamificationTest extends TestCase
         $this->assertSame(20, (int) DB::table('gamification_rewards')->sum('xp'));
         CarbonImmutable::setTestNow('2026-10-09T17:10:00Z');
         $this->reward('chapter:99', 30);
-        $this->reward('exercise:audio:99:2026-10-10', 20);
+        $this->reward('exercise:audio:99', 20);
         $service->submit($this->student, $this->chapter->program, $this->chapter, $make(), [1 => 'A'], 0);
         $this->assertSame(2, app(GamificationService::class)->streak($this->student));
-        $this->assertDatabaseHas('gamification_rewards', ['reward_key' => 'exercise:mini:'.$this->chapter->id.':2026-10-10', 'xp' => 0]);
+        $this->assertSame(70, (int) DB::table('gamification_rewards')->sum('xp'));
+        $this->assertSame(3, DB::table('gamification_rewards')->count());
+        $this->assertDatabaseHas('gamification_rewards', ['reward_key' => 'exercise:mini:'.$this->chapter->id, 'xp' => 20, 'activity_on' => '2026-10-09']);
     }
 
     public function test_leaderboard_cohorts_precedence_privacy_top_twenty_and_self(): void
@@ -161,7 +188,7 @@ class GamificationTest extends TestCase
 
     public function test_tryout_submission_reward_and_empty_attempt_exclusion(): void
     {
-        $parent = TryOut::create(['program_id' => $this->chapter->program_id, 'title' => 'Fixture', 'status' => 'published']);
+        $parent = TryOut::create(['program_id' => $this->chapter->program_id, 'title' => 'Fixture', 'status' => 'published', 'access_type' => 'free']);
         $make = fn ($answers) => TryOutAttempt::create(['user_id' => $this->student->id, 'try_out_id' => $parent->id, 'status' => 'in_progress', 'content_snapshot' => [['id' => 1, 'session' => 'vocabulary_kanji']], 'grading_snapshot' => ['questions' => [1 => ['correct_option' => 'A', 'point_value' => 45]], 'total_passing_score' => null], 'answers' => $answers, 'completed_sessions' => [], 'current_session' => 0, 'revision' => 0, 'started_at' => now()]);
         $service = app(TryOutAttemptService::class);
         $service->submit($this->student, $parent, $make([]), 0);
@@ -172,6 +199,12 @@ class GamificationTest extends TestCase
         $service->submit($this->student, $parent, $make([1 => 'A']), 0);
         $this->assertSame(20, (int) DB::table('gamification_rewards')->sum('xp'));
         $this->assertSame(1, app(GamificationService::class)->streak($this->student));
+        CarbonImmutable::setTestNow('2026-10-09T17:10:00Z');
+        $service->submit($this->student, $parent, $make([1 => 'A']), 0);
+        $this->assertSame(20, (int) DB::table('gamification_rewards')->sum('xp'));
+        $this->assertSame(1, DB::table('gamification_rewards')->count());
+        $this->assertDatabaseHas('gamification_rewards', ['reward_key' => 'tryout:'.$parent->id, 'activity_on' => '2026-10-09']);
+        $this->assertSame(2, app(GamificationService::class)->streak($this->student));
     }
 
     public function test_moved_or_unpublished_audio_attempts_do_not_award_xp(): void

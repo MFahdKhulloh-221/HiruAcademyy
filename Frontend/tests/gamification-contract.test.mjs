@@ -26,6 +26,19 @@ test("gamification reads use shared authenticated API and forward cancellation",
   assert.equal(calls.at(-1).options.signal, signal);
 });
 
+test("dashboard and leaderboard share numbered rules with separate headings", () => {
+  const dashboard = read("../src/components/student-dashboard.tsx");
+  const leaderboard = read("../src/components/student-leaderboard-screen.tsx");
+  const styles = read("../src/app/stitch-visual.css");
+  assert.match(dashboard, /import \{[^}]*LeaderboardRules[^}]*\} from "@\/components\/student-leaderboard-screen"/);
+  assert.match(dashboard, /<LeaderboardRules\s*\/>/);
+  assert.match(leaderboard, /<LeaderboardRules\s*\/>/);
+  assert.match(styles, /\.mini-locked-dialog\.leaderboard-rules\s*\{[^}]*text-align: left/);
+  assert.match(styles, /\.mini-locked-dialog\.leaderboard-rules h2\s*\{[^}]*font-weight: 700/);
+  assert.match(styles, /\.leaderboard-rules ol\s*\{[^}]*list-style: decimal outside/);
+  assert.match(styles, /\.leaderboard-rules li > strong\s*\{[^}]*display: block/);
+});
+
 test("leaderboard keeps top twenty and exactly one outside self, filters scope", () => {
   let requestedScope;
   const entries = Array.from({ length: 20 }, (_, index) => ({ user_id: index + 1, rank: index + 1, name: `Student ${index + 1}`, avatar_url: null, category: "lms", weekly_xp: 20 - index, streak_days: 3, is_current_user: false }));
@@ -50,7 +63,15 @@ test("leaderboard keeps top twenty and exactly one outside self, filters scope",
   assert.match(markup, /LMS Mandiri · 20 XP · 3 Hari Streak/);
   assert.match(markup, /<dialog[^>]+aria-labelledby=/);
   assert.match(markup, /Aturan Leaderboard HiruAcademy/);
-  assert.doesNotMatch(markup, /50 XP/);
+  assert.match(markup, /Tidak ada batas XP per hari maupun per minggu/);
+  assert.match(markup, /10 XP per materi baru/);
+  assert.match(markup, /20 XP/);
+  assert.match(markup, /Tambahan 30 XP/);
+  assert.match(markup, /Mengulang aktivitas yang sama pada hari berikutnya tidak memberi XP lagi/);
+  assert.doesNotMatch(markup, /Maksimal 50 XP|maksimum 350 XP|setiap hari\. Attempt/);
+  assert.match(markup, /Streak tidak direset setiap minggu/);
+  assert.match(markup, /5 hari berbeda dalam 7 hari pertama/);
+  assert.match(markup, /<strong>Ranking mingguan\.<\/strong>/);
   assert.match(markup, /Senin pukul 00.00 WIB/);
   data = { entries, self: { ...entries[0], is_current_user: true } };
   assert.equal((render().match(/<li value=/g) ?? []).length, 20);
