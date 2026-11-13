@@ -1,9 +1,10 @@
 import { commercialWhatsApp, type CommercialInvoice } from "@/lib/commercial-api";
 
 export const ADMIN_WHATSAPP_URL = "https://wa.me/6285194564214";
-export function invoiceWhatsAppUrl(invoice: Pick<CommercialInvoice, "id" | "program_code" | "plan_code">): string {
+export function invoiceWhatsAppUrl(invoice: Pick<CommercialInvoice, "id" | "plan_code"> & { program_code?: string | null }, email?: string): string {
   const plan = invoice.plan_code === "sensei" ? "Belajar dengan Sensei" : "Belajar Mandiri";
-  return `${ADMIN_WHATSAPP_URL}?text=${encodeURIComponent(`Halo Admin HiruAcademy, saya ingin konfirmasi pembayaran invoice ${invoice.id}, paket ${plan}, level ${invoice.program_code.toUpperCase()}. Mohon panduan konfirmasi pembayaran.`)}`;
+  const level = invoice.program_code?.trim().toUpperCase();
+  return `${ADMIN_WHATSAPP_URL}?text=${encodeURIComponent(`Halo Admin HiruAcademy, saya ingin konfirmasi pembayaran invoice ${invoice.id}${email?.trim() ? `, email akun ${email.trim()}` : ""}, paket ${plan}${level ? `, level ${level}` : ""}. Mohon panduan konfirmasi pembayaran.`)}`;
 }
 
 export function studentWhatsAppUrl(phone?: string | null): string | null {

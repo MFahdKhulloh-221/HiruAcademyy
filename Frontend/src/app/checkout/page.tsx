@@ -6,11 +6,12 @@ import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { AdminDialog } from "@/components/admin-primitives";
 import { useAuth } from "@/components/auth-provider";
-import { invoiceWhatsAppUrl } from "@/lib/admin-whatsapp";
 import { PublicPage } from "@/components/public-shell";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { useCommercialOrder } from "@/components/commercial-hooks";
-import { commercialData, commercialWrite, commercialSelection, type EffectiveAccess } from "@/lib/commercial-api";
+import { commercialWrite, commercialSelection } from "@/lib/commercial-api";
+import { invoiceWhatsAppUrl } from "@/lib/admin-whatsapp";
+import { writeRegistrationIntent } from "@/lib/registration-intent";
 
 function CheckoutContent() {
   const params = useSearchParams();
@@ -20,20 +21,11 @@ function CheckoutContent() {
 function CheckoutSelection() {
   const params = useSearchParams();
   const { authenticated, user } = useAuth();
-  const [access, setAccess] = useState<{ userId: number | string; paid: boolean } | null>(null);
-  useEffect(() => {
-    if (!user || user.role !== "student") return;
-    let active = true;
-    void commercialData<EffectiveAccess>("/api/student/access").then(data => {
-      if (active) setAccess({ userId: user.id, paid: data.source_grants.length > 0 });
-    }).catch(() => undefined);
-    return () => { active = false; };
-  }, [user]);
   const [modal, setModal] = useState<"success" | "error" | null>(null);
   const submitButton = useRef<HTMLButtonElement>(null);
   const closeModal = useCallback(() => { setModal(null); requestAnimationFrame(() => submitButton.current?.focus()); }, []);
   const { level, plan: planKey } = commercialSelection(params);
-  const order = useCommercialOrder(level, planKey);
+  const order = useCommercialOrder(level, planKey, true);
   const plan = planKey === "sensei" ? "Belajar dengan Sensei" : "Belajar Mandiri";
   const [referral, setReferral] = useState(params.get("referral") ?? "");
   const [useCredit, setUseCredit] = useState(false);
@@ -42,6 +34,9 @@ function CheckoutSelection() {
   const requestKey = useRef<string | null>(null);
   const [applied, setApplied] = useState(false);
   const [referralBusy, setReferralBusy] = useState(false);
+  const quoteKey = `${order.offer?.id}:${applied ? referral.trim() : ""}:${useCredit}`;
+  const [quotedKey, setQuotedKey] = useState("");
+  const quoteReady = quote !== null && quotedKey === quoteKey;
   const [referralError, setReferralError] = useState("");
   const referralRequest = useRef(0);
   async function applyReferral() {
@@ -58,15 +53,29 @@ function CheckoutSelection() {
   useEffect(() => {
     if (!authenticated || !order.offer || order.invoice) return;
     let active = true;
-    void commercialWrite<NonNullable<typeof quote>>("/api/student/referral-quote", "POST", { program_offer_id: order.offer.id, use_credit: useCredit, ...(applied ? { referral_code: referral.trim() } : {}) }).then(value => { if (active) { setQuote(value); setQuoteError(""); } }).catch(cause => { if (active) { setQuote(null); setQuoteError(cause instanceof Error ? cause.message : "Tagihan belum tersedia."); } });
+    void commercialWrite<NonNullable<typeof quote>>("/api/student/referral-quote", "POST", { program_offer_id: order.offer.id, use_credit: useCredit, ...(applied ? { referral_code: referral.trim() } : {}) }).then(value => { if (active) { setQuote(value); setQuotedKey(quoteKey); setQuoteError(""); } }).catch(cause => { if (active) { setQuote(null); setQuoteError(cause instanceof Error ? cause.message : "Tagihan belum tersedia."); } });
     return () => { active = false; };
-  }, [authenticated, order.offer, order.invoice, applied, referral, useCredit]);
+  }, [authenticated, order.offer, order.invoice, applied, referral, useCredit, quoteKey]);
+
+  const referralAttempted = useRef(false);
+  useEffect(() => {
+    if (!authenticated || referralAttempted.current || !params.get("referral")) return;
+    referralAttempted.current = true;
+    void applyReferral();
+  });
 
   async function createInvoice() {
     setModal(null);
+    const storageKey = `hiru.invoice-request:${user?.id}:${level}:${planKey}:${applied ? referral.trim() : ""}:${useCredit}`;
+    try { requestKey.current = sessionStorage.getItem(storageKey) ?? requestKey.current; } catch { /* Storage is optional. */ }
     requestKey.current ??= crypto.randomUUID();
+    try { sessionStorage.setItem(storageKey, requestKey.current); } catch { /* Retry key still survives within this page. */ }
     const inv = await order.create(applied ? referral : undefined, useCredit, requestKey.current);
-    setModal(inv ? "success" : "error");
+    if (inv) {
+      try { sessionStorage.removeItem(storageKey); } catch { /* Storage is optional. */ }
+      if (user) writeRegistrationIntent(user.id, `/invoice?${new URLSearchParams({ id: String(inv.id) })}`);
+      setModal("success");
+    } else setModal("error");
   }
 
   const programName = order.offer?.program.name ?? "Program belum tersedia";
@@ -74,7 +83,9 @@ function CheckoutSelection() {
   const duration = order.invoice ? order.invoice.duration_months : order.offer?.duration_months;
   const registerQuery = new URLSearchParams({ program: level, plan: planKey });
   if (referral.trim()) registerQuery.set("referral", referral.trim());
-  const total = order.invoice?.total_price ?? quote?.total_price ?? order.offer?.effective_price;
+  const editQuery = new URLSearchParams(registerQuery);
+  editQuery.set("edit", "selection");
+  const total = order.invoice?.total_price ?? (quoteReady ? quote?.total_price : undefined);
   const validTotal = typeof total === "number" && Number.isFinite(total) && total >= 0;
   const money = (value: number) => `Rp ${value.toLocaleString("id-ID")}`;
 
@@ -107,11 +118,20 @@ function CheckoutSelection() {
         <div><dt>Kredit diskon digunakan</dt><dd>{money(order.invoice?.credit_discount ?? quote?.credit_discount ?? 0)}</dd></div>
         <div className="checkout-total"><dt>Total Tagihan</dt><dd aria-live="polite">{validTotal ? money(total) : applied ? "Menunggu perhitungan server" : "Belum tersedia"}</dd></div>
       </dl>
-      <p className="checkout-payment-note">Konfirmasi pembayaran melalui WhatsApp Admin</p>
-      {authenticated ? <button ref={submitButton} className="button button-primary checkout-submit" disabled={order.busy || !order.offer || (authenticated && !order.invoice && (!quote || !!quoteError))} onClick={() => void createInvoice()}>{order.busy ? "Memproses..." : "Buat Invoice"}</button> : order.offer && <Link className="button button-primary checkout-submit" href={`/register?${registerQuery}`}>Daftar untuk melanjutkan</Link>}
+      <p className="checkout-payment-note">Pembayaran diverifikasi Admin, lalu akses diaktifkan. Membuka WhatsApp tidak mengaktifkan akses.</p>
+      {authenticated ? <button ref={submitButton} className="button button-primary checkout-submit" disabled={order.busy || referralBusy || !order.offer || (authenticated && !order.invoice && (!quoteReady || !!quoteError))} onClick={() => void createInvoice()}>{order.busy ? "Memproses..." : "Buat Invoice"}</button> : order.offer && <Link className="button button-primary checkout-submit" href={`/register?${registerQuery}`}>Daftar untuk melanjutkan</Link>}
+      {authenticated && !order.invoice && !order.busy && <Link className="button button-secondary checkout-submit" href={`/register?${editQuery}`}>Kembali ke Pilihan Belajar</Link>}
     </aside>
-    <AdminDialog open={modal !== null} title={modal === "success" ? "INVOICE BERHASIL DIBUAT" : "Invoice gagal dibuat"} close={closeModal} actions={<><button className="button button-secondary" type="button" onClick={closeModal}>Tutup</button>{modal === "error" && <button className="button button-primary" type="button" disabled={order.busy} onClick={() => void createInvoice()}>Coba Lagi</button>}</>}>
-      {modal === "success" && order.invoice ? <><span className="invoice-success-icon" aria-hidden="true">✓</span><p>Invoice Anda berhasil dibuat. Silakan hubungi Admin HiruAcademy melalui WhatsApp untuk melakukan konfirmasi pembayaran.</p><dl><div><dt>Nomor Invoice</dt><dd>{order.invoice.id}</dd></div><div><dt>Program</dt><dd>{programName}</dd></div><div><dt>Plan</dt><dd>{order.invoice.plan_code === "sensei" ? "Belajar dengan Sensei" : "Belajar Mandiri"}</dd></div></dl><p>{user && access?.userId === user.id && !access.paid ? "Akses akun Anda tetap sebagai Free Member hingga pembayaran dikonfirmasi oleh Admin." : "Akses paket yang dipesan akan diaktifkan setelah pembayaran dikonfirmasi oleh Admin. Akses paket lain yang sudah aktif tetap berlaku."}</p><div className="button-group"><a className="button button-primary" href={invoiceWhatsAppUrl(order.invoice)} target="_blank" rel="noopener noreferrer">Hubungi Admin via WhatsApp</a><Link className="button button-dark" href={authenticated ? "/dashboard" : "/login"}>{authenticated ? "Masuk Dashboard" : "Lanjut Login"}</Link><Link className="button button-secondary" href={`/invoice?id=${order.invoice.id}`}>Detail Pesanan</Link></div></> : <p role="alert">{order.error || "Permintaan belum berhasil."}</p>}
+    <AdminDialog open={modal !== null} title={modal === "success" ? "Invoice berhasil dibuat" : "Invoice belum selesai diproses"} close={closeModal} actions={<button className="button button-secondary" type="button" onClick={closeModal}>Tutup</button>}>
+      {modal === "success" && order.invoice ? <div className="checkout-success">
+        <p className="checkout-success-status">Menunggu Pembayaran</p>
+        <h3>Invoice #{order.invoice.id}</h3>
+        <p>{programName} · {plan}</p>
+        <strong className="checkout-success-total">{money(order.invoice.total_price)}</strong>
+        <p>Hubungi Admin untuk pembayaran manual. Akun baru tetap Free sampai Admin mengonfirmasi pembayaran. Akses paket yang sudah aktif tetap berlaku.</p>
+        <div className="button-group"><a className="button button-primary" href={invoiceWhatsAppUrl(order.invoice, user?.email)} target="_blank" rel="noopener noreferrer">Hubungi Admin via WhatsApp</a><Link className="button button-dark" href="/dashboard">Lanjut ke Dashboard</Link></div>
+        <p>Invoice tersimpan di <Link className="text-link" href="/invoice">Profil · Pesanan Saya</Link>.</p>
+      </div> : <><p role="alert">{order.error || "Permintaan belum berhasil."}</p><div className="button-group"><button className="button button-primary" type="button" disabled={order.busy} onClick={() => void createInvoice()}>Coba Lagi</button><Link className="text-link" href="/invoice">Periksa Pesanan Saya</Link></div></>}
     </AdminDialog></div>;
 }
 

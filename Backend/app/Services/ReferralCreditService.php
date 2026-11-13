@@ -119,6 +119,7 @@ class ReferralCreditService
         DB::transaction(function () use ($invoice, $action, $reason) {
             $this->policy(true);
             $invoice = Invoice::whereKey($invoice->id)->lockForUpdate()->firstOrFail();
+            if (DB::table('referral_invoice_controls')->where('invoice_id', $invoice->id)->where('status', 'cancelled')->exists()) $this->fail('Invoice yang dibatalkan tidak dapat diubah.');
             if ($action === 'cancel' && ! in_array($invoice->status, ['draft', 'awaiting_payment'], true)) $this->fail('Invoice dibayar tidak boleh dibatalkan melalui kontrol kredit. Gunakan penahanan dan rekonsiliasi.');
             DB::table('referral_invoice_controls')->updateOrInsert(['invoice_id' => $invoice->id], ['status' => $action === 'cancel' ? 'cancelled' : 'held', 'reason' => $reason, 'created_at' => now(), 'updated_at' => now()]);
             if ($action === 'cancel') {

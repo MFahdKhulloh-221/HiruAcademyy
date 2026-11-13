@@ -350,24 +350,62 @@ class InvoiceTest extends TestCase
         }
     }
 
-    public function test_student_submit_and_mark_paid_do_not_activate_and_admin_completes_adjacent_steps(): void
+    public function test_student_submit_awaits_payment_and_student_declaration_is_forbidden(): void
     {
         $invoice = $this->invoice();
-        $this->actingAs($this->student)->postJson('/api/student/invoices/'.$invoice->id.'/mark-paid')->assertUnprocessable();
+        $this->actingAs($this->student)->postJson('/api/student/invoices/'.$invoice->id.'/mark-paid')->assertForbidden();
         $this->postJson('/api/student/invoices/'.$invoice->id.'/submit', ['status' => 'active'])->assertOk()->assertJsonPath('data.status', 'awaiting_payment');
         $this->assertNotNull($invoice->fresh()->submitted_at);
         $this->assertNull($invoice->fresh()->paid_at);
-        $this->postJson('/api/student/invoices/'.$invoice->id.'/mark-paid')->assertOk()->assertJsonPath('data.status', 'paid');
-        $this->assertNotNull($invoice->fresh()->paid_at);
+        $this->postJson('/api/student/invoices/'.$invoice->id.'/mark-paid')->assertForbidden();
+        $this->assertSame('awaiting_payment', $invoice->fresh()->status);
+        $this->assertNull($invoice->fresh()->paid_at);
         $this->assertNull($invoice->fresh()->verified_at);
         $this->assertNull($invoice->fresh()->activated_at);
         $this->assertDatabaseCount('access_grants', 0);
-        $this->actingAs($this->admin)->postJson('/api/admin/invoices/'.$invoice->id.'/transition', ['status' => 'verified'])->assertOk()->assertJsonPath('data.status', 'verified');
-        $this->assertNotNull($invoice->fresh()->verified_at);
-        $this->assertDatabaseCount('access_grants', 0);
-        $this->postJson('/api/admin/invoices/'.$invoice->id.'/transition', ['status' => 'active'])->assertOk()->assertJsonPath('data.status', 'active');
-        $this->assertNotNull($invoice->fresh()->activated_at);
-        $this->assertDatabaseCount('access_grants', 1);
+    }
+
+    public function test_student_cannot_confirm_payment_through_admin_endpoint_or_service(): void
+    {
+        $invoice = $this->advance($this->invoice(), 'awaiting_payment');
+        $this->actingAs($this->student)->postJson('/api/admin/invoices/'.$invoice->id.'/transition', ['status' => 'paid'])->assertForbidden();
+        try {
+            app(InvoiceWorkflowService::class)->confirmPayment($invoice, $this->student);
+            $this->fail('Student confirmed payment.');
+        } catch (HttpException $exception) {
+            $this->assertSame(403, $exception->getStatusCode());
+        }
+        $this->assertSame('awaiting_payment', $invoice->fresh()->status);
+        $this->assertSame(0, $invoice->accessGrant()->count());
+    }
+
+    public function test_paid_confirmation_completes_legacy_states_and_retries_without_changes(): void
+    {
+        foreach (['awaiting_payment', 'paid', 'verified', 'active'] as $state) {
+            $invoice = $this->advance($this->invoice(), $state);
+            $url = '/api/admin/invoices/'.$invoice->id.'/transition';
+            $this->actingAs($this->admin)->postJson($url, ['status' => 'paid'])->assertOk()->assertJsonPath('data.status', 'active');
+            $before = $invoice->fresh()->getAttributes();
+            $grant = $invoice->accessGrant()->sole()->getAttributes();
+            $this->postJson($url, ['status' => 'paid'])->assertOk()->assertJsonPath('data.status', 'active');
+            $this->assertSame($before, $invoice->fresh()->getAttributes());
+            $this->assertSame($grant, $invoice->accessGrant()->sole()->getAttributes());
+        }
+    }
+
+    public function test_confirmation_rolls_back_payment_verification_and_referral_when_activation_fails(): void
+    {
+        $owner = $this->user('referrer', '081234567899');
+        $affiliate = app(\App\Services\AffiliateService::class)->ensure($owner);
+        $invoice = $this->advance($this->invoice(metadata: ['referral_code' => $affiliate->code]), 'awaiting_payment');
+        $before = $invoice->getAttributes();
+        $this->student->account_status = 'inactive';
+        $this->student->save();
+        $this->actingAs($this->admin)->postJson('/api/admin/invoices/'.$invoice->id.'/transition', ['status' => 'paid'])->assertUnprocessable();
+        $this->assertSame($before, $invoice->fresh()->getAttributes());
+        $this->assertSame(0, $invoice->accessGrant()->count());
+        $this->assertSame(0, DB::table('referral_learning_credits')->where('source_invoice_id', $invoice->id)->count());
+        $this->assertSame('pending', DB::table('referral_credit_purchases')->where('invoice_id', $invoice->id)->sole()->status);
     }
 
     public function test_admin_transition_matrix_rejects_skips_backwards_repeats_and_unknown_targets(): void
@@ -377,7 +415,7 @@ class InvoiceTest extends TestCase
             $invoice = $this->advance($this->invoice(), $state);
             $this->actingAs($this->admin);
             foreach ([...self::STATES, 'cancelled', '', null] as $target) {
-                if ($target === (self::STATES[$index + 1] ?? null) && $target !== null || $state === 'active' && $target === 'active') {
+                if ($target === (self::STATES[$index + 1] ?? null) && $target !== null || $state === 'active' && $target === 'active' || $target === 'paid' && $state !== 'draft' || $state === 'verified' && $target === 'verified') {
                     continue;
                 }
                 $before = $invoice->fresh()->getAttributes();
@@ -396,12 +434,13 @@ class InvoiceTest extends TestCase
             $invoice = $this->advance($this->invoice(), $state);
             $this->actingAs($this->student);
             foreach (['submit' => 'draft', 'mark-paid' => 'awaiting_payment'] as $action => $required) {
-                if ($state === $required) {
+                if ($action === 'submit' && $state === $required) {
                     continue;
                 }
                 $before = $invoice->fresh()->getAttributes();
                 $count = AccessGrant::count();
-                $this->postJson('/api/student/invoices/'.$invoice->id.'/'.$action, ['status' => 'active', 'user_id' => $this->admin->id])->assertUnprocessable();
+                $response = $this->postJson('/api/student/invoices/'.$invoice->id.'/'.$action, ['status' => 'active', 'user_id' => $this->admin->id]);
+                $action === 'mark-paid' ? $response->assertForbidden() : $response->assertUnprocessable();
                 $this->assertSame($before, $invoice->fresh()->getAttributes());
                 $this->assertSame($count, AccessGrant::count());
             }
@@ -468,7 +507,7 @@ class InvoiceTest extends TestCase
                     $invoice = $service->create($this->student, $offer);
                     $this->assertSame($original->id, $invoice->renewal_grant_id);
                     foreach (['awaiting_payment', 'paid'] as $status) {
-                        $invoice = $service->transition($invoice, $status, $this->student);
+                        $invoice = $service->transition($invoice, $status, $this->admin);
                         $this->assertNull($invoice->accessGrant()->first());
                         $this->assertSame($expiry, $original->fresh()->ends_at->toDateString());
                     }

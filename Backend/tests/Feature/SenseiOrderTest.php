@@ -31,6 +31,15 @@ class SenseiOrderTest extends TestCase
         $this->assertLessThan($rows->search(fn ($row) => $row->id === $ids[1]), $rows->search(fn ($row) => $row->id === $ids[0]));
         $this->getJson('/api/admin/sensei-profiles')->assertOk()->assertJsonPath('data.0.id', $ids[2]);
         $this->getJson('/api/sensei-profiles')->assertOk()->assertJsonPath('data.0.bio', $base['bio']);
+        // Occupied position inserts the moved profile and shifts its previous occupant.
+        $occupant = SenseiProfile::orderBy('sort_order')->skip(1)->first();
+        $this->patchJson('/api/admin/sensei-profiles/'.$ids[1], ['sort_order' => 2])->assertOk();
+        $rows = SenseiProfile::orderBy('sort_order')->orderBy('id')->get();
+        $this->assertSame($ids[1], $rows[1]->id);
+        $this->assertSame($occupant->id, $rows[2]->id);
+        $this->assertSame(range(1, $rows->count()), $rows->pluck('sort_order')->all());
+        $publicIds = $this->getJson('/api/sensei-profiles')->assertOk()->json('data.*.id');
+        $this->assertSame($rows->where('active', true)->pluck('id')->values()->all(), $publicIds);
         SenseiProfile::whereIn('id', $ids)->update(['sort_order' => 1]);
         $this->patchJson('/api/admin/sensei-profiles/'.$ids[1], ['sort_order' => 1, 'active' => false])->assertOk();
         $this->assertSame($ids[1], SenseiProfile::orderBy('sort_order')->first()->id);

@@ -3,7 +3,7 @@
 import { apiRequest } from "@/lib/api";
 
 export type Offer = { id?: number; program_id?: number; program: { id?: number; code: string; name: string; slug: string }; plan_code: "lms" | "sensei"; base_price: number | null; effective_price: number | null; discount_amount: number; discount_percent: number; duration_months: number; promotion?: { discount_percent: number; starts_at: string | null; ends_at: string | null } | null; status?: string; program_status?: string };
-export type CommercialInvoice = { referral_discount?: number; credit_discount?: number; promo_discount?: number; renewal_grant_id?: number | null; id: number; user_id: number; program_id: number; program_code: string; plan_code: "lms" | "sensei"; base_price: number; discount_amount: number; total_price: number; duration_months?: number; status: string; created_at: string; due_date?: string; paid_at?: string; verified_at?: string; activated_at?: string; submitted_at?: string; note?: string; access_grant?: { starts_at: string; ends_at: string } };
+export type CommercialInvoice = { can_delete?: boolean; referral_discount?: number; credit_discount?: number; promo_discount?: number; renewal_grant_id?: number | null; id: number; user_id: number; program_id: number; program_code: string; plan_code: "lms" | "sensei"; base_price: number; discount_amount: number; total_price: number; duration_months?: number; status: string; created_at: string; due_date?: string; paid_at?: string; verified_at?: string; activated_at?: string; submitted_at?: string; note?: string; access_grant?: { starts_at: string; ends_at: string } };
 export type Identity = { id: number; name: string; email: string; whatsapp: string; role: "student" | "admin"; account_status: string; country?: string; target_jlpt?: string };
 export type EffectiveAccess = { learning: Record<string, "preview" | "full" | "none">; replay_levels: string[]; source_grants: { id: number; program_code: string; plan_code: "lms" | "sensei"; starts_at: string; ends_at: string }[] };
 export type ApiAffiliate = { id: number; user_id?: number; name: string; code: string; status: string; email?: string; whatsapp?: string; rate?: number | null; created_at: string };
@@ -50,7 +50,15 @@ export async function createCommercialDraft(order: { level: string; plan: "lms" 
 }
 export async function createCommercialInvoice(order: { level: string; plan: "lms" | "sensei"; referral?: string; useCredit?: boolean; requestKey?: string }) {
   const invoice = await createCommercialDraft(order);
-  return commercialWrite<CommercialInvoice>(`/api/student/invoices/${invoice.id}/submit`, "POST");
+  if (invoice.status !== "draft") return invoice;
+  try {
+    return await commercialWrite<CommercialInvoice>(`/api/student/invoices/${invoice.id}/submit`, "POST");
+  } catch (cause) {
+    // A lost submit response must not turn a successful submission into another invoice.
+    const current = await commercialData<CommercialInvoice>(`/api/student/invoices/${invoice.id}`);
+    if (current.status !== "draft") return current;
+    throw cause;
+  }
 }
 export function commercialWhatsApp(phone: string, message: string): string | null {
   if (!/^\+?[1-9]\d{7,14}$/.test(phone)) return null;

@@ -30,9 +30,11 @@ class ReferralCreditRaceTest extends TestCase
         $code = app(AffiliateService::class)->ensure($owner);
         $workflow = app(InvoiceWorkflowService::class);
         $source = $workflow->create($friend, $offer, ['referral_code' => $code->code]);
-        foreach (['awaiting_payment', 'paid'] as $status) $workflow->transition($source, $status, $admin);
-        $job = ['op' => 'verify', 'data' => ['invoice' => $source->id]];
+        $workflow->transition($source, 'awaiting_payment', $admin);
+        $job = ['op' => 'confirm', 'data' => ['invoice' => $source->id]];
         $this->assertSame(['ok', 'ok'], $this->race($owner, $admin, [$job, $job]));
+        $this->assertSame('active', $source->fresh()->status);
+        $this->assertSame(1, DB::table('access_grants')->where('source_invoice_id', $source->id)->count());
         $this->assertSame(1, DB::table('referral_learning_credits')->where('source_invoice_id', $source->id)->count());
         $jobs = [];
         foreach (range(1, 2) as $_) $jobs[] = ['op' => 'create', 'data' => ['offer' => $offer->id, 'metadata' => ['use_credit' => true, 'credit_request_key' => (string) Str::uuid()]]];
@@ -44,7 +46,7 @@ class ReferralCreditRaceTest extends TestCase
         $this->assertSame(2, Invoice::where('user_id', $owner->id)->count());
         $purchase = Invoice::where('user_id', $owner->id)->where('credit_discount', '>', 0)->sole();
         foreach (['awaiting_payment', 'paid'] as $status) $workflow->transition($purchase, $status, $admin);
-        $results = $this->race($owner, $admin, [['op' => 'hold', 'data' => ['invoice' => $source->id]], ['op' => 'verify', 'data' => ['invoice' => $purchase->id]]]);
+        $results = $this->race($owner, $admin, [['op' => 'hold', 'data' => ['invoice' => $source->id]], ['op' => 'confirm', 'data' => ['invoice' => $purchase->id]]]);
         $this->assertSame('ok', $results[0]);
         $this->assertContains($results[1], ['ok', 'rejected']);
         $totals = app(ReferralCreditService::class)->student($owner)['totals'];
@@ -69,6 +71,7 @@ $job = json_decode(getenv('RACE_JOB'), true);
 auth()->setUser(App\Models\User::findOrFail(getenv('RACE_ADMIN')));
 try {
     if ($job['op'] === 'create') app(App\Services\InvoiceWorkflowService::class)->create(App\Models\User::findOrFail(getenv('RACE_USER')), App\Models\ProgramOffer::findOrFail($job['data']['offer']), $job['data']['metadata']);
+    elseif ($job['op'] === 'confirm') app(App\Services\InvoiceWorkflowService::class)->confirmPayment(App\Models\Invoice::findOrFail($job['data']['invoice']), auth()->user());
     elseif ($job['op'] === 'verify') app(App\Services\InvoiceWorkflowService::class)->transition(App\Models\Invoice::findOrFail($job['data']['invoice']), 'verified', auth()->user());
     else app(App\Services\ReferralCreditService::class)->control(App\Models\Invoice::findOrFail($job['data']['invoice']), 'hold', 'Concurrent review');
     echo 'ok';
