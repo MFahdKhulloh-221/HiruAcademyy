@@ -1,5 +1,5 @@
 import { apiRequest } from "@/lib/api";
-import { rememberAdminMedia, uploadAdminMedia } from "@/lib/admin-media";
+import { uploadAdminMedia } from "@/lib/admin-media";
 import type { PlacementSettings, PlacementQuestion, PlacementLevel, PlacementQuestionCount } from "@/components/admin-placement-preview";
 
 export type RecommendationRule = {

@@ -3,7 +3,7 @@ import type { LearningAccess } from "../src/lib/learning-api";
 import { dashboardFixture } from "./canonical-fixture";
 
 async function setupStudentApiMocks(page: Page) {
-  let user = { id: 901, name: "Sakura Tanaka", email: "sakura@example.test", whatsapp: "081234567890", role: "student", avatar_resolved_url: null as string | null };
+  const user = { id: 901, name: "Sakura Tanaka", email: "sakura@example.test", whatsapp: "081234567890", role: "student", avatar_resolved_url: null as string | null };
   const items = Array.from({ length: 103 }, (_, index) => ({ id: 103 - index, type: "Akun", title: `Notification ${103 - index}`, body: "Notification body", cta_label: "Lihat Profil", path: "/profile", read: false }));
   const programs = ["n5", "n4", "n3"].map((code, index) => ({ id: index + 1, code, slug: code, name: `JLPT ${code.toUpperCase()}`, family: "jlpt" }));
   const chapters = [1, 2].map(number => ({ id: number, chapter_number: number, title: `Chapter ${number}`, sort_order: number, access: "full", video_lessons: [], modules: [], flashcards: [], mini_checkpoint: { exists: false } }));
@@ -13,8 +13,6 @@ async function setupStudentApiMocks(page: Page) {
   await page.route(/\/(api\/|sanctum\/csrf-cookie)/, async route => {
     const url = new URL(route.request().url());
     const path = url.pathname;
-    const current = new URL(page.url());
-    const membership = current.searchParams.get("membership") ?? "lms";
 
     if (path === "/sanctum/csrf-cookie") {
       await route.fulfill({ status: 204 });

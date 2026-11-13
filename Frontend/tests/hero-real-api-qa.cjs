@@ -32,7 +32,7 @@ const fs=require('node:fs');const path=require('node:path');const assert=require
   await admin.getByLabel('Judul internal (untuk Admin)',{exact:true}).fill('QA slide satu');
   await admin.getByRole('button',{name:'+ Tambah Slide',exact:true}).click();
   await admin.getByLabel('Judul internal (untuk Admin)',{exact:true}).fill('QA slide dua');
-  const second=await upload(0,path.resolve('../assets/dashboard.png'));
+  await upload(0,path.resolve('../assets/dashboard.png'));
   await upload(1,path.resolve('../assets/flashcard.png'));
   await admin.getByLabel('Headline overlay',{exact:true}).fill('Headline QA kedua');
   await admin.getByLabel('Deskripsi overlay',{exact:true}).fill('Deskripsi tersimpan PostgreSQL lokal.');

@@ -43,7 +43,6 @@ const path = require('node:path');
       await page.getByRole('tab',{name:'Konten',exact:true}).click();
       await page.getByLabel('Headline overlay',{exact:true}).fill('Headline studio '+width);
       await page.getByLabel('Deskripsi overlay',{exact:true}).fill('Deskripsi studio '+width);
-      const preview=page.getByRole('heading',{name:'Live Preview Banner'}).locator('..').locator('..').locator('..');
       await page.getByRole('tab',{name:'Tombol CTA',exact:true}).click();
       await page.getByLabel('Label tombol utama',{exact:true}).fill('CTA studio '+width);
       await page.locator('section[aria-label="Promosi Hiru Academy"]').getByRole('link',{name:'CTA studio '+width,exact:false,includeHidden:true}).waitFor({state:'attached'});
