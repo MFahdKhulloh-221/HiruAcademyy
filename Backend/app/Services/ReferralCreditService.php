@@ -61,7 +61,8 @@ class ReferralCreditService
             ? min($available, $price['base_price'] - $promo - $friend, $policy->credit_limit ?? PHP_INT_MAX) : 0;
         return ['base_price' => $price['base_price'], 'promo_discount' => $promo, 'referral_discount' => $friend,
             'credit_discount' => $credit, 'discount_amount' => $promo + $friend + $credit,
-            'discount_percent' => $price['base_price'] > 0 ? round(($promo + $friend + $credit) / $price['base_price'] * 100, 2) : 0,
+            'discount_percent' => ($friend + $credit) === 0 ? ($promo > 0 ? $price['discount_percent'] : 0)
+                : ($price['base_price'] > 0 ? round(($promo + $friend + $credit) / $price['base_price'] * 100, 2) : 0),
             'total_price' => $price['base_price'] - $promo - $friend - $credit, 'available_credit' => $available,
             'affiliate_id' => $referral ? $affiliate->id : null, 'owner_id' => $referral ? $affiliate->user_id : null,
             'policy' => (array) $policy];

@@ -16,6 +16,7 @@ use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 use LogicException;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -90,7 +91,7 @@ class InvoiceTest extends TestCase
     public function test_creation_snapshots_authoritative_fields_and_does_not_grant_access(): void
     {
         $offer = $this->offer();
-        $response = $this->actingAs($this->student)->postJson('/api/student/invoices', ['program_offer_id' => $offer->id])
+        $response = $this->actingAs($this->student, 'sanctum')->postJson('/api/student/invoices', ['program_offer_id' => $offer->id, 'credit_request_key' => (string) Str::uuid()])
             ->assertCreated()->assertJsonStructure(['data' => [
                 'id', 'reference', 'user_id', 'program_offer_id', 'program_id', 'plan_code', 'status',
                 'base_price', 'discount_percent', 'discount_amount', 'total_price', 'currency', 'duration_months',
@@ -120,10 +121,10 @@ class InvoiceTest extends TestCase
             $offer = $this->offer('n1', $plan);
             $this->assertNull($offer->base_price);
             $this->assertSame('inactive', $offer->status);
-            $this->postJson('/api/student/invoices', ['program_offer_id' => $offer->id])->assertUnprocessable();
+            $this->postJson('/api/student/invoices', ['program_offer_id' => $offer->id, 'credit_request_key' => (string) Str::uuid()])->assertUnprocessable();
         }
         $offer = $this->offer('n3', 'sensei');
-        $response = $this->postJson('/api/student/invoices', ['program_offer_id' => $offer->id])
+        $response = $this->postJson('/api/student/invoices', ['program_offer_id' => $offer->id, 'credit_request_key' => (string) Str::uuid()])
             ->assertCreated()->assertJsonPath('data.status', 'draft')->assertJsonPath('data.duration_months', 1);
         $offer->update(['base_price' => 200000, 'duration_months' => 6]);
         $invoice = $this->advance(Invoice::findOrFail($response->json('data.id')));
@@ -154,7 +155,7 @@ class InvoiceTest extends TestCase
     #[DataProvider('prohibitedFields')]
     public function test_client_authority_is_rejected_without_persistence(string $field): void
     {
-        $this->actingAs($this->student)->postJson('/api/student/invoices', ['program_offer_id' => $this->offer()->id, $field => '1'])
+        $this->actingAs($this->student, 'sanctum')->postJson('/api/student/invoices', ['program_offer_id' => $this->offer()->id, $field => '1'])
             ->assertUnprocessable()->assertJsonValidationErrors($field);
         $this->assertDatabaseCount('invoices', 0);
         $this->assertDatabaseCount('access_grants', 0);
@@ -168,7 +169,7 @@ class InvoiceTest extends TestCase
     #[DataProvider('invalidOfferIds')]
     public function test_creation_requires_existing_offer(array $payload): void
     {
-        $this->actingAs($this->student)->postJson('/api/student/invoices', $payload)
+        $this->actingAs($this->student, 'sanctum')->postJson('/api/student/invoices', $payload)
             ->assertUnprocessable()->assertJsonValidationErrors('program_offer_id');
         $this->assertDatabaseCount('invoices', 0);
     }
@@ -187,7 +188,7 @@ class InvoiceTest extends TestCase
             'inactive_offer' => $offer->update(['status' => 'inactive']),
             'inactive_program' => $offer->program->update(['status' => 'inactive']),
         };
-        $this->actingAs($this->student)->postJson('/api/student/invoices', ['program_offer_id' => $offer->id])->assertUnprocessable();
+        $this->actingAs($this->student, 'sanctum')->postJson('/api/student/invoices', ['program_offer_id' => $offer->id, 'credit_request_key' => (string) Str::uuid()])->assertUnprocessable();
         try {
             $this->invoice(offer: $offer->fresh());
             $this->fail('Service accepted unavailable offer.');
@@ -204,7 +205,7 @@ class InvoiceTest extends TestCase
             $this->json($method, $url, ['program_offer_id' => $this->offer()->id, 'status' => 'awaiting_payment'])->assertUnauthorized();
         }
         foreach ([[$this->student, true], [$this->admin, false]] as [$user, $admin]) {
-            $this->actingAs($user);
+            $this->actingAs($user, 'sanctum');
             foreach ($this->endpoints($invoice, $admin) as [$method, $url]) {
                 $this->json($method, $url, ['status' => 'awaiting_payment'])->assertForbidden();
             }
@@ -212,7 +213,7 @@ class InvoiceTest extends TestCase
         foreach ([[$this->student, false], [$this->admin, true]] as [$user, $admin]) {
             $user->account_status = 'inactive';
             $user->save();
-            $this->actingAs($user);
+            $this->actingAs($user, 'sanctum');
             foreach ($this->endpoints($invoice, $admin) as [$method, $url]) {
                 $this->json($method, $url, ['status' => 'awaiting_payment'])->assertUnauthorized();
             }
@@ -244,7 +245,7 @@ class InvoiceTest extends TestCase
         $own = $this->invoice();
         $otherUser = $this->user('other', '081234567883');
         $other = $this->invoice($otherUser);
-        $response = $this->actingAs($this->student)->getJson('/api/student/invoices?user_id='.$otherUser->id)->assertOk()->assertJsonCount(1, 'data');
+        $response = $this->actingAs($this->student, 'sanctum')->getJson('/api/student/invoices?user_id='.$otherUser->id)->assertOk()->assertJsonCount(1, 'data');
         $this->assertSame([$own->id], array_column($response->json('data'), 'id'));
         $this->getJson('/api/student/invoices/'.$own->id)->assertOk()->assertJsonPath('data.id', $own->id);
         foreach ([$other->id, 0] as $id) {
@@ -252,7 +253,7 @@ class InvoiceTest extends TestCase
             $this->postJson('/api/student/invoices/'.$id.'/submit')->assertNotFound();
             $this->postJson('/api/student/invoices/'.$id.'/mark-paid')->assertNotFound();
         }
-        $adminList = $this->actingAs($this->admin)->getJson('/api/admin/invoices')->assertOk()->assertJsonCount(2, 'data');
+        $adminList = $this->actingAs($this->admin, 'sanctum')->getJson('/api/admin/invoices')->assertOk()->assertJsonCount(2, 'data');
         $this->assertEqualsCanonicalizing([$own->id, $other->id], array_column($adminList->json('data'), 'id'));
         $this->getJson('/api/admin/invoices/'.$other->id)->assertOk()->assertJsonPath('data.user_id', $otherUser->id);
         $this->getJson('/api/admin/invoices/0')->assertNotFound();
@@ -353,7 +354,7 @@ class InvoiceTest extends TestCase
     public function test_student_submit_awaits_payment_and_student_declaration_is_forbidden(): void
     {
         $invoice = $this->invoice();
-        $this->actingAs($this->student)->postJson('/api/student/invoices/'.$invoice->id.'/mark-paid')->assertForbidden();
+        $this->actingAs($this->student, 'sanctum')->postJson('/api/student/invoices/'.$invoice->id.'/mark-paid')->assertForbidden();
         $this->postJson('/api/student/invoices/'.$invoice->id.'/submit', ['status' => 'active'])->assertOk()->assertJsonPath('data.status', 'awaiting_payment');
         $this->assertNotNull($invoice->fresh()->submitted_at);
         $this->assertNull($invoice->fresh()->paid_at);
@@ -368,7 +369,7 @@ class InvoiceTest extends TestCase
     public function test_student_cannot_confirm_payment_through_admin_endpoint_or_service(): void
     {
         $invoice = $this->advance($this->invoice(), 'awaiting_payment');
-        $this->actingAs($this->student)->postJson('/api/admin/invoices/'.$invoice->id.'/transition', ['status' => 'paid'])->assertForbidden();
+        $this->actingAs($this->student, 'sanctum')->postJson('/api/admin/invoices/'.$invoice->id.'/transition', ['status' => 'paid'])->assertForbidden();
         try {
             app(InvoiceWorkflowService::class)->confirmPayment($invoice, $this->student);
             $this->fail('Student confirmed payment.');
