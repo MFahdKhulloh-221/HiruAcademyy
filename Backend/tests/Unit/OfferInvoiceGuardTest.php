@@ -6,7 +6,6 @@ use App\Http\Controllers\ProgramOfferController;
 use App\Models\Invoice;
 use App\Models\ProgramOffer;
 use App\Models\User;
-use App\Services\AffiliateService;
 use App\Services\InvoiceWorkflowService;
 use App\Services\NotificationService;
 use Illuminate\Container\Container;
@@ -71,6 +70,10 @@ final class OfferInvoiceGuardTest extends TestCase
         $database = Mockery::mock(DatabaseManager::class);
         $database->shouldReceive('transaction')->andReturnUsing(fn ($callback) => $callback());
         DB::swap($database);
+        $credits = Mockery::mock(\App\Services\ReferralCreditService::class);
+        $credits->shouldReceive('policy')->with(true)->andReturn((object) []);
+        $credits->shouldReceive('assertPayable')->with(Mockery::type(Invoice::class));
+        $container->instance(\App\Services\ReferralCreditService::class, $credits);
     }
 
     protected function tearDown(): void
@@ -169,9 +172,15 @@ final class OfferInvoiceGuardTest extends TestCase
             ->andReturnUsing(function () use (&$saved) {
                 return [(object) ['id' => 10, ...$saved]];
             });
-        $affiliate = Mockery::mock(AffiliateService::class);
-        $affiliate->shouldReceive('referral')->once()->with(Mockery::type(Invoice::class), null);
-        Container::getInstance()->instance(AffiliateService::class, $affiliate);
+        $credits = app(\App\Services\ReferralCreditService::class);
+        $credits->shouldReceive('price')->once()->with(Mockery::type(User::class), Mockery::type(ProgramOffer::class), Mockery::type('array'))
+            ->andReturnUsing(function ($student, $offer) {
+                $this->assertSame(7, $student->id);
+                $this->assertSame(101, $offer->base_price);
+                $price = $offer->pricing();
+                return $price + ['total_price' => $price['effective_price'], 'policy' => [], 'referral_discount' => 0, 'credit_discount' => 0, 'promo_discount' => $price['discount_amount']];
+            });
+        $credits->shouldReceive('reserve')->once()->with(Mockery::type(Invoice::class), Mockery::type('array'));
         $notifications = Mockery::mock(NotificationService::class);
         $notifications->shouldReceive('invoiceReminder')->once()->with(Mockery::type(User::class), Mockery::type(Invoice::class));
         Container::getInstance()->instance(NotificationService::class, $notifications);

@@ -42,6 +42,7 @@ final class ReadingAttemptSnapshotPayloadTest extends TestCase
                 'kind' => 'reading',
                 'status' => 'in_progress',
                 'revision' => 2,
+                'created_at' => '2026-11-14 12:00:00+00:00',
                 'content_snapshot' => $questions,
                 'grading_snapshot' => $grading,
                 'answers' => $answers,

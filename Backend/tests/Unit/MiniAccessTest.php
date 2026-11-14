@@ -33,7 +33,7 @@ final class MiniAccessTest extends TestCase
         parent::setUp();
         $this->previousContainer = Container::getInstance();
         $this->previousFacadeApplication = Facade::getFacadeApplication();
-        $this->previousDb = $this->previousFacadeApplication ? DB::getFacadeRoot() : null;
+        $this->previousDb = $this->previousFacadeApplication?->bound('db') ? DB::getFacadeRoot() : null;
         $container = new class extends Container
         {
             public function abort($code, $message = '', array $headers = []): never

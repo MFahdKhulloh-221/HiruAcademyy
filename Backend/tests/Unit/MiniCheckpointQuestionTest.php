@@ -63,8 +63,8 @@ final class MiniCheckpointQuestionTest extends TestCase
             if (str_contains($sql, 'count(*)')) return [(object) ['aggregate' => $chapterExists ? 1 : 0]];
             if (str_contains($sql, 'where "chapter_id"')) return [];
             if (str_contains($sql, 'select exists')) return [(object) ['exists' => $row !== null]];
-            if (str_contains($sql, '"programs"')) return [(object) ['id' => 1, 'family' => 'jlpt']];
-            if (str_contains($sql, '"chapters"')) return [(object) ['id' => 9, 'program_id' => 1]];
+            if (str_contains($sql, '"programs"')) return [(object) ['id' => 1, 'family' => 'jlpt', 'code' => 'n5']];
+            if (str_contains($sql, '"chapters"')) return [(object) ['id' => 9, 'program_id' => 1, 'mini_checkpoint_duration_minutes' => 7, 'mini_checkpoint_passing_score' => 80]];
             $this->assertStringContainsString('"mini_checkpoint_questions"', $sql);
             return $row ? [(object) $row] : [];
         });
@@ -89,7 +89,7 @@ final class MiniCheckpointQuestionTest extends TestCase
         try {
             $service = new LearningContentService;
             $safe = '<strong>Bold</strong><em>Italic</em><u>Underline</u><ruby>学校<rt>がっこう</rt></ruby>';
-            $input = ['session' => 2, 'part' => 3, 'duration_minutes' => 7, 'passing_score' => 80, 'chapter_id' => 9, 'question' => $safe.'<script>alert(1)</script>', 'options' => ['A' => '<b onclick="bad()">Answer</b>', 'B' => 'Legacy', 'C' => 'Third', 'D' => 'Fourth'], 'correct_option' => 'A', 'explanation' => $safe, 'sort_order' => 0, 'status' => 'draft'];
+            $input = ['chapter_id' => 9, 'question' => $safe.'<script>alert(1)</script>', 'options' => ['A' => '<b onclick="bad()">Answer</b>', 'B' => 'Legacy', 'C' => 'Third', 'D' => 'Fourth'], 'correct_option' => 'A', 'explanation' => $safe, 'sort_order' => 0, 'status' => 'draft'];
             $saved = $service->save('mini-checkpoint-questions', $input);
             $this->assertInstanceOf(MiniCheckpointQuestion::class, $saved);
             $this->assertSame($safe, $saved->question);
@@ -99,11 +99,13 @@ final class MiniCheckpointQuestionTest extends TestCase
             $this->assertSame($safe, $saved->explanation);
             $this->assertSame(80, $saved->passing_score);
             $this->assertSame(7, $saved->duration_minutes);
+            $this->assertSame(1, $saved->session);
+            $this->assertSame(1, $saved->part);
             $container->instance(\App\Services\LearningAttemptService::class, new \App\Services\LearningAttemptService(Mockery::mock(\App\Services\LearningProgressService::class)));
 
             $this->assertSame('published', $service->save('mini-checkpoint-questions', ['status' => 'published'], $saved)->status);
             $saved->status = 'published';
-            foreach ([['passing_score' => -1], ['passing_score' => 101], ['passing_score' => null], ['duration_minutes' => null], ['duration_minutes' => 0], ['session' => 0], ['part' => 0], ['status' => 'live']] as $invalid) {
+            foreach ([['passing_score' => -1], ['passing_score' => 101], ['passing_score' => 80], ['duration_minutes' => 7], ['duration_minutes' => 0], ['session' => 1], ['part' => 1], ['status' => 'live']] as $invalid) {
                 try {
                     $service->save('mini-checkpoint-questions', $invalid, $saved);
                     $this->fail('Expected validation failure.');
@@ -111,11 +113,11 @@ final class MiniCheckpointQuestionTest extends TestCase
                     $this->assertNotEmpty($error->errors());
                 }
             }
-            $chapter = (new \App\Models\Chapter)->forceFill(['id' => 9, 'access' => 'full']);
+            $chapter = (new \App\Models\Chapter)->forceFill(['id' => 9, 'access' => 'full', 'mini_checkpoint_duration_minutes' => 7, 'mini_checkpoint_passing_score' => 80]);
             foreach (['videoLessons', 'modules', 'flashcards', 'audioQuestions', 'readingPassages'] as $relation) $chapter->setRelation($relation, collect());
             $chapter->setRelation('miniCheckpointQuestions', collect([$saved]));
             $payload = (new \App\Http\Resources\StudentChapterResource($chapter))->toArray(Request::create('/'));
-            $this->assertSame(['session' => 2, 'part' => 3, 'duration_minutes' => 7, 'passing_score' => 80, 'question_count' => 1, 'configuration_valid' => true], $payload['mini_checkpoints'][0]);
+            $this->assertSame(['session' => 1, 'part' => 1, 'duration_minutes' => 7, 'passing_score' => 80, 'question_count' => 1, 'configuration_valid' => true], $payload['mini_checkpoints'][0]);
             $this->assertStringNotContainsString('correct_option', json_encode($payload));
             $configuration = $saved->only(['session', 'part', 'duration_minutes', 'passing_score']);
             foreach (['duration_minutes', 'passing_score'] as $field) {
@@ -126,10 +128,10 @@ final class MiniCheckpointQuestionTest extends TestCase
                     $this->assertArrayHasKey($field, $error->errors());
                 }
             }
-            $saved->passing_score = null;
+            $chapter->mini_checkpoint_passing_score = null;
             $invalidPayload = (new \App\Http\Resources\StudentChapterResource($chapter))->toArray(Request::create('/'));
             $this->assertFalse($invalidPayload['mini_checkpoints'][0]['configuration_valid']);
-            $saved->passing_score = 80;
+            $chapter->mini_checkpoint_passing_score = 80;
             $chapterExists = false;
             try {
                 $service->save('mini-checkpoint-questions', ['chapter_id' => 999], $saved);

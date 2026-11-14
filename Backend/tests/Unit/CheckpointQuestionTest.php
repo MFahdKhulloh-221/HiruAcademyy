@@ -48,6 +48,7 @@ final class CheckpointQuestionTest extends TestCase
         Model::setConnectionResolver($connections);
         $database = Mockery::mock(\Illuminate\Database\DatabaseManager::class);
         $database->shouldReceive('connection')->andReturn($connection);
+        $database->shouldReceive('select')->once()->with('SELECT pg_advisory_xact_lock(hashtext(?))', ['learning-chapter-order'])->andReturn([]);
         $database->shouldReceive('transaction')->andReturnUsing(fn ($callback) => $callback());
         DB::swap($database);
         $factory = new Factory(new Translator(new ArrayLoader, 'en'), $container);
@@ -63,6 +64,7 @@ final class CheckpointQuestionTest extends TestCase
             if (str_contains($sql, 'count(*)')) return [(object) ['aggregate' => $chapterExists ? 1 : 0]];
             if (str_contains($sql, 'select exists')) return [(object) ['exists' => $row !== null]];
             if (str_contains($sql, '"chapters"')) return [(object) ['id' => 9, 'program_id' => 1]];
+            if (str_contains($sql, '"programs"')) return [(object) ['id' => 1, 'family' => 'jlpt', 'code' => 'n5']];
             $this->assertStringContainsString('"checkpoint_questions"', $sql);
             return $row ? [(object) $row] : [];
         });

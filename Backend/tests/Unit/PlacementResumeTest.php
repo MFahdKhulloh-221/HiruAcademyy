@@ -49,7 +49,7 @@ final class PlacementResumeTest extends TestCase
         DB::swap($database);
         $row = ['id' => 12, 'user_id' => 1, 'status' => 'in_progress', 'config_snapshot' => json_encode(['question_count' => 1]), 'adaptive_state' => json_encode(['revision' => 3]), 'answers' => json_encode(['41' => 'B']), 'started_at' => CarbonImmutable::now('UTC')->subMinute()->toISOString(), 'expires_at' => CarbonImmutable::now('UTC')->addMinutes(4)->toISOString()];
         try {
-            $request = Request::create('/api/placement/attempts', 'POST', ['name' => 'Student', 'whatsapp' => '628123456789', 'target' => 'N5', 'privacy' => true]);
+            $request = Request::create('/api/placement/attempts', 'POST', ['name' => 'Student', 'whatsapp' => '628123456789', 'target' => 'N5', 'privacy' => true, 'whatsappConsent' => true]);
             $request->setUserResolver(fn () => (new User)->forceFill(['id' => 1, 'role' => 'student', 'account_status' => 'active']));
             $request->setLaravelSession(new Store('test', new ArraySessionHandler(60)));
             $connection->shouldReceive('select')->once()->ordered()->withArgs(function ($sql, $bindings) {

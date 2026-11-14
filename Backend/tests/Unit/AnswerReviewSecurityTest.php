@@ -34,7 +34,12 @@ final class AnswerReviewSecurityTest extends TestCase
         try {
             foreach (['reading', 'mini', 'tryout'] as $kind) {
                 $service = $kind === 'tryout'
-                    ? new TryOutAttemptService($this->createMock(ChapterAccessPolicy::class), new TryOutService)
+                    ? new TryOutAttemptService($this->createMock(ChapterAccessPolicy::class), new class extends TryOutService {
+                        public function builderCapabilities(): array
+                        {
+                            return ['images' => true, 'decimal_points' => true];
+                        }
+                    })
                     : new LearningAttemptService($this->createMock(LearningProgressService::class));
                 $content = array_map(fn ($id) => ['id' => $id, 'session' => $kind === 'tryout' ? 'vocabulary_kanji' : 1, 'part' => 1, 'duration_minutes' => 10, 'passing_score' => 70, 'question' => 'Question', 'options' => ['A' => 'A', 'B' => 'B'], 'correct_option' => 'B', 'explanation' => 'Injected secret'], [1, 2, 3]);
                 $grades = array_fill_keys([1, 2, 3], ['correct_option' => 'A', 'explanation' => '<ruby>学校<rt>がっこう</rt></ruby>', 'point_value' => 1]);
