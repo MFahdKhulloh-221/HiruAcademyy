@@ -46,7 +46,44 @@ class CheckpointR19Test extends TestCase
     {
         parent::setUp();
         $this->assertSame('hiru_academy_test', DB::connection()->getDatabaseName());
-        $this->assertSame('hiru_backend_test_gamification_final_20261008', DB::selectOne('SELECT current_schema() AS name')->name);
+        $this->assertSame(getenv('HIRU_TEST_SCHEMA') ?: 'hiru_backend_test_gamification_final_20261008', DB::selectOne('SELECT current_schema() AS name')->name);
+    }
+
+    public function test_http_authentication_role_and_account_gates(): void
+    {
+        $package = $this->package();
+        $owner = $this->user();
+        $this->grant($owner, 'n5', 'sensei');
+        $attempt = app(CheckpointAttemptService::class)->start($owner, $package);
+        $base = '/api/student/checkpoint-packages/'.$package->id;
+        $path = $base.'/attempts/'.$attempt->id;
+        $requests = [
+            ['GET', '/api/student/checkpoint-packages', []],
+            ['GET', $base, []],
+            ['POST', $base.'/attempts', []],
+            ['GET', $base.'/history', []],
+            ['GET', $path, []],
+            ['PUT', $path.'/answers', ['answers' => [], 'revision' => 0]],
+            ['POST', $path.'/submit', ['revision' => 0]],
+            ['POST', $path.'/abandon', []],
+            ['GET', $path.'/result', []],
+            ['GET', $path.'/review', []],
+        ];
+        $before = $attempt->fresh()->toArray();
+        foreach ($requests as [$method, $uri, $body]) {
+            $this->json($method, $uri, $body)->assertUnauthorized();
+        }
+        $admin = $this->user('admin');
+        $inactive = $this->user();
+        $inactive->forceFill(['account_status' => 'inactive'])->save();
+        foreach ([$admin, $inactive] as $user) {
+            foreach ($requests as [$method, $uri, $body]) {
+                $this->actingAs($user)->json($method, $uri, $body)
+                    ->assertStatus($user->account_status === 'active' ? 403 : 401);
+            }
+        }
+        $this->assertSame($before, $attempt->fresh()->toArray());
+        $this->assertSame(1, CheckpointAttempt::where('checkpoint_package_id', $package->id)->count());
     }
 
     public function test_sensei_only_cumulative_access_and_readonly_history(): void
@@ -54,13 +91,15 @@ class CheckpointR19Test extends TestCase
         $package = $this->package();
         $user = $this->user();
         $base = '/api/student/checkpoint-packages/'.$package->id;
-        $this->actingAs($user)->postJson($base.'/attempts')->assertForbidden();
+        $this->postJson('/api/auth/login', ['identity' => $user->email, 'password' => 'password'])->assertOk();
+        $this->postJson($base.'/attempts')->assertForbidden();
         $lms = $this->grant($user, 'n5', 'lms');
         $this->postJson($base.'/attempts')->assertForbidden();
         $otherLevel = Program::firstOrCreate(['code' => 'n4'], ['slug' => 'n4', 'name' => 'R19 N4', 'family' => 'jlpt', 'status' => 'active', 'sort_order' => 1]);
         $higherPackage = app(CheckpointPackageService::class)->save(['program_id' => $otherLevel->id, 'title' => 'Higher level', 'access_type' => 'free', 'max_score' => 3]);
         $lowerSensei = $this->grant($user, 'n5', 'sensei');
-        $this->assertFalse(app(CheckpointAttemptService::class)->canAccess($user, $higherPackage));
+        $this->getJson('/api/student/checkpoint-packages/'.$higherPackage->id)->assertForbidden();
+        $this->postJson('/api/student/checkpoint-packages/'.$higherPackage->id.'/attempts')->assertForbidden();
         DB::table('access_grants')->where('id', $lowerSensei)->update(['status' => 'inactive']);
         $sensei = $this->grant($user, 'n4', 'sensei', ['ends_at' => now()->subDay()]);
         $this->postJson($base.'/attempts')->assertForbidden();
@@ -71,17 +110,44 @@ class CheckpointR19Test extends TestCase
         DB::table('access_grants')->where('id', $sensei)->update(['status' => 'active']);
         $data = $this->postJson($base.'/attempts')->assertCreated()->json('data');
         $this->assertCount(3, $data['active_sessions']);
-        $this->assertArrayNotHasKey('correct_option', $data['questions'][0]);
+        $assertNoKeys = function (array $payload) use (&$assertNoKeys): void {
+            foreach ($payload as $key => $value) {
+                $this->assertNotContains($key, ['correct_option', 'correct_answer', 'explanation', 'grading_snapshot']);
+                if (is_array($value)) $assertNoKeys($value);
+            }
+        };
+        $assertNoKeys($data);
         $path = $base.'/attempts/'.$data['id'];
+        $assertNoKeys($this->getJson($base)->assertOk()->json());
+        $assertNoKeys($this->getJson($path)->assertOk()->json());
+        $this->getJson($path.'/result')->assertForbidden();
+        $this->getJson($path.'/review')->assertForbidden();
+        $owner = $user;
+        $other = $this->user();
+        $this->grant($other, 'n4', 'sensei');
         $before = CheckpointAttempt::findOrFail($data['id'])->toArray();
-        DB::table('access_grants')->where('id', $sensei)->update(['status' => 'inactive']);
+        $this->actingAs($other)->getJson($path)->assertNotFound();
+        $this->getJson($path.'/result')->assertNotFound();
+        $this->getJson($path.'/review')->assertNotFound();
+        $this->putJson($path.'/answers', ['answers' => [], 'revision' => 0])->assertNotFound();
+        $this->postJson($path.'/submit', ['revision' => 0])->assertNotFound();
+        $this->postJson($path.'/abandon')->assertNotFound();
+        $this->assertSame($before, CheckpointAttempt::findOrFail($data['id'])->toArray());
+        $this->actingAs($owner);
+        $before = CheckpointAttempt::findOrFail($data['id'])->toArray();
+        DB::table('access_grants')->where('id', $sensei)->update(['ends_at' => now()->subDay()]);
+        $this->getJson($path)->assertForbidden();
+        $this->putJson($path.'/answers', ['answers' => [], 'revision' => 0])->assertForbidden();
+        $this->postJson($path.'/submit', ['revision' => 0])->assertForbidden();
+        $this->assertSame($before, CheckpointAttempt::findOrFail($data['id'])->toArray());
+        DB::table('access_grants')->where('id', $sensei)->update(['ends_at' => now()->addDay(), 'status' => 'inactive']);
         $this->getJson($path)->assertForbidden();
         $this->putJson($path.'/answers', ['answers' => [], 'revision' => 0])->assertForbidden();
         $this->postJson($path.'/submit', ['revision' => 0])->assertForbidden();
         $this->assertSame($before, CheckpointAttempt::findOrFail($data['id'])->toArray());
         DB::table('access_grants')->where('id', $sensei)->update(['status' => 'active']);
         $answers = array_fill_keys(array_column($data['questions'], 'id'), 'B');
-        $this->putJson($path.'/answers', ['answers' => $answers, 'revision' => 0])->assertOk();
+        $assertNoKeys($this->putJson($path.'/answers', ['answers' => $answers, 'revision' => 0])->assertOk()->json());
         $this->putJson($path.'/answers', ['answers' => [], 'revision' => 0])->assertConflict();
         $result = $this->postJson($path.'/submit', ['revision' => 1])->assertOk()->assertJsonPath('data.result.earned', 3)->assertJsonPath('data.result.overall_pass', true)->assertJsonCount(3, 'data.result.sessions')->json('data');
         $this->postJson($path.'/submit', ['revision' => 1])->assertOk()->assertJsonPath('data.revision', $result['revision']);
@@ -93,7 +159,9 @@ class CheckpointR19Test extends TestCase
         $this->postJson($path.'/submit', ['revision' => 2])->assertForbidden();
         $this->putJson($path.'/answers', ['answers' => [], 'revision' => 2])->assertForbidden();
         $this->assertSame($completed, CheckpointAttempt::findOrFail($data['id'])->toArray());
-        $this->actingAs($this->user())->getJson($path.'/result')->assertNotFound();
+        $assertNoKeys($this->getJson($path.'/result')->assertOk()->json());
+        $this->actingAs($other)->getJson($path)->assertNotFound();
+        $this->getJson($path.'/result')->assertNotFound();
         $this->getJson($path.'/review')->assertNotFound();
         $this->putJson($path.'/answers', ['answers' => [], 'revision' => 2])->assertNotFound();
         $this->postJson($path.'/submit', ['revision' => 2])->assertNotFound();
