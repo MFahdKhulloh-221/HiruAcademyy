@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\ActivityCompletion;
 use App\Models\AudioQuestion;
 use App\Models\Chapter;
 use App\Models\CheckpointQuestion;
@@ -151,6 +152,11 @@ class LearningContentService
                 if ($model->exists) {
                     $model = $model->newQuery()->whereKey($model->getKey())->lockForUpdate()->firstOrFail();
                 }
+                if ($model->exists && $resource !== 'chapters') {
+                    $sourceChapterId = $resource === 'reading-questions'
+                        ? ReadingPassage::whereKey($model->reading_passage_id)->value('chapter_id') : $model->chapter_id;
+                    Chapter::whereKey($sourceChapterId)->lockForUpdate()->firstOrFail();
+                }
                 $model->fill($data);
                 if ($resource === 'flashcards' && $model->reading === null) {
                     $model->reading = '';
@@ -233,7 +239,14 @@ class LearningContentService
                     }
                     $model->sort_order = $position;
                 }
+                $moved = $model->exists && $resource !== 'chapters'
+                    && $model->isDirty($resource === 'reading-questions' ? 'reading_passage_id' : 'chapter_id');
                 $model->save();
+                if ($moved && in_array(self::RESOURCES[$resource][1], ['video', 'module', 'flashcard', 'audio', 'reading'], true)) {
+                    $ids = $resource === 'reading-passages' ? $model->questions()->pluck('id')->all() : [$model->id];
+                    ActivityCompletion::where('type', self::RESOURCES[$resource][1])->whereIn('resource_id', $ids)
+                        ->update(['chapter_id' => $chapterId]);
+                }
                 if ($reorderChapter) {
                     $siblings->splice($position, 0, [$model]);
                     $this->normalizeChapters($siblings);

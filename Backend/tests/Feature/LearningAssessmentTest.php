@@ -582,10 +582,36 @@ class LearningAssessmentTest extends TestCase
         $this->getJson($this->base.'/progress')->assertJsonPath('data.activities.audio.total', 0);
         $this->base = '/api/student/programs/'.$other->program_id.'/chapters/'.$other->id;
         $this->getJson($this->base.'/progress')->assertJsonPath('data.activities.audio.complete', true);
+        $this->assertDatabaseHas('activity_completions', ['type' => 'audio', 'resource_id' => $audio->id, 'chapter_id' => $other->id]);
+        $batch = app(\App\Services\LearningProgressService::class)->batch($this->student, Chapter::whereKey($other->id)->get(), Program::whereKey($other->program_id)->get()->keyBy('id'));
+        $this->assertTrue($batch[$other->id]['activities']['audio']['complete']);
         $attempt = $this->start('audio');
         $this->postJson($this->base.'/attempts/'.$attempt['id'].'/submit', ['answers' => [$audio->id => 'B'], 'revision' => 0])->assertOk();
         $this->assertSame(1, ActivityCompletion::where('type', 'audio')->where('resource_id', $audio->id)->count());
         $this->assertDatabaseHas('activity_completions', ['type' => 'audio', 'resource_id' => $audio->id, 'chapter_id' => $other->id]);
+    }
+
+    public function test_module_and_reading_moves_relocate_only_matching_canonical_completions(): void
+    {
+        $other = Chapter::create(['program_id' => $this->chapter->program_id, 'chapter_number' => 2, 'title' => 'Other', 'status' => 'published']);
+        $module = \App\Models\LearningModule::create(['chapter_id' => $this->chapter->id, 'title' => 'Module', 'module_type' => 'general', 'status' => 'published']);
+        $passage = ReadingPassage::create(['chapter_id' => $this->chapter->id, 'title' => 'Passage', 'body' => 'Body', 'status' => 'published']);
+        $question = ReadingQuestion::create($this->question(['reading_passage_id' => $passage->id]));
+        $target = ReadingPassage::create(['chapter_id' => $this->chapter->id, 'title' => 'Target', 'body' => 'Body', 'status' => 'published']);
+        $progress = app(\App\Services\LearningProgressService::class);
+        $progress->record($this->student, $this->chapter, 'module', $module->id);
+        $progress->record($this->student, $this->chapter, 'reading', $question->id);
+        $progress->record($this->student, $this->chapter, 'audio', $module->id);
+        $service = app(LearningContentService::class);
+        $service->save('modules', ['chapter_id' => $other->id], $module);
+        $service->save('reading-passages', ['chapter_id' => $other->id], $passage);
+        foreach (['module' => $module->id, 'reading' => $question->id] as $type => $id) {
+            $this->assertDatabaseHas('activity_completions', ['user_id' => $this->student->id, 'type' => $type, 'resource_id' => $id, 'chapter_id' => $other->id]);
+        }
+        $this->assertDatabaseHas('activity_completions', ['user_id' => $this->student->id, 'type' => 'audio', 'resource_id' => $module->id, 'chapter_id' => $this->chapter->id]);
+        $service->save('reading-questions', ['reading_passage_id' => $target->id], $question);
+        $this->assertDatabaseHas('activity_completions', ['user_id' => $this->student->id, 'type' => 'reading', 'resource_id' => $question->id, 'chapter_id' => $this->chapter->id]);
+        $this->assertSame(3, ActivityCompletion::where('user_id', $this->student->id)->count());
     }
 
     public function test_admin_cannot_delete_chapter_with_retained_attempts(): void

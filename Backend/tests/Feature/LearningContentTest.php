@@ -152,7 +152,7 @@ class LearningContentTest extends TestCase
         $url = '/api/admin/'.$resource;
         $this->actingAs($this->admin);
         $created = $this->postJson($url, $payload)->assertCreated()
-            ->assertJsonPath('data.status', 'draft')->assertJsonPath('data.sort_order', 0);
+            ->assertJsonPath('data.status', 'draft')->assertJsonPath('data.sort_order', $resource === 'chapters' ? 1 : 0);
         $id = $created->json('data.id');
         $this->assertIsInt($id);
         foreach ($payload as $field => $value) {

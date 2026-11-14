@@ -89,7 +89,8 @@ class AssessmentRaceTest extends TestCase
         $this->student->forceFill(['role' => 'student', 'account_status' => 'active'])->save();
         $options = ['A' => 'One', 'B' => 'Two', 'C' => 'Three', 'D' => 'Four'];
         if ($kind === 'try_out') {
-            $this->assertSame('hiru_backend_test_gamification_final_20261008', DB::selectOne('SELECT current_schema() AS name')->name);
+            $this->assertMatchesRegularExpression('/^hiru_backend_test_[a-z0-9_]+$/D', (string) getenv('HIRU_TEST_SCHEMA'));
+            $this->assertSame(getenv('HIRU_TEST_SCHEMA'), DB::selectOne('SELECT current_schema() AS name')->name);
             if (! Schema::hasColumn('try_out_attempts', 'expires_at')) {
                 (require database_path('migrations/2026_10_11_000001_add_try_out_duration_and_attempt_deadline.php'))->up();
             }
@@ -286,6 +287,51 @@ PHP;
         }
     }
 
+    public function test_content_move_waits_for_source_completion_and_preserves_canonical_row(): void
+    {
+        $fixture = $this->fixture('learning', false);
+        $audio = AudioQuestion::where('chapter_id', $this->chapter->id)->firstOrFail();
+        $target = Chapter::create(['program_id' => $this->chapter->program_id, 'chapter_number' => 999999, 'title' => 'Move target', 'status' => 'published']);
+        $name = 'move_'.bin2hex(random_bytes(8));
+        $code = <<<'PHP'
+require 'vendor/autoload.php';
+$app = require 'bootstrap/app.php';
+$app->make(Illuminate\Contracts\Console\Kernel::class)->bootstrap();
+config(['database.connections.pgsql' => json_decode(getenv('RACE_CONNECTION'), true, 512, JSON_THROW_ON_ERROR)]);
+Illuminate\Support\Facades\DB::purge('pgsql');
+App\Support\DatabaseSafety::assertTarget(true);
+if (Illuminate\Support\Facades\DB::selectOne('SELECT current_schema() AS name')->name !== getenv('HIRU_TEST_SCHEMA')) throw new RuntimeException('Wrong schema');
+Illuminate\Support\Facades\DB::select("SELECT set_config('application_name', ?, false)", [getenv('RACE_NAME')]);
+app(App\Services\LearningContentService::class)->save('audio-questions', ['chapter_id' => (int) getenv('MOVE_TARGET')], App\Models\AudioQuestion::findOrFail(getenv('MOVE_AUDIO')));
+PHP;
+        $worker = new Process([PHP_BINARY, '-r', $code], base_path(), ['APP_ENV' => 'testing', 'APP_CONFIG_CACHE' => base_path('bootstrap/cache/race-nonexistent.php'), 'DB_URL' => '',
+            'RACE_CONNECTION' => json_encode(DB::connection()->getConfig(), JSON_THROW_ON_ERROR), 'RACE_NAME' => $name, 'MOVE_TARGET' => $target->id, 'MOVE_AUDIO' => $audio->id], null, 25);
+        try {
+            DB::beginTransaction();
+            Chapter::whereKey($this->chapter->id)->lockForUpdate()->firstOrFail();
+            $worker->start();
+            $deadline = microtime(true) + 12;
+            do {
+                DB::select('SELECT pg_stat_clear_snapshot()');
+                $blocked = DB::selectOne("SELECT count(*) AS total FROM pg_stat_activity WHERE datname = current_database() AND application_name = ? AND wait_event_type = 'Lock'", [$name]);
+                if ((int) $blocked->total === 1) break;
+                $this->assertTrue($worker->isRunning(), $worker->getErrorOutput());
+                usleep(20000);
+            } while (microtime(true) < $deadline);
+            $this->assertSame(1, (int) $blocked->total, 'Move must wait for source chapter completion.');
+            app(\App\Services\LearningProgressService::class)->record($this->student, $this->chapter, 'audio', $audio->id);
+            DB::commit();
+            $this->assertSame(0, $worker->wait(), $worker->getErrorOutput());
+            $this->assertSame(1, DB::table('activity_completions')->where('user_id', $this->student->id)->where('type', 'audio')->where('resource_id', $audio->id)->count());
+            $this->assertDatabaseHas('activity_completions', ['user_id' => $this->student->id, 'type' => 'audio', 'resource_id' => $audio->id, 'chapter_id' => $target->id]);
+        } finally {
+            while (DB::transactionLevel() > 0) DB::rollBack();
+            if ($worker->isRunning()) $worker->stop();
+            DB::table('activity_completions')->where('chapter_id', $target->id)->delete();
+            $target->delete();
+        }
+    }
+
     public function test_studio_concurrent_save_and_delete_reject_stale_writes(): void
     {
         $fixture = $this->fixture('try_out', false);
@@ -298,9 +344,8 @@ PHP;
         foreach ([false, true] as $delete) {
             $body = ['revision' => $service->studioRevision($this->tryOut), 'settings' => ['status' => 'draft'],
                 'passages' => [['id' => (string) $passage->id, 'title' => 'Race passage', 'body' => $delete ? '<p>Saved again</p>' : '<p>Saved</p>']],
-                'questions' => $this->tryOut->questions()->orderBy('id')->get()->map(function ($q) use ($service) {
-                    $content = $service->adminQuestion($q);
-                    unset($content['id'], $content['try_out_id'], $content['audio_url_resolved_url']);
+                'questions' => $this->tryOut->questions()->orderBy('id')->get()->map(function ($q) {
+                    $content = $q->only(['passage_id', 'session', 'question', 'options', 'correct_option', 'explanation', 'point_value', 'reading_passage', 'audio_url', 'sort_order', 'status', 'instruction', 'japanese']);
                     return ['id' => (string) $q->id, 'content' => $content];
                 })->all(), 'deleted_question_ids' => [], 'deleted_passage_ids' => []];
             $other = $body;
