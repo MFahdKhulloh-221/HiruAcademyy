@@ -59,9 +59,40 @@ class RegistrationWelcomeTest extends TestCase
         $this->assertFalse($service->visible($this->student())->whereKey($welcome->id)->exists());
         $admin = $this->student();
         $admin->forceFill(['role' => 'admin'])->save();
-        $this->actingAs($admin)->getJson('/api/admin/notifications/'.$welcome->id)->assertNotFound();
+        $this->actingAs($admin)->withSession(['password_hash_web' => $admin->password])
+            ->getJson('/api/admin/notifications/'.$welcome->id)->assertNotFound();
         $service->mark($user, (string) $welcome->id, ['read' => true]);
         $this->assertTrue($service->listing($user)[0]['read']);
+    }
+
+    public function test_repeated_login_preserves_welcome_and_read_state(): void
+    {
+        $user = $this->student();
+        $user->update(['password' => 'password123']);
+        $service = app(NotificationService::class);
+        $service->welcome($user);
+        $welcome = NotificationContent::where('user_id', $user->id)->sole();
+        $service->mark($user, (string) $welcome->id, ['read' => true]);
+        $before = $service->listing($user);
+
+        for ($attempt = 0; $attempt < 3; $attempt++) {
+            $this->postJson('/api/auth/login', ['identity' => $user->email, 'password' => 'password123'])->assertOk();
+            $this->getJson('/api/student/notifications')->assertOk()->assertJsonPath('data', $before);
+            $this->postJson('/api/auth/logout')->assertNoContent();
+        }
+        $this->assertSame(1, NotificationContent::where('user_id', $user->id)->count());
+    }
+
+    public function test_login_does_not_create_welcome_for_existing_account(): void
+    {
+        $user = $this->student();
+        $user->update(['password' => 'password123']);
+
+        for ($attempt = 0; $attempt < 2; $attempt++) {
+            $this->postJson('/api/auth/login', ['identity' => $user->email, 'password' => 'password123'])->assertOk();
+            $this->assertSame(0, NotificationContent::where('user_id', $user->id)->count());
+            $this->postJson('/api/auth/logout')->assertNoContent();
+        }
     }
 
     public function test_pending_jlpt_exact_welcome_and_later_reminder_are_deduped(): void

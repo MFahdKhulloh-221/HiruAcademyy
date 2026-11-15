@@ -68,7 +68,6 @@ class AuthController extends Controller
             return response()->json(['message' => 'Email/WhatsApp atau kata sandi tidak sesuai.'], 422);
         }
 
-        app(NotificationService::class)->welcome($user);
         Auth::guard('web')->login($user);
         $request->session()->regenerate();
         $request->session()->put('password_hash_web', $user->password);
