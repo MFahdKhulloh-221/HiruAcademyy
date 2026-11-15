@@ -136,13 +136,25 @@ test("real login, admin settings, completion, immutable award, IDOR and transpor
 
     await login(student, "student");
     await student.goto("/certificate");
-    await expect(student.getByRole("heading", { name: /Belum ada sertifikat yang diterbitkan/ })).toBeVisible();
+    await expect(student.getByRole("heading", { name: "Sertifikat Digital", exact: true })).toBeVisible();
+    await expect(student.getByText("Belum ada sertifikat diterbitkan", { exact: true })).toBeVisible();
+    await expect(student.getByRole("heading", { name: "Pencapaianmu sedang dipersiapkan", exact: true })).toBeVisible();
+    await expect(student.getByRole("navigation", { name: "Halaman sertifikat" })).toHaveCount(0);
+    const journey = student.getByRole("region", { name: "Perjalanan belajarmu", exact: true });
+    const programCard = journey.getByRole("article").filter({ has: student.getByRole("heading", { name, exact: true }) });
+    await expect(programCard.getByRole("link", { name: "Buka Program", exact: true })).toHaveAttribute("href", `/journey/${encodeURIComponent(`c6-${fixture.token}`.toLowerCase())}`);
+    await expect(journey.getByRole("progressbar")).toHaveCount(0);
     expect((await request(student, "/api/student/program-achievements")).body.meta.total).toBe(0);
     execFileSync("php", [resolve("../Backend/tests/support/program-achievement-browser-fixture.php"), "complete"], { env: process.env, stdio: "inherit" });
     const reconcilePath = `/api/student/program-achievements/programs/${fixture.program}/reconcile`;
-    const reconciled = await request(student, reconcilePath, "POST");
-    expect(reconciled.status).toBe(200);
-    expect(["issued", "existing"]).toContain(reconciled.body.reason);
+    await student.getByRole("combobox").selectOption(String(fixture.program));
+    const reconcileResponse = student.waitForResponse(response => response.url() === api + reconcilePath && response.request().method() === "POST");
+    await student.getByRole("button", { name: "Periksa Penyelesaian", exact: true }).click();
+    const response = await reconcileResponse;
+    expect(response.status()).toBe(200);
+    const reconciled = await response.json();
+    expect(["issued", "existing"]).toContain(reconciled.reason);
+    await expect(student.getByRole("region", { name: "Sertifikat yang diterbitkan", exact: true }).getByRole("link", { name: "Lihat Sertifikat", exact: true })).toBeVisible();
     const collection = await request(student, "/api/student/program-achievements");
     expect(collection.status).toBe(200);
     expect(collection.body.meta.total).toBe(1);
@@ -150,8 +162,9 @@ test("real login, admin settings, completion, immutable award, IDOR and transpor
     expect(award).toMatchObject({ program_id: fixture.program, student_name_snapshot: fixture.users.student.name, program_name_snapshot: name, program_code_snapshot: `c6-${fixture.token}`, learning_type_snapshot: "lms", presentation_snapshot: { title, description, signature_data_url: signature, signature_position: "bottom-left" } });
     expect(Number.isFinite(Date.parse(award.issued_at))).toBe(true);
     await student.reload();
-    await expect(student.getByRole("link", { name: "Lihat Detail Sertifikat" })).toBeVisible();
-    await student.getByRole("link", { name: "Lihat Detail Sertifikat" }).click();
+    const issuedCertificate = student.getByRole("region", { name: "Sertifikat yang diterbitkan", exact: true }).getByRole("link", { name: "Lihat Sertifikat", exact: true });
+    await expect(issuedCertificate).toBeVisible();
+    await issuedCertificate.click();
     await expect(student).toHaveURL(`/certificate/${award.id}`);
     const certificate = student.getByRole("img", { name: `Sertifikat penyelesaian ${name} — ${fixture.users.student.name}`, exact: true });
     await expect(certificate).toBeVisible();
@@ -207,22 +220,25 @@ test("real login, admin settings, completion, immutable award, IDOR and transpor
 
     // Warm Next's SPA route cache before creating a real transport failure.
     await student.getByRole("link", { name: "Kembali ke Sertifikat" }).click();
-    await expect(student.getByRole("link", { name: "Lihat Detail Sertifikat" })).toBeVisible();
+    await expect(student.getByRole("link", { name: "Lihat Sertifikat" })).toBeVisible();
     await expect(student.getByRole("link", { name: /PDF|Unduh|Download/i })).toHaveCount(0);
     await expect(student.getByRole("button", { name: /PDF|Unduh|Download/i })).toHaveCount(0);
-    await student.getByRole("link", { name: "Lihat Detail Sertifikat" }).click();
+    await student.getByRole("link", { name: "Lihat Sertifikat" }).click();
     await expect(certificate).toBeVisible();
     // Keep Next's document online; fail a real in-page request without mocking API responses.
     await student.getByRole("link", { name: "Kembali ke Sertifikat" }).click();
-    await expect(student.getByRole("link", { name: "Lihat Detail Sertifikat" })).toBeVisible();
+    await expect(student.getByRole("link", { name: "Lihat Sertifikat" })).toBeVisible();
     await student.getByRole("combobox").selectOption(String(fixture.program));
     await studentContext.setOffline(true);
     await student.getByRole("button", { name: "Periksa Penyelesaian", exact: true }).click();
     await expect(student.getByRole("status").filter({ hasText: "Pemeriksaan penyelesaian belum berhasil. Silakan coba lagi." })).toBeVisible();
     await studentContext.setOffline(false);
     await student.getByRole("button", { name: "Periksa Penyelesaian", exact: true }).click();
-    await expect(student.getByRole("status").filter({ hasText: "Sertifikat program ini sudah diterbitkan." })).toBeVisible();
-    await expect(student.getByRole("link", { name: "Lihat Detail Sertifikat" })).toBeVisible();
+    const existingNotice = student.getByRole("status").filter({ hasText: "Sertifikat sudah tersedia" });
+    await expect(existingNotice).toBeVisible();
+    await expect(existingNotice.getByRole("link", { name: "Lihat Sertifikat", exact: true })).toHaveAttribute("href", `/certificate/${award.id}`);
+    await expect(student.getByRole("region", { name: "Sertifikat yang diterbitkan", exact: true }).getByRole("link", { name: "Lihat Sertifikat", exact: true })).toHaveAttribute("href", `/certificate/${award.id}`);
+    await expect(student.getByRole("navigation", { name: "Halaman sertifikat" })).toHaveCount(0);
     console.log("REAL_ACHIEVEMENT_EVIDENCE", JSON.stringify({ awardId: award.id, collectionTotal: 1, learningType: award.learning_type_snapshot, issuedAt: award.issued_at, snapshotStable: true, signatureStableAfterGlobalRemoval: true, pdfHeader: "%PDF-", pdfPage: "A4 landscape", otherStudentStatus: 404, viewports: [1440, 390], realOfflineRetry: true }));
   } finally {
     try {

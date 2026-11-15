@@ -14,6 +14,10 @@ async function mockApi(page: Page, admin = false) {
     row: template(), snapshots: [achievement()], emptyAdmin: false,
     issuer: { signature_data_url: null, signature_position: "bottom-right" },
     listError: false, previewError: false, saveError: false, issuerValidationError: false,
+    catalog: { programs: [{ id: 1, code: "n5", name: "JLPT N5", family: "jlpt" }], access: { learning: { n5: "full" } as Record<string, "full" | "preview" | "none">, replay_levels: [], source_grants: [{ plan_code: "lms", program_code: "n5" }] }, chapters: [] },
+    lastPage: 1, listReads: [] as number[],
+    reconciliation: { data: null as ReturnType<typeof achievement> | null, reason: "disabled" },
+    publishOnReconcile: false,
     hold: null as Promise<void> | null,
     writes: [] as { method: string; path: string; body: unknown }[],
     unexpected: [] as string[], pdf: [] as string[], downloads: [] as string[],
@@ -44,11 +48,15 @@ async function mockApi(page: Page, admin = false) {
     }
     if (path === "/sanctum/csrf-cookie" && method === "GET") return route.fulfill({ status: 204, headers: { "set-cookie": "XSRF-TOKEN=mock; Path=/; SameSite=Lax" } });
     if (path === "/api/me" && method === "GET") return route.fulfill({ json: { data: { id: 91, name: "Mock User", email: "mock@example.test", whatsapp: "081234567890", role: admin ? "admin" : "student", account_status: "active" } } });
+    if (path === "/api/public/analytics-config" && method === "GET") return route.fulfill({ json: { data: { measurementId: null } } });
     if (path === "/api/student/notifications" && method === "GET") return route.fulfill({ json: { data: [] } });
-    if (path === "/api/student/dashboard" && method === "GET") return route.fulfill({ json: { data: { programs: [{ id: 1, code: "n5", name: "JLPT N5" }], access: { learning: { n5: "full" }, replay_levels: [], source_grants: [{ plan_code: "lms", program_code: "n5" }] }, chapters: [] } } });
+    if (path === "/api/student/dashboard" && method === "GET") return route.fulfill({ json: { data: state.catalog } });
     if (path === adminPath && method === "GET" || path === studentPath && method === "GET") {
       if (state.hold) await state.hold;
-      return route.fulfill(state.listError ? { status: 500, json: {} } : { json: paged(path === adminPath ? state.emptyAdmin ? [] : [state.row] : state.snapshots) });
+      if (path === studentPath) state.listReads.push(Number(url.searchParams.get("page") ?? 1));
+      const result = paged(path === adminPath ? state.emptyAdmin ? [] : [state.row] : state.snapshots);
+      if (path === studentPath) Object.assign(result.meta, { current_page: Number(url.searchParams.get("page") ?? 1), last_page: state.lastPage, total: state.lastPage > 1 ? 21 : state.snapshots.length });
+      return route.fulfill(state.listError ? { status: 500, json: {} } : { json: result });
     }
     if (path === `${adminPath}/1` && method === "PATCH") {
       if (state.saveError) return route.fulfill({ status: 500, json: {} });
@@ -58,7 +66,10 @@ async function mockApi(page: Page, admin = false) {
     }
     if (path === `${adminPath}/1/preview` && method === "GET") return route.fulfill(state.previewError ? { status: 500, json: {} } : { json: { data: state.row } });
     if (path === `${studentPath}/71` && method === "GET") return route.fulfill({ json: { data: state.snapshots[0] } });
-    if (path === `${studentPath}/programs/1/reconcile` && method === "POST") return route.fulfill({ json: { data: null, reason: "disabled" } });
+    if (path === `${studentPath}/programs/1/reconcile` && method === "POST") {
+      if (state.publishOnReconcile && state.reconciliation.data) state.snapshots = [state.reconciliation.data];
+      return route.fulfill({ json: state.reconciliation });
+    }
     state.unexpected.push(`${method} ${path}`);
     return route.fulfill({ status: 501, json: { message: "Unmocked API request" } });
   });
@@ -167,7 +178,11 @@ test("mock API: student loading, error retry, empty, explicit refresh reason", a
   state.hold = null;
   state.listError = false;
   await page.getByRole("button", { name: "Coba Lagi Sertifikat", exact: true }).click();
-  await expect(page.getByRole("heading", { name: /Belum ada sertifikat/i })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Sertifikat Digital", exact: true })).toBeVisible();
+  await expect(page.getByText("Belum ada sertifikat diterbitkan", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pencapaianmu sedang dipersiapkan", exact: true })).toBeVisible();
+  await expect(page.getByText("Lanjutkan program dan selesaikan tugas wajib. Setelah itu, periksa penyelesaian untuk memperoleh sertifikat.", { exact: true })).toBeVisible();
+  await expect(page.getByRole("navigation", { name: "Halaman sertifikat" })).toHaveCount(0);
   expect(state.writes).toEqual([]);
   await page.getByRole("combobox").selectOption("1");
   await page.getByRole("button", { name: /periksa|perbarui|refresh/i }).click();
@@ -175,6 +190,138 @@ test("mock API: student loading, error retry, empty, explicit refresh reason", a
   expect(state.writes[0]).toMatchObject({ method: "POST", path: `${studentPath}/programs/1/reconcile` });
   expect([null, "{}"]).toContain(state.writes[0].body === null ? null : JSON.stringify(state.writes[0].body));
   await expect(page.getByRole("status").filter({ hasText: /otomatis.*(nonaktif|aktif)|belum.*diaktifkan/i }).first()).toBeVisible();
+  await clean(page, state);
+});
+
+for (const width of [1440, 390]) {
+  test(`mock API: empty center keeps achievement before completion card at ${width}`, async ({ page }, testInfo) => {
+    await page.setViewportSize({ width, height: 900 });
+    const state = await mockApi(page);
+    state.snapshots = [];
+    await page.goto("/certificate");
+    const empty = page.getByRole("heading", { name: "Pencapaianmu sedang dipersiapkan", exact: true });
+    const completion = page.getByRole("heading", { name: "Periksa Penyelesaian", exact: true });
+    await expect(empty).toBeVisible();
+    await expect(completion).toBeVisible();
+    const emptyBox = (await empty.boundingBox())!;
+    const completionBox = (await completion.boundingBox())!;
+    if (width === 1440) expect(emptyBox.x).toBeLessThan(completionBox.x);
+    else expect(emptyBox.y).toBeLessThan(completionBox.y);
+    const topbar = page.getByRole("banner");
+    await expect(topbar).toHaveCount(1);
+    await expect(topbar).toHaveCSS("background-color", "rgb(255, 255, 255)");
+    await expect(topbar).toHaveCSS("border-bottom-width", "1px");
+    await expect(topbar).toHaveCSS("border-bottom-style", "solid");
+    const topbarBox = (await topbar.boundingBox())!;
+    expect(topbarBox.y).toBe(0);
+    expect(topbarBox.height).toBeGreaterThanOrEqual(width === 1440 ? 76 : 68);
+    if (width === 1440) {
+      const sidebar = page.locator(".student-nav-desktop");
+      await expect(sidebar).toHaveCSS("background-color", "rgb(255, 255, 255)");
+      await expect(sidebar).toHaveCSS("border-right-width", "1px");
+    }
+    await page.screenshot({ path: testInfo.outputPath(`certificate-empty-${width}.png`), fullPage: true });
+    await expect(page.getByRole("button", { name: "Periksa Penyelesaian", exact: true })).toBeDisabled();
+    await expect(page.getByRole("navigation", { name: "Halaman sertifikat" })).toHaveCount(0);
+    await noOverflow(page);
+    await clean(page, state);
+  });
+}
+
+test("mock API: journey uses accessible catalog programs, encoded codes, and no invented progress", async ({ page }) => {
+  const state = await mockApi(page);
+  state.snapshots = [];
+  state.catalog.programs = [
+    { id: 1, code: "n5", name: "JLPT N5", family: "jlpt" },
+    { id: 2, code: "ssw food/basic", name: "Program pratinjau katalog", family: "ssw" },
+    { id: 3, code: "hidden", name: "Program tanpa akses", family: "ssw" },
+    { id: 4, code: "ssw-food", name: "SSW Pengolahan Makanan", family: "ssw" },
+  ];
+  state.catalog.access.learning = { n5: "full", "ssw food/basic": "preview", hidden: "none", "ssw-food": "full" };
+  await page.goto("/certificate");
+  const center = page.getByRole("region", { name: "Pusat sertifikat", exact: true });
+  const journey = center.getByRole("region", { name: "Perjalanan belajarmu", exact: true });
+  const full = journey.getByRole("article").filter({ has: page.getByRole("heading", { name: "JLPT N5", exact: true }) });
+  const preview = journey.getByRole("article").filter({ has: page.getByRole("heading", { name: "Program pratinjau katalog", exact: true }) });
+  await expect(full.getByRole("link", { name: "Buka Program", exact: true })).toHaveAttribute("href", "/journey/n5");
+  await expect(full.getByText("Akses penuh", { exact: true })).toBeVisible();
+  await expect(preview.getByText("Terkunci", { exact: true })).toBeVisible();
+  const lockedButton = preview.getByRole("button", { name: "Buka Program", exact: true });
+  await lockedButton.click();
+  const dialog = page.getByRole("dialog", { name: "Anda belum memiliki program ini", exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByRole("link", { name: "Beli membership", exact: true })).toHaveAttribute("href", "/renewal?target=ssw%20food%2Fbasic");
+  await dialog.getByRole("button", { name: "Batal", exact: true }).click();
+  await expect(dialog).not.toBeVisible();
+  await expect(lockedButton).toBeFocused();
+  await lockedButton.click();
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible();
+  await expect(journey.getByRole("article").filter({ has: page.getByRole("heading", { name: "SSW Pengolahan Makanan", exact: true }) }).getByRole("link", { name: "Buka Program", exact: true })).toHaveAttribute("href", "/journey/ssw-pengolahan-makanan");
+  await expect(journey.getByRole("article")).toHaveCount(4);
+  await expect(journey.getByRole("article").filter({ has: page.getByRole("heading", { name: "Program tanpa akses", exact: true }) }).getByRole("button", { name: "Buka Program", exact: true })).toBeVisible();
+  await expect(center.getByRole("combobox").getByRole("option", { name: "Program pratinjau katalog", exact: true })).toHaveCount(0);
+  await expect(center.getByRole("progressbar")).toHaveCount(0);
+  await expect(center.getByText(/\d+\s*%|\d+\s*\/\s*\d+|\d+\s+(?:dari\s+\d+\s+)?(?:tugas|bab|materi)\b/i)).toHaveCount(0);
+  await clean(page, state);
+});
+
+test("mock API: incomplete notice preserves reason without inventing missing tasks", async ({ page }) => {
+  const state = await mockApi(page);
+  state.snapshots = [];
+  state.reconciliation.reason = "incomplete";
+  await page.goto("/certificate");
+  await page.getByRole("combobox").selectOption("1");
+  await page.getByRole("button", { name: "Periksa Penyelesaian", exact: true }).click();
+  const notice = page.getByRole("status").filter({ hasText: "Belum memenuhi syarat" });
+  await expect(notice).toContainText("Kriteria penyelesaian program belum terpenuhi.");
+  await expect(notice.getByRole("listitem")).toHaveCount(0);
+  await expect(notice).not.toContainText(/\d+\s*(?:%|tugas|bab|materi)/i);
+  await expect(page.getByRole("link", { name: "Lihat Sertifikat", exact: true })).toHaveCount(0);
+  await clean(page, state);
+});
+
+for (const reason of ["existing", "issued"]) {
+  test(`mock API: ${reason} exposes returned certificate and refreshes issued list`, async ({ page }) => {
+    const state = await mockApi(page);
+    state.snapshots = [];
+    state.reconciliation = { reason, data: { ...achievement(), id: 84 } };
+    state.publishOnReconcile = reason === "issued";
+    await page.goto("/certificate");
+    await expect(page.getByRole("heading", { name: "Pencapaianmu sedang dipersiapkan", exact: true })).toBeVisible();
+    const initialReads = state.listReads.length;
+    await page.getByRole("combobox").selectOption("1");
+    await page.getByRole("button", { name: "Periksa Penyelesaian", exact: true }).click();
+    const notice = page.getByRole("status").filter({ hasText: reason === "existing" ? "Sertifikat sudah tersedia" : "Sertifikat berhasil diterbitkan." });
+    await expect(notice).toBeVisible();
+    if (reason === "existing") await expect(notice).toContainText("Sertifikat program ini sudah diterbitkan.");
+    await expect(notice.getByRole("link", { name: "Lihat Sertifikat", exact: true })).toHaveAttribute("href", "/certificate/84");
+    await expect.poll(() => state.listReads.length).toBeGreaterThan(initialReads);
+    if (reason === "issued") {
+      await expect(page.getByRole("article", { name: "Achievement digital", exact: true })).toBeVisible();
+      await expect(page.getByRole("heading", { name: "Pencapaianmu sedang dipersiapkan", exact: true })).toHaveCount(0);
+    }
+    await expect(page.getByRole("navigation", { name: "Halaman sertifikat" })).toHaveCount(0);
+    await page.getByRole("combobox").selectOption("");
+    await expect(notice).toHaveCount(0);
+    await clean(page, state);
+  });
+}
+
+test("mock API: pagination appears only for multiple certificate pages", async ({ page }) => {
+  const state = await mockApi(page);
+  await page.goto("/certificate");
+  await expect(page.getByRole("link", { name: "Lihat Sertifikat", exact: true })).toHaveAttribute("href", "/certificate/71");
+  const pagination = page.getByRole("navigation", { name: "Halaman sertifikat", exact: true });
+  await expect(pagination).toHaveCount(0);
+  state.lastPage = 2;
+  await page.reload();
+  await expect(pagination).toBeVisible();
+  await expect(pagination).toContainText("Halaman 1 dari 2");
+  await pagination.getByRole("button", { name: "Berikutnya", exact: true }).click();
+  await expect(pagination).toContainText("Halaman 2 dari 2");
+  expect(state.listReads).toContain(2);
+  await expect(pagination.getByRole("button", { name: "Berikutnya", exact: true })).toBeDisabled();
   await clean(page, state);
 });
 
