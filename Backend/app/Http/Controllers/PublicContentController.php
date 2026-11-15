@@ -5,11 +5,24 @@ namespace App\Http\Controllers;
 use App\Services\PublicContentService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 
 class PublicContentController extends Controller
 {
     public function __construct(private PublicContentService $content) {}
+
+    public function analyticsConfig(): JsonResponse
+    {
+        $row = DB::table('admin_settings')->where('section', 'integrations')->first(['value']);
+        $settings = $row ? json_decode($row->value, true) : null;
+        $measurementId = $row
+            ? (($settings['ga4Enabled'] ?? null) === true ? ($settings['ga4MeasurementId'] ?? null) : null)
+            : config('services.ga4.measurement_id');
+
+        return response()->json(['data' => ['measurementId' => is_string($measurementId)
+            && preg_match('/^G-[A-Z0-9]+$/iD', $measurementId) ? $measurementId : null]]);
+    }
 
     public function showcase(): JsonResponse
     {

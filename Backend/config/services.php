@@ -14,6 +14,12 @@ return [
     |
     */
 
+    'ga4' => [
+        'measurement_id' => env('GA4_MEASUREMENT_ID', 'G-93DCMCP6N9'),
+        'property_id' => env('GA4_PROPERTY_ID', '558392393'),
+        'credentials_path' => env('GOOGLE_APPLICATION_CREDENTIALS'),
+    ],
+
     'postmark' => [
         'token' => env('POSTMARK_TOKEN'),
     ],

@@ -14,6 +14,13 @@ export async function loadCanonicalAnalytics(period: AnalyticsPeriod) {
     learning: { publishedPrograms: { ...currentMetric }, publishedChapters: { ...currentMetric }, publishedAssessments: { ...currentMetric }, publishedDecks: { ...currentMetric }, publishedMaterials: { ...currentMetric }, publishedReplays: { ...currentMetric }, upcomingSessions: { ...currentMetric }, programsByCode: [], chaptersByProgram: [], assessmentsByType: [], decksByProgram: [], materialsByType: [], replaysByProgram: [] },
     transactions: { invoicesByStatus: [], verifiedAndActiveValue: { ...periodMetric }, commissionsByStatus: [], availableCommission: { ...periodMetric }, paidCommission: { ...periodMetric }, payoutsByStatus: [], payoutValueByStatus: [] },
   } };
+  const analyticsConfig = await commercialData<{ measurementId: string | null }>("/api/public/analytics-config");
+  data.tabs.summary.externalAnalytics = {
+    configured: !!analyticsConfig.measurementId,
+    status: analyticsConfig.measurementId ? "attention" : "disconnected",
+    source: "settings",
+    label: analyticsConfig.measurementId ? "GA4 dikonfigurasi · penerimaan data belum diverifikasi" : "Belum terhubung",
+  };
   const now = Date.now();
   const start = period === "all" ? 0 : now - (period === "7d" ? 7 : 30) * 86400000;
   const current = (value: number) => ({ value, scope: "current" as const, dateFiltered: false as const });

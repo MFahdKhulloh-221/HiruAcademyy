@@ -1,0 +1,29 @@
+.banner {
+  position: fixed;
+  z-index: 100;
+  inset: auto 16px 16px;
+  max-width: 900px;
+  margin-inline: auto;
+  padding: 20px;
+  border: 1px solid #d8c8bd;
+  border-radius: 16px;
+  background: #fff;
+  color: #202733;
+  box-shadow: 0 8px 32px #20273326;
+}
+.banner p { margin: 8px 0 16px; line-height: 1.6; font-size: 14px; }
+.banner a { color: #954900; text-decoration: underline; }
+.actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.actions button, .preferences {
+  min-height: 44px;
+  padding: 10px 16px;
+  border: 1px solid #954900;
+  border-radius: 8px;
+  background: #fff;
+  color: #954900;
+  font: inherit;
+  cursor: pointer;
+}
+.actions button:last-child { background: #954900; color: #fff; }
+.preferences { position: fixed; bottom: 12px; left: 12px; z-index: 60; font-size: 12px; }
+.actions button:focus-visible, .preferences:focus-visible { outline: 3px solid #202733; outline-offset: 3px; }

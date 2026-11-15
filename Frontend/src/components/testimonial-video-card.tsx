@@ -23,7 +23,7 @@ function VideoCard({ title, name, context, description, source, poster }: Props 
     <div className="testimonial-video-frame">
       {!playing || failed || source?.kind === "instagram" ? <>
         {poster && !posterFailed && <Image src={poster} alt={`Thumbnail ${title}`} fill unoptimized sizes="(max-width: 767px) 100vw, 50vw" style={{ objectFit: "cover" }} onError={() => setPosterFailed(true)} />}
-        {source && source.kind !== "instagram" && !failed && <button type="button" aria-label={`Putar ${title}`} onClick={() => setPlaying(true)}>▶</button>}
+        {source && source.kind !== "instagram" && !failed && <button type="button" data-analytics-video-provider={source.kind} aria-label={`Putar ${title}`} onClick={() => setPlaying(true)}>▶</button>}
         {(!source || failed) && <p role="status">Video tidak dapat diputar.</p>}
       </> : source?.kind === "native" ? <video controls autoPlay preload="metadata" aria-label={title} poster={poster || undefined} src={source.src} onLoadedData={() => setLoaded(true)} onError={() => setFailed(true)} /> : source && <iframe title={title} src={source.src} loading="lazy" referrerPolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-presentation" allow="fullscreen; picture-in-picture" allowFullScreen onLoad={() => setLoaded(true)} onError={() => setFailed(true)} />}
       {playing && !loaded && !failed && <p className="testimonial-video-loading" role="status">Memuat video…</p>}

@@ -1,75 +1,175 @@
 "use client";
 
-import Link from "next/link";
-import { LoadingSkeleton } from "@/components/loading-skeleton";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { LuArrowUpRight, LuChartColumn, LuClock, LuEye, LuUsers, LuMousePointer2 } from "react-icons/lu";
 import { useLearningRequest } from "@/components/learning-hooks";
-import { loadCanonicalAnalytics } from "@/lib/canonical-analytics";
+import { apiRequest, ApiError } from "@/lib/api";
 import {
-  AdminBreadcrumb,
-  AdminEmptyState,
   AdminMetricCard,
   AdminPageHeader,
-  AdminSection,
   AdminShell,
-  AdminStatusBadge,
-  AdminTabs,
 } from "@/components/admin-primitives";
-import {
-  type AnalyticsData,
-  type AnalyticsPeriod,
-  type Distribution,
-} from "@/lib/admin-analytics";
+import styles from "./admin-analytics-dashboard.module.css";
 
-const tabs = ["Ringkasan", "Akuisisi", "Pembelajaran", "Transaksi"] as const;
-const periods: readonly { label: string; value: AnalyticsPeriod }[] = [
-  { label: "7 Hari", value: "7d" },
-  { label: "30 Hari", value: "30d" },
-  { label: "Semua", value: "all" },
-];
-const rupiah = new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 });
+type AnalyticsReport = {
+  period: "7d" | "30d";
+  metrics: { activeUsers: number; sessions: number; screenPageViews: number; averageEngagementSeconds: number };
+};
+const number = new Intl.NumberFormat("id-ID", { maximumFractionDigits: 1 });
 
-function DistributionList({ rows, value = false }: { rows: readonly Distribution[]; value?: boolean }) {
-  const visible = rows.filter((row) => row.count > 0 || (row.value ?? 0) > 0);
-  const maximum = Math.max(0, ...visible.map((row) => value ? row.value ?? 0 : row.count));
-  if (!visible.length) return <AdminEmptyState title="Belum ada data" description="Belum ada data untuk bagian dan periode ini." />;
-  return <ul className="analytics-distribution">{visible.map((row) => {
-    const amount = value ? row.value ?? 0 : row.count;
-    return <li key={row.label}><div><strong>{row.label}</strong><span>{row.count} data{value ? ` · ${rupiah.format(amount)}` : ""}</span></div><div className="analytics-bar" aria-hidden="true"><span style={{ width: `${maximum ? Math.max(4, amount / maximum * 100) : 0}%` }} /></div></li>;
-  })}</ul>;
-}
+type RealtimeReport = {
+  windowMinutes: number;
+  refreshedAt: string;
+  metrics: { activeUsers: number; screenPageViews: number };
+};
 
-function Summary({ data }: { data: AnalyticsData }) {
-  const summary = data.tabs.summary;
-  return <div className="analytics-stack"><section className="analytics-metrics" aria-label="Metrik ringkasan"><AdminMetricCard label="Total pengguna" value={summary.totalUsers.value} detail="Snapshot saat ini"/><AdminMetricCard label="Membership aktif" value={summary.activeMemberships.value} detail="Snapshot saat ini"/><AdminMetricCard label="Invoice perlu tindakan" value={summary.invoicesAwaitingAction.value} detail="Snapshot saat ini"/><AdminMetricCard label="Invoice terverifikasi/aktif" value={summary.verifiedAndActiveInvoices.value} detail="Snapshot saat ini"/><AdminMetricCard label="Lead placement" value="—" detail="Sesuai periode"/><AdminMetricCard label="Konten terbit" value={summary.publishedContent.value} detail="Snapshot saat ini"/></section><div className="analytics-section-grid"><AdminSection title="Status invoice" description="Distribusi operasional sesuai periode."><DistributionList rows={data.tabs.transactions.invoicesByStatus}/></AdminSection><AdminSection title="Sesi mendatang" description="Jadwal berstatus Terjadwal, snapshot saat ini."><div className="analytics-single-value"><strong>{summary.upcomingSessions.value}</strong><span>sesi mendatang</span></div></AdminSection></div><ExternalAnalytics status={summary.externalAnalytics}/></div>;
-}
+function RealtimeSummary() {
+  const [report, setReport] = useState<RealtimeReport | null>(null);
+  const [lastSuccess, setLastSuccess] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(false);
+  const refresh = useRef<() => void>(() => {});
 
-function Acquisition({ data }: { data: AnalyticsData }) {
-  const acquisition = data.tabs.acquisition;
-  const snapshot = acquisition.affiliateSnapshot;
-  return <div className="analytics-stack"><p className="analytics-scope-note">Data placement mengikuti periode. Data affiliate diberi label snapshot saat ini.</p><div className="analytics-section-grid"><AdminSection title="Rekomendasi placement" description="Distribusi lead placement sesuai periode."><DistributionList rows={acquisition.placementRecommendations}/></AdminSection><AdminSection title="Target placement" description="Distribusi target lead sesuai periode."><DistributionList rows={acquisition.placementTargets}/></AdminSection><AdminSection title="Status lead placement" description="Status operasional lead sesuai periode."><DistributionList rows={acquisition.leadStatuses}/></AdminSection><AdminSection title="Atribusi referral" description="Invoice beratribusi referral sesuai periode."><DistributionList rows={acquisition.referralAttributedInvoices} value/></AdminSection></div><AdminSection title="Affiliate — snapshot saat ini" description="Akumulasi tersimpan saat ini; tidak berubah oleh pilihan periode."><div className="analytics-snapshot-table"><span>Affiliate<strong>{snapshot.affiliates}</strong></span><span>Affiliate aktif<strong>{snapshot.activeAffiliates}</strong></span><span>Klik<strong>—</strong></span><span>Pendaftaran<strong>—</strong></span><span>Pembelian<strong>—</strong></span></div></AdminSection></div>;
-}
+  useEffect(() => {
+    let controller: AbortController | null = null;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let disposed = false;
+    const load = async () => {
+      if (disposed || document.hidden || controller) return;
+      clearTimeout(timer);
+      const current = new AbortController();
+      controller = current;
+      setLoading(true);
+      try {
+        const response = await apiRequest<{ data: RealtimeReport }>("/api/admin/analytics/realtime", { signal: current.signal });
+        const data = response.data;
+        if (data?.windowMinutes !== 30 || !Number.isFinite(Date.parse(data.refreshedAt)) || !data.metrics || ![data.metrics.activeUsers, data.metrics.screenPageViews].every(value => Number.isSafeInteger(value) && value >= 0)) throw new ApiError(502);
+        if (!current.signal.aborted) {
+          setReport(data);
+          setLastSuccess(data.refreshedAt);
+          setError(false);
+        }
+      } catch {
+        if (!current.signal.aborted) {
+          setReport(null);
+          setError(true);
+        }
+      } finally {
+        controller = null;
+        if (!disposed) {
+          setLoading(false);
+          if (!document.hidden) timer = setTimeout(load, 15_000);
+        }
+      }
+    };
+    const visibility = () => {
+      clearTimeout(timer);
+      if (document.hidden) controller?.abort();
+      else void load();
+    };
+    refresh.current = () => { void load(); };
+    document.addEventListener("visibilitychange", visibility);
+    void load();
+    return () => {
+      disposed = true;
+      clearTimeout(timer);
+      controller?.abort();
+      document.removeEventListener("visibilitychange", visibility);
+      refresh.current = () => {};
+    };
+  }, []);
 
-function Learning({ data }: { data: AnalyticsData }) {
-  const learning = data.tabs.learning;
-  return <div className="analytics-stack"><p className="analytics-scope-note">Inventaris konten dan sesi saja. Tidak ada klaim performa pembelajar.</p><section className="analytics-metrics" aria-label="Inventaris pembelajaran"><AdminMetricCard label="Program terbit" value={learning.publishedPrograms.value} detail="Snapshot saat ini"/><AdminMetricCard label="Bab terbit" value={learning.publishedChapters.value} detail="Snapshot saat ini"/><AdminMetricCard label="Asesmen terbit" value={learning.publishedAssessments.value} detail="Snapshot saat ini"/><AdminMetricCard label="Deck terbit" value={learning.publishedDecks.value} detail="Snapshot saat ini"/><AdminMetricCard label="Materi terbit" value={learning.publishedMaterials.value} detail="Snapshot saat ini"/><AdminMetricCard label="Replay terbit" value={learning.publishedReplays.value} detail="Snapshot saat ini"/></section><div className="analytics-section-grid"><AdminSection title="Bab per program"><DistributionList rows={learning.chaptersByProgram}/></AdminSection><AdminSection title="Asesmen per jenis"><DistributionList rows={learning.assessmentsByType}/></AdminSection><AdminSection title="Materi per jenis"><DistributionList rows={learning.materialsByType}/></AdminSection><AdminSection title="Replay per program"><DistributionList rows={learning.replaysByProgram}/></AdminSection></div><AdminSection title="Sesi mendatang" description="Snapshot jadwal berstatus Terjadwal."><div className="analytics-single-value"><strong>{learning.upcomingSessions.value}</strong><span>sesi mendatang</span></div></AdminSection></div>;
-}
-
-function Transactions({ data }: { data: AnalyticsData }) {
-  const transactions = data.tabs.transactions;
-  return <div className="analytics-stack"><section className="analytics-metrics analytics-metrics-three" aria-label="Nilai transaksi"><AdminMetricCard label="Invoice terverifikasi/aktif" value={rupiah.format(transactions.verifiedAndActiveValue.value)} detail="Sesuai periode"/><AdminMetricCard label="Komisi tersedia" value={rupiah.format(transactions.availableCommission.value)} detail="Sesuai periode"/><AdminMetricCard label="Komisi dicairkan" value={rupiah.format(transactions.paidCommission.value)} detail="Sesuai periode"/></section><div className="analytics-section-grid"><AdminSection title="Invoice per status" description="Jumlah dan nilai sesuai periode."><DistributionList rows={transactions.invoicesByStatus} value/></AdminSection><AdminSection title="Komisi per status" description="Jumlah dan nilai sesuai periode."><DistributionList rows={transactions.commissionsByStatus} value/></AdminSection><AdminSection title="Pencairan per status" description="Jumlah sesuai periode."><DistributionList rows={transactions.payoutsByStatus}/></AdminSection><AdminSection title="Nilai pencairan per status" description="Jumlah dan nilai sesuai periode."><DistributionList rows={transactions.payoutValueByStatus} value/></AdminSection></div></div>;
-}
-
-function ExternalAnalytics({ status }: { status: AnalyticsData["tabs"]["summary"]["externalAnalytics"] }) {
-  return <aside className="analytics-external"><div><h2>External Analytics</h2><p>GA4 / Meta mengikuti status integrasi Analitik di Pengaturan Integrasi; bukan data performa eksternal.</p></div><AdminStatusBadge status={status.label}/><Link href="/admin/pengaturan-integrasi?tab=Integrasi">Buka Pengaturan Integrasi</Link></aside>;
+  return <section className={styles.realtime} aria-labelledby="realtime-title" aria-busy={loading}>
+    <header className={styles.sectionHeader}>
+      <div><h2 id="realtime-title" className={styles.liveTitle}>Aktivitas Realtime</h2><p>Ringkasan aktivitas selama 30 menit terakhir</p></div>
+      <span className={styles.window}>30 MENIT TERAKHIR</span>
+    </header>
+    <div className={styles.realtimeMetrics}>
+      <div><LuUsers className={styles.metricIcon} aria-hidden="true" /><AdminMetricCard label="Pengguna Aktif" value={report ? number.format(report.metrics.activeUsers) : "—"} detail="Pengguna aktif realtime" /></div>
+      <div><LuEye className={styles.metricIcon} aria-hidden="true" /><AdminMetricCard label="Tayangan Halaman" value={report ? number.format(report.metrics.screenPageViews) : "—"} detail="Page views realtime" /></div>
+    </div>
+    {error && <p role="alert">Realtime tidak tersedia. Tanda — bukan nol kunjungan.</p>}
+    <div className={styles.realtimeFooter}><p role="status">{loading ? "Memuat Realtime…" : lastSuccess ? <>Terakhir berhasil mengambil laporan: <time dateTime={lastSuccess}>{new Date(lastSuccess).toLocaleTimeString("id-ID", { timeZone: "Asia/Jakarta" })} WIB</time> (bukan waktu aktivitas terbaru).</> : "Belum ada laporan Realtime."}</p>
+    <button className={styles.retry} type="button" disabled={loading} onClick={() => refresh.current()}>Perbarui Realtime</button></div>
+  </section>;
 }
 
 export function AdminAnalyticsDashboard() {
-  const [tab, setTab] = useState<(typeof tabs)[number]>("Ringkasan");
-  const [period, setPeriod] = useState<AnalyticsPeriod>("30d");
-  const load = useCallback(() => loadCanonicalAnalytics(period), [period]);
-  const request = useLearningRequest(load, `analytics-${period}`);
-  const data = request.data;
-  if (!data) return <AdminShell current="/admin/analitik"><main className="admin-page admin-analytics">{request.error ? <p role="alert">{request.error}</p> : <LoadingSkeleton variant="dashboard" rows={6} />}{request.error && <button type="button" onClick={request.retry}>Coba Lagi</button>}</main></AdminShell>;
-  return <AdminShell current="/admin/analitik"><main className="admin-page admin-analytics"><AdminBreadcrumb items={[{ label: "Admin", href: "/admin" }, { label: "Analitik" }]}/><AdminPageHeader eyebrow="PANEL ADMIN • ANALITIK" title="Analitik" description="Ringkasan operasional dari data yang tersedia di panel admin." actions={<fieldset className="analytics-period"><legend>Periode</legend>{periods.map((item) => <button key={item.value} type="button" className={period === item.value ? "active" : ""} aria-pressed={period === item.value} onClick={() => setPeriod(item.value)}>{item.label}</button>)}</fieldset>}/><AdminTabs tabs={tabs} active={tab} onChange={(next) => setTab(next as (typeof tabs)[number])} label="Bagian analitik">{tab === "Ringkasan" && <Summary data={data}/>} {tab === "Akuisisi" && <Acquisition data={data}/>} {tab === "Pembelajaran" && <Learning data={data}/>} {tab === "Transaksi" && <Transactions data={data}/>}</AdminTabs></main></AdminShell>;
+  const [period, setPeriod] = useState<AnalyticsReport["period"]>("30d");
+  const load = useCallback(async (signal: AbortSignal) => {
+    try {
+      const response = await apiRequest<{ data: AnalyticsReport }>(`/api/admin/analytics?period=${period}`, { signal });
+      const report = response.data;
+      if (report?.period !== period || !report.metrics || ![report.metrics.activeUsers, report.metrics.sessions, report.metrics.screenPageViews, report.metrics.averageEngagementSeconds].every(value => typeof value === "number" && Number.isFinite(value) && value >= 0)) throw new ApiError(502);
+      return report;
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 503) throw new ApiError(503, {}, "Akses laporan GA4 melalui backend belum tersedia. Autentikasi Google Analytics Data API perlu dikonfigurasi dengan aman atau layanan sedang tidak tersedia.");
+      throw error;
+    }
+  }, [period]);
+  const request = useLearningRequest(load, `ga4-${period}`);
+  const metrics = request.data?.metrics;
+  const value = (amount: number | undefined) => amount === undefined ? "—" : number.format(amount);
+  return (
+    <AdminShell current="/admin/analitik">
+      <main className={`admin-page ${styles.page}`}>
+        <AdminPageHeader
+          title="Analitik"
+          description="Pantau kunjungan dan aktivitas pengunjung HiruAcademy."
+          actions={<span className={styles.source}>Sumber: GA4</span>}
+        />
+        <RealtimeSummary />
+        <section className={styles.summary} aria-labelledby="summary-title">
+          <header className={styles.sectionHeader}>
+            <div><h2 id="summary-title">Ringkasan Kunjungan</h2><p>Performa situs dalam {period === "7d" ? "7" : "30"} hari terakhir</p></div>
+            <fieldset className={styles.period}>
+              <legend className="sr-only">Periode laporan</legend>
+              {(["7d", "30d"] as const).map(item => <button key={item} type="button" aria-pressed={period === item} onClick={() => setPeriod(item)}>{item === "7d" ? "7 Hari" : "30 Hari"}</button>)}
+            </fieldset>
+          </header>
+          <section className={styles.metrics} aria-label="Metrik utama Google Analytics" aria-busy={request.loading}>
+            <div><LuUsers className={styles.metricIcon} aria-hidden="true" /><AdminMetricCard label="Pengguna Aktif" value={value(metrics?.activeUsers)} detail="jumlah pengguna yang berinteraksi" /></div>
+            <div><LuMousePointer2 className={styles.metricIcon} aria-hidden="true" /><AdminMetricCard label="Sesi Kunjungan" value={value(metrics?.sessions)} detail="total sesi pengunjung" /></div>
+            <div><LuEye className={styles.metricIcon} aria-hidden="true" /><AdminMetricCard label="Tayangan Halaman" value={value(metrics?.screenPageViews)} detail="jumlah halaman yang dilihat" /></div>
+            <div><LuClock className={styles.metricIcon} aria-hidden="true" /><AdminMetricCard label="Rata-rata Engagement" value={metrics ? `${value(metrics.averageEngagementSeconds)} dtk` : "—"} detail="rata-rata waktu engagement aktif" /></div>
+          </section>
+          {!request.loading && !request.error && metrics && Object.values(metrics).every(amount => amount === 0) && <div className={styles.empty} role="status"><strong>Data laporan periode ini belum tersedia</strong><p>GA4 Realtime dapat menampilkan aktivitas lebih awal daripada laporan standar.</p></div>}
+
+        {request.loading && <p role="status">Memuat laporan Google Analytics…</p>}
+        {request.error && <section className={styles.unavailable} aria-labelledby="analytics-unavailable-title">
+          <span className={styles.icon} aria-hidden="true"><LuChartColumn /></span>
+          <h2 id="analytics-unavailable-title">Laporan GA4 belum tersedia di panel ini</h2>
+          <p role="alert">{request.error}</p>
+          <p className={styles.note}>Tanda — berarti data belum tersedia, bukan nol kunjungan. Konfigurasi pelacakan bukan bukti bahwa Google Analytics telah menerima data.</p>
+          <button className={styles.retry} type="button" onClick={request.retry}>Coba lagi</button>
+        </section>}
+          <details className={styles.explanation}>
+            <summary>Kenapa data Realtime dan ringkasan bisa berbeda?</summary>
+            <ul>
+              <li>Realtime menampilkan aktivitas selama 30 menit terakhir, terpisah dari ringkasan standar 7 atau 30 hari.</li>
+              <li>Laporan standar GA4 dapat memerlukan 24–48 jam untuk memproses data. Angka nol tidak selalu berarti tidak ada aktivitas.</li>
+              <li>Realtime diperbarui otomatis setiap 15 detik saat tab terlihat; cache maksimal 15 detik. Ringkasan standar disimpan dalam cache selama 5 menit.</li>
+              <li>Data Google dapat terlambat, bukan jaminan aktivitas langsung. Waktu pembaruan menunjukkan laporan terakhir berhasil diambil, bukan aktivitas terbaru.</li>
+            </ul>
+          </details>
+        </section>
+
+        <footer className={styles.details}>
+          <div>
+            <h2>Lihat Laporan Lebih Lengkap</h2>
+            <p>Tren kunjungan, sumber traffic, dan halaman populer dapat dilihat di Google Analytics.</p>
+          </div>
+          <a
+            className={styles.link}
+            href="https://analytics.google.com/analytics/web/#/p558392393/reports/intelligenthome"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            Buka Google Analytics <LuArrowUpRight aria-hidden="true" />
+            <span className="sr-only"> (tab baru)</span>
+          </a>
+        </footer>
+      </main>
+    </AdminShell>
+  );
 }

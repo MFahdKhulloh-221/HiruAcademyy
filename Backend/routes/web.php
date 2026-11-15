@@ -2,9 +2,12 @@
 
 use App\Http\Controllers\AccessGrantController;
 use App\Http\Controllers\AdminAffiliateController;
+use App\Http\Controllers\AdminAnalyticsController;
 use App\Http\Controllers\AdminBlogCatalogController;
+use App\Http\Controllers\AdminCertificateIssuerController;
 use App\Http\Controllers\AdminCheckpointController;
 use App\Http\Controllers\AdminCommissionController;
+use App\Http\Controllers\AdminDailyPracticeController;
 use App\Http\Controllers\AdminLearningController;
 use App\Http\Controllers\AdminMediaController;
 use App\Http\Controllers\AdminNotificationController;
@@ -34,6 +37,7 @@ use App\Http\Controllers\ReferralCreditController;
 use App\Http\Controllers\StudentAffiliateController;
 use App\Http\Controllers\StudentAssessmentController;
 use App\Http\Controllers\StudentCheckpointController;
+use App\Http\Controllers\StudentDailyPracticeController;
 use App\Http\Controllers\StudentGamificationController;
 use App\Http\Controllers\StudentLearningController;
 use App\Http\Controllers\StudentNotificationController;
@@ -52,8 +56,10 @@ use Laravel\Sanctum\Http\Middleware\AuthenticateSession;
 
 Route::prefix('api')->middleware(['throttle:api', AuthenticateSession::class])->group(function () {
     Route::middleware(['auth:sanctum', 'active', 'role:admin'])->prefix('admin')->group(function () {
-        Route::get('certificate-issuer', [\App\Http\Controllers\AdminCertificateIssuerController::class, 'show']);
-        Route::post('certificate-issuer', [\App\Http\Controllers\AdminCertificateIssuerController::class, 'update']);
+        Route::get('analytics', [AdminAnalyticsController::class, 'show']);
+        Route::get('analytics/realtime', [AdminAnalyticsController::class, 'realtime']);
+        Route::get('certificate-issuer', [AdminCertificateIssuerController::class, 'show']);
+        Route::post('certificate-issuer', [AdminCertificateIssuerController::class, 'update']);
         Route::get('program-achievements', [AdminProgramAchievementController::class, 'index']);
         Route::patch('program-achievements/{program}', [AdminProgramAchievementController::class, 'update'])->whereNumber('program');
         Route::get('program-achievements/{program}/preview', [AdminProgramAchievementController::class, 'preview'])->whereNumber('program');
@@ -126,7 +132,7 @@ Route::prefix('api')->middleware(['throttle:api', AuthenticateSession::class])->
         Route::get('commissions', [AdminCommissionController::class, 'index']);
         Route::get('commissions/{commission}', [AdminCommissionController::class, 'show']);
         Route::prefix('daily-practices')->group(function () {
-            $controller = \App\Http\Controllers\AdminDailyPracticeController::class;
+            $controller = AdminDailyPracticeController::class;
             Route::get('/', [$controller, 'index']);
             Route::post('/', [$controller, 'store']);
             Route::get('{practice}', [$controller, 'show']);
@@ -236,7 +242,7 @@ Route::prefix('api')->middleware(['throttle:api', AuthenticateSession::class])->
             Route::get('attempts/{attempt}/review', [StudentAssessmentController::class, 'review']);
         });
         Route::prefix('daily-practices')->group(function () {
-            $controller = \App\Http\Controllers\StudentDailyPracticeController::class;
+            $controller = StudentDailyPracticeController::class;
             Route::get('/', [$controller, 'index']);
             Route::get('{practice}', [$controller, 'show']);
             Route::post('{practice}/attempt', [$controller, 'start'])->name('assessment.daily.start');
@@ -277,6 +283,7 @@ Route::prefix('api')->middleware(['throttle:api', AuthenticateSession::class])->
     Route::get('placement/attempts/{attempt}', [PublicPlacementController::class, 'show'])->whereNumber('attempt');
     Route::put('placement/attempts/{attempt}/answers', [PublicPlacementController::class, 'save'])->whereNumber('attempt');
     Route::post('placement/attempts/{attempt}/submit', [PublicPlacementController::class, 'submit'])->whereNumber('attempt');
+    Route::get('public/analytics-config', [PublicContentController::class, 'analyticsConfig']);
     Route::get('public/landing/hero', [LandingHeroController::class, 'publicShow']);
     Route::get('public/offers', [ProgramOfferController::class, 'publicIndex']);
     Route::get('admin/offers', [ProgramOfferController::class, 'adminIndex'])

@@ -90,12 +90,20 @@ export default function PrivacyPage() {
                 diakses, kartu flashcard yang dipelajari, dan riwayat latihan.
               </li>
               <li>
-                <strong>Analitik (jika diaktifkan):</strong> kami dapat
-                menggunakan Google Analytics 4 (GA4) dan/atau Meta Pixel untuk
-                memahami pola penggunaan situs secara agregat. Penggunaan
-                analitik pihak ketiga ini tunduk pada kebijakan privasi
-                masing-masing penyedia. Kamu dapat menolak cookie analitik
-                jika fitur persetujuan cookie tersedia.
+                <strong>Analitik (jika diaktifkan):</strong> Google Analytics 4
+                (GA4) hanya dimuat setelah kamu memilih Izinkan analitik.
+                Pelacakan dibatasi pada halaman publik; halaman akun, pembayaran,
+                asesmen, dan admin tidak dilacak. Tayangan halaman dapat menyertakan
+                token kampanye UTM dan ID klik iklan yang lolos penyaringan, serta
+                asal situs perujuk tanpa path atau kueri. Fragmen, parameter lain,
+                email, dan nomor WhatsApp tidak dikirim. Interaksi publik mencakup
+                gulir 90%, klik keluar, unduhan, pembukaan video sematan, dan
+                mulai/selesai video HTML5 tanpa judul atau URL media.
+                Pemrosesan oleh Google tunduk pada kebijakan
+                privasi Google. Kamu dapat menolak atau mencabut persetujuan lewat
+                tombol Preferensi analitik pada halaman publik. Pilihan disimpan
+                di perangkat; pencabutan tidak menghapus data yang sudah diterima
+                Google.
               </li>
               <li>
                 <strong>Penyimpanan lokal (localStorage):</strong> beberapa data
