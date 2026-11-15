@@ -3105,6 +3105,15 @@ rt { color: var(--secondary); }
   }
 }
 
+/* Shared student header keeps content spacing separate from navigation. */
+.supporting-body { min-width: 0; }
+.supporting-body > .supporting-main { margin: 0 auto; }
+.supporting-body > .supporting-main:has(> .community-chat-page) { height: calc(100dvh - 76px); }
+@media (max-width: 1023px) {
+  .supporting-shell > .supporting-body > .supporting-main { padding-top: 24px !important; }
+  .supporting-body > .supporting-main:has(> .community-chat-page) { height: calc(100dvh - 68px); }
+}
+
 /* Sidebar Clean Modern Styling */
 .student-nav-desktop {
   background: #ffffff !important;

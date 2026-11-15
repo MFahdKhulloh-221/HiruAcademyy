@@ -6,7 +6,7 @@ import { Suspense, useState } from "react";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { useAuth } from "@/components/auth-provider";
 import { StudentNavigation } from "@/components/student-navigation";
-import { StudentHeaderActions } from "@/components/student-header-actions";
+import { StudentTopbar } from "@/components/student-topbar";
 import { StudentBreadcrumb } from "@/components/student-breadcrumb";
 import { useLearningCatalog } from "@/components/learning-hooks";
 import { learningMembership } from "@/lib/learning-api";
@@ -79,10 +79,9 @@ function InvoiceContent() {
 export default function InvoicePage() {
   const catalog = useLearningCatalog();
   const membership = catalog.data ? learningMembership(catalog.data.access) : "free";
-  return <div className="supporting-shell student-shell"><StudentNavigation membership={membership} /><main className="supporting-main">
-    <StudentHeaderActions membership={membership} />
+  return <div className="supporting-shell student-shell"><StudentNavigation membership={membership} /><div className="supporting-body"><StudentTopbar membership={membership} /><main className="supporting-main">
     <div className={styles.content}><StudentBreadcrumb items={[{ label: "Profil", href: "/profile" }, { label: "Pesanan Saya" }]} />
       <Suspense fallback={<LoadingSkeleton variant="article" label="Memuat invoice..." />}><InvoiceContent /></Suspense>
     </div>
-  </main></div>;
+  </main></div></div>;
 }

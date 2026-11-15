@@ -4,7 +4,7 @@ import Link from "next/link";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { useState } from "react";
 import { ProfileScreen } from "@/components/profile-screen";
-import { StudentHeaderActions } from "@/components/student-header-actions";
+import { StudentTopbar } from "@/components/student-topbar";
 import { LuArrowLeft, LuAward, LuBookOpen, LuCircleCheck, LuGraduationCap, LuReceipt, LuShieldCheck } from "react-icons/lu";
 import { StudentAffiliateScreen } from "@/components/student-affiliate-screen";
 import { StudentBreadcrumb } from "@/components/student-breadcrumb";
@@ -32,10 +32,9 @@ export function SupportingScreen(props: Props) {
   const { kind, membership } = props;
   if (kind === "library") return <LearningLibrary />;
   if (kind === "practice") return <PracticeScreen membership={membership} resolvedCatalog={props} />;
-  return <div className="supporting-shell student-shell"><StudentNavigation membership={membership} /><main className={`supporting-main ${kind === "renewal" ? "renewal" : kind}-page`}>
-    <StudentHeaderActions membership={membership} />
+  return <div className="supporting-shell student-shell"><StudentNavigation membership={membership} /><div className="supporting-body"><StudentTopbar membership={membership} /><main className={`supporting-main ${kind === "renewal" ? "renewal" : kind}-page`}>
     {kind === "notifications" ? <StudentNotificationsScreen /> : kind === "community" ? <StudentCommunityScreen membership={membership} /> : kind === "progress" ? <StudentProgressScreen /> : kind === "leaderboard" ? <StudentLeaderboardScreen /> : kind === "certificate" ? <StudentCertificateCenter /> : kind === "profile" ? <ProfileScreen access={props.access} programs={props.programs} /> : kind === "affiliate" ? <StudentAffiliateScreen /> : kind === "renewal" ? <RenewalScreen {...props} /> : <EmptySupportingScreen kind={kind} />}
-  </main></div>;
+  </main></div></div>;
 }
 
 function EmptySupportingScreen({ kind }: { kind: SupportingKind }) {

@@ -62,6 +62,10 @@ async function setupStudentApiMocks(page: Page) {
       await route.fulfill({ json: { data: { chapter_id: 1, activities: {}, mini_unlocked: false } } });
       return;
     }
+    if (path === "/api/student/program-achievements") {
+      await route.fulfill({ json: { data: [], meta: { current_page: 1, last_page: 1, total: 0, per_page: 20 } } });
+      return;
+    }
     if (path === "/api/student/affiliate") {
       await route.fulfill({ json: { data: { code: null, affiliate: null, totals: { pending: 0, approved: 0, paid: 0 } } } });
       return;
@@ -93,6 +97,7 @@ for (const width of [360, 1440]) {
     await page.route("**/sanctum/csrf-cookie", route => route.fulfill({ status: 204 }));
     await page.route("**/api/me", route => route.fulfill({ json: { data: user } }));
     await page.route("**/api/public/programs", route => route.fulfill({ json: { data: [] } }));
+    await page.route("**/api/student/dashboard", route => route.fulfill({ json: { data: { programs: [], access: { learning: { n5: "full" }, replay_levels: [], source_grants: [{ plan_code: "lms", program_code: "n5" }] } } } }));
     await page.route("**/api/student/access", route => route.fulfill({ json: { data: { learning: { n5: "full" }, replay_levels: [], source_grants: [{ plan_code: "lms", program_code: "n5" }] } } }));
     await page.route("**/api/student/notifications", route => route.fulfill({ json: { data: items } }));
     await page.route("**/api/student/notifications/*/read", route => {
@@ -122,13 +127,15 @@ for (const width of [360, 1440]) {
     const panel = page.getByRole("region", { name: "Profil akun", exact: true });
     await expect(panel).toContainText(user.name);
     await expect(panel).toContainText("Belajar Mandiri");
-    await panel.getByRole("button", { name: "Ganti Foto Profil" }).click();
-    await page.getByLabel("Ganti Foto Profil", { exact: true }).setInputFiles("tests/fixtures/sample.png");
-    await expect(panel.getByRole("alert")).toContainText("Foto belum dapat digunakan.");
+    await panel.getByRole("link", { name: "Kelola Foto Profil" }).click();
+    await expect(panel).toHaveCount(0);
+    await page.getByLabel("File foto profil", { exact: true }).setInputFiles("tests/fixtures/sample.png");
+    await expect(page.getByRole("alert").filter({ hasText: "Foto belum dapat digunakan." })).toBeVisible();
     await expect(profile.locator("img")).toHaveCount(0);
     rejectPhoto = false;
-    await page.getByLabel("Ganti Foto Profil", { exact: true }).setInputFiles("tests/fixtures/sample.png");
-    await expect(panel.getByRole("status")).toBeVisible();
+    await page.getByLabel("File foto profil", { exact: true }).setInputFiles("tests/fixtures/sample.png");
+    await expect(page.getByRole("status").filter({ hasText: "Foto profil berhasil diperbarui." })).toBeVisible();
+    await profile.click();
     await expect(profile.locator("img")).toHaveAttribute("src", /profile-fixture\.png$/);
     await expect(page.locator(".profile-identity img")).toHaveAttribute("src", /profile-fixture\.png$/);
     await expect(page.getByLabel("Nama Lengkap", { exact: true })).toHaveValue(user.name);
@@ -136,7 +143,7 @@ for (const width of [360, 1440]) {
     await expect(profile).toBeFocused();
     await expect(panel).toHaveCount(0);
     await profile.click();
-    await page.getByRole("heading", { name: "Keamanan Akun" }).click();
+    await page.getByRole("heading", { name: "Pengaturan Akun", exact: true }).click();
     await expect(panel).toHaveCount(0);
     await bell.click();
     const notifications = page.getByRole("region", { name: "Notifikasi terbaru" });
@@ -191,6 +198,13 @@ async function assertHeaderPlacement(page: Page, viewportWidth: number) {
 
   await expect(bell).toBeVisible();
   await expect(profile).toBeVisible();
+  const topbar = page.getByRole("banner");
+  await expect(topbar).toHaveCount(1);
+  await expect(topbar).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(topbar).toHaveCSS("border-bottom-width", "1px");
+  await expect(topbar).toHaveCSS("border-bottom-style", "solid");
+  expect((await topbar.boundingBox())!.y).toBe(0);
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 
   const bellBox = (await bell.boundingBox())!;
   const profileBox = (await profile.boundingBox())!;
@@ -240,6 +254,13 @@ const headerRoutes = [
   "/learn/n5/chapter-1",
   "/schedule",
   "/profile",
+  "/certificate",
+  "/library",
+  "/flashcards",
+  "/practice",
+  "/invoice",
+  "/profile/testimoni",
+  "/tryout",
 ];
 
 for (const width of [390, 768, 1440]) {
@@ -248,8 +269,10 @@ for (const width of [390, 768, 1440]) {
     await setupStudentApiMocks(page);
 
     for (const route of headerRoutes) {
-      await page.goto(route);
-      await assertHeaderPlacement(page, width);
+      await test.step(route, async () => {
+        await page.goto(route);
+        await assertHeaderPlacement(page, width);
+      });
     }
   });
 }

@@ -13,6 +13,7 @@ import {
   LuSearch,
 } from "react-icons/lu";
 import { StudentNavigation } from "@/components/student-navigation";
+import { StudentTopbar } from "@/components/student-topbar";
 import { parseMembership } from "@/lib/dashboard-mock";
 import { useLearningRequest } from "@/components/learning-hooks";
 import { studentFlashcards, type FlashcardDeck } from "@/lib/learning-api";
@@ -92,6 +93,8 @@ export function FlashcardCollection() {
   return (
     <div className="supporting-shell student-shell">
       <StudentNavigation membership={membership} />
+      <div className="supporting-body">
+        <StudentTopbar membership={membership} />
       <main className="supporting-main flashcard-collection">
         {request.error && (
           <p role="alert">
@@ -300,6 +303,7 @@ export function FlashcardCollection() {
         </section>
 
       </main>
+      </div>
     </div>
   );
 }

@@ -9,6 +9,7 @@ import {
   LuSearch,
 } from "react-icons/lu";
 import { StudentNavigation } from "@/components/student-navigation";
+import { StudentTopbar } from "@/components/student-topbar";
 import { useLearningRequest } from "@/components/learning-hooks";
 import { learningCatalog, learningLibrary, learningMembership, safeLearningUrl, type LibraryModule } from "@/lib/learning-api";
 
@@ -45,6 +46,8 @@ export function LearningLibrary() {
   return (
     <div className="supporting-shell student-shell">
       <StudentNavigation membership={membership} />
+      <div className="supporting-body">
+        <StudentTopbar membership={membership} />
       <main className="supporting-main library-page">
         <header className="supporting-header">
           <p className="dash-kicker">PERPUSTAKAAN MATERI</p>
@@ -167,6 +170,7 @@ export function LearningLibrary() {
           </div>
         )}
       </main>
+      </div>
     </div>
   );
 }

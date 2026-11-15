@@ -13,6 +13,7 @@ import { ClassDetailScreen, ReplayPlayerScreen, ReplayScreen, ScheduleScreen } f
 import { SenseiShell } from "@/components/sensei-shell";
 import { SenseiTryoutScreen } from "@/components/sensei-tryout-screen";
 import { StudentNavigation } from "@/components/student-navigation";
+import { StudentTopbar } from "@/components/student-topbar";
 import { learningMembership } from "@/lib/learning-api";
 
 type RouteKind = "dashboard" | "levels" | "journey" | "learning" | "video" | "grammar" | "kanji" | "flashcards" | "audio" | "reading" | "checkpoint" | "tryout" | "schedule" | "class-detail" | "replay" | "replay-player" | "mini";
@@ -41,7 +42,7 @@ function StudentServiceRoute({ kind }: { kind: RouteKind }) {
   const request = useLearningCatalog();
   if (!request.data) return request.error ? <main className="supporting-main"><p role="alert">{request.error}</p><button type="button" onClick={request.retry}>Coba Lagi</button></main> : <StudentLoading shell={(kind === "tryout" || kind === "checkpoint") ? "supporting" : "sensei"} variant={kind === "replay-player" ? "learning" : "cards"} label="Memuat…" />;
   const membership = learningMembership(request.data.access);
-  if (kind === "tryout" || kind === "checkpoint") return <div className="supporting-shell student-shell"><StudentNavigation membership={membership} /><main className="supporting-main"><SenseiTryoutScreen membership={membership} kind={kind} /></main></div>;
+  if (kind === "tryout" || kind === "checkpoint") return <div className="supporting-shell student-shell"><StudentNavigation membership={membership} /><div className="supporting-body"><StudentTopbar membership={membership} /><main className="supporting-main"><SenseiTryoutScreen membership={membership} kind={kind} /></main></div></div>;
   const breadcrumbs = kind === "class-detail" ? [{ label: "Jadwal", href: `/schedule?membership=${membership}` }, { label: "Chapter 4" }] : kind === "replay-player" ? [{ label: "Replay", href: `/replay?membership=${membership}` }, { label: "Chapter 4" }] : undefined;
   return <SenseiShell membership={membership} breadcrumbs={breadcrumbs}>
     {kind === "schedule" && <ScheduleScreen />}

@@ -39,7 +39,7 @@ export function StudentLoading({ active = true, shell = "dashboard", ...props }:
         <div className={styles.footer}><span /><span /></div>
       </div>
       <div className={styles.main}>
-        {shell !== "supporting" && <div className={`${styles.topbar} ${styles.shapes} ${shell === "dashboard" ? styles.dashboardTopbar : ""}`} aria-hidden="true"><span /><div><span /><span /></div></div>}
+        <div className={`${styles.topbar} ${styles.shapes} ${shell === "dashboard" ? styles.dashboardTopbar : ""}`} aria-hidden="true"><span /><div><span /><span /></div></div>
         <span className={`${styles.mobileTrigger} ${styles.shapes}`} aria-hidden="true" />
         <main className={`${contentClass} ${styles.content}`}><LoadingSkeleton {...props} /></main>
       </div>

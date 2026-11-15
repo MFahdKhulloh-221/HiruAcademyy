@@ -1,0 +1,35 @@
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 76px;
+  padding: 12px 24px;
+  border-bottom: 1px solid #d8ddef;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.topbar > a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  min-width: 0;
+  color: #142c49;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+@media (max-width: 1023px) {
+  .topbar {
+    min-height: 68px;
+    padding-left: 68px;
+  }
+}
+
+@media (max-width: 639px) {
+  .topbar {
+    gap: 8px;
+    padding-right: 12px;
+  }
+}

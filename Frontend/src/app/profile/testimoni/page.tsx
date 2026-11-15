@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { StudentNavigation } from "@/components/student-navigation";
+import { StudentTopbar } from "@/components/student-topbar";
 import { useLearningCatalog } from "@/components/learning-hooks";
 import { learningMembership } from "@/lib/learning-api";
 import { ApiError, apiRequest } from "@/lib/api";
@@ -122,7 +123,7 @@ export default function StudentTestimonialPage() {
   }
   const membership = catalog.data ? learningMembership(catalog.data.access) : "free";
   const preview: TestimonialContent = { id: 0, name: user?.name ?? "", image: user?.avatar ?? null, image_resolved_url: user?.avatar_resolved_url, context, quote: draft.quote || "Komentar pengalaman belajarmu akan tampil di sini.", type, title: draft.title, video_title: draft.title, video_url: draft.videoUrl, video_thumbnail: draft.thumbnail, show_on_testimonials: false };
-  return <div className="supporting-shell student-shell"><StudentNavigation membership={membership} /><main className={`supporting-main profile-page ${styles.page}`}>
+  return <div className="supporting-shell student-shell"><StudentNavigation membership={membership} /><div className="supporting-body"><StudentTopbar membership={membership} /><main className={`supporting-main profile-page ${styles.page}`}>
     <header className={`supporting-heading ${styles.heading}`}><p className="dash-kicker">TESTIMONI SAYA</p><h1>Bagikan Pengalaman Belajarmu</h1><p>Tulis pengalaman atau bagikan video. Testimoni berizin langsung tampil di halaman Testimoni; Landing dipilih Admin.</p></header>
     <div className={styles.layout}>
       <form className={styles.form} onSubmit={save} aria-busy={busy}>
@@ -152,5 +153,5 @@ export default function StudentTestimonialPage() {
       {Object.entries(history).map(([kind, item]) => item && <article key={kind} className={styles.historyItem}><div className={styles.historyHeader}><h3>{kind === "text" ? "Testimoni Tertulis" : "Testimoni Video"}</h3><span className={`${styles.badge} ${item.moderation_status === "approved" ? styles.badgeApproved : item.moderation_status === "pending" ? styles.badgePending : styles.badgeRejected}`}>{item.archived_at ? "Arsip" : item.published && item.show_on_testimonials ? "Tayang" : item.moderation_status === "approved" ? "Disembunyikan" : item.moderation_status === "pending" ? "Menunggu peninjauan Admin" : "Perlu perbaikan"}</span></div>{item.moderation_note && <p className={styles.historyNote}>Catatan Admin: {item.moderation_note}</p>}<p className={styles.historyQuote}>{item.title || item.quote}</p></article>)}
       {!loading && !Object.values(loadErrors).some(Boolean) && !Object.values(history).some(Boolean) && <p className={styles.emptyHistory}>Belum ada testimoni yang dikirim.</p>}
     </section>
-  </main></div>;
+  </main></div></div>;
 }
