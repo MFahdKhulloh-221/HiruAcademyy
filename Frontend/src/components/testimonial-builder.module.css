@@ -1,0 +1,4 @@
+.textPreview { display: grid; grid-template-columns: minmax(0, 1fr); }
+.textPreview :global(.testimonial-card) { min-height: 0; border: 1px solid #e1e5ed; border-radius: 20px; background: #fff; }
+.textPreview :global(.testimonial-card) > header { flex-wrap: wrap; }
+.textPreview :global(.testimonial-card) > header > div { flex: 1 1 140px; }
