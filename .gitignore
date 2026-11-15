@@ -11,3 +11,4 @@ Backend/database/*.sqlite-*
 *.sql
 *.pem
 *.key
+/graphify-out/cache/last_query_stamp
