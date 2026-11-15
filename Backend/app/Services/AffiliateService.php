@@ -7,6 +7,7 @@ use App\Models\Commission;
 use App\Models\Invoice;
 use App\Models\InvoiceAttribution;
 use App\Models\User;
+use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -17,9 +18,12 @@ class AffiliateService
     public function ensure(User $user): Affiliate
     {
         abort_unless($user->role === 'student', 403);
+
         return DB::transaction(function () use ($user) {
             User::whereKey($user->id)->lockForUpdate()->firstOrFail();
-            if ($existing = Affiliate::where('user_id', $user->id)->first()) return $existing;
+            if ($existing = Affiliate::where('user_id', $user->id)->first()) {
+                return $existing;
+            }
             // Privacy-first: random alias never exposes the student's name.
             for ($attempt = 0; $attempt < 5; $attempt++) {
                 try {
@@ -27,9 +31,13 @@ class AffiliateService
                         'user_id' => $user->id, 'name' => $user->name, 'code' => $this->generateCode(),
                         'status' => 'active', 'rate' => app(AffiliateWithdrawalService::class)->settings()->rate,
                     ]));
-                } catch (\Illuminate\Database\UniqueConstraintViolationException $exception) {
-                    if ($existing = Affiliate::where('user_id', $user->id)->first()) return $existing;
-                    if ($attempt === 4) throw $exception;
+                } catch (UniqueConstraintViolationException $exception) {
+                    if ($existing = Affiliate::where('user_id', $user->id)->first()) {
+                        return $existing;
+                    }
+                    if ($attempt === 4) {
+                        throw $exception;
+                    }
                 }
             }
             throw new \RuntimeException('Kode referral gagal dibuat.');
@@ -45,7 +53,7 @@ class AffiliateService
     {
         $data = Validator::make(['code' => is_string($code) ? strtoupper(trim($code)) : $code], ['code' => ['required', 'string', 'max:255', 'regex:/^[A-Z0-9_-]+$/D']])->validate();
         $affiliate = Affiliate::where('code', $data['code'])->first();
-        if (! app(ReferralCreditService::class)->policy()->enabled || ! $affiliate || $affiliate->status !== 'active') {
+        if (! app(ReferralCreditService::class)->policy()->enabled || ! $affiliate || $affiliate->status !== 'active' || ! $affiliate->user()->where('role', 'student')->exists()) {
             throw ValidationException::withMessages(['referral_code' => 'Kode referral tidak ditemukan atau tidak aktif.']);
         }
         if ($affiliate->user_id === $user->id) {
@@ -54,6 +62,7 @@ class AffiliateService
         if ($user->referrer_affiliate_id !== null && $user->referrer_affiliate_id !== $affiliate->id) {
             throw ValidationException::withMessages(['referral_code' => 'Akun sudah terhubung dengan kode referral lain.']);
         }
+
         return $affiliate;
     }
 
@@ -238,6 +247,7 @@ class AffiliateService
         $processing = (int) $requests->whereIn('status', ['pending', 'approved', 'processing', 'reconciliation'])->sum('amount');
         $paid = (int) DB::table('payouts')->where('affiliate_id', $affiliate->id)->sum('amount');
         $available = array_sum(array_column($withdrawals->available($affiliate), 'amount'));
+
         return [
             'affiliate' => $affiliate->only(['id', 'name', 'code', 'status', 'rate']), 'code' => $affiliate->code,
             'totals' => ['pending' => (int) $records->where('status', 'pending')->sum('amount'), 'approved' => $available, 'paid' => $paid, 'processing' => $processing],

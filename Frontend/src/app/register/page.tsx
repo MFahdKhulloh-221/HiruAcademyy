@@ -99,6 +99,7 @@ function RegisterForm() {
       password,
       password_confirmation: password,
       target_jlpt: targetJlpt,
+      ...(referral.trim() ? { referral_code: referral.trim() } : {}),
     };
     pending.current = true;
     setBusy(true);
@@ -202,7 +203,7 @@ function RegisterForm() {
               </select>
             </label>
 
-            {plan !== "Free Member" && <label className="referral-field">Kode Referral (Opsional)<input name="referral" type="text" value={referral} onChange={event => setReferral(event.target.value)} placeholder="Masukkan kode referral" />
+            {(!editingSelection || plan !== "Free Member") && <label className="referral-field">Kode Referral (Opsional)<input name="referral" type="text" maxLength={255} value={referral} onChange={event => setReferral(event.target.value)} placeholder="Masukkan kode referral" />
             </label>}
           </div>
 

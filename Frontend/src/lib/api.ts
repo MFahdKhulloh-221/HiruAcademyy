@@ -16,6 +16,7 @@ const fieldMessages: Record<string, string> = {
   password_confirmation: "Konfirmasi kata sandi harus sesuai.",
   country: "Periksa negara.",
   target_jlpt: "Periksa target JLPT.",
+  referral_code: "Kode referral tidak valid atau tidak aktif. Periksa kode atau kosongkan untuk mendaftar tanpa referral.",
   token: "Tautan reset tidak valid atau kedaluwarsa.",
 };
 

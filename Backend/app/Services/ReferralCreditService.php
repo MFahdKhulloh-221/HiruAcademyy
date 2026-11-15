@@ -19,6 +19,7 @@ class ReferralCreditService
         $query = DB::table('referral_credit_settings')->where('id', 1);
         $policy = ($lock ? $query->lockForUpdate() : $query)->firstOrFail();
         $policy->program_ids = json_decode($policy->program_ids, true, 512, JSON_THROW_ON_ERROR);
+
         return $policy;
     }
 
@@ -30,8 +31,10 @@ class ReferralCreditService
     public function balances(int $userId): array
     {
         $credits = DB::table('referral_learning_credits')->where('user_id', $userId)->orderBy('id')->get();
+
         return $credits->map(function ($credit) {
             $uses = DB::table('referral_credit_uses')->where('credit_id', $credit->id)->whereIn('status', ['reserved', 'used'])->sum('amount');
+
             return ['id' => $credit->id, 'amount' => $credit->status === 'available' && (! $credit->expires_at || now()->lt($credit->expires_at)) ? max(0, $credit->amount - $uses) : 0];
         })->all();
     }
@@ -46,10 +49,14 @@ class ReferralCreditService
         $eligible = $eligible && (! $ids || in_array($offer->program_id, $ids, true));
         $code = $metadata['referral_code'] ?? null;
         $affiliate = null;
-        if ($code) $affiliate = app(AffiliateService::class)->validateReferral($user, $code);
-        elseif ($user->referrer_affiliate_id && $policy->enabled) {
-            $candidate = Affiliate::find($user->referrer_affiliate_id);
-            if ($candidate?->status === 'active') $affiliate = app(AffiliateService::class)->validateReferral($user, $candidate->code);
+        if ($code) {
+            $affiliate = app(AffiliateService::class)->validateReferral($user, $code);
+        } elseif ($user->referrer_affiliate_id && $policy->enabled) {
+            $candidate = Affiliate::whereKey($user->referrer_affiliate_id)
+                ->where('user_id', '<>', $user->id)->whereHas('user', fn ($query) => $query->where('role', 'student'))->first();
+            if ($candidate?->status === 'active') {
+                $affiliate = app(AffiliateService::class)->validateReferral($user, $candidate->code);
+            }
         }
         $first = ! Invoice::where('user_id', $user->id)->whereIn('status', ['verified', 'active'])->exists()
             && ! DB::table('referral_credit_purchases')->where('buyer_id', $user->id)->where('status', '<>', 'cancelled')->exists();
@@ -59,6 +66,7 @@ class ReferralCreditService
         $available = array_sum(array_column($this->balances($user->id), 'amount'));
         $credit = ! empty($metadata['use_credit']) && $eligible
             ? min($available, $price['base_price'] - $promo - $friend, $policy->credit_limit ?? PHP_INT_MAX) : 0;
+
         return ['base_price' => $price['base_price'], 'promo_discount' => $promo, 'referral_discount' => $friend,
             'credit_discount' => $credit, 'discount_amount' => $promo + $friend + $credit,
             'discount_percent' => ($friend + $credit) === 0 ? ($promo > 0 ? $price['discount_percent'] : 0)
@@ -79,21 +87,33 @@ class ReferralCreditService
         $remaining = $quote['credit_discount'];
         foreach ($this->balances($invoice->user_id) as $credit) {
             $amount = min($remaining, $credit['amount']);
-            if ($amount > 0) DB::table('referral_credit_uses')->insert(['invoice_id' => $invoice->id, 'credit_id' => $credit['id'], 'amount' => $amount, 'status' => 'reserved', 'created_at' => now(), 'updated_at' => now()]);
+            if ($amount > 0) {
+                DB::table('referral_credit_uses')->insert(['invoice_id' => $invoice->id, 'credit_id' => $credit['id'], 'amount' => $amount, 'status' => 'reserved', 'created_at' => now(), 'updated_at' => now()]);
+            }
             $remaining -= $amount;
-            if ($remaining === 0) break;
+            if ($remaining === 0) {
+                break;
+            }
         }
-        if ($remaining !== 0) $this->fail('Kredit tidak mencukupi. Muat ulang tagihan.');
+        if ($remaining !== 0) {
+            $this->fail('Kredit tidak mencukupi. Muat ulang tagihan.');
+        }
     }
 
     public function assertPayable(Invoice $invoice): void
     {
-        if (DB::table('referral_invoice_controls')->where('invoice_id', $invoice->id)->exists()) $this->fail('Invoice ditahan atau dibatalkan oleh Admin.');
+        if (DB::table('referral_invoice_controls')->where('invoice_id', $invoice->id)->exists()) {
+            $this->fail('Invoice ditahan atau dibatalkan oleh Admin.');
+        }
         $first = DB::table('referral_credit_purchases')->where('invoice_id', $invoice->id)->where('status', 'pending')->exists();
-        if ($first && Invoice::where('user_id', $invoice->user_id)->where('id', '<>', $invoice->id)->whereIn('status', ['verified', 'active'])->exists()) $this->fail('Pembelian pertama telah berubah. Tahan invoice dan buat tagihan baru.');
+        if ($first && Invoice::where('user_id', $invoice->user_id)->where('id', '<>', $invoice->id)->whereIn('status', ['verified', 'active'])->exists()) {
+            $this->fail('Pembelian pertama telah berubah. Tahan invoice dan buat tagihan baru.');
+        }
         $blocked = DB::table('referral_credit_uses as u')->join('referral_learning_credits as c', 'c.id', '=', 'u.credit_id')
             ->where('u.invoice_id', $invoice->id)->where('u.status', 'reserved')->where('c.status', '<>', 'available')->exists();
-        if ($blocked) $this->fail('Kredit sumber ditahan. Hubungi Admin.');
+        if ($blocked) {
+            $this->fail('Kredit sumber ditahan. Hubungi Admin.');
+        }
     }
 
     public function verified(Invoice $invoice): void
@@ -101,10 +121,13 @@ class ReferralCreditService
         $this->assertPayable($invoice);
         DB::table('referral_credit_uses')->where('invoice_id', $invoice->id)->where('status', 'reserved')->update(['status' => 'used', 'updated_at' => now()]);
         $purchase = DB::table('referral_credit_purchases')->where('invoice_id', $invoice->id)->first();
-        if (! $purchase || $purchase->status !== 'pending') return;
+        if (! $purchase || $purchase->status !== 'pending') {
+            return;
+        }
         if (Invoice::where('user_id', $invoice->user_id)->where('id', '<>', $invoice->id)->whereIn('status', ['verified', 'active'])->exists()) {
             DB::table('referral_credit_purchases')->where('id', $purchase->id)->update(['status' => 'held', 'updated_at' => now()]);
             app(AffiliateWithdrawalService::class)->audit('credit.first_purchase_conflict', (string) $invoice->id);
+
             return;
         }
         $days = $invoice->credit_policy['expiry_days'] ?? null;
@@ -120,8 +143,12 @@ class ReferralCreditService
         DB::transaction(function () use ($invoice, $action, $reason) {
             $this->policy(true);
             $invoice = Invoice::whereKey($invoice->id)->lockForUpdate()->firstOrFail();
-            if (DB::table('referral_invoice_controls')->where('invoice_id', $invoice->id)->where('status', 'cancelled')->exists()) $this->fail('Invoice yang dibatalkan tidak dapat diubah.');
-            if ($action === 'cancel' && ! in_array($invoice->status, ['draft', 'awaiting_payment'], true)) $this->fail('Invoice dibayar tidak boleh dibatalkan melalui kontrol kredit. Gunakan penahanan dan rekonsiliasi.');
+            if (DB::table('referral_invoice_controls')->where('invoice_id', $invoice->id)->where('status', 'cancelled')->exists()) {
+                $this->fail('Invoice yang dibatalkan tidak dapat diubah.');
+            }
+            if ($action === 'cancel' && ! in_array($invoice->status, ['draft', 'awaiting_payment'], true)) {
+                $this->fail('Invoice dibayar tidak boleh dibatalkan melalui kontrol kredit. Gunakan penahanan dan rekonsiliasi.');
+            }
             DB::table('referral_invoice_controls')->updateOrInsert(['invoice_id' => $invoice->id], ['status' => $action === 'cancel' ? 'cancelled' : 'held', 'reason' => $reason, 'created_at' => now(), 'updated_at' => now()]);
             if ($action === 'cancel') {
                 DB::table('referral_credit_uses')->where('invoice_id', $invoice->id)->where('status', 'reserved')->update(['status' => 'released', 'updated_at' => now()]);
@@ -129,7 +156,9 @@ class ReferralCreditService
             $credit = DB::table('referral_learning_credits')->where('source_invoice_id', $invoice->id)->first();
             if ($credit) {
                 $spent = DB::table('referral_credit_uses')->where('credit_id', $credit->id)->where('status', 'used')->sum('amount');
-                if ($action === 'reverse' && $spent > 0) $this->fail('Kredit telah digunakan. Tahan dan rekonsiliasi; saldo tidak dikurangi otomatis.');
+                if ($action === 'reverse' && $spent > 0) {
+                    $this->fail('Kredit telah digunakan. Tahan dan rekonsiliasi; saldo tidak dikurangi otomatis.');
+                }
                 DB::table('referral_learning_credits')->where('id', $credit->id)->update(['status' => $action === 'reverse' ? 'reversed' : 'held', 'updated_at' => now()]);
             }
             DB::table('referral_credit_purchases')->where('invoice_id', $invoice->id)->update(['status' => $action === 'cancel' ? 'cancelled' : 'held', 'updated_at' => now()]);
@@ -146,6 +175,7 @@ class ReferralCreditService
             ->select('r.id', 'r.invoice_id', 'r.created_at', 'r.reward', 'r.friend_discount', 'r.status', 'p.name as program', 'i.status as payment_status')->orderByDesc('r.id')->get();
         $usage = DB::table('referral_credit_uses as u')->join('referral_learning_credits as c', 'c.id', '=', 'u.credit_id')->join('invoices as i', 'i.id', '=', 'u.invoice_id')->join('programs as p', 'p.id', '=', 'i.program_id')->where('c.user_id', $user->id)
             ->select('u.invoice_id', 'u.credit_id', 'u.amount', 'u.status', 'u.created_at', 'i.reference', 'p.name as program')->orderByDesc('u.created_at')->get();
+
         return ['affiliate' => [...$affiliate->only(['id', 'code', 'status']), 'name' => $user->name], 'policy' => $this->policy(),
             'totals' => ['available' => array_sum(array_column($this->balances($user->id), 'amount')), 'pending' => (int) $pending,
                 'reserved' => (int) (clone $uses)->where('u.status', 'reserved')->sum('u.amount'), 'used' => (int) (clone $uses)->where('u.status', 'used')->sum('u.amount')],

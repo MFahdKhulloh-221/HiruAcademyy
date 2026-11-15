@@ -28,6 +28,7 @@ export type RegisterPayload = {
   password: string;
   password_confirmation: string;
   country?: string | null;
+  referral_code?: string;
   target_jlpt?: "N5" | "N4" | "N3" | "N2" | "N1" | null;
 };
 
@@ -141,8 +142,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   function register(payload: RegisterPayload) {
-    const { name, email, whatsapp, password, password_confirmation, country, target_jlpt } = payload;
-    return authenticate("/api/auth/register", { name, email, whatsapp, password, password_confirmation, country, target_jlpt });
+    const { name, email, whatsapp, password, password_confirmation, country, target_jlpt, referral_code } = payload;
+    return authenticate("/api/auth/register", { name, email, whatsapp, password, password_confirmation, country, target_jlpt, referral_code });
   }
 
   async function logout(): Promise<void> {
