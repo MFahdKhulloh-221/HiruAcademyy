@@ -1,90 +1,101 @@
+.page {
+  --daily-navy: #162c46;
+  --daily-border: #e3e9f0;
+  color: var(--daily-navy);
+  background: #f5f7fa;
+  padding: 28px;
+  border-radius: 20px;
+  min-width: 0;
+  display: grid;
+  gap: 24px;
+}
+.page :global(.button) { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; border: 1px solid var(--daily-border); border-radius: 10px; color: var(--daily-navy); background: white; box-shadow: none; }
+.page :global(.button-primary) { background: #ff7900; border-color: #ff7900; color: #162c46; }
+.page button:disabled { opacity: .5; cursor: not-allowed; }
+.page :is(button, input, select):focus-visible { outline: 3px solid #162c46; outline-offset: 3px; }
+.page :is(input, select) { min-height: 46px; min-width: 0; width: 100%; border: 1px solid var(--daily-border); border-radius: 10px; background: white; color: #162c46; padding: 10px 12px; }
+.page :global(.admin-page-header) { margin-bottom: 0; }
+.page :global(.admin-page-header) h1 { color: #162c46; }
+.page [role="alert"] { white-space: pre-line; color: #9b281b; }
+.page [role="status"] { color: #162c46; }
+.stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.stats > div { display: flex; align-items: center; gap: 16px; padding: 20px; border: 1px solid var(--daily-border); border-radius: 14px; background: white; }
+.stats svg { width: 44px; height: 44px; padding: 11px; border-radius: 12px; background: #fff1e5; color: #162c46; }
+.stats span { color: #526275; font-size: 13px; }
+.stats strong { display: block; margin-top: 4px; color: #162c46; font-size: 26px; }
+.toolbar { display: grid; gap: 20px; }
+.tabs { display: flex; gap: 8px; border-bottom: 1px solid var(--daily-border); }
+.tabs button { min-height: 48px; padding: 10px 20px; border: 0; border-bottom: 3px solid transparent; background: transparent; color: #526275; font-weight: 600; }
+.tabs button[aria-selected="true"] { color: #162c46; border-bottom-color: #ff7900; }
+.filters { display: flex; gap: 12px; }
+.search { display: flex; align-items: center; position: relative; flex: 1; min-width: 0; }
+.filters .search { width: auto; }
+.filters .search input { width: 100%; }
+.filters > select { flex: 0 0 260px; }
+.search svg { position: absolute; left: 14px; }
+.search input { padding-left: 42px; }
+.filters > select { max-width: 260px; }
+.list { min-width: 0; padding: 0; border: 1px solid var(--daily-border); border-radius: 14px; background: white; overflow: hidden; }
+.list :global(.admin-data-table-wrap) { border: 0; }
+.list :global(.admin-data-table) { min-width: 0; width: 100%; }
+.list th { background: #f5f7fa; color: #526275; font-size: 12px; }
+.list :is(th, td) { padding: 16px 12px; border-color: var(--daily-border); white-space: normal; overflow-wrap: anywhere; }
+.list td:first-child { min-width: 150px; }
+.list :global(.admin-row-actions) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.list :global(.admin-row-actions) button { font-size: 12px; padding: 8px; margin: 0; }
+.list :global(.admin-row-actions) span { grid-column: 1 / -1; font-size: 12px; color: #526275; }
+.questionCount { display: block; margin-top: 6px; color: #526275; font-size: 12px; }
+.badge { display: inline-flex; white-space: nowrap; padding: 6px 10px; border: 1px solid var(--daily-border); border-radius: 999px; background: #f5f7fa; color: #162c46; font-size: 12px; font-weight: 600; }
+.badge[data-published="true"] { background: #fff1e5; border-color: #ffd2ab; }
+.form { display: grid; grid-template-columns: minmax(0, 1fr) 320px; align-items: start; gap: 24px; }
+.fields { display: grid; gap: 20px; min-width: 0; border: 0; padding: 0; margin: 0; }
+.card { min-width: 0; display: grid; gap: 18px; padding: 24px; background: white; border: 1px solid var(--daily-border); border-radius: 16px; }
+.card h2 { margin: 0; color: #162c46; font-size: 18px; font-weight: 700; }
+.card h3 { overflow-wrap: anywhere; margin: 0; font-size: 20px; }
+.card p { margin: 0; color: #526275; font-size: 13px; line-height: 1.7; }
+.page .card :global(.admin-field) { min-width: 0; padding: 0; background: transparent; color: #162c46; font-size: 14px; }
+.page .card :global(.admin-field) :is(input, select) { border-color: #e3e9f0; background: white; color: #162c46; }
+.card > .badge { justify-self: start; }
+.page > :global(.button) { justify-self: start; }
+.fieldRow { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.summary { display: grid; gap: 14px; margin: 0; }
+.summary div { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
+.summary dt { color: #526275; }
+.summary dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
+.formActions { display: grid; gap: 10px; }
+@media (max-width: 1023px) {
+  .page { padding: 20px; }
+  .form { grid-template-columns: 1fr; }
+  .list :is(th, td) { padding: 12px 8px; }
+}
 @media (max-width: 639px) {
-  .list.list :global(.admin-data-table-wrap) {
-    overflow: visible;
-    border: 0;
-  }
-
-  .list.list table,
-  .list.list tbody,
-  .list.list tr,
-  .list.list td {
-    display: block;
-    width: 100%;
-    min-width: 0;
-  }
-
-  .list.list :global(.admin-data-table) {
-    min-width: 0;
-    table-layout: auto;
-  }
-
-  .list.list caption {
-    display: block;
-    padding: 0 0 16px;
-    text-align: left;
-  }
-
-  .list.list thead {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    overflow: hidden;
-    clip-path: inset(50%);
-  }
-
-  .list.list tr {
-    border: 1px solid #e2e5ec;
-    border-radius: 16px;
-    padding: 16px;
-    margin-bottom: 16px;
-  }
-
-  .list.list tr:last-child {
-    margin-bottom: 0;
-  }
-
-  .list.list td {
-    padding: 8px 0;
-    border: 0;
-    white-space: normal;
-    overflow-wrap: anywhere;
-  }
-
-  .list.list td::before {
-    display: block;
-    margin-bottom: 4px;
-    font-size: 12px;
-    font-weight: 600;
-    color: #596579;
-  }
-
-  .list.list td:nth-child(1) {
-    font-size: 18px;
-    font-weight: 600;
-    line-height: 1.4;
-  }
-
+  .page { padding: 14px; border-radius: 12px; }
+  .stats { gap: 8px; }
+  .stats > div { padding: 12px 8px; gap: 6px; flex-direction: column; align-items: flex-start; }
+  .stats svg { width: 32px; height: 32px; padding: 7px; }
+  .stats span { font-size: 11px; }
+  .stats strong { font-size: 22px; }
+  .filters { flex-direction: column; }
+  .filters > select { max-width: none; flex-basis: auto; }
+  .filters .search { width: 100%; }
+  .tabs button { flex: 1; padding: 10px; }
+  .fieldRow { grid-template-columns: 1fr; }
+  .card { padding: 18px; }
+  .list { border: 0; background: transparent; overflow: visible; }
+  .list.list :global(.admin-data-table-wrap) { overflow: visible; border: 0; }
+  .list.list table, .list.list tbody, .list.list tr, .list.list td { display: block; width: 100%; min-width: 0; }
+  .list.list :global(.admin-data-table) { min-width: 0; table-layout: auto; }
+  .list.list caption { display: block; padding: 0 0 16px; text-align: left; }
+  .list.list thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .list.list tr { border: 1px solid var(--daily-border); border-radius: 16px; padding: 16px; margin-bottom: 16px; background: white; }
+  .list.list tr:last-child { margin-bottom: 0; }
+  .list.list td { padding: 8px 0; border: 0; white-space: normal; overflow-wrap: anywhere; }
+  .list.list td::before { display: block; margin-bottom: 4px; font-size: 12px; font-weight: 600; color: #526275; }
+  .list.list td:nth-child(1) { font-size: 18px; font-weight: 600; line-height: 1.4; }
   .list.list td:nth-child(2)::before { content: "Kategori"; }
   .list.list td:nth-child(3)::before { content: "Target level"; }
   .list.list td:nth-child(4)::before { content: "Jadwal WIB"; }
   .list.list td:nth-child(5)::before { content: "Status"; }
-  .list.list td:nth-child(6)::before { content: "Soal"; }
-
-  .list.list :global(.admin-row-actions) {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 8px;
-    min-width: 0;
-  }
-
-  .list.list :global(.admin-row-actions) button {
-    min-height: 44px;
-    min-width: 44px;
-    width: 100%;
-    margin: 0;
-  }
-
-  .list.list :global(.admin-row-actions) span {
-    grid-column: 1 / -1;
-  }
+  .list.list :global(.admin-row-actions) { grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; }
+  .list.list :global(.admin-row-actions) button { min-height: 44px; min-width: 44px; width: 100%; }
 }

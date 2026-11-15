@@ -9,6 +9,7 @@ import { useLearningRequest } from "@/components/learning-hooks";
 import { downloadReport, loadReport, loadReportAttempt, loadReportParticipants, reportQuery, type ReportFilters, type ReportQuestion } from "@/lib/admin-tryout-results-api";
 import { assessmentSessions, assessmentSessionLabels } from "@/lib/assessment-attempt";
 import styles from "./admin-tryout-results.module.css";
+import daily from "./daily-practice-studio.module.css";
 const sectionLabel = (code: string) => assessmentSessionLabels[assessmentSessions.indexOf(code as typeof assessmentSessions[number])] ?? code;
 
 const tabs = ["Ringkasan", "Peserta", "Analisis Soal", "Individual"];
@@ -19,7 +20,9 @@ const versionKey = (question: ReportQuestion) => `${question.id}:${question.fing
 const tryoutReports = { loadReport, loadReportParticipants, loadReportAttempt, downloadReport };
 export type AdminResultsApi = Pick<typeof tryoutReports, "loadReport" | "loadReportParticipants" | "loadReportAttempt"> & { downloadReport?: typeof downloadReport };
 
-export function AdminTryoutResults({ id, title, level, packages, onPackageChange, reportsApi = tryoutReports, assessmentLabel = "Try Out", showPassing = true }: { id: string; title: string; level: string; packages: { id: string; title: string; context: string }[]; onPackageChange: (id: string) => void; onClose: () => void; reportsApi?: AdminResultsApi; assessmentLabel?: string; showPassing?: boolean }) {
+export function AdminTryoutResults({ id, title, level, packages, onPackageChange, reportsApi = tryoutReports, assessmentLabel = "Try Out", showPassing: passingEnabled = true }: { id: string; title: string; level: string; packages: { id: string; title: string; context: string }[]; onPackageChange: (id: string) => void; onClose: () => void; reportsApi?: AdminResultsApi; assessmentLabel?: string; showPassing?: boolean }) {
+  const isDaily = assessmentLabel === "Latihan Harian";
+  const showPassing = passingEnabled && !isDaily;
   const [tab, setTab] = useState(tabs[0]);
   const [filters, setFilters] = useState<ReportFilters>({ search: "", status: "all", date_from: "", date_to: "" });
   const [page, setPage] = useState(1);
@@ -55,11 +58,11 @@ export function AdminTryoutResults({ id, title, level, packages, onPackageChange
   const questions = report.data?.questions ?? [];
   function openQuestion(question: ReportQuestion) { setSelected(versionKey(question)); setTab("Analisis Soal"); }
   const detail = individual.data;
-  return <div className={styles.workspace}>
+  return <div className={`${styles.workspace} ${isDaily ? daily.reports : ""}`}>
     <AdminPageHeader title={`Analisis Hasil ${assessmentLabel}`} description={`${title} · ${level}`} actions={reportsApi.downloadReport && <button className="button button-primary" type="button" disabled={exporting} aria-busy={exporting} onClick={() => void exportExcel()}>{exporting ? "Mengunduh…" : "Unduh Excel"}</button>} />
     <details><summary>Tentang statistik laporan</summary><p className={styles.note}>Skor akhir mengikuti hasil tersimpan; belum ada pembulatan baru. Statistik hanya attempt selesai. Rata-rata memakai poin mentah, bukan persentase atau skor skala JLPT. Waktu ditampilkan dalam WIB.</p></details>
     <label className="admin-field">Paket {assessmentLabel}<select value={id} onChange={event => onPackageChange(event.target.value)}>{packages.map(item => <option key={item.id} value={item.id}>{item.title} · {item.context}</option>)}</select></label>
-    <AdminSection><div className={styles.filters}>
+    <AdminSection><div className={`${styles.filters} ${daily.filters}`}>
       <label className="admin-field">Cari peserta<input type="search" placeholder="Nama peserta" maxLength={200} value={filters.search} onChange={event => changeFilters({ ...filters, search: event.target.value })} /></label>
       <label className="admin-field" hidden={!showPassing}>Hasil<select value={filters.status} onChange={event => changeFilters({ ...filters, status: event.target.value as ReportFilters["status"] })}><option value="all">Semua kelulusan</option><option value="passed">Lulus</option><option value="failed">Tidak lulus</option></select></label>
       <label className="admin-field">Selesai sejak<input type="date" value={filters.date_from} max={filters.date_to || undefined} onChange={event => changeFilters({ ...filters, date_from: event.target.value })} /></label>
@@ -71,7 +74,7 @@ export function AdminTryoutResults({ id, title, level, packages, onPackageChange
       {report.loading && <p role="status">Memuat laporan…</p>}
       {report.error && <p role="alert">{report.error} <button className="button" type="button" onClick={report.retry}>Coba Lagi</button></p>}
       {report.data && summary && (summary.responses === 0 ? <AdminSection><p>Belum ada attempt selesai sesuai filter.</p></AdminSection> : tab === "Ringkasan" ? <>
-        <div className={styles.cards}>{[["Total attempt selesai", summary.responses], ["Rata-rata poin mentah", score(summary.mean)], ["Median", score(summary.median)], ["Rentang skor", `${score(summary.min)}–${score(summary.max)}`]].map(([label, value]) => <section className={styles.card} key={label}><h2>{label}</h2><strong>{value}</strong></section>)}</div>
+        <div className={`${styles.cards} ${daily.stats}`}>{[["Total attempt selesai", summary.responses], ["Rata-rata poin mentah", score(summary.mean)], ["Median", score(summary.median)], ["Rentang skor", `${score(summary.min)}–${score(summary.max)}`]].map(([label, value]) => <section className={styles.card} key={label}><h2>{label}</h2><strong>{value}</strong></section>)}</div>
         <div className={styles.summaryMeta}><span>Peserta unik: <strong>{summary.unique_participants}</strong></span>{showPassing && <><span>Lulus: <strong>{summary.passed}</strong></span><span>Tidak lulus: <strong>{summary.failed}</strong></span></>}</div>
         <div className={styles.overviewGrid}>
           <AdminSection title="Distribusi skor"><ScoreHistogram buckets={report.data.histogram} /></AdminSection>
@@ -106,7 +109,7 @@ export function AdminTryoutResults({ id, title, level, packages, onPackageChange
           </dl>
         </div>
         <div className={styles.attemptPicker}><div><h3>Riwayat attempt</h3><p className={styles.note}>Pilih attempt selesai untuk melihat detail hasilnya.</p></div><label className="admin-field">Attempt selesai peserta ini<select value={attempt} onChange={event => setAttempt(Number(event.target.value))}>{!detail.attempts.some(item => item.id === attempt) && <option value={attempt}>Attempt #{attempt}</option>}{detail.attempts.map(item => <option key={item.id} value={item.id}>#{item.id} · {date(item.completed_at)} · Skor {score(item.raw_score)}</option>)}</select></label></div>
-        <AdminDataTable caption="Skor per bagian" rows={detail.participant.sessions} rowKey={row => row.code} columns={[{ key: "section", header: "Bagian", cell: row => row.label || sectionLabel(row.code) }, { key: "score", header: "Poin", cell: row => `${score(row.earned)} / ${score(row.max)}` }, { key: "correct", header: "Benar", cell: row => row.correct }, { key: "wrong", header: "Salah", cell: row => row.wrong }, { key: "blank", header: "Kosong", cell: row => row.unanswered }, { key: "pass", header: "Hasil", cell: row => showPassing ? <span className={`${styles.badge} ${row.pass ? styles.passed : styles.failed}`}>{row.pass ? "Lulus" : "Tidak lulus"}</span> : "—" }]} />
+        <AdminDataTable caption="Skor per bagian" rows={detail.participant.sessions} rowKey={row => row.code} columns={[{ key: "section", header: "Bagian", cell: row => row.label || sectionLabel(row.code) }, { key: "score", header: "Poin", cell: row => `${score(row.earned)} / ${score(row.max)}` }, { key: "correct", header: "Benar", cell: row => row.correct }, { key: "wrong", header: "Salah", cell: row => row.wrong }, { key: "blank", header: "Kosong", cell: row => row.unanswered }, ...(!isDaily ? [{ key: "pass", header: "Hasil", cell: (row: import("@/lib/admin-tryout-results-api").ReportParticipant["sessions"][number]) => showPassing ? <span className={`${styles.badge} ${row.pass ? styles.passed : styles.failed}`}>{row.pass ? "Lulus" : "Tidak lulus"}</span> : "—" }] : [])]} />
         <section className={styles.snapshot} aria-label="Snapshot jawaban">
           <header className={styles.snapshotHeading}><div><h3>Snapshot jawaban</h3><p className={styles.note}>Jawaban peserta dan kunci dari attempt ini.</p></div><span className={styles.note}>{detail.questions.length} soal</span></header>
           {detail.questions.map(question => <article className={styles.question} key={`${question.number}:${question.id}`}>

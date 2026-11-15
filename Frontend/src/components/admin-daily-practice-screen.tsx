@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
-import { AdminDataTable, AdminDialog, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge } from "@/components/admin-primitives";
+import { FiArrowLeft, FiBookOpen, FiCheckCircle, FiEdit2, FiFileText, FiPlus, FiSearch, FiTrash2, FiBarChart2 } from "react-icons/fi";
+import { AdminDataTable, AdminDialog, AdminPageHeader, AdminSection, AdminShell } from "@/components/admin-primitives";
 import { AdminTryoutQuestionBuilder } from "@/components/admin-tryout-question-builder";
 import { AdminTryoutResults } from "@/components/admin-tryout-results";
 import { assessmentPassageError, assessmentQuestionError, type AdminAssessment } from "@/components/admin-assessment-fixtures";
@@ -25,6 +26,9 @@ function DailyPracticeWorkspace() {
   const request = useLearningRequest(loadDailyPractices, "admin-daily-practices");
   const catalog = useContent<{ code: string; name: string; status: string }>("/api/admin/programs");
   const [form, setForm] = useState<DailySettings | null>(null);
+  const [tab, setTab] = useState("all");
+  const [search, setSearch] = useState("");
+  const [category, setCategory] = useState("");
   const [editing, setEditing] = useState<DailyPractice | null>(null);
   const [studio, setStudio] = useState<{ item: DailyPractice; baseline: AdminAssessment; draft: AdminAssessment } | null>(null);
   const [results, setResults] = useState<DailyPractice | null>(null);
@@ -45,6 +49,12 @@ function DailyPracticeWorkspace() {
     return () => window.removeEventListener("beforeunload", beforeUnload);
   }, [dirty]);
   function close() { if (!busy && !uploading && (!dirty || window.confirm("Buang perubahan yang belum disimpan?"))) discard(); }
+  function closeStudio() {
+    if (!studio || busy || uploading || (dirty && !window.confirm("Buang perubahan yang belum disimpan?"))) return;
+    setEditing(studio.item);
+    setForm({ ...studio.item, starts_at: localWib(studio.item.starts_at), ends_at: localWib(studio.item.ends_at) });
+    setStudio(null); setDirty(false); setError("");
+  }
   async function write(action: () => Promise<void>) {
     if (busyRef.current || uploading) return;
     busyRef.current = true; setBusy(true); setError(""); setMessage("");
@@ -61,14 +71,16 @@ function DailyPracticeWorkspace() {
       setDirty(false);
     });
   }
-  function submit(event: FormEvent) {
+  function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const intent = (event.nativeEvent as SubmitEvent).submitter?.getAttribute("value") ?? "draft";
     if (!form) return;
+    if (intent === "published" && (!editing || !editing.question_count)) { setError("Tambahkan soal terlebih dahulu sebelum publikasi."); return; }
     if (form.starts_at.slice(0, 10) !== form.ends_at.slice(0, 10) || form.ends_at <= form.starts_at) { setError("Mulai dan selesai harus pada tanggal WIB yang sama; selesai setelah mulai."); return; }
     void write(async () => {
-      const saved = await saveDailySettings({ ...form, starts_at: `${form.starts_at}:00+07:00`, ends_at: `${form.ends_at}:00+07:00` }, editing?.id);
-      setForm(null); setEditing(null); setDirty(false); setMessage("Pengaturan tersimpan.");
-      if (!editing) { const detail = await loadDailyPractice(saved.id); const baseline = dailyAssessment(detail); setStudio({ item: detail, baseline, draft: baseline }); }
+      const saved = await saveDailySettings({ ...form, status: intent === "published" ? "published" : intent === "studio" ? form.status : "draft", starts_at: `${form.starts_at}:00+07:00`, ends_at: `${form.ends_at}:00+07:00` }, editing?.id);
+      setEditing(saved); setForm({ ...saved, starts_at: localWib(saved.starts_at), ends_at: localWib(saved.ends_at) }); setDirty(false); setMessage(intent === "published" ? "Latihan berhasil dipublikasikan." : "Pengaturan tersimpan.");
+      if (intent === "studio") { const detail = await loadDailyPractice(saved.id); const baseline = dailyAssessment(detail); setForm(null); setStudio({ item: detail, baseline, draft: baseline }); }
     });
   }
   async function saveQuestions(draft: AdminAssessment) {
@@ -81,28 +93,46 @@ function DailyPracticeWorkspace() {
     });
   }
   const rows = request.data ?? [];
-  return <main className="admin-page">
-    {studio ? <AdminTryoutQuestionBuilder key={`${studio.item.id}:${studio.item.category}`} draft={studio.draft} initialQuestion={null} fixedSession={dailyCategories.indexOf(studio.item.category)} studioTitle="Latihan Harian" saveLabel="Simpan Latihan Harian" busy={busy} error={error} saveStatus={message} onDirtyChange={setDirty} onUploadBusyChange={setUploading} onChange={draft => { setStudio({ ...studio, draft }); setDirty(true); }} onSave={saveQuestions} onClose={close} onDelete={async () => {}} /> : results ? <><button className="button" type="button" onClick={() => setResults(null)}>Kembali ke daftar</button><AdminTryoutResults key={results.id} id={String(results.id)} title={results.title} level={results.target_level} assessmentLabel="Latihan Harian" showPassing={false} reportsApi={dailyReportsApi} packages={rows.map(item => ({ id: String(item.id), title: item.title, context: item.target_level }))} onPackageChange={id => setResults(rows.find(item => String(item.id) === id) ?? null)} onClose={() => setResults(null)} /></> : <>
-      <AdminPageHeader title="Latihan Harian" description="Latihan mandiri untuk semua membership. Jadwal WIB; beberapa latihan dan jadwal tumpang tindih diperbolehkan." actions={<button className="button button-primary" type="button" disabled={busy || request.loading || !!request.error} onClick={() => { setEditing(null); setForm({ ...empty }); setError(""); setDirty(false); }}>Buat Latihan</button>} />
+  const filtered = rows.filter(item => (tab === "all" || item.status === tab) && (!category || item.category === category) && item.title.toLocaleLowerCase("id-ID").includes(search.toLocaleLowerCase("id-ID")));
+  const published = rows.filter(item => item.status === "published").length;
+  const categoryLabel = (value: string) => dailyCategoryLabels[dailyCategories.indexOf(value as DailySettings["category"])];
+  return <main className={`admin-page ${styles.page}`}>
+    {studio ? <AdminTryoutQuestionBuilder key={`${studio.item.id}:${studio.item.category}`} draft={studio.draft} initialQuestion={null} fixedSession={dailyCategories.indexOf(studio.item.category)} studioTitle="Latihan Harian" saveLabel="Simpan Latihan Harian" busy={busy} error={error} saveStatus={message} onDirtyChange={setDirty} onUploadBusyChange={setUploading} onChange={draft => { setStudio({ ...studio, draft }); setDirty(true); }} onSave={saveQuestions} closeLabel="Kembali ke Pengaturan" onClose={closeStudio} onDelete={async () => {}} /> : results ? <><button className="button" type="button" onClick={() => setResults(null)}>Kembali ke daftar</button><AdminTryoutResults key={results.id} id={String(results.id)} title={results.title} level={results.target_level} assessmentLabel="Latihan Harian" showPassing={false} reportsApi={dailyReportsApi} packages={rows.map(item => ({ id: String(item.id), title: item.title, context: item.target_level }))} onPackageChange={id => setResults(rows.find(item => String(item.id) === id) ?? null)} onClose={() => setResults(null)} /></> : form ? <>
+      <button className="button" type="button" disabled={busy || uploading} onClick={close}><FiArrowLeft aria-hidden /> Kembali ke daftar</button>
+      <AdminPageHeader title={editing ? "Edit Latihan Harian" : "Buat Latihan Harian"} description="Atur informasi dan jadwal, lengkapi soal, lalu publikasikan latihan." />
+      <form onSubmit={submit} onChange={() => setDirty(true)} className={styles.form}>
+        <fieldset disabled={busy || uploading} className={styles.fields}>
+          <section className={styles.card} aria-labelledby="daily-info"><h2 id="daily-info">Informasi latihan</h2><p>Latihan yang sama untuk semua membership.</p>
+            <label className="admin-field">Judul<input required placeholder="Contoh: Latihan Tata Bahasa N5" value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} /></label>
+            <div className={styles.fieldRow}><label className="admin-field">Kategori<select value={form.category} disabled={!!editing?.question_count} onChange={event => setForm({ ...form, category: event.target.value as DailySettings["category"] })}>{dailyCategories.map((value, index) => <option key={value} value={value}>{dailyCategoryLabels[index]}</option>)}</select></label>
+            <label className="admin-field">Target level<select required value={form.target_level} onChange={event => setForm({ ...form, target_level: event.target.value })}><option value="">Pilih level</option>{form.target_level && !catalog.data.some(item => item.code === form.target_level) && <option value={form.target_level}>{form.target_level}</option>}{catalog.data.filter(item => item.status === "active").map(item => <option key={item.code} value={item.code}>{item.name} ({item.code})</option>)}</select></label></div>
+            {!!editing?.question_count && <p>Kategori dikunci karena soal sudah tersedia.</p>}
+            {catalog.error && <p role="alert">{catalog.error} <button className="button" type="button" onClick={catalog.reload}>Coba Lagi</button></p>}
+          </section>
+          <section className={styles.card} aria-labelledby="daily-schedule"><h2 id="daily-schedule">Jadwal latihan</h2><p>Semua waktu menggunakan WIB. Mulai dan selesai pada tanggal yang sama.</p>
+            <label className="admin-field">Tanggal (WIB)<input required type="date" value={form.starts_at.slice(0, 10)} onChange={event => { const day = event.target.value; setForm({ ...form, starts_at: `${day}T${form.starts_at.slice(11)}`, ends_at: `${day}T${form.ends_at.slice(11)}` }); }} /></label>
+            <div className={styles.fieldRow}><label className="admin-field">Mulai (WIB)<input required type="time" value={form.starts_at.slice(11)} onChange={event => setForm({ ...form, starts_at: `${form.starts_at.slice(0, 10)}T${event.target.value}` })} /></label>
+            <label className="admin-field">Selesai (WIB)<input required type="time" value={form.ends_at.slice(11)} onChange={event => setForm({ ...form, ends_at: `${form.starts_at.slice(0, 10)}T${event.target.value}` })} /></label></div>
+          </section>
+        </fieldset>
+        <aside className={styles.card} aria-label="Ringkasan latihan"><h2>Ringkasan latihan</h2><span className={styles.badge}>{form.status === "published" ? "Terbit" : "Draft"}</span><h3>{form.title || "Judul latihan belum diisi"}</h3>
+          <dl className={styles.summary}><div><dt>Kategori</dt><dd>{categoryLabel(form.category)}</dd></div><div><dt>Target level</dt><dd>{form.target_level.toUpperCase() || "Belum dipilih"}</dd></div><div><dt>Tanggal WIB</dt><dd>{form.starts_at.slice(0, 10) || "Belum diatur"}</dd></div><div><dt>Waktu WIB</dt><dd>{form.starts_at.slice(11) || "—"} – {form.ends_at.slice(11) || "—"}</dd></div><div><dt>Jumlah soal</dt><dd>{editing?.question_count ?? 0} soal</dd></div></dl>
+          <p>Simpan draft terlebih dahulu. Publikasi memerlukan soal valid dan persetujuan validasi server. Edit dan hapus dikunci setelah pengerjaan dimulai.</p>
+          {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
+          <div className={styles.formActions}><button className="button" type="submit" value="draft" disabled={busy || uploading || catalog.loading || !!catalog.error}><FiFileText aria-hidden /> Simpan Draft</button><button className="button" type="submit" value="studio" disabled={busy || uploading || catalog.loading || !!catalog.error}><FiBookOpen aria-hidden /> Kelola Soal</button><button className="button button-primary" type="submit" value="published" disabled={busy || uploading || catalog.loading || !!catalog.error || !editing?.question_count}><FiCheckCircle aria-hidden /> Publikasikan</button></div>
+          {!editing?.question_count && <p>Tambahkan soal melalui Kelola Soal sebelum publikasi.</p>}
+        </aside>
+      </form>
+    </> : <>
+      <AdminPageHeader title="Kelola Latihan Harian" description="Buat, jadwalkan, dan pantau latihan harian dalam satu tempat." actions={<button className="button button-primary" type="button" disabled={busy || request.loading || !!request.error} onClick={() => { setEditing(null); setForm({ ...empty }); setError(""); setMessage(""); setDirty(false); }}><FiPlus aria-hidden /> Buat Latihan</button>} />
+      <div className={styles.stats} aria-label="Statistik latihan"><div><FiBookOpen aria-hidden /><span>Total latihan<strong>{rows.length}</strong></span></div><div><FiCheckCircle aria-hidden /><span>Terbit<strong>{published}</strong></span></div><div><FiFileText aria-hidden /><span>Draft<strong>{rows.length - published}</strong></span></div></div>
+      <section className={styles.toolbar} aria-label="Filter latihan"><div className={styles.tabs} role="tablist" aria-label="Status latihan">{[["all", "Semua"], ["published", "Terbit"], ["draft", "Draft"]].map(([value, label]) => <button key={value} type="button" role="tab" aria-selected={tab === value} onClick={() => setTab(value)}>{label}</button>)}</div><div className={styles.filters}><label className={styles.search}><FiSearch aria-hidden /><input aria-label="Cari judul latihan" placeholder="Cari judul latihan…" value={search} onChange={event => setSearch(event.target.value)} /></label><select aria-label="Filter kategori" value={category} onChange={event => setCategory(event.target.value)}><option value="">Semua kategori</option>{dailyCategories.map((value, index) => <option key={value} value={value}>{dailyCategoryLabels[index]}</option>)}</select></div></section>
       {error && <p role="alert">{error}</p>}{message && <p role="status">{message}</p>}
       {request.error && <p role="alert">{request.error} <button className="button" type="button" onClick={request.retry}>Coba Lagi</button></p>}
-      <AdminSection className={styles.list}><AdminDataTable caption="Daftar latihan harian" loading={request.loading} rows={rows} rowKey={item => String(item.id)} columns={[
-        { key: "title", header: "Judul", cell: item => item.title }, { key: "category", header: "Kategori", cell: item => dailyCategoryLabels[dailyCategories.indexOf(item.category)] }, { key: "level", header: "Target level", cell: item => item.target_level }, { key: "window", header: "Jadwal WIB", cell: item => `${date(item.starts_at)} – ${date(item.ends_at)}` }, { key: "status", header: "Status", cell: item => <AdminStatusBadge status={item.status} /> }, { key: "questions", header: "Soal", cell: item => item.question_count },
-      ]} actions={{ cell: item => <div className="admin-row-actions"><button className="button" type="button" disabled={busy || dailyLocked(item)} onClick={() => void open(item, "settings")}>Edit</button><button className="button" type="button" disabled={busy || dailyLocked(item)} onClick={() => void open(item, "studio")}>Kelola Soal</button><button className="button" type="button" disabled={busy} onClick={() => setResults(item)}>Analisis</button><button className="button" type="button" disabled={busy || dailyLocked(item)} onClick={() => setDeleting(item)}>Hapus</button>{dailyLocked(item) && <span>Sudah ada pengerjaan; dikunci</span>}</div> }} /></AdminSection>
+      <AdminSection className={styles.list}><AdminDataTable caption="Daftar latihan harian" loading={request.loading} rows={filtered} rowKey={item => String(item.id)} columns={[
+        { key: "title", header: "Judul", cell: item => <><strong>{item.title}</strong><small className={styles.questionCount}>{item.question_count} soal</small></> }, { key: "category", header: "Kategori", cell: item => dailyCategoryLabels[dailyCategories.indexOf(item.category)] }, { key: "level", header: "Target level", cell: item => item.target_level }, { key: "window", header: "Jadwal WIB", cell: item => `${date(item.starts_at)} – ${date(item.ends_at)}` }, { key: "status", header: "Status", cell: item => <span className={styles.badge} data-published={item.status === "published"}>{item.status === "published" ? "Terbit" : "Draft"}</span> },
+      ]} actions={{ cell: item => <div className="admin-row-actions"><button className="button" type="button" disabled={busy || dailyLocked(item)} onClick={() => void open(item, "settings")}><FiEdit2 aria-hidden /> Edit</button><button className="button" type="button" disabled={busy || dailyLocked(item)} onClick={() => void open(item, "studio")}><FiBookOpen aria-hidden /> Kelola Soal</button><button className="button" type="button" disabled={busy} onClick={() => setResults(item)}><FiBarChart2 aria-hidden /> Analisis</button><button className="button" type="button" disabled={busy || dailyLocked(item)} onClick={() => setDeleting(item)}><FiTrash2 aria-hidden /> Hapus</button>{dailyLocked(item) && <span>Sudah ada pengerjaan; dikunci</span>}</div> }} /></AdminSection>
     </>}
-    <AdminDialog open={form !== null} title={editing ? "Edit Latihan Harian" : "Buat Latihan Harian"} close={close}>
-      {form && <form onSubmit={submit} onChange={() => setDirty(true)}><fieldset disabled={busy} className="admin-form-grid">
-        <label className="admin-field">Judul<input required value={form.title} onChange={event => setForm({ ...form, title: event.target.value })} /></label>
-        <label className="admin-field">Kategori<select value={form.category} disabled={!!editing?.question_count} onChange={event => setForm({ ...form, category: event.target.value as DailySettings["category"] })}>{dailyCategories.map((category, index) => <option key={category} value={category}>{dailyCategoryLabels[index]}</option>)}</select></label>
-        <label className="admin-field">Target level<select required value={form.target_level} onChange={event => setForm({ ...form, target_level: event.target.value })}><option value="">Pilih level</option>{form.target_level && !catalog.data.some(item => item.code === form.target_level) && <option value={form.target_level}>{form.target_level}</option>}{catalog.data.filter(item => item.status === "active").map(item => <option key={item.code} value={item.code}>{item.name} ({item.code})</option>)}</select></label>
-        {catalog.error && <p role="alert">{catalog.error}</p>}
-        <label className="admin-field">Mulai (WIB)<input required type="datetime-local" value={form.starts_at} onChange={event => setForm({ ...form, starts_at: event.target.value })} /></label>
-        <label className="admin-field">Selesai (WIB)<input required type="datetime-local" value={form.ends_at} onChange={event => setForm({ ...form, ends_at: event.target.value })} /></label>
-        <label className="admin-field">Status<select value={form.status} onChange={event => setForm({ ...form, status: event.target.value as DailySettings["status"] })}><option value="draft">Draft</option><option value="published" disabled={!editing}>Published</option></select></label>
-        <p>Simpan draft terlebih dahulu, lengkapi soal, lalu terbitkan melalui Edit. Semua membership mendapat latihan yang sama. Kategori dikunci setelah soal tersedia. Edit dan hapus dikunci setelah attempt dimulai.</p>
-        {error && <p role="alert">{error}</p>}<button className="button button-primary" type="submit" disabled={catalog.loading || !!catalog.error}>Simpan Pengaturan</button>
-      </fieldset></form>}
-    </AdminDialog>
     <AdminDialog open={!!deleting} title="Hapus Latihan Harian" close={() => { if (!busy) setDeleting(null); }} actions={<button className="button" type="button" disabled={busy} onClick={() => void write(async () => { if (deleting) await deleteDailyPractice(deleting.id); setDeleting(null); setMessage("Latihan dihapus."); })}>Hapus Permanen</button>}><p>Hapus {deleting?.title}? Tindakan ini tidak dapat dibatalkan.</p>{error && <p role="alert">{error}</p>}</AdminDialog>
   </main>;
 }

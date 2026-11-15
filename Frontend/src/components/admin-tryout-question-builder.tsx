@@ -14,15 +14,17 @@ import { assessmentLetters, assessmentPassageError, assessmentQuestionLocation, 
 import { placementText } from "@/lib/placement-rich-text";
 import { adminMediaUrl } from "@/lib/admin-media";
 import styles from "./admin-tryout-builder.module.css";
+import daily from "./daily-practice-studio.module.css";
 
 const labels = ["Kosakata & Kanji", "Tata Bahasa", "Reading (Dokkai)", "Audio (Choukai)"];
 
-export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChange, onUploadBusyChange, busy: saving, error, onChange, onSave, onClose, saveStatus, navigation, bulkAction, readingOnly = false, audioOnly = false, fixedSession, studioTitle, saveLabel }: {
+export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChange, onUploadBusyChange, busy: saving, error, onChange, onSave, onClose, saveStatus, navigation, bulkAction, readingOnly = false, audioOnly = false, fixedSession, studioTitle, saveLabel, closeLabel = "Kembali ke Daftar" }: {
   fixedSession?: number;
   readingOnly?: boolean;
   audioOnly?: boolean;
   studioTitle?: string;
   saveLabel?: string;
+  closeLabel?: string;
   navigation?: ReactNode;
   bulkAction?: ReactNode;
   saveStatus: string;
@@ -134,8 +136,8 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
     <button type="button" className="button" disabled={busy} onClick={() => moveGroup(1)}>Grup Berikutnya</button>
     <button type="button" className={`button ${styles.danger}`} disabled={busy} onClick={() => setRemove("group")}><FiTrash2 aria-hidden="true" />Hapus Grup</button>
   </div></details>;
-  return <section className={styles.questionBuilder} data-assessment-kind={draft.kind} aria-label={`HIRU ${title.toUpperCase()} STUDIO`}>
-    <header className={styles.studioHeader}>
+  return <section className={`${styles.questionBuilder} ${fixedSession !== undefined ? daily.builder : ""}`} data-assessment-kind={draft.kind} aria-label={`HIRU ${title.toUpperCase()} STUDIO`}>
+    <header className={`${styles.studioHeader} ${daily.header}`}>
       <h1>{draft.title}</h1>
       <div className={styles.metadata}><span>{fixedSession !== undefined ? `Target ${draft.context.toUpperCase()}` : chapterOnly ? draft.context : `JLPT ${draft.context.toUpperCase().replace(/^JLPT\s*/, "")}`}</span>{!chapterOnly && <AdminStatusBadge status={draft.status} />}</div>
     </header>
@@ -147,7 +149,7 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
       <div><h2>{labels[session]}</h2><p>{questions.length} soal{groupEnabled && passage ? ` / ${passage.title} / Nomor ${groupRange}` : ""}</p></div>
       <div className={styles.studioNavigation} inert={uploading}>{navigation}<AdminTabs tabs={["Editor", "Pratinjau Siswa"]} active={preview ? "Pratinjau Siswa" : "Editor"} label="Mode editor" onChange={value => setPreview(value !== "Editor")} /></div>
     </div>
-    <div className={styles.studioPanels} inert={busy}>
+    <div className={`${styles.studioPanels} ${daily.panels}`} inert={busy}>
       <aside id="studio-navigator" className={styles.studioNavigator} aria-label="Navigator Konten">
         <div className={styles.listHeading}><h2>{session === 2 ? "Struktur Reading" : "Daftar Soal"}</h2><span>{questions.length} soal</span></div>
         <label className={`admin-field ${styles.searchField}`}><span><FiSearch aria-hidden="true" />Cari soal</span><input type="search" value={search} onChange={event => setSearch(event.target.value)} /></label>
@@ -200,7 +202,7 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
         </PlacementEditorProvider> : <p>Pilih soal atau tambahkan konten untuk mulai mengedit.</p>}
       </section>
     </div>
-    <footer className={styles.studioActions} aria-label="Aksi Studio"><p role="status">{saveStatus}</p><div>{bulkAction}<button type="button" className="button" disabled={busy} onClick={onClose}>Kembali ke Daftar</button><button type="button" className="button button-primary" disabled={busy} aria-busy={busy} onClick={() => { if (!pendingUpload.current) void onSave(draft); }}><FiSave aria-hidden="true" />{busy ? "Menyimpan..." : saveLabel ?? `Simpan ${title}`}</button></div></footer>
+    <footer className={styles.studioActions} aria-label="Aksi Studio"><p role="status">{saveStatus}</p><div>{bulkAction}<button type="button" className="button" disabled={busy} onClick={onClose}>{closeLabel}</button><button type="button" className="button button-primary" disabled={busy} aria-busy={busy} onClick={() => { if (!pendingUpload.current) void onSave(draft); }}><FiSave aria-hidden="true" />{busy ? "Menyimpan..." : saveLabel ?? `Simpan ${title}`}</button></div></footer>
     <AdminDialog open={groupForm} title={grammarStimulus ? "Grup Bacaan Tata Bahasa" : "Grup Bacaan Reading"} className={styles.packageDialog} close={() => setGroupForm(false)} actions={<><button className="button" type="button" onClick={() => setGroupForm(false)}>Kembali</button><button className="button button-primary" type="submit" form="tryout-reading-group" disabled={busy}>Buat Grup</button></>}>
       <form id="tryout-reading-group" className={styles.groupForm} noValidate onSubmit={event => { event.preventDefault(); const invalid = event.currentTarget.querySelector<HTMLInputElement>("input:invalid"); if (invalid) { reportIssue(`Sesi ${sections[session]} — Grup ${groupLabel} baru: ${invalid.labels?.[0]?.textContent || "Isian"}: ${invalid.validationMessage}\nPerbaiki isian lalu pilih Buat Grup kembali.`); return; } addGroup(); }}>
         <p className={styles.linkedHint}>{grammarStimulus ? "Satu bacaan bersama untuk beberapa soal Tata Bahasa." : "Satu bacaan bersama untuk beberapa soal Reading."}</p>

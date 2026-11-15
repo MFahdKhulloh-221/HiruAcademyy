@@ -1,0 +1,106 @@
+/* Daily-only roots keep shared assessment studios unchanged. */
+.builder[data-assessment-kind], .reports {
+  --daily-navy: #162c46;
+  --daily-orange: #ff7900;
+  --daily-border: #e3e9f0;
+  color: var(--daily-navy);
+  background: #f5f7fa;
+  border-radius: 16px;
+  padding: 24px;
+  gap: 20px;
+  min-width: 0;
+}
+.builder[data-assessment-kind] { --builder-accent: #ff7900; --builder-soft: #f5f7fa; }
+.builder[data-assessment-kind] .header {
+  padding: 0 0 20px;
+  border-color: var(--daily-border);
+}
+.builder[data-assessment-kind] .header h1 { color: var(--daily-navy); font-size: clamp(20px, 2.4vw, 28px); letter-spacing: -.025em; }
+.builder[data-assessment-kind] .panels { grid-template-columns: 264px minmax(0, 1fr); gap: 20px; }
+.builder[data-assessment-kind] :is([aria-label="Navigator Konten"], [aria-label="Editor Pertanyaan"], [aria-label="Teks bacaan"]),
+.reports :global(.admin-section), .reports .stats > section {
+  border: 1px solid var(--daily-border);
+  border-radius: 14px;
+  box-shadow: none;
+  background: #fff;
+}
+.builder[data-assessment-kind] [aria-label="Navigator Konten"] { padding: 16px; gap: 16px; }
+.builder[data-assessment-kind] [aria-label="Navigator Konten"] li > button { height: auto; min-height: 80px; border-color: var(--daily-border); }
+.builder[data-assessment-kind] [aria-label="Navigator Konten"] li > [aria-current] {
+  background: #f5f7fa;
+  border-color: var(--daily-orange);
+  color: var(--daily-navy);
+  box-shadow: inset 3px 0 var(--daily-orange);
+}
+.builder[data-assessment-kind] [aria-label="Navigator Konten"] [aria-current] > strong {
+  background: var(--daily-navy);
+  color: #fff;
+}
+.builder[data-assessment-kind] [aria-label="Editor Pertanyaan"] { padding: 24px; }
+.builder[data-assessment-kind] [aria-label="Editor Pertanyaan"] > header { border-color: var(--daily-border); padding-bottom: 16px; }
+.builder[data-assessment-kind] :global(.admin-tabs) { border-color: var(--daily-border); border-radius: 10px; }
+.builder[data-assessment-kind] :global(.admin-tabs button[aria-selected=true]),
+.reports :global([role="tab"][aria-selected="true"]) {
+  background: var(--daily-navy);
+  border-color: var(--daily-navy);
+  color: #fff;
+}
+.builder[data-assessment-kind] :global(.button), .reports :global(.button) {
+  min-height: 44px;
+  border-radius: 9px;
+  border-color: var(--daily-border);
+  color: var(--daily-navy);
+  box-shadow: none;
+}
+.builder[data-assessment-kind] :global(.button-primary), .reports :global(.button-primary) {
+  background: var(--daily-orange);
+  border-color: var(--daily-orange);
+  color: #162c46;
+  font-weight: 700;
+}
+.builder[data-assessment-kind] :global(.button-primary:hover), .reports :global(.button-primary:hover) {
+  background: #162c46;
+  border-color: #162c46;
+  color: #fff;
+}
+.builder[data-assessment-kind] :is(input:not([type=radio]):not([type=checkbox]), select, textarea),
+.builder[data-assessment-kind] :global(.placement-text-editor),
+.reports :is(input, select) { border-color: var(--daily-border); border-radius: 9px; color: var(--daily-navy); }
+.builder[data-assessment-kind] :global(.placement-text-editor[data-active=true]) { border-color: var(--daily-orange); box-shadow: 0 0 0 1px #ff790026; }
+.builder[data-assessment-kind] :global(:focus-visible),
+.builder[data-assessment-kind] :global(.placement-text-editor:focus-within),
+.reports :is(button, input, select, summary):focus-visible { outline-color: var(--daily-navy); }
+.builder[data-assessment-kind] > footer { padding: 20px 0 0; border-color: var(--daily-border); }
+.reports > header { margin: 0; }
+.reports h1 { color: var(--daily-navy); font-size: clamp(22px, 2.4vw, 28px); letter-spacing: -.025em; }
+.reports > details { margin: 0; padding: 0 16px; border: 1px solid var(--daily-border); border-radius: 10px; background: #fff; }
+.reports > details[open] { padding-bottom: 12px; }
+.reports summary { color: var(--daily-navy); }
+.reports .filters { grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr)); gap: 12px; }
+.reports :global(.admin-field[hidden]) { display: none; }
+.reports :global(.admin-field), .reports :global(.admin-field select), .reports :global(.admin-field input) { min-width: 0; max-width: 100%; width: 100%; }
+.reports :global(.admin-tabs) { max-width: 100%; overflow-x: auto; flex-wrap: nowrap; }
+.reports :global([role="tab"]) { flex-shrink: 0; min-height: 44px; white-space: nowrap; }
+.reports .stats { gap: 12px; }
+.reports .stats > section { padding: 20px; border-top: 3px solid var(--daily-orange); }
+.reports .stats strong { color: var(--daily-navy); }
+.reports :global(.admin-data-table-wrap) { overflow-x: auto; overscroll-behavior-inline: contain; }
+.reports :global(.admin-data-table) { font-size: 13px; }
+.reports :global(.admin-data-table th) { background: #f5f7fa; color: var(--daily-navy); }
+.reports :global(.admin-data-table th), .reports :global(.admin-data-table td) { border-color: var(--daily-border); }
+.reports :is(img, audio) { max-width: 100%; }
+@media (max-width: 1023px) {
+  .builder[data-assessment-kind] .panels { grid-template-columns: minmax(0, 1fr); }
+  .builder[data-assessment-kind] [aria-label="Daftar pertanyaan"] { max-height: 320px; }
+  .reports .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .reports .filters > :first-child { grid-column: 1 / -1; }
+}
+@media (max-width: 639px) {
+  .builder[data-assessment-kind], .reports { padding: 12px; gap: 16px; border-radius: 12px; }
+  .builder[data-assessment-kind] :is([aria-label="Editor Pertanyaan"], [aria-label="Navigator Konten"]) { padding: 12px; }
+  .builder[data-assessment-kind] > footer > div { width: 100%; }
+  .builder[data-assessment-kind] > footer > div > button { flex: 1 1 160px; }
+  .reports .filters { grid-template-columns: minmax(0, 1fr); }
+  .reports .stats { gap: 8px; }
+  .reports .stats > section { padding: 14px; }
+}
