@@ -10,6 +10,7 @@ import { downloadReport, loadReport, loadReportAttempt, loadReportParticipants, 
 import { assessmentSessions, assessmentSessionLabels } from "@/lib/assessment-attempt";
 import styles from "./admin-tryout-results.module.css";
 import daily from "./daily-practice-studio.module.css";
+import { TryoutResultsDashboard } from "./tryout-results-dashboard";
 const sectionLabel = (code: string) => assessmentSessionLabels[assessmentSessions.indexOf(code as typeof assessmentSessions[number])] ?? code;
 
 const tabs = ["Ringkasan", "Peserta", "Analisis Soal", "Individual"];
@@ -20,7 +21,11 @@ const versionKey = (question: ReportQuestion) => `${question.id}:${question.fing
 const tryoutReports = { loadReport, loadReportParticipants, loadReportAttempt, downloadReport };
 export type AdminResultsApi = Pick<typeof tryoutReports, "loadReport" | "loadReportParticipants" | "loadReportAttempt"> & { downloadReport?: typeof downloadReport };
 
-export function AdminTryoutResults({ id, title, level, packages, onPackageChange, reportsApi = tryoutReports, assessmentLabel = "Try Out", showPassing: passingEnabled = true }: { id: string; title: string; level: string; packages: { id: string; title: string; context: string }[]; onPackageChange: (id: string) => void; onClose: () => void; reportsApi?: AdminResultsApi; assessmentLabel?: string; showPassing?: boolean }) {
+export function AdminTryoutResults(props: Parameters<typeof LegacyAdminResults>[0]) {
+  return props.assessmentLabel === "Latihan Harian" ? <LegacyAdminResults {...props} /> : <TryoutResultsDashboard {...props} />;
+}
+
+function LegacyAdminResults({ id, title, level, packages, onPackageChange, reportsApi = tryoutReports, assessmentLabel = "Try Out", showPassing: passingEnabled = true }: { id: string; title: string; level: string; packages: { id: string; title: string; context: string }[]; onPackageChange: (id: string) => void; onClose: () => void; reportsApi?: AdminResultsApi; assessmentLabel?: string; showPassing?: boolean }) {
   const isDaily = assessmentLabel === "Latihan Harian";
   const showPassing = passingEnabled && !isDaily;
   const [tab, setTab] = useState(tabs[0]);
