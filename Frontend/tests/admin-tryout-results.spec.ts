@@ -10,7 +10,7 @@ const questions = Array.from({ length: 10 }, (_, index) => {
   const wrong = number === 2 ? 2 : 0;
   return { version: `7:${number}`, id: 700 + number, fingerprint: `snapshot-${number}-${"a".repeat(48)}`, section: number === 9 ? "reading" : "grammar", number, question: `Pertanyaan snapshot ${number}`, options, correct_option: "A", received: 3, not_received: 1, correct, wrong, unanswered: blank ? 3 : 1, correct_percentage: correct ? 66.67 : 0, distribution: { A: { count: correct, percentage: correct ? 66.67 : 0 }, B: { count: wrong, percentage: wrong ? 66.67 : 0 }, C: { count: 0, percentage: 0 }, D: { count: 0, percentage: 0 } } };
 });
-const revisedQuestion = { ...questions[0], version: "7:1:revision", fingerprint: `snapshot-1-${"b".repeat(48)}`, question: "Pertanyaan snapshot 1 revisi" };
+const revisedQuestion = { ...questions[0], version: "7:1:revision", fingerprint: `snapshot-1-${"b".repeat(48)}`, question: "Pertanyaan snapshot 1 revisi", received: 1, correct: 0, wrong: 1, unanswered: 0, correct_percentage: 0, distribution: { A: { count: 0, percentage: 0 }, B: { count: 1, percentage: 100 }, C: { count: 0, percentage: 0 }, D: { count: 0, percentage: 0 } } };
 const reportQuestions = [...questions, revisedQuestion];
 const hardest = [questions[1], questions[9], ...questions.slice(2, 8)];
 const participant = (id: number) => ({ id, user_id: 91, name: "Rina Mock", whatsapp: "628123456789", started_at: "2026-10-01T01:00:00Z", completed_at: "2026-10-01T02:00:00Z", status: "completed", raw_score: id === 101 ? 30 : 70, final_score: id === 101 ? 30 : 70, max_score: 100, overall_pass: id !== 101, sessions: [{ code: "grammar", label: "Tata Bahasa", earned: id === 101 ? 0 : 2, max: 2, correct: id === 101 ? 0 : 1, wrong: id === 101 ? 1 : 0, unanswered: 0, pass: id !== 101 }] });
@@ -65,7 +65,8 @@ for (const width of [1440, 768, 390]) {
       await expect(page.getByRole("tab", { name: tab, exact: true })).toHaveAttribute("aria-selected", "true");
       if (tab === "Peserta" || tab === "Individual") await expect(page.getByRole("button", { name: "Detail Individual", exact: true })).toBeVisible();
       if (tab === "Analisis Soal") {
-        await expect(page.getByRole("combobox", { name: "Pilih soal", exact: true })).toHaveValue(`701:${questions[0].fingerprint}`);
+        await expect(page.getByRole("combobox", { name: "Pilih soal", exact: true })).toHaveCount(0);
+        await expect(page.getByRole("combobox", { name: "Bentuk soal", exact: true })).toHaveValue(`701:${questions[0].fingerprint}`);
         const detail = page.getByRole("article", { name: "Detail analisis soal", exact: true });
         await expect(detail.getByText("Pertanyaan snapshot 1", { exact: true })).toBeVisible();
         await expect(detail.getByRole("heading", { name: "Soal 1 — Tata Bahasa", exact: true })).toBeVisible();
@@ -79,11 +80,34 @@ for (const width of [1440, 768, 390]) {
       }
     }
     await page.getByRole("button", { name: "Detail Individual", exact: true }).click();
-    await expect(page.getByText("Jawaban: B · Kunci: A · Salah · Poin 0 / 2", { exact: true })).toBeVisible();
+    await expect(page.getByText("Jawaban: B · Kunci: A", { exact: true })).toBeVisible();
     await noOverflow(page);
     expect(errors).toEqual([]);
   });
 }
+
+test("daily practice retains separate version picker and existing analysis", async ({ page }) => {
+  await page.route("**/api/admin/programs", route => route.fulfill({ json: { data: [] } }));
+  await page.route("**/api/admin/daily-practices**", route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path.endsWith("/participants")) return route.fulfill({ json: { data: [], meta: { current_page: 1, last_page: 1, total: 0, per_page: 20 } } });
+    if (path.endsWith("/reports")) return route.fulfill({ json: { data: { summary: { responses: 4, unique_participants: 1, mean: 50, median: 50, min: 30, max: 70, passed: 2, failed: 2 }, histogram: [], questions: reportQuestions, hardest: [] } } });
+    return route.fulfill({ json: { data: [{ id: 7, title: "Latihan analitik", category: "grammar", target_level: "n5", status: "published", starts_at: "2026-11-13T08:00:00+07:00", ends_at: "2026-11-13T10:00:00+07:00", question_count: 10, attempts_count: 4 }] } });
+  });
+  await page.goto("/admin/latihan-harian");
+  await page.getByRole("tab", { name: "Terbit", exact: true }).click();
+  await page.getByRole("button", { name: "Analisis", exact: true }).click();
+  await page.getByRole("tab", { name: "Analisis Soal", exact: true }).click();
+  const select = page.getByRole("combobox", { name: "Pilih soal", exact: true });
+  await expect(select).toBeVisible();
+  await expect(select.locator("option")).toHaveCount(11);
+  await select.selectOption(`701:${revisedQuestion.fingerprint}`);
+  const detail = page.getByRole("article", { name: "Detail analisis soal", exact: true });
+  await expect(detail).toContainText("Versi 2");
+  await expect(detail).toContainText(revisedQuestion.question);
+  await expect(detail).toContainText("Penyebut: 1 attempt menerima versi ini.");
+  await expect(page.getByRole("combobox", { name: "Bentuk soal", exact: true })).toHaveCount(0);
+});
 
 test("mocked result tabs support keyboard and linked panels", async ({ page }) => {
   await mockReports(page);
@@ -108,14 +132,35 @@ test("mocked hardest question selects exact snapshot analysis", async ({ page })
   await expect(page.getByRole("button", { name: "Lihat analisis soal 6", exact: true })).toHaveCount(0);
   await page.getByRole("button", { name: "Lihat analisis soal 2", exact: true }).click();
   await expect(page.getByRole("tab", { name: "Analisis Soal", exact: true })).toHaveAttribute("aria-selected", "true");
-  await expect(page.getByRole("combobox", { name: "Pilih soal", exact: true })).toHaveValue(`702:${questions[1].fingerprint}`);
+  await expect(page.getByRole("combobox", { name: "Pilih soal", exact: true })).toHaveCount(0);
   const detail = page.getByRole("article", { name: "Detail analisis soal", exact: true });
   await expect(detail.getByRole("heading", { name: "Soal 2 — Tata Bahasa", exact: true })).toBeVisible();
   await expect(detail.getByText("Pertanyaan snapshot 2", { exact: true })).toBeVisible();
   await expect(detail.getByText("Pertanyaan snapshot 1", { exact: true })).toHaveCount(0);
-  await expect(detail.getByText("Penyebut: 3 attempt menerima versi ini. 1 attempt tidak menerima soal ini.", { exact: true })).toBeVisible();
+  await expect(detail.getByText("Statistik dihitung dari 3 pengerjaan yang menggunakan bentuk soal ini.", { exact: true })).toBeVisible();
   await expect(detail.getByText("Persentase benar", { exact: true })).toBeVisible();
   await expect(detail.getByText("0%", { exact: true }).first()).toBeVisible();
+});
+
+test("mocked hardest navigation reveals later page and exact alternate form", async ({ page }) => {
+  await mockReports(page);
+  await openResults(page);
+  await page.getByRole("button", { name: "Lihat analisis soal 10", exact: true }).click();
+  const list = page.getByRole("complementary", { name: "Daftar analisis soal", exact: true });
+  await expect(list.getByRole("button").filter({ hasText: "Soal 10 ·" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("navigation", { name: "Halaman soal", exact: true })).toContainText("2 / 2");
+  await page.getByLabel("Cari soal", { exact: true }).fill("tidak ada");
+  await page.getByRole("tab", { name: "Ringkasan", exact: true }).click();
+  await page.getByRole("button", { name: "Lihat analisis soal 2", exact: true }).click();
+  await expect(list.getByRole("button").filter({ hasText: "Soal 2 ·" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByLabel("Cari soal", { exact: true })).toHaveValue("");
+  await page.getByRole("tab", { name: "Ringkasan", exact: true }).click();
+  await page.route("**/api/admin/try-outs/7/reports?*", route => route.fulfill({ json: { data: { try_out: tryOut, summary: { responses: 4, unique_participants: 1, mean: 50, median: 50, min: 30, max: 70, passed: 2, failed: 2 }, histogram: [], questions: reportQuestions, hardest: [revisedQuestion] } } }));
+  await page.getByLabel("Cari peserta", { exact: true }).fill("Rina");
+  await expect(page.getByRole("button", { name: "Lihat analisis soal 1", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Lihat analisis soal 1", exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "Bentuk soal", exact: true })).toHaveValue(`701:${revisedQuestion.fingerprint}`);
+  await expect(page.getByRole("article", { name: "Detail analisis soal", exact: true })).toContainText(revisedQuestion.question);
 });
 
 test("mocked score histogram renders SVG bars, tooltip, and disclosed data", async ({ page }) => {
@@ -131,7 +176,7 @@ test("mocked score histogram renders SVG bars, tooltip, and disclosed data", asy
   }
   const totalCard = page.locator("section").filter({ has: page.getByRole("heading", { name: "Total attempt selesai", exact: true }) });
   await expect(totalCard).toContainText("4");
-  await expect(page.getByText("Peserta unik:", { exact: false })).toContainText("1");
+  await expect(page.getByText("Peserta unik:", { exact: false })).toHaveCount(0);
   await bars.first().hover();
   const tooltip = chart.locator(".recharts-tooltip-wrapper");
   await expect(tooltip).toBeVisible();
@@ -154,17 +199,24 @@ test("mocked question versions hide fingerprints until technical disclosure", as
   await mockReports(page);
   await openResults(page);
   await page.getByRole("tab", { name: "Analisis Soal", exact: true }).click();
-  const select = page.getByRole("combobox", { name: "Pilih soal", exact: true });
+  const select = page.getByRole("combobox", { name: "Bentuk soal", exact: true });
   await expect(select).toHaveValue(`701:${questions[0].fingerprint}`);
   const labels = await select.locator("option").allTextContents();
-  expect(labels.some(label => /Versi 1/.test(label))).toBe(true);
-  expect(labels.some(label => /Versi 2/.test(label))).toBe(true);
+  expect(labels).toEqual(["Bentuk A — digunakan dalam 3 pengerjaan", "Bentuk B — digunakan dalam 1 pengerjaan"]);
+  await expect(page.getByText(/Versi [123]/)).toHaveCount(0);
+  await expect(page.getByText("Soal ini memiliki beberapa bentuk data yang pernah digunakan saat pengerjaan. Statistik dipisahkan agar hasil tetap akurat.", { exact: true })).toBeVisible();
   for (const question of reportQuestions) expect(labels.join(" ")).not.toContain(question.fingerprint);
   await select.selectOption(`701:${revisedQuestion.fingerprint}`);
   const detail = page.getByRole("article", { name: "Detail analisis soal", exact: true });
   await expect(detail.getByText(revisedQuestion.question, { exact: true })).toBeVisible();
   await expect(detail.getByText(questions[0].question, { exact: true })).toHaveCount(0);
-  const technical = detail.locator("details");
+  await expect(detail.getByText("Statistik dihitung dari 1 pengerjaan yang menggunakan bentuk soal ini.", { exact: true })).toBeVisible();
+  const distribution = detail.getByRole("figure", { name: "Distribusi jawaban", exact: true }).getByRole("table");
+  await expect(distribution.getByRole("row").filter({ has: page.getByRole("rowheader", { name: "B", exact: true }) }).getByRole("cell").first()).toHaveText("1");
+  await select.selectOption(`701:${questions[0].fingerprint}`);
+  await expect(detail.getByText("Statistik dihitung dari 3 pengerjaan yang menggunakan bentuk soal ini.", { exact: true })).toBeVisible();
+  await select.selectOption(`701:${revisedQuestion.fingerprint}`);
+  const technical = detail.locator("details").filter({ has: page.getByText("Detail Teknis", { exact: true }) });
   await expect(technical).not.toHaveAttribute("open", "");
   await expect(page.getByText(revisedQuestion.fingerprint, { exact: false })).not.toBeVisible();
   await technical.locator("summary").click();
@@ -177,6 +229,10 @@ test("mocked question list filters, searches, and paginates locally", async ({ p
   const api = await mockReports(page);
   await openResults(page);
   await page.getByRole("tab", { name: "Analisis Soal", exact: true }).click();
+  const list = page.getByRole("complementary", { name: "Daftar analisis soal", exact: true });
+  await expect(list.getByRole("button").filter({ hasText: "Soal 1 ·" })).toHaveCount(1);
+  await expect(list.getByRole("button").filter({ hasText: "Soal 1 ·" })).toContainText("4 pengerjaan");
+  await expect(list.getByRole("button").filter({ hasText: "Soal 1 ·" })).not.toContainText("% benar");
   const pagination = page.getByRole("navigation", { name: "Halaman soal", exact: true });
   const previous = pagination.getByRole("button", { name: "Soal sebelumnya", exact: true });
   const next = pagination.getByRole("button", { name: "Soal berikutnya", exact: true });
@@ -223,7 +279,8 @@ test("mocked answer chart keeps counts and blank denominator accessible", async 
   await expect(chart.locator(".recharts-tooltip-wrapper")).toBeVisible();
   await expect(chart.locator(".recharts-tooltip-wrapper")).toContainText("2");
   for (const text of Object.values(options)) await expect(detail.getByText(text, { exact: true })).toBeVisible();
-  await page.getByRole("combobox", { name: "Pilih soal", exact: true }).selectOption(`710:${questions[9].fingerprint}`);
+  await page.getByRole("button", { name: "Soal berikutnya", exact: true }).click();
+  await page.getByRole("complementary", { name: "Daftar analisis soal", exact: true }).getByRole("button").filter({ hasText: "Soal 10 ·" }).click();
   await expect(detail.getByRole("heading", { name: "Soal 10 — Tata Bahasa", exact: true })).toBeVisible();
   await expect(detail.getByText("Belum dijawab oleh peserta", { exact: true })).toBeVisible();
   for (const label of ["A", "B", "C", "D", "Kosong"]) {
@@ -265,10 +322,10 @@ test("mocked individual detail switches completed attempts and snapshot choices"
   await page.getByRole("tab", { name: "Individual", exact: true }).click();
   await page.getByRole("button", { name: "Detail Individual", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Rina Mock", exact: true })).toBeVisible();
-  await expect(page.getByText("Jawaban: B · Kunci: A · Salah · Poin 0 / 2", { exact: true })).toBeVisible();
+  await expect(page.getByText("Jawaban: B · Kunci: A", { exact: true })).toBeVisible();
   await expect(page.getByText("Pembahasan snapshot tersimpan", { exact: true })).toBeVisible();
   await page.getByRole("combobox", { name: "Attempt selesai peserta ini", exact: true }).selectOption("102");
-  await expect(page.getByText("Jawaban: A · Kunci: A · Benar · Poin 2 / 2", { exact: true })).toBeVisible();
+  await expect(page.getByText("Jawaban: A · Kunci: A", { exact: true })).toBeVisible();
   expect(api.requests.filter(url => /\/attempts\//.test(url.pathname)).map(url => url.pathname)).toEqual(["/api/admin/try-outs/7/reports/attempts/101", "/api/admin/try-outs/7/reports/attempts/102"]);
   await page.getByRole("button", { name: "Pilih Peserta / Attempt Lain", exact: true }).click();
   await expect(page.getByRole("button", { name: "Detail Individual", exact: true })).toBeVisible();
@@ -318,7 +375,7 @@ for (const target of ["reports", "participants", "attempt", "export"] as const) 
       await page.getByRole("button", { name: "Coba Lagi", exact: true }).click();
       if (target === "reports") await expect(page.getByRole("heading", { name: "Total attempt selesai", exact: true })).toBeVisible();
       if (target === "participants") await expect(page.getByRole("button", { name: "Detail Individual", exact: true })).toBeVisible();
-      if (target === "attempt") await expect(page.getByText("Jawaban: B · Kunci: A · Salah · Poin 0 / 2", { exact: true })).toBeVisible();
+      if (target === "attempt") await expect(page.getByText("Jawaban: B · Kunci: A", { exact: true })).toBeVisible();
     }
     await expect(page.getByRole("alert").filter({ hasText: "Permintaan belum berhasil" })).toHaveCount(0);
   });

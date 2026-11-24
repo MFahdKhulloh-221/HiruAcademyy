@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { AdminDataTable, AdminPageHeader, AdminSection, AdminTabs } from "@/components/admin-primitives";
 import { PlacementRichText } from "@/components/placement-rich-text";
@@ -27,6 +27,7 @@ export function AdminTryoutResults({ id, title, level, packages, onPackageChange
   const [filters, setFilters] = useState<ReportFilters>({ search: "", status: "all", date_from: "", date_to: "" });
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState("");
+  const [questionTarget, setQuestionTarget] = useState(0);
   const [attempt, setAttempt] = useState<number | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportError, setExportError] = useState("");
@@ -56,7 +57,7 @@ export function AdminTryoutResults({ id, title, level, packages, onPackageChange
   function openAttempt(value: number) { setAttempt(value); setTab("Individual"); }
   const summary = report.data?.summary;
   const questions = report.data?.questions ?? [];
-  function openQuestion(question: ReportQuestion) { setSelected(versionKey(question)); setTab("Analisis Soal"); }
+  function openQuestion(question: ReportQuestion) { setSelected(versionKey(question)); setQuestionTarget(value => value + 1); setTab("Analisis Soal"); }
   const detail = individual.data;
   return <div className={`${styles.workspace} ${isDaily ? daily.reports : ""}`}>
     <AdminPageHeader title={`Analisis Hasil ${assessmentLabel}`} description={`${title} · ${level}`} actions={reportsApi.downloadReport && <button className="button button-primary" type="button" disabled={exporting} aria-busy={exporting} onClick={() => void exportExcel()}>{exporting ? "Mengunduh…" : "Unduh Excel"}</button>} />
@@ -75,12 +76,12 @@ export function AdminTryoutResults({ id, title, level, packages, onPackageChange
       {report.error && <p role="alert">{report.error} <button className="button" type="button" onClick={report.retry}>Coba Lagi</button></p>}
       {report.data && summary && (summary.responses === 0 ? <AdminSection><p>Belum ada attempt selesai sesuai filter.</p></AdminSection> : tab === "Ringkasan" ? <>
         <div className={`${styles.cards} ${daily.stats}`}>{[["Total attempt selesai", summary.responses], ["Rata-rata poin mentah", score(summary.mean)], ["Median", score(summary.median)], ["Rentang skor", `${score(summary.min)}–${score(summary.max)}`]].map(([label, value]) => <section className={styles.card} key={label}><h2>{label}</h2><strong>{value}</strong></section>)}</div>
-        <div className={styles.summaryMeta}><span>Peserta unik: <strong>{summary.unique_participants}</strong></span>{showPassing && <><span>Lulus: <strong>{summary.passed}</strong></span><span>Tidak lulus: <strong>{summary.failed}</strong></span></>}</div>
+        <div className={styles.summaryMeta}>{isDaily && <span>Peserta unik: <strong>{summary.unique_participants}</strong></span>}{showPassing && <><span>Lulus: <strong>{summary.passed}</strong></span><span>Tidak lulus: <strong>{summary.failed}</strong></span></>}</div>
         <div className={styles.overviewGrid}>
           <AdminSection title="Distribusi skor"><ScoreHistogram buckets={report.data.histogram} /></AdminSection>
           <AdminSection title="Soal tersulit"><p className={styles.note}>Persentase dari attempt yang menerima versi soal ini, termasuk jawaban kosong.</p>{report.data.hardest.length ? <ul className={styles.hardest}>{report.data.hardest.slice(0, 5).map(question => <li key={versionKey(question)}><div className={styles.listHeading}><strong>Soal {question.number} · {sectionLabel(question.section)}</strong><strong>{score(question.correct_percentage)}% benar</strong></div><p className={styles.snippet}>{plainText(question.question)}</p><BlankNotice question={question} /><meter min={0} max={100} value={question.correct_percentage ?? 0} aria-label={`Soal ${question.number}: ${score(question.correct_percentage)}% benar`} /><small>{question.correct} benar · {question.wrong} salah · {question.unanswered} kosong</small><button type="button" className="button" aria-label={`Lihat analisis soal ${question.number}`} onClick={() => openQuestion(question)}>Lihat analisis</button></li>)}</ul> : <p>Belum ada analisis soal.</p>}<button type="button" className="button" onClick={() => setTab("Analisis Soal")}>Lihat semua soal</button></AdminSection>
         </div>
-      </> : <QuestionExplorer questions={questions} selected={selected} onSelect={setSelected} />)}
+      </> : isDaily ? <QuestionExplorer questions={questions} selected={selected} onSelect={setSelected} /> : <TryoutQuestionExplorer key={questionTarget} questions={questions} selected={selected} onSelect={setSelected} />)}
     </>}
     {(tab === "Peserta" || (tab === "Individual" && attempt === null)) && <AdminSection title={tab === "Individual" ? "Pilih attempt peserta" : "Peserta"}>
       {people.error && <p role="alert">{people.error} <button type="button" className="button" onClick={people.retry}>Coba Lagi</button></p>}
@@ -176,14 +177,67 @@ function QuestionExplorer({ questions, selected, onSelect }: { questions: Report
   </AdminSection>;
 }
 
-function QuestionAnalysis({ question, version }: { question: ReportQuestion; version: string }) {
+function formLetter(index: number): string {
+  return (index >= 26 ? formLetter(Math.floor(index / 26) - 1) : "") + String.fromCharCode(65 + index % 26);
+}
+
+function TryoutQuestionExplorer({ questions, selected, onSelect }: { questions: ReportQuestion[]; selected: string; onSelect: (key: string) => void }) {
+  const groups = Array.from(questions.reduce((map, question) => {
+    const forms = map.get(question.id) ?? [];
+    forms.push(question);
+    map.set(question.id, forms);
+    return map;
+  }, new Map<number, ReportQuestion[]>()).values()).map(forms => forms.sort((a, b) => a.fingerprint < b.fingerprint ? -1 : a.fingerprint > b.fingerprint ? 1 : 0));
+  const [section, setSection] = useState("all");
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(() => Math.max(1, Math.ceil((groups.findIndex(forms => forms.some(question => versionKey(question) === selected)) + 1) / 8)));
+  const term = search.trim().toLocaleLowerCase("id-ID");
+  const matches = (question: ReportQuestion) => (section === "all" || question.section === section) && `${question.id} ${question.number} ${plainText(question.question)}`.toLocaleLowerCase("id-ID").includes(term);
+  const filtered = groups.filter(forms => forms.some(matches));
+  const pages = Math.max(1, Math.ceil(filtered.length / 8));
+  const currentPage = Math.min(page, pages);
+  const visible = filtered.slice((currentPage - 1) * 8, currentPage * 8);
+  const activeForms = visible.find(forms => forms.some(question => versionKey(question) === selected)) ?? visible[0];
+  const active = activeForms?.find(question => versionKey(question) === selected) ?? activeForms?.find(matches) ?? activeForms?.[0];
+  function changeFilter(nextSection: string, nextSearch: string) { setSection(nextSection); setSearch(nextSearch); setPage(1); }
+  return <AdminSection title="Analisis Soal">
+    <div className={styles.tryoutFilters}>
+      <label className="admin-field">Filter section<select value={section} onChange={event => changeFilter(event.target.value, search)}><option value="all">Semua sesi</option>{assessmentSessions.map(code => <option key={code} value={code}>{sectionLabel(code)}</option>)}</select></label>
+      <label className="admin-field">Cari soal<input type="search" placeholder="Nomor atau teks soal" value={search} onChange={event => changeFilter(section, event.target.value)} /></label>
+    </div>
+    {!filtered.length ? <p>Tidak ada soal sesuai pencarian atau filter.</p> : <div className={styles.tryoutExplorer}>
+      <aside aria-label="Daftar analisis soal" className={styles.tryoutSidebar}>
+        <p className={styles.note}>{filtered.length} soal · Pilih soal untuk melihat analisis</p>
+        <ul className={styles.tryoutQuestionList}>{visible.map(forms => {
+          const representative = forms.find(matches) ?? forms[0];
+          const multiple = forms.length > 1;
+          return <li key={representative.id}><button className={styles.tryoutQuestionChoice} type="button" aria-pressed={active?.id === representative.id} onClick={() => onSelect(versionKey(forms.find(question => versionKey(question) === selected) ?? representative))}>
+            <strong>Soal {representative.number} · {sectionLabel(representative.section)}</strong>
+            <span className={styles.snippet}>{plainText(representative.question)}</span>
+            {multiple ? <><span className={styles.tryoutFormBadge}>Beberapa bentuk soal</span><small>{forms.reduce((total, question) => total + question.received, 0)} pengerjaan</small></> : <small>{representative.received} pengerjaan · {score(representative.correct_percentage)}% benar</small>}
+          </button></li>;
+        })}</ul>
+        <nav className={styles.pagination} aria-label="Halaman soal"><button className="button" type="button" disabled={currentPage <= 1} onClick={() => setPage(currentPage - 1)} aria-label="Soal sebelumnya">Sebelumnya</button><span role="status">{currentPage} / {pages}</span><button className="button" type="button" disabled={currentPage >= pages} onClick={() => setPage(currentPage + 1)} aria-label="Soal berikutnya">Berikutnya</button></nav>
+      </aside>
+      {active && activeForms && <QuestionAnalysis question={active} version={`Bentuk ${formLetter(activeForms.indexOf(active))}`} simple introduction={activeForms.length > 1 ? <div className={styles.tryoutForms}>
+        <span className={styles.tryoutFormBadge}>Beberapa bentuk soal</span>
+        <p className={styles.note}>Soal ini memiliki beberapa bentuk data yang pernah digunakan saat pengerjaan. Statistik dipisahkan agar hasil tetap akurat.</p>
+        <label className="admin-field">Bentuk soal<select value={versionKey(active)} onChange={event => onSelect(event.target.value)}>{activeForms.map((question, index) => <option key={versionKey(question)} value={versionKey(question)}>Bentuk {formLetter(index)} — digunakan dalam {question.received} pengerjaan</option>)}</select></label>
+        <p className={styles.note}>Huruf bentuk hanya penanda, bukan riwayat perubahan atau penanda bentuk terbaru.</p>
+      </div> : undefined} />}
+    </div>}
+  </AdminSection>;
+}
+
+function QuestionAnalysis({ question, version, simple = false, introduction }: { question: ReportQuestion; version: string; simple?: boolean; introduction?: ReactNode }) {
   const data = [...["A", "B", "C", "D"].map(letter => ({ label: letter, count: question.distribution[letter]?.count ?? 0, percentage: question.distribution[letter]?.percentage ?? 0 })), { label: "Kosong", count: question.unanswered, percentage: question.received ? Math.round(question.unanswered / question.received * 10000) / 100 : 0 }];
-  return <article className={styles.analysisDetail} aria-label="Detail analisis soal">
-    <header><p className={styles.note}>{version}</p><h3>Soal {question.number} — {sectionLabel(question.section)}</h3></header>
+  return <article className={simple ? `${styles.analysisDetail} ${styles.tryoutDetail}` : styles.analysisDetail} aria-label="Detail analisis soal">
+    <header>{!simple && <p className={styles.note}>{version}</p>}<h3>Soal {question.number} — {sectionLabel(question.section)}</h3>{simple && <p className={styles.note}>{question.received} pengerjaan · {score(question.correct_percentage)}% benar</p>}</header>
+    {introduction}
     <PlacementRichText value={question.question} />
-    <div className={styles.questionStats}>{[["Menerima soal", question.received], ["Benar", question.correct], ["Salah", question.wrong], ["Kosong", question.unanswered], ["Persentase benar", `${score(question.correct_percentage)}%`]].map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
+    <div className={styles.questionStats}>{[[simple ? "Pengerjaan menggunakan soal ini" : "Menerima soal", question.received], [simple ? "Jawaban benar" : "Benar", question.correct], [simple ? "Jawaban salah" : "Salah", question.wrong], [simple ? "Tidak dijawab" : "Kosong", question.unanswered], ["Persentase benar", `${score(question.correct_percentage)}%`]].map(([label, value]) => <div key={label}><span>{label}</span><strong>{value}</strong></div>)}</div>
     <BlankNotice question={question} />
-    <p className={styles.note}>Penyebut: {question.received} attempt menerima versi ini. {question.not_received} attempt tidak menerima soal ini.</p>
+    {simple ? <p className={styles.note}>Statistik dihitung dari {question.received} pengerjaan yang menggunakan bentuk soal ini.</p> : <p className={styles.note}>Penyebut: {question.received} attempt menerima versi ini. {question.not_received} attempt tidak menerima soal ini.</p>}
     <figure className={styles.figure} aria-label="Distribusi jawaban"><figcaption>Distribusi jawaban · Kunci benar: {question.correct_option}</figcaption>
       <div className={styles.chart}><ResponsiveContainer width="100%" height="100%" minWidth={0}><BarChart data={data} layout="vertical" margin={{ top: 8, right: 16, bottom: 20, left: 0 }} accessibilityLayer>
         <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="#e2e5ec" />
@@ -195,6 +249,6 @@ function QuestionAnalysis({ question, version }: { question: ReportQuestion; ver
       <table className={styles.chartTable}><caption>Jumlah dan persentase jawaban</caption><thead><tr><th>Pilihan</th><th>Jumlah</th><th>Persentase</th></tr></thead><tbody>{data.map(item => <tr key={item.label}><th scope="row">{item.label}{item.label === question.correct_option ? " — benar" : ""}</th><td>{item.count}</td><td>{item.percentage}%</td></tr>)}</tbody></table>
     </figure>
     <ul className={styles.options}>{Object.entries(question.options).map(([letter, text]) => <li key={letter} className={letter === question.correct_option ? styles.correct : undefined}><strong>{letter}.{letter === question.correct_option ? " Kunci benar" : ""}</strong><PlacementRichText value={text} /></li>)}</ul>
-    <details><summary>Detail teknis snapshot</summary><p>ID soal: {question.id} · {version}</p><p className={styles.fingerprint}>Fingerprint: {question.fingerprint}</p></details>
+    <details><summary>{simple ? "Detail Teknis" : "Detail teknis snapshot"}</summary><p>ID soal: {question.id} · {version}</p><p className={styles.fingerprint}>Fingerprint: {question.fingerprint}</p></details>
   </article>;
 }
