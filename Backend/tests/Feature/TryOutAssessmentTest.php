@@ -38,6 +38,7 @@ class TryOutAssessmentTest extends TestCase
         $this->assertSame('testing', app()->environment());
         $this->assertSame('hiru_academy_test', DB::connection()->getDatabaseName());
         $this->assertSame('hiru_backend_test_gamification_final_20261008', DB::selectOne('SELECT current_schema() AS name')->name);
+        $this->assertTrue(Schema::hasColumn('try_outs', 'session_duration_minutes'), 'Install per-session timing migration explicitly before running this test.');
         if (! Schema::hasColumn('try_out_attempts', 'expires_at')) {
             (require database_path('migrations/2026_10_11_000001_add_try_out_duration_and_attempt_deadline.php'))->up();
         }
@@ -62,7 +63,7 @@ class TryOutAssessmentTest extends TestCase
         $this->seed(ProgramSeeder::class);
         $this->student = $this->user('student');
         $this->admin = $this->user('admin');
-        $this->tryOut = app(TryOutService::class)->save(['program_id' => Program::where('code', 'n5')->firstOrFail()->id, 'title' => 'Try Out fixture', 'access_type' => 'free']);
+        $this->tryOut = app(TryOutService::class)->save(['program_id' => Program::where('code', 'n5')->firstOrFail()->id, 'title' => 'Try Out fixture', 'access_type' => 'free', 'session_duration_minutes' => array_fill_keys(array_keys(TryOutService::SESSIONS), 5), 'break_duration_minutes' => 1]);
         $this->base = '/api/student/try-outs/'.$this->tryOut->id;
         $this->adminBase = '/api/admin/try-outs/'.$this->tryOut->id;
         $this->actingAs($this->student);
@@ -102,7 +103,17 @@ class TryOutAssessmentTest extends TestCase
 
     private function start(): array
     {
-        return $this->postJson($this->base.'/attempts')->assertCreated()->json('data');
+        $id = $this->postJson($this->base.'/attempts')->assertCreated()->json('data.id');
+        // Existing lifecycle cases exercise persisted legacy attempts; new timing has focused race coverage.
+        $attempt = \App\Models\TryOutAttempt::findOrFail($id);
+        $snapshot = $attempt->grading_snapshot;
+        unset($snapshot['timing_mode'], $snapshot['session_duration_minutes'], $snapshot['break_duration_minutes']);
+        DB::table('try_out_attempts')->where('id', $id)->update([
+            'grading_snapshot' => json_encode($snapshot, JSON_THROW_ON_ERROR), 'phase' => null, 'session_started_at' => null,
+            'expires_at' => $this->tryOut->fresh()->duration_minutes === null ? null : $attempt->started_at->copy()->addMinutes($this->tryOut->fresh()->duration_minutes),
+        ]);
+
+        return app(\App\Services\TryOutAttemptService::class)->payload($attempt->fresh());
     }
 
     public function test_studio_shared_passage_roundtrip_snapshot_and_atomic_validation(): void
@@ -146,7 +157,11 @@ class TryOutAssessmentTest extends TestCase
         $attempt = app(\App\Services\TryOutAttemptService::class)->start($this->student, $this->tryOut->fresh());
         $this->assertArrayHasKey($passage['id'], $attempt->grading_snapshot['passages']);
         \App\Models\TryOutPassage::findOrFail($passage['id'])->update(['body' => '<p>Changed</p>']);
-        $payload = app(\App\Services\TryOutAttemptService::class)->payload($attempt);
+        // Completed review exposes every session; in-progress timed payload intentionally does not.
+        $review = clone $attempt;
+        $review->status = 'completed';
+        $review->result_snapshot = ['earned' => 0, 'sessions' => []];
+        $payload = app(\App\Services\TryOutAttemptService::class)->payload($review);
         $studentReading = collect($payload['questions'])->firstWhere('session', 'reading');
         $this->assertSame($passage['body'], $studentReading['passage']['body']);
         $this->assertArrayNotHasKey('correct_option', $studentReading);

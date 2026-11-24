@@ -1,4 +1,5 @@
 import { assessmentSessions } from "@/lib/assessment-attempt";
+import type { TryOutSessionCode } from "@/lib/admin-assessment-store";
 import type { AssessmentImage, AssessmentPassageBlock } from "@/lib/assessment-image";
 import { passageBlocksError } from "@/lib/assessment-passage-blocks";
 import { placementText } from "@/lib/placement-rich-text";
@@ -43,6 +44,8 @@ export type AdminAssessment = {
   session: string;
   part: string;
   duration: string;
+  sessionDurationMinutes?: Record<TryOutSessionCode, string> | null;
+  breakDurationMinutes?: string;
   maxScore: string;
   passingScore: string;
   sessionPassingScores?: Record<string, number> | null;
@@ -74,6 +77,17 @@ export function validAssessmentAudio(file: File | null) {
 }
 function positiveInteger(value: string) {
   return /^\d+$/.test(value) && Number.isSafeInteger(Number(value)) && Number(value) > 0;
+}
+export function tryOutTimingError(item: Pick<AdminAssessment, "sessionDurationMinutes" | "breakDurationMinutes">) {
+  if (assessmentSessions.some(session => !positiveInteger(item.sessionDurationMinutes?.[session] ?? "") || Number(item.sessionDurationMinutes?.[session]) > 2147483647)) return "Isi durasi setiap sesi dengan bilangan bulat positif (menit).";
+  if (!positiveInteger(item.breakDurationMinutes ?? "") || Number(item.breakDurationMinutes) > 2147483647) return "Isi waktu istirahat dengan bilangan bulat positif (menit).";
+  return "";
+}
+export function tryOutTimingTotals(item: Pick<AdminAssessment, "sessionDurationMinutes" | "breakDurationMinutes">) {
+  if (tryOutTimingError(item)) return null;
+  const work = assessmentSessions.reduce((sum, session) => sum + Number(item.sessionDurationMinutes![session]), 0);
+  const rest = Number(item.breakDurationMinutes) * 3;
+  return { work, rest, total: work + rest };
 }
 export function assessmentImageError(content: AssessmentImage) {
   if (content.image && !content.image_alt?.trim()) return "Isi teks alternatif gambar.";
@@ -121,7 +135,8 @@ export function assessmentError(item: AdminAssessment) {
   const contexts: readonly string[] = item.kind === "mini" ? miniAssessmentContexts : tryoutAssessmentContexts;
   if (!contexts.includes(item.context) || !item.title.trim()) return "Isi judul dan pilih konteks yang valid.";
   if (item.kind === "mini" && (!item.chapter.trim() || !positiveInteger(item.session) || !["1", "2"].includes(item.part))) return "Isi chapter, sesi, dan part yang valid.";
-  if (item.duration && !positiveInteger(item.duration)) return "Durasi harus berupa bilangan bulat positif.";
+  if (item.kind === "tryout" && tryOutTimingError(item)) return tryOutTimingError(item);
+  if (item.kind !== "tryout" && item.duration && !positiveInteger(item.duration)) return "Durasi harus berupa bilangan bulat positif.";
   if (!positiveInteger(item.maxScore) || !positiveInteger(item.order)) return "Skor maksimal dan urutan harus berupa bilangan bulat positif.";
   if (item.kind !== "mini") {
     if (item.passingScore !== "" && (!/^\d+$/.test(item.passingScore) || !Number.isSafeInteger(Number(item.passingScore)))) return "Passing score harus berupa bilangan bulat nonnegatif.";

@@ -4,7 +4,7 @@ import type { AssessmentImage, AssessmentPassageBlock } from "./assessment-image
 export type AttemptQuestion = AssessmentImage & { id: number; instruction?: string | null; japanese?: { text: string; reading?: string | null } | null; question?: string; prompt?: string; session?: string | number; part?: number; duration_minutes?: number; title?: string; options: Record<string, string>; audio_url?: string | null; audio_url_resolved_url?: string | null; image_url?: string | null; reading_passage?: string | null; passage?: AssessmentImage & { id?: number; title: string; body: string; blocks?: AssessmentPassageBlock[] | null }; correct_option?: string; explanation?: string | null; selected_answer?: string | null; status?: string };
 export type AttemptResult = { correct: number; wrong: number; unanswered: number; total?: number; percentage?: number; earned?: number; max?: number; passed?: boolean; passing_score?: number; overall_pass?: boolean | null; total_passing_score?: number | null; recommendation_level?: string | null; sessions?: { code: string; label: string; earned: number; max: number; correct: number; wrong: number; unanswered: number; passing_score: number; passing_score_basis?: "points" | "correct_answers"; pass: boolean }[] };
 export type MiniQuestion = AttemptQuestion & { session: number; part: number; duration_minutes: number };
-export type ServerAttempt = { adaptive?: boolean; question_limit?: number; passing_score?: number; request_started_at?: number; received_at?: number; session?: number; part?: number; duration_minutes?: number; server_now?: string; kind?: string; chapter_id?: number; id: number; status: "in_progress" | "completed"; revision?: number; scoring_version?: string; current_session?: number; active_sessions?: (typeof assessmentSessions)[number][]; completed_sessions?: string[]; questions: AttemptQuestion[]; answers: Record<string, string>; result: AttemptResult | null; expires_at?: string | null; started_at?: string; completed_at?: string | null };
+export type ServerAttempt = { timing_mode?: "per_session"; phase?: "session" | "break"; session_started_at?: string | null; break_ends_at?: string | null; session_duration_minutes?: Partial<Record<(typeof assessmentSessions)[number], number>>; break_duration_minutes?: number; adaptive?: boolean; question_limit?: number; passing_score?: number; request_started_at?: number; received_at?: number; session?: number; part?: number; duration_minutes?: number; server_now?: string; kind?: string; chapter_id?: number; id: number; status: "in_progress" | "completed"; revision?: number; scoring_version?: string; current_session?: number; active_sessions?: (typeof assessmentSessions)[number][]; completed_sessions?: string[]; questions: AttemptQuestion[]; answers: Record<string, string>; result: AttemptResult | null; expires_at?: string | null; started_at?: string; completed_at?: string | null };
 export const assessmentSessions = ["vocabulary_kanji", "grammar", "reading", "audio"] as const;
 export const assessmentSessionLabels = ["Kosakata & Kanji", "Tata Bahasa", "Reading (Dokkai)", "Audio (Choukai)"] as const;
 export type AttemptDomain = "learning" | "tryout" | "checkpoint" | "placement";
@@ -36,11 +36,13 @@ export class AttemptPersistence {
   private submitting: Promise<ServerAttempt> | null = null;
   private saveError: unknown;
   private expiring = false;
+  private perSession() { return this.domain === "tryout" && this.attempt.timing_mode === "per_session"; }
   private expired() { return (this.domain === "tryout" || this.domain === "checkpoint") && (this.expiring || tryOutRemaining(this.attempt, performance.now()) === 0); }
   private async refresh() {
     const request_started_at = performance.now();
     const response = await this.request<{ data: ServerAttempt }>(this.path);
     this.attempt = { ...response.data, request_started_at, received_at: performance.now() };
+    if (this.perSession() && (this.attempt.phase === "break" || this.attempt.status === "completed")) this.expiring = false;
     return this.attempt;
   }
   expire() {
@@ -48,7 +50,7 @@ export class AttemptPersistence {
     if (this.submitting) return this.submitting;
     this.submitting = this.enqueue(async () => {
       const attempt = await this.refresh();
-      if (attempt.status !== "completed" || !attempt.result) throw new ApiError(200, {}, `${this.domain === "checkpoint" ? "Checkpoint" : "Try Out"}: backend belum mengonfirmasi hasil selesai. Coba kembali untuk memeriksa attempt yang sama.`);
+      if (!(this.perSession() && attempt.phase === "break") && (attempt.status !== "completed" || !attempt.result)) throw new ApiError(200, {}, `${this.domain === "checkpoint" ? "Checkpoint" : "Try Out"}: backend belum mengonfirmasi hasil selesai. Coba kembali untuk memeriksa attempt yang sama.`);
       return attempt;
     }).finally(() => { this.submitting = null; });
     return this.submitting;
@@ -64,13 +66,15 @@ export class AttemptPersistence {
     const response = await this.request<{ data: ServerAttempt }>(this.path + suffix, { method, body: JSON.stringify(body) });
     if ((this.domain === "tryout" || this.domain === "checkpoint") && suffix === "/submit" && (response.data.status !== "completed" || !response.data.result)) throw new ApiError(200, {}, `${this.domain === "checkpoint" ? "Checkpoint" : "Try Out"}: backend belum mengonfirmasi hasil selesai. Coba kembali untuk memeriksa attempt yang sama.`);
     this.attempt = { ...response.data, request_started_at, received_at: performance.now() };
+    if (this.perSession() && (this.attempt.phase === "break" || this.attempt.status === "completed")) this.expiring = false;
     return this.attempt;
   }
   save(answers: Record<string, string>, finishSession = false) {
     if (this.submitting) return this.submitting;
-    const snapshot = { ...answers };
+    const session = this.attempt.current_session;
+    const snapshot = this.perSession() ? currentAnswers(this.attempt, answers) : { ...answers };
     return this.enqueue(async () => {
-      if (this.attempt.status === "completed") return this.attempt;
+      if (this.attempt.status === "completed" || (this.perSession() && (this.attempt.phase !== "session" || this.attempt.current_session !== session))) return this.attempt;
       if (this.expired()) return this.refresh();
       const body = this.domain === "placement" ? { answers: snapshot, ...((this.attempt.adaptive || this.attempt.scoring_version === "percentage-v1") ? { revision: this.attempt.revision } : {}) } : (this.domain === "tryout" || this.domain === "checkpoint") ? { answers: snapshot, revision: this.attempt.revision, ...((this.domain === "tryout" || this.domain === "checkpoint") ? { finish_session: finishSession } : {}) } : { answers: snapshot, revision: this.attempt.revision };
       try {
@@ -78,6 +82,15 @@ export class AttemptPersistence {
         this.saveError = undefined;
         return attempt;
       } catch (error) {
+        if (this.perSession() && !(error instanceof ApiError && error.status === 422)) {
+          try {
+            const canonical = await this.refresh();
+            if (canonical.status === "completed" || canonical.phase === "break" || canonical.current_session !== session) {
+              this.saveError = undefined;
+              return canonical;
+            }
+          } catch { /* Preserve original save error; never replay closed-session answers. */ }
+        }
         if (this.domain === "placement" && (this.attempt.adaptive || this.attempt.scoring_version === "percentage-v1")) {
           try {
             const canonical = await this.refresh();
@@ -92,8 +105,33 @@ export class AttemptPersistence {
       }
     });
   }
+  nextSession() {
+    return this.enqueue(async () => {
+      if (!this.perSession() || this.attempt.status === "completed" || this.attempt.phase !== "break") return this.attempt;
+      try {
+        const attempt = await this.write("/next-session", { revision: this.attempt.revision }, "POST");
+        this.expiring = false;
+        this.saveError = undefined;
+        return attempt;
+      } catch (error) {
+        try {
+          const canonical = await this.refresh();
+          if (canonical.status === "completed" || canonical.phase === "session") {
+            this.expiring = false;
+            this.saveError = undefined;
+            return canonical;
+          }
+        } catch { /* Preserve original error; never replay an unconfirmed transition. */ }
+        throw error;
+      }
+    });
+  }
   submit(answers: Record<string, string>) {
     if (this.submitting) return this.submitting;
+    if (this.perSession()) {
+      this.submitting = this.save(answers, true).finally(() => { this.submitting = null; });
+      return this.submitting;
+    }
     const snapshot = { ...answers };
     this.submitting = this.enqueue(async () => {
       if (this.attempt.status === "completed") return this.attempt;

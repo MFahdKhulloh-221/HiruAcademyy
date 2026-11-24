@@ -64,7 +64,7 @@ async function request(path: string, options: RequestInit): Promise<Response> {
       window.dispatchEvent(new Event(AUTH_EXPIRED_EVENT));
     }
     const errors: Record<string, string[]> = {};
-    const studentTryOut = /^\/api\/student\/try-outs\/\d+\/attempts\/\d+(?:\/(?:answers|submit))?$/.test(path);
+    const studentTryOut = /^\/api\/student\/try-outs\/\d+\/attempts\/\d+(?:\/(?:answers|submit|next-session))?$/.test(path);
     const dailyPractice = /^\/api\/(?:admin|student)\/daily-practices(?:\/|\?|$)/.test(path);
     const placement = /^\/api\/(?:admin\/placement-(?:configs|questions|previews)(?:\/.*)?|placement(?:\/.*)?)$/.test(path);
     const body = response.status === 422 || studentTryOut ? await response.json().catch(() => null) : null;

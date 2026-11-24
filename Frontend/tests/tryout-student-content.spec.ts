@@ -82,6 +82,29 @@ async function mockContent(page: Page, { completed = false, kind = "tryout", fai
   return { calls, errors, server: () => server };
 }
 
+test("saved semantic formatting renders in student prompt options and passage after reload (mock API)", async ({ page }) => {
+  const mock = await mockContent(page);
+  const formatted = (label: string) => `<b>${label} bold</b> <i>${label} italic</i> <u>${label} underline</u>`;
+  const item = mock.server().questions.find(question => question.id === 301) as ContentQuestion;
+  item.question = formatted("Prompt");
+  item.options = { ...options, A: formatted("Option") };
+  item.passage = { id: 51, title: "Formatted passage", body: formatted("Passage") };
+  await open(page);
+  for (const reload of [false, true]) {
+    if (reload) await page.reload();
+    await chooseSession(page, "Reading (Dokkai)");
+    for (const label of ["Prompt", "Option", "Passage"]) {
+      await expect(page.getByText(`${label} bold`, { exact: true })).toHaveCSS("font-weight", "700");
+      await expect(page.getByText(`${label} italic`, { exact: true })).toHaveCSS("font-style", "italic");
+      await expect(page.getByText(`${label} underline`, { exact: true })).toHaveCSS("text-decoration-line", "underline");
+    }
+    await card(page).locator("label").filter({ has: page.getByRole("radio", { name: /A\. Option bold/ }) }).click();
+    await expect.poll(() => mock.server().answers[301]).toBe("A");
+  }
+  expect(mock.errors).toEqual([]);
+  expect(mock.calls.submits).toBe(0);
+});
+
 async function open(page: Page, query = "") {
   await page.clock.install({ time: new Date("2026-10-11T00:00:00Z") });
   await page.goto(`/tryout?tryout=2&attempt=9${query}`);

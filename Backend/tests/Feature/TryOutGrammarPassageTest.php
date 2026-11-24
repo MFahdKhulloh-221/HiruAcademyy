@@ -87,6 +87,8 @@ class TryOutGrammarPassageTest extends TestCase
                 $table->integer('total_passing_score')->nullable();
                 $table->integer('duration_minutes')->nullable();
                 $table->json('session_passing_scores')->nullable();
+                $table->json('session_duration_minutes')->nullable();
+                $table->integer('break_duration_minutes')->nullable();
                 $table->timestamps();
             });
             Schema::create($prefix.'_passages', function (Blueprint $table) use ($key, $parents) {
@@ -123,7 +125,8 @@ class TryOutGrammarPassageTest extends TestCase
             }
             $table->integer('current_session');
             $table->integer('revision');
-            foreach (['started_at', 'expires_at', 'completed_at', 'abandoned_at'] as $column) {
+            $table->string('phase')->nullable();
+            foreach (['session_started_at', 'break_ends_at', 'started_at', 'expires_at', 'completed_at', 'abandoned_at'] as $column) {
                 $table->timestamp($column)->nullable();
             }
             $table->timestamps();
@@ -132,7 +135,7 @@ class TryOutGrammarPassageTest extends TestCase
 
     private function parent(): TryOut
     {
-        return TryOut::create(['program_id' => 1, 'title' => 'Grammar fixture']);
+        return TryOut::create(['program_id' => 1, 'title' => 'Grammar fixture', 'session_duration_minutes' => array_fill_keys(array_keys(TryOutService::SESSIONS), 5), 'break_duration_minutes' => 1]);
     }
 
     private function content(string $session = 'grammar', ?int $passage = null): array
@@ -264,6 +267,9 @@ class TryOutGrammarPassageTest extends TestCase
         $attemptService = new class(app(ChapterAccessPolicy::class), $contentService) extends TryOutAttemptService
         {
             public function authorize(User $user, Model $tryOut, ?Model $attempt = null): void {}
+
+            // Legacy snapshots retain full question navigation; timing coverage lives in AssessmentRaceTest.
+            protected function snapshotMetadata(Model $assessment, array $questions): array { return []; }
         };
         $user = new User;
         $user->id = 1;

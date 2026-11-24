@@ -63,7 +63,7 @@ class TryOutService
                         $fail('Duration must be a positive integer.');
                     }
                 }],
-            ]);
+            ] + ($this->supportsTryOutContent() ? $this->timingRules(false) : []));
             $resequence = array_key_exists('sort_order', $input) || ! $model->exists;
             $targetOrder = array_key_exists('sort_order', $data) ? (int) $data['sort_order'] : (int) ($model->sort_order ?? 1);
             $model->fill($data);
@@ -329,8 +329,27 @@ class TryOutService
         return array_keys(self::SESSIONS);
     }
 
+    private function timingRules(bool $required): array
+    {
+        $presence = $required ? 'required' : 'sometimes';
+        $positive = ['required', 'integer', 'min:1', 'max:2147483647', function ($attribute, $value, $fail) {
+            if (is_bool($value)) {
+                $fail('Timing must be a positive integer.');
+            }
+        }];
+
+        return [
+            'session_duration_minutes' => [$presence, 'array:'.implode(',', array_keys(self::SESSIONS)), 'size:4'],
+            'session_duration_minutes.*' => $positive,
+            'break_duration_minutes' => array_merge([$presence], $positive),
+        ];
+    }
+
     public function assertPublishable(Model $tryOut): void
     {
+        if ($this->supportsTryOutContent()) {
+            Validator::make($tryOut->only(['session_duration_minutes', 'break_duration_minutes']), $this->timingRules(true))->validate();
+        }
         $this->program($tryOut->program_id);
         $questions = $tryOut->questions()->where('status', 'published')->get();
         foreach ($questions as $question) {
@@ -399,7 +418,7 @@ class TryOutService
 
     public function payload(Model $tryOut): array
     {
-        return ['access_type' => $tryOut->access_type ?? 'membership', 'id' => $tryOut->id, 'program_id' => $tryOut->program_id, 'level' => strtoupper($tryOut->program->code), 'title' => $tryOut->title, 'status' => $tryOut->status, 'max_score' => $tryOut->max_score, 'sort_order' => $tryOut->sort_order, 'session_passing_scores' => $tryOut->session_passing_scores, 'section_passing_score' => $tryOut->session_passing_scores === null ? 19 : null, 'section_passing_score_basis' => $tryOut->session_passing_scores === null ? 'correct_answers' : 'points', 'total_passing_score' => $tryOut->total_passing_score, 'duration_minutes' => $tryOut->duration_minutes, 'question_count' => $tryOut->questions()->count(), 'published_question_count' => $tryOut->questions()->where('status', 'published')->count(), 'sessions' => self::SESSIONS];
+        return ['access_type' => $tryOut->access_type ?? 'membership', 'id' => $tryOut->id, 'program_id' => $tryOut->program_id, 'level' => strtoupper($tryOut->program->code), 'title' => $tryOut->title, 'status' => $tryOut->status, 'max_score' => $tryOut->max_score, 'sort_order' => $tryOut->sort_order, 'session_passing_scores' => $tryOut->session_passing_scores, 'section_passing_score' => $tryOut->session_passing_scores === null ? 19 : null, 'section_passing_score_basis' => $tryOut->session_passing_scores === null ? 'correct_answers' : 'points', 'total_passing_score' => $tryOut->total_passing_score, 'duration_minutes' => $tryOut->duration_minutes, 'question_count' => $tryOut->questions()->count(), 'published_question_count' => $tryOut->questions()->where('status', 'published')->count(), 'sessions' => self::SESSIONS] + ($this->supportsTryOutContent() ? ['timing_mode' => 'per_session', 'session_duration_minutes' => $tryOut->session_duration_minutes, 'break_duration_minutes' => $tryOut->break_duration_minutes] : []);
     }
 
     public function studioRevision(Model $tryOut): string

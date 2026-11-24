@@ -11,7 +11,8 @@ test("Try Out adapter persists editable score, order, instructions and Japanese"
 });
 
 const compile = source => ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
-const fixtures = vm.createContext({ exports: {}, require: () => ({}) });
+const sessionCodes = ["vocabulary_kanji", "grammar", "reading", "audio"];
+const fixtures = vm.createContext({ exports: {}, require: () => ({ assessmentSessions: sessionCodes }) });
 vm.runInContext(compile(readFileSync(new URL("../src/components/admin-assessment-fixtures.ts", import.meta.url), "utf8")), fixtures);
 const { assessmentPointValueError } = fixtures.exports;
 
@@ -30,7 +31,7 @@ function adapterHarness(decimalPoints) {
       calls.push({ path, options });
       return { data: path === "/api/admin/programs" ? [{ id: 1, code: "n5" }] : path === "/api/admin/try-outs" ? [assessment] : assessment };
     },
-    assessmentSessions: [], jlptTryoutSessions: [],
+    assessmentSessions: sessionCodes, jlptTryoutSessions: [],
   } });
   vm.runInContext(compile(source), context);
   return { ...context.exports, calls };
@@ -42,7 +43,7 @@ test("Try Out adapter preserves server decimal capability and enforces weight ru
     assert.equal((await api.loadAdminTryOuts())[0].builderCapabilities.decimal_points, flag === true);
   }
   const api = adapterHarness(true);
-  const item = { id: "1", context: "N5", duration: "", status: "Draft", questions: [{ answers: [], order: "1", status: "Draft", pointValue: 1.75 }] };
+  const item = { id: "1", context: "N5", duration: "", sessionDurationMinutes: { vocabulary_kanji: "11", grammar: "12", reading: "13", audio: "14" }, breakDurationMinutes: "2", status: "Draft", questions: [{ answers: [], order: "1", status: "Draft", pointValue: 1.75 }] };
   for (const value of [1, 1.25, 1.5, 1.75, 179.25, 179.5, 179.75, 180]) {
     await api.saveAdminTryOut({ ...item, questions: [{ ...item.questions[0], pointValue: value }] });
     const payload = JSON.parse(api.calls.findLast(call => call.path.endsWith("/studio")).options.body);

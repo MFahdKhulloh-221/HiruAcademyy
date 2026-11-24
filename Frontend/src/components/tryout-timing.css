@@ -1,0 +1,76 @@
+.tryout-readable-content.tryout-placement-style .learning-question-card > h2 {
+  font-size: clamp(16px, 1.5vw, 20px);
+  line-height: 1.8;
+  font-weight: 500;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.tryout-readable-content.tryout-placement-style .exam-reading-scroll {
+  max-height: none;
+  overflow: visible;
+  scrollbar-gutter: auto;
+  font-size: clamp(16px, 1.3vw, 18px);
+  line-height: 2;
+}
+
+.tryout-active-session {
+  display: grid;
+  gap: .5rem;
+  padding: 1rem;
+  border-left: 3px solid #954900;
+  border-radius: .5rem;
+  background: #F9F9FF;
+}
+
+.tryout-active-session > span {
+  color: #954900;
+  font-size: .875rem;
+  font-weight: 600;
+}
+
+.tryout-active-session > strong {
+  font-size: 1rem;
+}
+
+.tryout-active-session > small {
+  color: #555b6e;
+  line-height: 1.5;
+}
+
+.tryout-session-duration {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
+.tryout-break {
+  max-width: 48rem;
+  margin: 2rem auto;
+  padding: clamp(1.5rem, 5vw, 3rem);
+  border: 1px solid #e7e7ef;
+  border-radius: 1rem;
+  background: #fff;
+  text-align: center;
+}
+
+.tryout-break > svg {
+  width: 2rem;
+  height: 2rem;
+  color: #954900;
+}
+
+.tryout-break-timer {
+  display: grid;
+  gap: .5rem;
+  margin: 2rem 0;
+}
+
+.tryout-break-timer strong {
+  font-size: clamp(2.5rem, 8vw, 4rem);
+  font-variant-numeric: tabular-nums;
+}
+
+.tryout-break .button {
+  min-height: 44px;
+  margin-top: 1rem;
+}

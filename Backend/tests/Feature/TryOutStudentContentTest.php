@@ -58,7 +58,7 @@ class TryOutStudentContentTest extends TryOutGrammarPassageTest
             }
         }
         $service = app(TryOutService::class);
-        $parent = TryOut::create(['program_id' => 1, 'title' => 'Student content', 'duration_minutes' => 10]);
+        $parent = TryOut::create(['program_id' => 1, 'title' => 'Student content', 'duration_minutes' => 10, 'session_duration_minutes' => array_fill_keys(array_keys(TryOutService::SESSIONS), 5), 'break_duration_minutes' => 1]);
         $media = $images ? ['image' => 'https://example.test/original.png', 'image_alt' => 'Original diagram', 'image_position' => 'after'] : [];
         $questions = [];
         foreach (['grammar', 'grammar', 'grammar', 'grammar', 'vocabulary_kanji', 'reading', 'audio'] as $index => $session) {

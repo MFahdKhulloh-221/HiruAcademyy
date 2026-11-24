@@ -106,10 +106,13 @@ class TryOutPassageBlocksTest extends TryOutGrammarPassageTest
                 'point_value' => 1, 'status' => 'published', 'passage_id' => $session === 'grammar' ? $passage->id : null,
                 'audio_url' => $session === 'audio' ? 'https://example.test/audio.mp3' : null]);
         }
-        $parent->update(['status' => 'published', 'max_score' => 4]);
+        $parent->update(['status' => 'published', 'max_score' => 4, 'session_duration_minutes' => array_fill_keys(array_keys(TryOutService::SESSIONS), 5), 'break_duration_minutes' => 1]);
         $attempts = new class(app(ChapterAccessPolicy::class), $service) extends TryOutAttemptService
         {
             public function authorize(User $user, Model $tryOut, ?Model $attempt = null): void {}
+
+            // Passage navigation checks use legacy full-question snapshots.
+            protected function snapshotMetadata(Model $assessment, array $questions): array { return []; }
         };
         $user = new User;
         $user->id = 1;

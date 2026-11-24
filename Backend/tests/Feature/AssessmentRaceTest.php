@@ -77,7 +77,7 @@ class AssessmentRaceTest extends TestCase
         }
     }
 
-    private function fixture(string $kind, bool $expired = true): array
+    private function fixture(string $kind, bool $expired = true, bool $perSession = false): array
     {
         $program = Program::where('code', 'n5')->first();
         if (! $program) {
@@ -89,6 +89,7 @@ class AssessmentRaceTest extends TestCase
         $this->student->forceFill(['role' => 'student', 'account_status' => 'active'])->save();
         $options = ['A' => 'One', 'B' => 'Two', 'C' => 'Three', 'D' => 'Four'];
         if ($kind === 'try_out') {
+            $this->assertTrue(Schema::hasColumn('try_outs', 'session_duration_minutes'), 'Per-session migration must be installed explicitly before running Try Out race tests.');
             $this->assertMatchesRegularExpression('/^hiru_backend_test_[a-z0-9_]+$/D', (string) getenv('HIRU_TEST_SCHEMA'));
             $this->assertSame(getenv('HIRU_TEST_SCHEMA'), DB::selectOne('SELECT current_schema() AS name')->name);
             if (! Schema::hasColumn('try_out_attempts', 'expires_at')) {
@@ -107,15 +108,22 @@ class AssessmentRaceTest extends TestCase
                 (require database_path('migrations/2026_10_29_000033_add_try_out_shared_passages.php'))->up();
             }
             $content = app(TryOutService::class);
-            $this->tryOut = $content->save(['program_id' => $program->id, 'title' => 'Race '.bin2hex(random_bytes(8)), 'access_type' => 'free']);
+            $this->tryOut = $content->save(['program_id' => $program->id, 'title' => 'Race '.bin2hex(random_bytes(8)), 'access_type' => 'free', 'session_duration_minutes' => array_fill_keys(array_keys(TryOutService::SESSIONS), 5), 'break_duration_minutes' => 1]);
             foreach (array_keys(TryOutService::SESSIONS) as $session) {
                 $content->saveQuestion($this->tryOut, ['session' => $session, 'question' => 'Race question', 'options' => $options, 'correct_option' => 'B', 'point_value' => 45, 'status' => 'published', 'audio_url' => $session === 'audio' ? 'https://example.test/race.mp3' : null]);
             }
             $this->tryOut = $content->save(['status' => 'published'], $this->tryOut);
             $service = app(TryOutAttemptService::class);
             $attempt = $service->start($this->student, $this->tryOut);
-            foreach ($attempt->content_snapshot as $question) {
-                $attempt = $service->save($this->student, $this->tryOut, $attempt, [$question['id'] => 'B'], $attempt->revision, true);
+            if (! $perSession) {
+                // Preserve legacy global-mode race coverage alongside per-session cases.
+                $snapshot = $attempt->grading_snapshot;
+                unset($snapshot['timing_mode'], $snapshot['session_duration_minutes'], $snapshot['break_duration_minutes']);
+                DB::table('try_out_attempts')->where('id', $attempt->id)->update(['grading_snapshot' => json_encode($snapshot, JSON_THROW_ON_ERROR), 'phase' => null, 'session_started_at' => null, 'expires_at' => null]);
+                $attempt->refresh();
+                foreach ($attempt->content_snapshot as $question) {
+                    $attempt = $service->save($this->student, $this->tryOut, $attempt, [$question['id'] => 'B'], $attempt->revision, true);
+                }
             }
 
             return ['kind' => $kind, 'table' => 'try_out_attempts', 'id' => $attempt->id, 'parent' => $this->tryOut->id, 'user' => $this->student->id, 'revision' => $attempt->revision, 'answers' => $attempt->answers];
@@ -183,6 +191,10 @@ try {
         if (getenv('RACE_OPERATION') === 'abandon') {
             $service->abandon($user, $parent, $attempt);
             $result = $attempt->fresh();
+        } elseif (getenv('RACE_OPERATION') === 'finish-session') {
+            $result = $service->save($user, $parent, $attempt, [], $f['revision'], true);
+        } elseif (getenv('RACE_OPERATION') === 'next-session') {
+            $result = $service->nextSession($user, $parent, $attempt, $f['revision']);
         } elseif (getenv('RACE_OPERATION') === 'refresh') {
             $result = $service->refresh($user, $parent, $attempt);
         } else {
@@ -284,6 +296,137 @@ PHP;
                     $worker->stop();
                 }
             }
+        }
+    }
+
+    public function test_per_session_double_finish_and_double_next_never_skip_or_restart(): void
+    {
+        $fixture = $this->fixture('try_out', false, true);
+        foreach (['finish-session', 'next-session', 'timeout'] as $operation) {
+            if ($operation === 'timeout') {
+                DB::table('try_out_attempts')->where('id', $fixture['id'])->update(['expires_at' => now()->subSecond()]);
+                $fixture['revision'] = TryOutAttempt::findOrFail($fixture['id'])->revision;
+            }
+            if ($operation === 'next-session') {
+                $this->assertTrue(TryOutAttempt::findOrFail($fixture['id'])->break_ends_at->isFuture());
+                $fixture['revision'] = TryOutAttempt::findOrFail($fixture['id'])->revision;
+            }
+            $names = ['session_'.bin2hex(random_bytes(8)), 'session_'.bin2hex(random_bytes(8))];
+            $workers = [$this->worker($fixture, $operation === 'timeout' ? 'finish-session' : $operation, $names[0]), $this->worker($fixture, $operation === 'timeout' ? 'refresh' : $operation, $names[1])];
+            DB::beginTransaction();
+            DB::table('try_out_attempts')->where('id', $fixture['id'])->lockForUpdate()->first();
+            try {
+                foreach ($workers as $worker) $worker->start();
+                $deadline = microtime(true) + 12;
+                do {
+                    DB::select('SELECT pg_stat_clear_snapshot()');
+                    $blocked = DB::select("SELECT application_name FROM pg_stat_activity WHERE datname = current_database() AND application_name IN (?, ?) AND wait_event_type = 'Lock'", $names);
+                    if (count($blocked) === 2) break;
+                    foreach ($workers as $worker) $this->assertTrue($worker->isRunning(), $worker->getErrorOutput());
+                    usleep(20000);
+                } while (microtime(true) < $deadline);
+                $this->assertCount(2, $blocked);
+                DB::commit();
+                $codes = [];
+                foreach ($workers as $worker) {
+                    $this->assertSame(0, $worker->wait(), $worker->getErrorOutput());
+                    $codes[] = json_decode($worker->getOutput(), true, 512, JSON_THROW_ON_ERROR)['http'];
+                }
+                sort($codes);
+                $this->assertContains($codes, $operation === 'timeout' ? [[200, 200], [200, 409]] : [[200, 409]]);
+                $attempt = TryOutAttempt::findOrFail($fixture['id']);
+                $this->assertSame($operation === 'timeout' ? 2 : 1, $attempt->current_session);
+                $this->assertSame($operation === 'timeout' ? ['vocabulary_kanji', 'grammar'] : ['vocabulary_kanji'], $attempt->completed_sessions);
+                $this->assertSame($fixture['revision'] + 1, $attempt->revision);
+                $this->assertSame($operation === 'next-session' ? 'session' : 'break', $attempt->phase);
+                if ($operation === 'next-session') {
+                    $this->assertSame(300, (int) $attempt->session_started_at->diffInSeconds($attempt->expires_at));
+                }
+            } finally {
+                while (DB::transactionLevel() > 0) DB::rollBack();
+                foreach ($workers as $worker) if ($worker->isRunning()) $worker->stop();
+            }
+        }
+    }
+
+    public function test_all_four_timed_sessions_finalize_with_same_score_and_no_answer_key_leak(): void
+    {
+        $fixture = $this->fixture('try_out', false, true);
+        $service = app(TryOutAttemptService::class);
+        $attempt = TryOutAttempt::findOrFail($fixture['id']);
+        try {
+            foreach (array_keys(TryOutService::SESSIONS) as $index => $session) {
+                $payload = $service->payload($attempt);
+                $this->assertSame([$session], array_values(array_unique(array_column($payload['questions'], 'session'))));
+                $this->assertArrayNotHasKey('correct_option', $payload['questions'][0]);
+                $this->assertArrayNotHasKey('explanation', $payload['questions'][0]);
+                $answers = array_fill_keys(array_column($payload['questions'], 'id'), 'B');
+                $attempt = $service->save($this->student, $this->tryOut, $attempt, $answers, $attempt->revision, true);
+                if ($index < 3) {
+                    $this->assertSame('break', $attempt->phase);
+                    $this->assertNull($attempt->expires_at);
+                    $this->assertSame([], $service->payload($attempt)['questions']);
+                    $this->travel(1)->minutes();
+                    $attempt = $service->nextSession($this->student, $this->tryOut, $attempt, $attempt->revision);
+                }
+            }
+            $this->assertSame('completed', $attempt->status);
+            $this->assertSame(180, $attempt->result_snapshot['earned']);
+            $this->assertSame(array_keys(TryOutService::SESSIONS), $attempt->completed_sessions);
+            $this->assertCount(4, $service->payload($attempt, true)['questions']);
+            $this->assertSame($attempt->revision, $service->submit($this->student, $this->tryOut, $attempt, 0)->revision);
+        } finally {
+            $this->travelBack();
+        }
+    }
+
+    public function test_per_session_rejects_future_answers_and_allows_skipping_break_and_default_timing(): void
+    {
+        $fixture = $this->fixture('try_out', false, true);
+        $service = app(TryOutAttemptService::class);
+        $attempt = TryOutAttempt::findOrFail($fixture['id']);
+        try {
+            $service->save($this->student, $this->tryOut, $attempt, [$attempt->content_snapshot[1]['id'] => 'B'], 0);
+            $this->fail('Future session answer accepted.');
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $this->assertArrayHasKey('answers', $exception->errors());
+        }
+        $attempt = $service->save($this->student, $this->tryOut, $attempt, [], 0, true);
+        $this->assertTrue($attempt->break_ends_at->isFuture());
+        $attempt = $service->nextSession($this->student, $this->tryOut, $attempt, $attempt->revision);
+        $this->assertSame('session', $attempt->phase);
+        $this->assertNull($attempt->break_ends_at);
+        $this->assertSame(1, $attempt->current_session);
+        $this->assertSame(300, (int) $attempt->session_started_at->diffInSeconds($attempt->expires_at));
+        $this->tryOut->update(['session_duration_minutes' => null, 'break_duration_minutes' => null]);
+        $defaultAttempt = $service->start($this->student, $this->tryOut);
+        $this->assertSame(1800, (int) $defaultAttempt->session_started_at->diffInSeconds($defaultAttempt->expires_at));
+        $this->assertSame(5, $defaultAttempt->grading_snapshot['break_duration_minutes']);
+    }
+
+    public function test_per_session_timeout_discards_answers_and_preserves_snapshot_and_break_resume(): void
+    {
+        $fixture = $this->fixture('try_out', false, true);
+        $service = app(TryOutAttemptService::class);
+        $attempt = TryOutAttempt::findOrFail($fixture['id']);
+        $snapshot = $attempt->grading_snapshot;
+        $this->tryOut->update(['session_duration_minutes' => array_fill_keys(array_keys(TryOutService::SESSIONS), 10), 'break_duration_minutes' => 2]);
+        $this->travel(6)->minutes();
+        try {
+            $deadline = $attempt->expires_at->copy();
+            $attempt = $service->save($this->student, $this->tryOut, $attempt, [$attempt->content_snapshot[0]['id'] => 'A'], 0, true);
+            $this->assertSame([], $attempt->answers);
+            $this->assertSame($snapshot, $attempt->grading_snapshot);
+            $this->assertSame('break', $attempt->phase);
+            $this->assertNull($attempt->expires_at);
+            $this->assertTrue($deadline->addMinute()->equalTo($attempt->break_ends_at));
+            $this->assertSame([], $service->payload($attempt)['questions']);
+            $this->assertSame('per_session', $service->history($this->student, $this->tryOut)['attempts'][0]['timing_mode']);
+            $attempt = $service->nextSession($this->student, $this->tryOut, $attempt, $attempt->revision);
+            $this->assertSame(300, (int) $attempt->session_started_at->diffInSeconds($attempt->expires_at));
+            $this->assertSame(['grammar'], array_values(array_unique(array_column($service->payload($attempt)['questions'], 'session'))));
+        } finally {
+            $this->travelBack();
         }
     }
 

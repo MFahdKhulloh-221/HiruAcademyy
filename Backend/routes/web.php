@@ -258,6 +258,7 @@ Route::prefix('api')->middleware(['throttle:api', AuthenticateSession::class])->
             Route::post('{tryOut}/attempts', [StudentTryOutController::class, 'start'])->name('assessment.tryout.start');
             Route::get('{tryOut}/attempts/{attempt}', [StudentTryOutController::class, 'attempt']);
             Route::put('{tryOut}/attempts/{attempt}/answers', [StudentTryOutController::class, 'save'])->name('assessment.tryout.answers');
+            Route::post('{tryOut}/attempts/{attempt}/next-session', [StudentTryOutController::class, 'nextSession'])->name('assessment.tryout.next-session');
             Route::post('{tryOut}/attempts/{attempt}/abandon', [StudentTryOutController::class, 'abandon']);
             Route::post('{tryOut}/attempts/{attempt}/submit', [StudentTryOutController::class, 'submit'])->name('assessment.tryout.submit');
             Route::get('{tryOut}/attempts/{attempt}/review', [StudentTryOutController::class, 'review']);
