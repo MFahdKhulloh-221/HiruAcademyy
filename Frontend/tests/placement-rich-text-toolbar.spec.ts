@@ -1,5 +1,54 @@
 import { expect, test } from "./canonical-fixture";
 
+test("placement toolbar emits semantic bold italic underline and retains them after save and reopen", async ({ page }) => {
+  const rows: Record<string, unknown>[] = [];
+  await page.route("**/api/admin/placement-configs", route => route.fulfill({ json: { data: [{ id: 7, title: "Placement", intro_heading: "Intro", duration_minutes: 7, description: "Desc", status: "draft" }] } }));
+  await page.route("**/api/admin/placement-questions**", async route => {
+    if (route.request().method() === "POST") rows.push({ ...route.request().postDataJSON(), id: 10 });
+    await route.fulfill({ json: { data: route.request().method() === "GET" ? rows : rows[0] } });
+  });
+  await page.goto("/admin/placement-hasil");
+  await page.getByRole("combobox", { name: "Kategori kelompok", exact: true }).selectOption("Moji・Goi");
+  await page.getByRole("button", { name: "+ Tambah Soal", exact: true }).click();
+  const dialog = page.getByRole("dialog");
+  await dialog.getByRole("combobox", { name: "Jenis soal", exact: true }).selectOption("Reading");
+  const labels = ["Pertanyaan", "Pilihan A", "Teks bacaan"];
+  for (const label of labels) {
+    const field = dialog.getByRole("textbox", { name: label, exact: true });
+    await field.fill(`${label} formatted`);
+    await expect(field).toHaveCSS("font-weight", "400");
+    await expect(field).toHaveCSS("font-style", "normal");
+    await expect(field).toHaveCSS("text-decoration-line", "none");
+    // Ambient browser CSS mode must not change the toolbar's persisted HTML format.
+    await page.evaluate(() => document.execCommand("styleWithCSS", false, "true"));
+    const toolbar = dialog.getByRole("toolbar", { name: `Format ${label}`, exact: true });
+    for (const format of ["bold", "italic", "underline"]) {
+      await field.press("Control+a");
+      await expect(toolbar.getByRole("button", { name: format, exact: true })).toHaveAttribute("aria-pressed", "false");
+      await toolbar.getByRole("button", { name: format, exact: true }).click();
+    }
+  }
+  for (const label of ["Pilihan B", "Pilihan C", "Pilihan D"]) await dialog.getByRole("textbox", { name: label, exact: true }).fill(label);
+  await dialog.getByRole("combobox", { name: "Jawaban benar", exact: true }).selectOption("A");
+  await dialog.getByRole("button", { name: "Simpan", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
+  const payload = rows[0];
+  for (const html of [payload.prompt, (payload.options as Record<string, string>).A, payload.passage]) {
+    expect(html).toMatch(/<(b|strong)>/);
+    expect(html).toMatch(/<(i|em)>/);
+    expect(html).toContain("<u>");
+    expect(html).not.toContain("style=");
+  }
+  await page.reload();
+  await page.getByRole("button", { name: "Edit soal 1", exact: true }).click();
+  for (const label of labels) {
+    const field = dialog.getByRole("textbox", { name: label, exact: true });
+    await expect(field.locator("b, strong")).toHaveCSS("font-weight", "700");
+    await expect(field.locator("i, em")).toHaveCSS("font-style", "italic");
+    await expect(field.locator("u")).toHaveCSS("text-decoration-line", "underline");
+  }
+});
+
 test("standalone placement controller preserves selection, undo, editor ownership and busy state", async ({ page }) => {
   await page.route("**/api/admin/placement-configs", route => route.fulfill({ json: { data: [{ id: 7, title: "Placement", intro_heading: "Intro", duration_minutes: 7, description: "Desc", status: "draft" }] } }));
   await page.route("**/api/admin/placement-questions**", route => route.fulfill({ json: { data: [] } }));
@@ -17,8 +66,6 @@ test("standalone placement controller preserves selection, undo, editor ownershi
   await prompt.press("Control+a");
   const bold = toolbar.getByRole("button", { name: "bold", exact: true });
   await expect(bold).toHaveAttribute("aria-pressed", /true|false/);
-  // Admin field CSS may inherit bold; normalize before testing an explicit toggle.
-  if (await bold.getAttribute("aria-pressed") === "true") await bold.click();
   await expect(bold).toHaveAttribute("aria-pressed", "false");
   const beforeBold = await prompt.innerHTML();
   await bold.click();

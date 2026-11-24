@@ -70,6 +70,8 @@ function EditorToolbarControls({ context, disabled }: { context: EditorContext; 
   const canEdit = () => !unavailable && active.writable() && isActive(active);
   function command(command: string) {
     if (!canEdit() || !active || !active.restore()) return;
+    // Persist semantic tags; sanitizer intentionally strips inline styles.
+    document.execCommand("styleWithCSS", false, "false");
     document.execCommand(command);
     active.remember();
     active.emit();
