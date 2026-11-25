@@ -5,7 +5,7 @@ import { ApiError, apiRequest } from "@/lib/api";
 import styles from "./question-audio-player.module.css";
 
 type Status = "loading" | "idle" | "playing" | "used" | "error";
-type AudioGrant = { data: { status: "available" | "reserved" | "used"; token?: string } };
+type AudioGrant = { data: { status: "available" | "reserved" | "used"; expires_at?: string | null } };
 
 type Props = { endpoint: string; src: string; disabled?: boolean };
 
@@ -34,6 +34,10 @@ export function QuestionAudioPlayer({ endpoint, src, disabled = false }: Props) 
     const controller = new AbortController();
     let disposed = false;
     let busy = false;
+    let starting = false;
+    let started = false;
+    let leaseDeadline = 0;
+    let leaseTimer: ReturnType<typeof setTimeout> | undefined;
     let token: string | null = null;
     let commitRequested = false;
     let committed = false;
@@ -55,42 +59,11 @@ export function QuestionAudioPlayer({ endpoint, src, disabled = false }: Props) 
       }
     }
 
-    async function checkStatus() {
-      if (disposed || disabled) return;
-      if (!latestSrc.current) {
-        setStatus("error");
-        setMessage("Audio gagal dimuat. Coba lagi.");
-        return;
-      }
-      setStatus("loading");
-      setMessage("Memeriksa izin audio…");
-      try {
-        const { data } = await apiRequest<AudioGrant>(endpoint, { signal: controller.signal, cache: "no-store" });
-        if (disposed) return;
-        if (data.status === "available" && !committed) {
-          commitRequested = false;
-          token = null;
-          setStatus("idle");
-          setMessage("Siapkan volume sebelum memutar audio. Audio hanya dapat diputar satu kali.");
-        } else if (data.status === "used" || committed) {
-          setStatus("used");
-          setMessage("Kesempatan mendengarkan sudah digunakan.");
-        } else {
-          setStatus("error");
-          setMessage("Audio sedang digunakan. Periksa kembali izin audio sebelum melanjutkan.");
-        }
-      } catch {
-        if (disposed) return;
-        setStatus("error");
-        setMessage("Izin audio belum dapat diperiksa. Periksa koneksi, lalu coba lagi.");
-      }
-    }
-
     function preload() {
       return new Promise<void>((resolve, reject) => {
         function finish(error?: Error) {
           clearTimeout(timer);
-          audio!.removeEventListener("canplaythrough", ready);
+          audio!.removeEventListener("canplay", ready);
           audio!.removeEventListener("error", failed);
           cancelPreload = undefined;
           if (error) reject(error); else resolve();
@@ -99,94 +72,150 @@ export function QuestionAudioPlayer({ endpoint, src, disabled = false }: Props) 
         function failed() { finish(new Error("Audio gagal dimuat.")); }
         cancelPreload = () => finish(new Error("Pemutaran dibatalkan."));
         const timer = setTimeout(failed, 30000);
-        audio!.addEventListener("canplaythrough", ready);
+        audio!.addEventListener("canplay", ready);
         audio!.addEventListener("error", failed);
         audio!.preload = "auto";
-        if (audio!.readyState >= HTMLMediaElement.HAVE_ENOUGH_DATA) ready();
+        if (audio!.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA) ready();
         else audio!.load();
       });
     }
 
-    async function play() {
-      if (disposed || disabled || busy || committed || commitRequested) return;
+    async function checkStatus() {
+      if (disposed || disabled || busy || starting || commitRequested) return;
       busy = true;
+      clearTimeout(leaseTimer);
       setStatus("loading");
       setMessage("Menyiapkan audio…");
       try {
+        await release();
+        // A failed release must not discard ownership or acquire a second token.
+        if (token && performance.now() < leaseDeadline) throw new Error("Reservation still held");
+        token = null;
+        const { data } = await apiRequest<AudioGrant>(endpoint, { signal: controller.signal, cache: "no-store" });
+        if (disposed) return;
+        if (data.status === "used" || committed) {
+          setStatus("used");
+          setMessage("Kesempatan mendengarkan sudah digunakan.");
+          return;
+        }
+        if (data.status === "reserved") {
+          setStatus("error");
+          setMessage("Audio sedang digunakan. Periksa kembali izin audio sebelum melanjutkan.");
+          return;
+        }
+        if (!latestSrc.current) throw new Error("Audio unavailable");
+        // Keep issued URL stable while prepared/playing; refreshed props are used only on retry.
         if (audio!.getAttribute("src") !== latestSrc.current) audio!.src = latestSrc.current;
         await preload();
         if (disposed) return;
         token = crypto.randomUUID();
-        const { data } = await apiRequest<AudioGrant>(`${endpoint}/reserve`, {
+        // Server lease is 30 seconds. Monotonic request-start deadline avoids client clock skew.
+        leaseDeadline = performance.now() + 25000;
+        const grant = await apiRequest<AudioGrant>(`${endpoint}/reserve`, {
           method: "POST", body: JSON.stringify({ token }),
         });
         if (disposed) { await release(); return; }
-        if (data.status !== "reserved") {
-          token = null;
-          await checkStatus();
-          return;
-        }
-        audio!.muted = true;
-        audio!.playbackRate = 1;
-        await audio!.play();
+        if (grant.data.status !== "reserved" || performance.now() >= leaseDeadline) throw new Error("Reservation unavailable");
+        setStatus("idle");
+        setMessage("");
+        leaseTimer = setTimeout(() => { void checkStatus(); }, leaseDeadline - performance.now());
       } catch (error) {
-        stop();
-        if (!commitRequested) await release();
+        await release();
         if (disposed) return;
-        if (commitRequested || (error instanceof ApiError && error.status === 409)) {
-          await checkStatus();
-        } else {
-          setStatus("error");
-          setMessage("Audio gagal dimuat. Coba lagi.");
-        }
+        setStatus("error");
+        setMessage(error instanceof ApiError && error.status === 409
+          ? "Audio sedang digunakan. Periksa kembali izin audio sebelum melanjutkan."
+          : "Audio gagal dimuat. Periksa koneksi, lalu coba lagi.");
       } finally {
         busy = false;
       }
     }
 
+    async function rejected() {
+      if (disposed || started) return;
+      stop();
+      clearTimeout(leaseTimer);
+      starting = false;
+      await release();
+      if (disposed) return;
+      setStatus("error");
+      setMessage("Audio gagal diputar. Coba lagi.");
+    }
+
+    function play() {
+      if (disposed || disabled || busy || starting || committed || commitRequested || !token) return;
+      if (performance.now() >= leaseDeadline) { void checkStatus(); return; }
+      starting = true;
+      clearTimeout(leaseTimer);
+      leaseTimer = setTimeout(() => { if (!started) void rejected(); }, leaseDeadline - performance.now());
+      setStatus("loading");
+      setMessage("Menyiapkan audio…");
+      audio!.volume = volumeRef.current;
+      audio!.playbackRate = 1;
+      audio!.muted = false;
+      // No await before play: retain browser user activation for this single audible start.
+      try { void audio!.play().catch(rejected); } catch { void rejected(); }
+    }
+
     async function playing() {
-      if (disposed || !token || commitRequested) return;
+      if (disposed || !starting || !token || commitRequested) return;
+      if (performance.now() >= leaseDeadline) { void rejected(); return; }
+      started = true;
+      clearTimeout(leaseTimer);
       commitRequested = true;
-      audio!.pause();
+      setStatus("playing");
+      setMessage("Dengarkan audio dengan saksama.");
+      const body = JSON.stringify({ token });
       try {
-        const { data } = await apiRequest<AudioGrant>(`${endpoint}/commit`, {
-          method: "POST", body: JSON.stringify({ token }),
-        });
-        if (disposed) return;
-        if (data.status !== "used") throw new Error("Audio grant rejected");
+        // ponytail: cooperative playback confirmation; protected streaming needed for proof of sound.
+        let grant: AudioGrant;
+        try {
+          grant = await apiRequest<AudioGrant>(`${endpoint}/commit`, { method: "POST", body });
+        } catch (error) {
+          stop();
+          if (disposed || (error instanceof ApiError && error.status >= 400 && error.status < 500)) throw error;
+          // Same token is idempotent: confirm a potentially lost successful response once.
+          grant = await apiRequest<AudioGrant>(`${endpoint}/commit`, { method: "POST", body });
+        }
+        if (grant.data.status !== "used") throw new Error("Audio grant rejected");
         committed = true;
-        audio!.currentTime = 0;
-        audio!.volume = volumeRef.current;
-        audio!.muted = false;
-        await audio!.play();
-        if (disposed) { stop(); return; }
-        setStatus("playing");
-        setMessage("Dengarkan audio dengan saksama.");
+        if (!disposed && audio!.paused) {
+          setStatus("used");
+          setMessage("Pemutaran audio terhenti. Audio telah diputar dan tidak dapat diulang.");
+        }
       } catch {
         stop();
-        if (!disposed) await checkStatus();
+        if (disposed) return;
+        // Never offer replay after actual playback, even when confirmation is uncertain.
+        setStatus("used");
+        setMessage("Pemutaran audio terhenti. Izin audio tidak dapat dikonfirmasi; audio tidak dapat diulang.");
       }
     }
 
     function metadata() {
       if (!disposed) setDuration(Number.isFinite(audio!.duration) ? audio!.duration : 0);
     }
-    function progress() { if (!disposed && committed) setElapsed(audio!.currentTime); }
+    function progress() { if (!disposed && started) setElapsed(audio!.currentTime); }
     function ended() {
       stop();
-      if (disposed || !committed) return;
+      if (disposed || !started) return;
       setStatus("used");
       setMessage("Kesempatan mendengarkan sudah digunakan.");
     }
     function failed() {
       stop();
-      if (disposed || !committed) return;
+      if (disposed) return;
+      if (!started) {
+        if (starting || (!busy && token)) void rejected();
+        return;
+      }
       setStatus("used");
       setMessage("Pemutaran audio terhenti. Audio telah diputar dan tidak dapat diulang.");
     }
     function rate() { if (audio!.playbackRate !== 1) audio!.playbackRate = 1; }
     function pagehide() {
       disposed = true;
+      clearTimeout(leaseTimer);
       cancelPreload?.();
       stop();
       audio!.removeAttribute("src");
@@ -246,18 +275,18 @@ export function QuestionAudioPlayer({ endpoint, src, disabled = false }: Props) 
           <span>{clock(duration)}</span>
         </div>
       </div>
-      <label className={styles.volume}>
-        Volume
+      <div className={styles.volume}>
+        <span>Volume</span>
         <input type="range" min="0" max="1" step="0.05" value={volume} disabled={disabled} aria-label="Volume audio" onChange={event => {
           const next = Number(event.target.value);
           volumeRef.current = next;
           setVolume(next);
           if (audioRef.current) audioRef.current.volume = next;
         }} />
-      </label>
-      <p className={`${styles.status} ${status === "error" ? styles.error : ""}`} role="status" aria-live="polite">
+      </div>
+      {(disabled || message) && <p className={`${styles.status} ${status === "error" ? styles.error : ""}`} role="status" aria-live="polite">
         {disabled ? "Audio tidak tersedia karena sesi tidak aktif." : message}
-      </p>
+      </p>}
       {!disabled && status === "error" && <button type="button" className={styles.retry} onClick={() => actions.current.retry()}>Coba Lagi</button>}
     </section>
   );

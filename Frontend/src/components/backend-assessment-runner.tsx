@@ -697,7 +697,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
         {readingLayout ? <div><h1>{answerReview ? `Review Jawaban · ${title}` : title}</h1>{readingContext && <p>{readingContext.label}</p>}</div> : tryoutExperience ? <h1>{reviewing ? "Review Jawaban · " : ""}<strong>{title.split(" - ")[0]}</strong><span>{title.includes(" - ") ? ` | ${title.split(" - ").slice(1).join(" - ")}` : ""}{sessionLabel ? ` - ${sessionLabel}` : ""}</span></h1> : tryoutExperience ? <><h1>{reviewing ? "Review Jawaban · " : ""}Soal {Math.min(index + 1, questions.length)} dari {questions.length}</h1><p>{title}{sessionLabel ? ` • ${sessionLabel}` : ""}</p><p className="tryout-runner-status">{questions.filter(item => flow.answers[item.id]).length} / {questions.length} Terjawab<span role="status">{saveStatus}</span></p></> : <h1>{answerReview ? `Review Jawaban ? ${title}` : title}</h1>}
 
-        {sessionLocked && <p className="tryout-active-session">Sesi {(attempt.current_session ?? 0) + 1} dari {timingGroups.length} — {activeGroup?.label}</p>}
+        {domain !== "tryout" && sessionLocked && <p className="tryout-active-session">Sesi {(attempt.current_session ?? 0) + 1} dari {timingGroups.length} — {activeGroup?.label}</p>}
 
         {mobileTryout && <div className="tryout-mobile-status"><span>{sessionLabel}</span><strong>Soal {sessionPosition + 1} dari {sessionQuestions.length}</strong><progress aria-label="Progress jawaban Try Out" value={answeredCount} max={questions.length || 1} /></div>}
 
@@ -753,7 +753,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
             <section className={`learning-question-card${examReading ? " exam-reading-questions" : ""}`} tabIndex={examReading ? 0 : undefined} aria-label={examReading ? "Pertanyaan dan pilihan jawaban" : undefined}>
 
-              <p className="dash-kicker">{tryoutExperience ? <>{sessionLabel && <span>{sessionLabel}</span>}<span>Soal {sessionPosition + 1}</span></> : <>SOAL {Math.min(index + 1, questions.length)} DARI {questions.length}</>}</p>
+              <p className="dash-kicker">{tryoutExperience ? <>{domain !== "tryout" && sessionLabel && <span className="tryout-session-badge">{sessionLabel}</span>}<span>Soal {sessionPosition + 1}</span></> : <>SOAL {Math.min(index + 1, questions.length)} DARI {questions.length}</>}</p>
 
               {!isReading && !examReading && question.passage && <section className="reading-passage" aria-label={tryoutImages && question.session === "grammar" ? "Kelompok soal tata bahasa" : undefined}><h2><PlacementRichText value={question.passage.title} /></h2><AssessmentPassageContent passage={tryoutImages ? question.passage : { body: question.passage.body }} /></section>}
 

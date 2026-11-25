@@ -72,7 +72,17 @@ class AssessmentAudioTest extends TestCase
         $token = (string) Str::uuid();
         $other = (string) Str::uuid();
         $this->getJson($base.'/1')->assertOk()->assertJsonPath('data.status', 'available');
-        $this->postJson($base.'/1/reserve', ['token' => $token])->assertOk()->assertJsonPath('data.status', 'reserved');
+        // A non-UTC PostgreSQL session must not shift or immediately expire the lease.
+        $timezone = DB::selectOne('SHOW TIME ZONE')->TimeZone;
+        DB::statement("SET TIME ZONE 'Asia/Jakarta'");
+        try {
+            $reservation = $this->postJson($base.'/1/reserve', ['token' => $token])->assertOk()->assertJsonPath('data.status', 'reserved');
+            $seconds = now()->diffInSeconds(\Illuminate\Support\Carbon::parse($reservation->json('data.expires_at')), false);
+            $this->assertGreaterThan(20, $seconds);
+            $this->assertLessThanOrEqual(30, $seconds);
+        } finally {
+            DB::select("SELECT set_config('TimeZone', ?, false)", [$timezone]);
+        }
         $this->postJson($base.'/2/reserve', ['token' => $token])->assertOk();
         $this->postJson($base.'/2/reserve', ['token' => $other])->assertConflict();
         $this->postJson($base.'/1/release', ['token' => $other])->assertConflict();

@@ -695,7 +695,7 @@
   width: 100%;
   max-width: 100%;
 }
-.tryout-runner-polished .learning-question-card label {
+.tryout-runner-polished .learning-question-card fieldset label {
   position: relative;
   min-height: 64px;
   padding: 12px;
@@ -703,11 +703,11 @@
   border-radius: 12px;
   gap: 12px;
 }
-.tryout-runner-polished .learning-question-card label.selected {
+.tryout-runner-polished .learning-question-card fieldset label.selected {
   border-color: var(--orange-dark);
   background: #fff7ef;
 }
-.tryout-runner-polished .learning-question-card label > input {
+.tryout-runner-polished .learning-question-card fieldset label > input[type="radio"] {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -895,7 +895,7 @@
   box-shadow: none;
 }
 .tryout-runner-polished button:focus-visible,
-.tryout-runner-polished .learning-question-card label:has(input:focus-visible) {
+.tryout-runner-polished .learning-question-card fieldset label:has(input:focus-visible) {
   outline: 3px solid var(--orange-dark);
   outline-offset: 4px;
 }
@@ -931,14 +931,14 @@
 .tryout-runner-polished .learning-question-head > p { grid-column: 1; margin: 0; font-size: 13px; line-height: 1.4; }
 .tryout-runner-polished .learning-question-head .checkpoint-timer { grid-column: 2; grid-row: 1 / 4; align-self: center; position: static; margin: 0; padding: 8px 12px; min-width: 100px; }
 .tryout-runner-polished .learning-question-head .checkpoint-timer strong { font-size: 22px; }
-.tryout-runner-polished .learning-question-card label.review-correct { border-color: #32643a; background: #eaf3e7; color: #254e2b; }
-.tryout-runner-polished .learning-question-card label.review-wrong { border-color: #a32b32; background: #fff0f0; color: #8b2028; }
+.tryout-runner-polished .learning-question-card fieldset label.review-correct { border-color: #32643a; background: #eaf3e7; color: #254e2b; }
+.tryout-runner-polished .learning-question-card fieldset label.review-wrong { border-color: #a32b32; background: #fff0f0; color: #8b2028; }
 .tryout-runner-polished .tryout-review-label { font-size: 12px; margin-left: auto; }
 @media (max-width: 639px) {
   .tryout-runner-polished .learning-question-head { gap: 4px 8px; }
   .tryout-runner-polished .learning-question-head .checkpoint-timer { padding: 6px 8px; min-width: 84px; }
   .tryout-runner-polished .learning-question-head .checkpoint-timer small { display: none; }
-  .tryout-runner-polished .learning-question-card label { flex-wrap: wrap; }
+  .tryout-runner-polished .learning-question-card fieldset label { flex-wrap: wrap; }
   .tryout-runner-polished .tryout-review-label { flex-basis: 100%; margin-left: 0; }
 }
 /* Try Out menu scrolls with page, never floats over questions or answer checks. */
@@ -1060,7 +1060,7 @@
   box-shadow: var(--clay-shadow);
 }
 .tryout-placement-style .learning-question-card > .dash-kicker { align-items: center; }
-.tryout-placement-style .learning-question-card > .dash-kicker > span:first-child {
+.tryout-placement-style .learning-question-card > .dash-kicker > .tryout-session-badge {
   padding: 6px 14px;
   border-radius: 999px;
   background: #fff1e6;
@@ -1079,7 +1079,7 @@
   font-weight: 700;
 }
 .tryout-placement-style .learning-question-card fieldset { display: grid; gap: 12px; }
-.tryout-placement-style .learning-question-card label {
+.tryout-placement-style .learning-question-card fieldset label {
   display: flex;
   align-items: center;
   padding: 14px 20px;
@@ -1087,7 +1087,7 @@
   border-radius: 14px;
   gap: 14px;
 }
-.tryout-placement-style .learning-question-card label.selected {
+.tryout-placement-style .learning-question-card fieldset label.selected {
   border-color: var(--orange);
   box-shadow: 0 4px 12px rgb(244 130 32 / 12%);
 }
@@ -1099,7 +1099,7 @@
   font-size: 12px;
   color: var(--secondary);
 }
-.tryout-placement-style .learning-question-card label.selected .tryout-option-letter {
+.tryout-placement-style .learning-question-card fieldset label.selected .tryout-option-letter {
   background: var(--orange);
   color: #5a2a00;
 }
@@ -1291,10 +1291,10 @@
   .tryout-placement-style .learning-question-layout > main { display: block; }
   .tryout-placement-style .learning-question-card { padding: 16px; border-radius: 16px; }
   .tryout-placement-style .learning-question-card > .dash-kicker { gap: 6px; margin-bottom: 14px; font-size: 10px; }
-  .tryout-placement-style .learning-question-card > .dash-kicker > span:first-child { padding: 5px 8px; font-size: 10px; letter-spacing: .04em; }
+  .tryout-placement-style .learning-question-card > .dash-kicker > .tryout-session-badge { padding: 5px 8px; font-size: 10px; letter-spacing: .04em; }
   .tryout-placement-style .learning-question-card h2 { font-size: 18px; line-height: 1.7; margin-bottom: 16px; }
   .tryout-placement-style .learning-question-card fieldset { gap: 8px; margin-top: 16px; }
-  .tryout-placement-style .learning-question-card label { min-height: 44px; padding: 8px 10px; gap: 8px; border-radius: 10px; }
+  .tryout-placement-style .learning-question-card fieldset label { min-height: 44px; padding: 8px 10px; gap: 8px; border-radius: 10px; }
   .tryout-placement-style .learning-question-card .tryout-option-letter { flex-basis: 28px; height: 28px; }
   .tryout-placement-style .learning-question-card .tryout-option-text { font-size: 14px; }
   .tryout-placement-style .button { min-height: 44px; padding: 10px 12px; border-radius: 10px; font-size: 13px; line-height: 1.4; }

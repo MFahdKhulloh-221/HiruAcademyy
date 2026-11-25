@@ -104,9 +104,18 @@
 }
 
 .volume input {
+  appearance: auto;
+  display: block;
   width: 112px;
+  min-width: 0;
+  height: 44px;
   min-height: 44px;
   margin: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   accent-color: #954900;
 }
 

@@ -48,13 +48,13 @@ class AssessmentAudioService
                 abort_if($used || ($reserved && ! $owns), 409, 'Audio already used or reserved.');
                 if (! $reserved) {
                     $query->delete();
-                    DB::table('assessment_audio_plays')->insert($identity + ['token' => $token, 'reserved_until' => now()->addSeconds(30), 'used_at' => null]);
+                    DB::table('assessment_audio_plays')->insert($identity + ['token' => $token, 'reserved_until' => now()->addSeconds(30)->toISOString(), 'used_at' => null]);
                 }
             } elseif ($action === 'commit') {
                 // ponytail: records playback authorization, not proof of sound; protected streaming needed beyond cooperative clients.
                 abort_unless($owns && ($used || $reserved), 409, 'Audio reservation expired or unavailable.');
                 if (! $used) {
-                    $query->update(['used_at' => now()]);
+                    $query->update(['used_at' => now()->toISOString()]);
                 }
             } elseif ($action === 'release') {
                 // A committed allowance is never refundable, including same-token retries.
@@ -62,7 +62,8 @@ class AssessmentAudioService
                 $query->delete();
             }
 
-            $play = $query->first();
+            // PostgreSQL delete/update compilation may replace query columns with ctid.
+            $play = DB::table('assessment_audio_plays')->where($identity)->first();
             $status = $play?->used_at !== null ? 'used' : ($play !== null && now()->lt(Carbon::parse($play->reserved_until)) ? 'reserved' : 'available');
 
             return ['status' => $status, 'audio_key' => $key, 'expires_at' => $status === 'reserved' ? Carbon::parse($play->reserved_until)->toISOString() : null];
