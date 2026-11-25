@@ -7,6 +7,7 @@
 }
 
 .tryout-readable-content.tryout-placement-style .exam-reading-scroll {
+  background: #ffffff;
   max-height: none;
   overflow: visible;
   scrollbar-gutter: auto;
@@ -64,33 +65,123 @@
 }
 
 .tryout-break {
-  max-width: 48rem;
-  margin: 2rem auto;
-  padding: clamp(1.5rem, 5vw, 3rem);
+  max-width: 38rem;
+  margin: clamp(1rem, 3vw, 2rem) auto;
+  overflow: hidden;
   border: 1px solid #e7e7ef;
-  border-radius: 1rem;
+  border-radius: 1.25rem;
   background: #fff;
+  color: #18243e;
   text-align: center;
+  box-shadow: 0 12px 36px #18243e0d;
 }
 
-.tryout-break > svg {
-  width: 2rem;
-  height: 2rem;
-  color: #954900;
+.tryout-break-header {
+  padding: 1.5rem;
+  background: #18243e;
+  color: #fff;
+}
+
+.tryout-break-header .dash-kicker {
+  color: #ffb575;
+}
+
+.tryout-break-header h1 {
+  margin: .75rem 0 .5rem;
+  font-size: clamp(1.5rem, 4vw, 2rem);
+}
+
+.tryout-break-header p {
+  margin: .5rem 0 0;
+}
+
+.tryout-break-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: #f48220;
+  color: #5a2a00;
+  font-size: 1.5rem;
+}
+
+.tryout-break-body {
+  display: grid;
+  gap: 1rem;
+  padding: clamp(1.25rem, 4vw, 2rem);
+}
+
+.tryout-break-body :is(h2, p) {
+  margin: 0;
+}
+
+.tryout-break-body > h2 {
+  font-size: 1.125rem;
+}
+
+.tryout-break-body > p,
+.tryout-break-body > small {
+  line-height: 1.6;
+  color: #555b6e;
 }
 
 .tryout-break-timer {
-  display: grid;
-  gap: .5rem;
-  margin: 2rem 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: .75rem;
+  color: #954900;
+}
+
+.tryout-break-timer > svg {
+  width: 1.75rem;
+  height: 1.75rem;
 }
 
 .tryout-break-timer strong {
-  font-size: clamp(2.5rem, 8vw, 4rem);
+  font-size: clamp(3rem, 12vw, 4.5rem);
   font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.tryout-break-next {
+  display: grid;
+  gap: .5rem;
+  padding: 1rem;
+  border: 1px solid #e7e7ef;
+  border-radius: .75rem;
+  background: #f9f9ff;
+}
+
+.tryout-break-next > span {
+  font-size: .875rem;
+  color: #555b6e;
+}
+
+.tryout-break-next h2 {
+  font-size: 1.125rem;
 }
 
 .tryout-break .button {
   min-height: 44px;
+  white-space: normal;
+}
+
+.tryout-expired-notice {
   margin-top: 1rem;
+  padding: 1rem;
+  border-left: 3px solid #954900;
+  border-radius: .5rem;
+  background: #f9f9ff;
+}
+
+.tryout-expired-notice h2 {
+  margin: 0 0 .5rem;
+  font-size: 1.125rem;
+}
+
+.tryout-expired-notice p {
+  margin: 0;
+  line-height: 1.6;
 }

@@ -133,6 +133,39 @@ test("shared grammar-reading timer saves both categories and drops autosave queu
   assert.equal(store.attempt.phase, "break");
 });
 
+test("break expiry adopts server-started session once and leaves answers writable", async () => {
+  const api = backend({ ...initial(), phase: "break", current_session: 1, expires_at: null });
+  const store = new AttemptPersistence(api.state, "/attempts/1", "tryout", api.request);
+  api.state = { ...api.state, phase: "session", expires_at: "2099-01-01T00:00:00Z", server_now: "2026-01-01T00:00:00Z" };
+  const first = store.expire();
+  assert.equal(first, store.expire());
+  assert.equal((await first).phase, "session");
+  assert.equal(api.calls.length, 1);
+  await store.save({ 2: "B" });
+  assert.equal(api.calls.at(-1).path, "/attempts/1/answers");
+});
+
+test("last timeout locks review; concurrent result clicks finalize once without writing answers", async () => {
+  const state = { ...initial(), phase: "session", current_session: 3 };
+  let canonical = { ...state, phase: "review", current_session: 4, expires_at: null };
+  const calls = [];
+  const store = new AttemptPersistence(state, "/attempts/1", "tryout", async (path, options) => {
+    calls.push(path);
+    if (options) {
+      assert.equal(path, "/attempts/1/submit");
+      assert.deepEqual(Object.keys(JSON.parse(options.body)), ["revision"]);
+      canonical = { ...canonical, status: "completed", result: { correct: 1 } };
+    }
+    return { data: canonical };
+  });
+  assert.equal((await store.expire()).phase, "review");
+  await store.save({ 1: "D" });
+  const submit = store.submit({ 1: "D" });
+  assert.equal(submit, store.submit({ 1: "C" }));
+  assert.equal((await submit).status, "completed");
+  assert.deepEqual(calls, ["/attempts/1", "/attempts/1/submit"]);
+});
+
 test("checkpoint and legacy tryout keep global submission and unfiltered answers", async () => {
   for (const domain of ["checkpoint", "tryout"]) {
     const state = initial();

@@ -437,7 +437,7 @@ PHP;
         $attempt = TryOutAttempt::findOrFail($fixture['id']);
         $snapshot = $attempt->grading_snapshot;
         $this->tryOut->update(['session_duration_minutes' => array_fill_keys(array_keys(TryOutService::SESSIONS), 10), 'break_duration_minutes' => 2]);
-        $this->travel(6)->minutes();
+        $this->travel(5)->minutes();
         try {
             $deadline = $attempt->expires_at->copy();
             $attempt = $service->save($this->student, $this->tryOut, $attempt, [$attempt->content_snapshot[0]['id'] => 'A'], 0, true);
@@ -453,6 +453,134 @@ PHP;
             $this->assertSame(['grammar', 'reading'], array_values(array_unique(array_column($service->payload($attempt)['questions'], 'session'))));
         } finally {
             $this->travelBack();
+        }
+    }
+
+    public function test_inactive_try_out_catches_up_from_frozen_deadlines_then_locks_review_until_submit(): void
+    {
+        $fixture = $this->fixture('try_out', false, true);
+        $service = app(TryOutAttemptService::class);
+        $attempt = TryOutAttempt::findOrFail($fixture['id']);
+        $snapshot = $attempt->grading_snapshot;
+        $firstDeadline = $attempt->expires_at->copy();
+        try {
+            $this->travelTo($firstDeadline->copy()->addMinutes(3));
+            // Stale autosave must transition first, never write into the next session.
+            $attempt = $service->save($this->student, $this->tryOut, $attempt, [$attempt->content_snapshot[0]['id'] => 'A'], 0);
+            $this->assertSame('session', $attempt->phase);
+            $this->assertSame(1, $attempt->current_session);
+            $this->assertSame([], $attempt->answers);
+            $this->assertTrue($firstDeadline->copy()->addMinute()->equalTo($attempt->session_started_at));
+            $this->assertTrue($firstDeadline->copy()->addMinutes(11)->equalTo($attempt->expires_at));
+            $this->assertSame(2, $attempt->revision);
+            $this->travelTo($firstDeadline->copy()->addDay());
+            $attempt = $service->refresh($this->student, $this->tryOut, $attempt);
+            $this->assertSame('review', $attempt->phase);
+            $this->assertSame('in_progress', $attempt->status);
+            $this->assertSame(3, $attempt->current_session);
+            $this->assertSame(array_keys(TryOutService::TIMING_SESSIONS), $attempt->completed_sessions);
+            $this->assertSame($snapshot, $attempt->grading_snapshot);
+            $this->assertNull($attempt->expires_at);
+            $this->assertNull($attempt->break_ends_at);
+            $this->assertNull($attempt->completed_at);
+            $this->assertNull($attempt->result_snapshot);
+            $payload = $service->payload($attempt);
+            $this->assertSame('review', $payload['phase']);
+            $this->assertNull($payload['result']);
+            $this->assertCount(4, $payload['questions']);
+            foreach ($payload['questions'] as $question) {
+                foreach (['correct_option', 'explanation', 'point_value'] as $secret) {
+                    $this->assertArrayNotHasKey($secret, $question);
+                }
+            }
+            $revision = $attempt->revision;
+            $this->assertSame($revision, $service->refresh($this->student, $this->tryOut, $attempt)->revision);
+            try {
+                $service->save($this->student, $this->tryOut, $attempt, [$attempt->content_snapshot[0]['id'] => 'B'], $revision);
+                $this->fail('Review answers must stay locked.');
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpException $exception) {
+                $this->assertSame(409, $exception->getStatusCode());
+            }
+            $attempt = $service->submit($this->student, $this->tryOut, $attempt, $revision);
+            $this->assertSame('completed', $attempt->status);
+            $this->assertSame($revision + 1, $attempt->revision);
+            $this->assertSame($attempt->revision, $service->submit($this->student, $this->tryOut, $attempt, $revision)->revision);
+        } finally {
+            $this->travelBack();
+        }
+    }
+
+    public function test_expired_break_next_uses_anchor_and_legacy_four_session_timeout_stays_frozen(): void
+    {
+        $fixture = $this->fixture('try_out', false, true);
+        $service = app(TryOutAttemptService::class);
+        $attempt = TryOutAttempt::findOrFail($fixture['id']);
+        $snapshot = $attempt->grading_snapshot;
+        $snapshot['session_duration_minutes'] = array_fill_keys(array_keys(TryOutService::SESSIONS), 5);
+        $attempt->update(['grading_snapshot' => $snapshot]);
+        $attempt = $service->save($this->student, $this->tryOut, $attempt, [], 0, true);
+        $anchor = $attempt->break_ends_at->copy();
+        try {
+            $this->travelTo($anchor->copy()->addMinute());
+            $attempt = $service->nextSession($this->student, $this->tryOut, $attempt, 0);
+            $this->assertTrue($anchor->equalTo($attempt->session_started_at));
+            $this->assertTrue($anchor->copy()->addMinutes(5)->equalTo($attempt->expires_at));
+            $this->travelTo($anchor->copy()->addDay());
+            // Submit crossing deadline first returns review; second explicit submit finalizes.
+            $attempt = $service->submit($this->student, $this->tryOut, $attempt, 0);
+            $this->assertSame('review', $attempt->phase);
+            $this->assertSame('in_progress', $attempt->status);
+            $this->assertSame(4, $attempt->current_session);
+            $this->assertSame(array_keys(TryOutService::SESSIONS), $attempt->completed_sessions);
+            $this->assertSame($snapshot, $attempt->grading_snapshot);
+            $this->assertNull($service->payload($attempt)['result']);
+        } finally {
+            $this->travelBack();
+        }
+    }
+
+    public function test_final_timeout_refresh_and_submit_race_enters_review_before_idempotent_double_submit(): void
+    {
+        $fixture = $this->fixture('try_out', false, true);
+        $attempt = TryOutAttempt::findOrFail($fixture['id']);
+        $attempt->update(['current_session' => 2, 'completed_sessions' => ['vocabulary_kanji', 'grammar_reading'], 'expires_at' => now()->subSecond()]);
+        foreach ([['refresh', 'submit'], ['submit', 'submit']] as $round => $operations) {
+            $fixture['revision'] = $attempt->revision;
+            $names = ['review_'.bin2hex(random_bytes(8)), 'review_'.bin2hex(random_bytes(8))];
+            $workers = [$this->worker($fixture, $operations[0], $names[0]), $this->worker($fixture, $operations[1], $names[1])];
+            DB::beginTransaction();
+            DB::table('try_out_attempts')->where('id', $fixture['id'])->lockForUpdate()->first();
+            try {
+                foreach ($workers as $worker) $worker->start();
+                $deadline = microtime(true) + 12;
+                do {
+                    DB::select('SELECT pg_stat_clear_snapshot()');
+                    $blocked = DB::select("SELECT application_name FROM pg_stat_activity WHERE datname = current_database() AND application_name IN (?, ?) AND wait_event_type = 'Lock'", $names);
+                    if (count($blocked) === 2) break;
+                    foreach ($workers as $worker) $this->assertTrue($worker->isRunning(), $worker->getErrorOutput());
+                    usleep(20000);
+                } while (microtime(true) < $deadline);
+                $this->assertCount(2, $blocked);
+                DB::commit();
+                foreach ($workers as $worker) {
+                    $this->assertSame(0, $worker->wait(), $worker->getErrorOutput());
+                    $response = json_decode($worker->getOutput(), true, 512, JSON_THROW_ON_ERROR);
+                    $this->assertContains($response['http'], $round === 0 ? [200, 409] : [200]);
+                }
+                $attempt->refresh();
+                $this->assertSame($round === 0 ? 'in_progress' : 'completed', $attempt->status);
+                $this->assertSame($fixture['revision'] + 1, $attempt->revision);
+                $this->assertSame([], $attempt->answers);
+                if ($round === 0) {
+                    $this->assertSame('review', $attempt->phase);
+                    $this->assertNull($attempt->result_snapshot);
+                } else {
+                    $this->assertNotNull($attempt->result_snapshot);
+                }
+            } finally {
+                while (DB::transactionLevel() > 0) DB::rollBack();
+                foreach ($workers as $worker) if ($worker->isRunning()) $worker->stop();
+            }
         }
     }
 

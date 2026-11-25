@@ -173,7 +173,7 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
     return result;
   }
   async function expire() {
-    if ((domain !== "tryout" && domain !== "checkpoint") || !persistence.current || !current) return;
+    if ((domain !== "tryout" && domain !== "checkpoint") || !persistence.current || !current || pending.current) return;
     pending.current = true;
     const result = await run(() => persistence.current!.expire());
     pending.current = false;

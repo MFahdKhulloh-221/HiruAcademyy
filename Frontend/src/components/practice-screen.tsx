@@ -8,6 +8,7 @@ import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { AssessmentContent } from "@/components/assessment-content";
 import { AssessmentPassageContent } from "@/components/assessment-passage-content";
 import { PlacementRichText } from "@/components/placement-rich-text";
+import { QuestionAudioPlayer } from "@/components/question-audio-player";
 import type { LearningCatalog } from "@/components/learning-hooks";
 import type { Membership } from "@/lib/dashboard-mock";
 import { contentMedia } from "@/lib/public-content-api";
@@ -240,7 +241,7 @@ export function PracticeScreen({ membership, resolvedCatalog }: { membership: Me
           {question.passage && <AssessmentPassageContent passage={question.passage} />}
           {!question.passage && question.reading_passage && <PlacementRichText value={question.reading_passage} />}
           {question.instruction && <PlacementRichText value={question.instruction} />}
-          {question.audio_url && <audio controls preload="none" src={contentMedia(question.audio_url, question.audio_url_resolved_url)} aria-label={`Audio soal ${index + 1}`} />}
+          {question.audio_url && (review ? <audio controls preload="none" src={contentMedia(question.audio_url, question.audio_url_resolved_url)} aria-label={`Audio soal ${index + 1}`} /> : <QuestionAudioPlayer key={`${attempt.id}:${question.id}`} endpoint={`/api/assessment-audio/daily-practice/${attempt.id}/${question.id}`} src={contentMedia(question.audio_url, question.audio_url_resolved_url) ?? ""} disabled={completed || expired} />)}
           {question.japanese && <p lang="ja"><ruby>{question.japanese.text}<rt>{question.japanese.reading}</rt></ruby></p>}
           <AssessmentContent content={question}><h3 id={`daily-question-${question.id}`}>{index + 1}. <PlacementRichText value={question.question ?? question.prompt ?? ""} /></h3></AssessmentContent>
           <fieldset className={styles.options} disabled={completed || busy || expired} aria-labelledby={`daily-question-${question.id}`}>

@@ -278,6 +278,13 @@ Route::prefix('api')->middleware(['throttle:api', AuthenticateSession::class])->
     Route::get('testimonials', [PublicContentController::class, 'testimonials']);
     Route::get('blog', [PublicContentController::class, 'blog']);
     Route::get('blog/{slug}', [PublicContentController::class, 'article']);
+    Route::prefix('assessment-audio/{domain}/{attempt}/{question}')
+        ->where(['domain' => 'learning|placement|tryout|checkpoint|daily-practice', 'attempt' => '[1-9][0-9]{0,17}', 'question' => '[1-9][0-9]{0,17}'])
+        ->group(function () {
+            Route::get('', [\App\Http\Controllers\AssessmentAudioController::class, 'status']);
+            Route::post('{action}', [\App\Http\Controllers\AssessmentAudioController::class, 'mutate'])->where('action', 'reserve|commit|release');
+        });
+
     Route::get('placement', [PublicPlacementController::class, 'index']);
     Route::post('placement/attempts', [PublicPlacementController::class, 'start'])->block();
     Route::get('placement/attempts/current', [PublicPlacementController::class, 'current'])->middleware(['auth:sanctum', 'active', 'role:student']);

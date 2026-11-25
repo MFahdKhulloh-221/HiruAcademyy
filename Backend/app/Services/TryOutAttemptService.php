@@ -85,13 +85,22 @@ class TryOutAttemptService
         return $this->assessmentModel === TryOut::class && ($attempt->grading_snapshot['timing_mode'] ?? null) === 'per_session';
     }
 
-    private function finishActiveSession(User $user, Model $tryOut, Model $attempt, $endedAt): Model
+    private function finishActiveSession(User $user, Model $tryOut, Model $attempt, $endedAt, bool $timedOut = false): Model
     {
         $sessions = array_keys($this->timingSessions($attempt));
         $completed = $attempt->completed_sessions;
         $completed[] = $sessions[$attempt->current_session];
         if (count($completed) === count($sessions)) {
-            return $this->finalize($user, $tryOut, $attempt);
+            if (! $timedOut) {
+                return $this->finalize($user, $tryOut, $attempt);
+            }
+            $attempt->update([
+                'completed_sessions' => $completed, 'current_session' => count($sessions),
+                'phase' => 'review', 'expires_at' => null, 'break_ends_at' => null,
+                'revision' => $attempt->revision + 1,
+            ]);
+
+            return $attempt;
         }
         $attempt->update([
             'completed_sessions' => $completed, 'current_session' => count($completed),
@@ -103,11 +112,33 @@ class TryOutAttemptService
         return $attempt;
     }
 
-    private function expire(User $user, Model $tryOut, Model $attempt): Model
+    private function catchUp(User $user, Model $tryOut, Model $attempt): Model
     {
-        return $this->perSession($attempt)
-            ? $this->finishActiveSession($user, $tryOut, $attempt, $attempt->expires_at)
-            : $this->finalize($user, $tryOut, $attempt);
+        if (! $this->perSession($attempt)) {
+            return $this->expired($attempt) ? $this->finalize($user, $tryOut, $attempt) : $attempt;
+        }
+        // Each frozen session can expire once and each intervening break can end once.
+        for ($step = 0, $limit = count($this->timingSessions($attempt)) * 2; $step < $limit && $attempt->status === 'in_progress'; $step++) {
+            if ($attempt->phase === 'session' && $this->expired($attempt)) {
+                $this->finishActiveSession($user, $tryOut, $attempt, $attempt->expires_at, true);
+            } elseif ($attempt->phase === 'break' && $attempt->break_ends_at !== null && now()->greaterThanOrEqualTo($attempt->break_ends_at)) {
+                $this->beginSession($attempt, $attempt->break_ends_at->copy());
+            } else {
+                break;
+            }
+        }
+
+        return $attempt;
+    }
+
+    private function beginSession(Model $attempt, $startedAt): void
+    {
+        $session = array_keys($this->timingSessions($attempt))[$attempt->current_session];
+        $attempt->update([
+            'phase' => 'session', 'session_started_at' => $startedAt, 'break_ends_at' => null,
+            'expires_at' => $startedAt->copy()->addMinutes($attempt->grading_snapshot['session_duration_minutes'][$session]),
+            'revision' => $attempt->revision + 1,
+        ]);
     }
 
     public function nextSession(User $user, Model $tryOut, Model $attempt, int $revision): Model
@@ -118,18 +149,14 @@ class TryOutAttemptService
             $this->authorize($user, $tryOut, $locked);
             abort_if($locked->abandoned_at !== null, 409, 'Try out attempt was abandoned.');
             abort_unless($this->perSession($locked) && $locked->status === 'in_progress', 409);
-            if ($this->expired($locked)) {
-                return $this->expire($user, $tryOut, $locked);
+            $beforeCatchUp = $locked->revision;
+            $locked = $this->catchUp($user, $tryOut, $locked);
+            if ($locked->revision !== $beforeCatchUp) {
+                return $locked;
             }
             abort_unless($locked->revision === $revision, 409, 'Stale answer revision.');
             abort_unless($locked->phase === 'break' && $locked->break_ends_at !== null, 409, 'Attempt is not on a break.');
-            $startedAt = now();
-            $session = array_keys($this->timingSessions($locked))[$locked->current_session];
-            $locked->update([
-                'phase' => 'session', 'session_started_at' => $startedAt, 'break_ends_at' => null,
-                'expires_at' => $startedAt->copy()->addMinutes($locked->grading_snapshot['session_duration_minutes'][$session]),
-                'revision' => $locked->revision + 1,
-            ]);
+            $this->beginSession($locked, now());
 
             return $locked;
         }, 3);
@@ -176,13 +203,15 @@ class TryOutAttemptService
             $locked = $this->attemptModel::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
             $this->authorize($user, $tryOut, $locked);
             abort_if($locked->abandoned_at !== null, 409, 'Try out attempt was abandoned.');
-            if ($this->expired($locked)) {
-                return $this->expire($user, $tryOut, $locked);
+            $beforeCatchUp = $locked->revision;
+            $locked = $this->catchUp($user, $tryOut, $locked);
+            if ($locked->revision !== $beforeCatchUp) {
+                return $locked;
             }
             abort_unless($locked->status === 'in_progress', 409, 'Try out attempt is already finished.');
             abort_unless($locked->revision === $revision, 409, 'Stale answer revision.');
             if ($this->perSession($locked)) {
-                abort_unless($locked->phase === 'session', 409, 'Answers are locked during break.');
+                abort_unless($locked->phase === 'session', 409, 'Answers are locked during break or review.');
             }
             $activeQuestions = $this->perSession($locked)
                 ? array_filter($locked->content_snapshot, fn ($question) => in_array($question['session'], $this->activeTimingCategories($locked), true))
@@ -228,10 +257,15 @@ class TryOutAttemptService
                 return $locked;
             }
             if ($this->perSession($locked)) {
-                if ($this->expired($locked)) {
-                    return $this->expire($user, $tryOut, $locked);
+                $beforeCatchUp = $locked->revision;
+                $locked = $this->catchUp($user, $tryOut, $locked);
+                if ($locked->revision !== $beforeCatchUp) {
+                    return $locked;
                 }
                 abort_unless($locked->revision === $revision, 409, 'Stale answer revision.');
+                if ($locked->phase === 'review') {
+                    return $this->finalize($user, $tryOut, $locked);
+                }
                 abort_unless($locked->phase === 'session' && $locked->current_session === count($this->timingSessions($locked)) - 1, 409, 'Finish each session before submitting.');
 
                 return $this->finishActiveSession($user, $tryOut, $locked, now());
@@ -257,7 +291,7 @@ class TryOutAttemptService
             $this->authorize($user, $tryOut, $locked);
             abort_if($locked->abandoned_at !== null, 409, 'Try out attempt was abandoned.');
 
-            return $this->expired($locked) ? $this->expire($user, $tryOut, $locked) : $locked;
+            return $this->catchUp($user, $tryOut, $locked);
         }, 3);
     }
 
@@ -342,7 +376,7 @@ class TryOutAttemptService
         abort_if($review && $attempt->status !== 'completed', 403);
         $questions = [];
         foreach ($attempt->content_snapshot as $question) {
-            if ($this->perSession($attempt) && $attempt->status === 'in_progress'
+            if ($this->perSession($attempt) && $attempt->status === 'in_progress' && $attempt->phase !== 'review'
                 && ($attempt->phase !== 'session' || ! in_array($question['session'], $this->activeTimingCategories($attempt), true))) {
                 continue;
             }
