@@ -23,6 +23,31 @@ class TryOutService
 
     public const SESSIONS = ['vocabulary_kanji' => 'Kosakata & Kanji', 'grammar' => 'Tata Bahasa', 'reading' => 'Reading (Dokkai)', 'audio' => 'Audio (Choukai)'];
 
+    public const TIMING_SESSIONS = ['vocabulary_kanji' => 'Kosakata & Kanji', 'grammar_reading' => 'Tata Bahasa & Reading (Dokkai)', 'audio' => 'Audio (Choukai)'];
+    public const TIMING_CATEGORIES = ['vocabulary_kanji' => ['vocabulary_kanji'], 'grammar_reading' => ['grammar', 'reading'], 'audio' => ['audio']];
+
+    public static function normalizeTiming(array $durations): array
+    {
+        $keys = array_keys($durations);
+        sort($keys);
+        $legacy = array_keys(self::SESSIONS);
+        $current = array_keys(self::TIMING_SESSIONS);
+        sort($legacy);
+        sort($current);
+        if (($keys !== $legacy && $keys !== $current) || array_filter($durations, fn ($value) => is_bool($value) || filter_var($value, FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 2147483647]]) === false)) {
+            throw ValidationException::withMessages(['session_duration_minutes' => 'Isi durasi ketiga sesi secara lengkap dengan bilangan bulat positif.']);
+        }
+        if (array_key_exists('grammar', $durations)) {
+            $combined = (int) $durations['grammar'] + (int) $durations['reading'];
+            if ($combined > 2147483647) {
+                throw ValidationException::withMessages(['session_duration_minutes' => 'Total durasi Tata Bahasa dan Reading tidak boleh melebihi 2147483647 menit.']);
+            }
+            $durations = ['vocabulary_kanji' => $durations['vocabulary_kanji'], 'grammar_reading' => $combined, 'audio' => $durations['audio']];
+        }
+
+        return array_map('intval', array_replace(array_fill_keys(array_keys(self::TIMING_SESSIONS), 0), $durations));
+    }
+
     public function validateInput(array $input, array $rules): array
     {
         $unknown = array_diff(array_keys($input), array_filter(array_keys($rules), fn ($key) => ! str_contains($key, '.')));
@@ -66,6 +91,9 @@ class TryOutService
             ] + ($this->supportsTryOutContent() ? $this->timingRules(false) : []));
             $resequence = array_key_exists('sort_order', $input) || ! $model->exists;
             $targetOrder = array_key_exists('sort_order', $data) ? (int) $data['sort_order'] : (int) ($model->sort_order ?? 1);
+            if (isset($data['session_duration_minutes'])) {
+                $data['session_duration_minutes'] = self::normalizeTiming($data['session_duration_minutes']);
+            }
             $model->fill($data);
             $model->max_score ??= 180;
             $model->sort_order = max(1, (int) ($model->sort_order ?? 1));
@@ -339,7 +367,20 @@ class TryOutService
         }];
 
         return [
-            'session_duration_minutes' => [$presence, 'array:'.implode(',', array_keys(self::SESSIONS)), 'size:4'],
+            'session_duration_minutes' => [$presence, 'array', function ($attribute, $value, $fail) {
+                if (! is_array($value)) {
+                    return;
+                }
+                $keys = array_keys($value);
+                sort($keys);
+                $legacy = array_keys(self::SESSIONS);
+                $current = array_keys(self::TIMING_SESSIONS);
+                sort($legacy);
+                sort($current);
+                if ($keys !== $legacy && $keys !== $current) {
+                    $fail('Isi durasi ketiga sesi secara lengkap.');
+                }
+            }],
             'session_duration_minutes.*' => $positive,
             'break_duration_minutes' => array_merge([$presence], $positive),
         ];
@@ -418,7 +459,7 @@ class TryOutService
 
     public function payload(Model $tryOut): array
     {
-        return ['access_type' => $tryOut->access_type ?? 'membership', 'id' => $tryOut->id, 'program_id' => $tryOut->program_id, 'level' => strtoupper($tryOut->program->code), 'title' => $tryOut->title, 'status' => $tryOut->status, 'max_score' => $tryOut->max_score, 'sort_order' => $tryOut->sort_order, 'session_passing_scores' => $tryOut->session_passing_scores, 'section_passing_score' => $tryOut->session_passing_scores === null ? 19 : null, 'section_passing_score_basis' => $tryOut->session_passing_scores === null ? 'correct_answers' : 'points', 'total_passing_score' => $tryOut->total_passing_score, 'duration_minutes' => $tryOut->duration_minutes, 'question_count' => $tryOut->questions()->count(), 'published_question_count' => $tryOut->questions()->where('status', 'published')->count(), 'sessions' => self::SESSIONS] + ($this->supportsTryOutContent() ? ['timing_mode' => 'per_session', 'session_duration_minutes' => $tryOut->session_duration_minutes, 'break_duration_minutes' => $tryOut->break_duration_minutes] : []);
+        return ['access_type' => $tryOut->access_type ?? 'membership', 'id' => $tryOut->id, 'program_id' => $tryOut->program_id, 'level' => strtoupper($tryOut->program->code), 'title' => $tryOut->title, 'status' => $tryOut->status, 'max_score' => $tryOut->max_score, 'sort_order' => $tryOut->sort_order, 'session_passing_scores' => $tryOut->session_passing_scores, 'section_passing_score' => $tryOut->session_passing_scores === null ? 19 : null, 'section_passing_score_basis' => $tryOut->session_passing_scores === null ? 'correct_answers' : 'points', 'total_passing_score' => $tryOut->total_passing_score, 'duration_minutes' => $tryOut->duration_minutes, 'question_count' => $tryOut->questions()->count(), 'published_question_count' => $tryOut->questions()->where('status', 'published')->count(), 'sessions' => self::SESSIONS] + ($this->supportsTryOutContent() ? ['timing_mode' => 'per_session', 'timing_sessions' => self::TIMING_SESSIONS, 'session_duration_minutes' => $tryOut->session_duration_minutes, 'break_duration_minutes' => $tryOut->break_duration_minutes] : []);
     }
 
     public function studioRevision(Model $tryOut): string

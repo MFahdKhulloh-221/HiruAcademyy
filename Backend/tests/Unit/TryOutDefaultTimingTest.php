@@ -29,7 +29,7 @@ final class TryOutDefaultTimingTest extends TestCase
     public function test_missing_session_timing_defaults_to_thirty_minutes_and_sets_server_deadline(): void
     {
         $tryOut = new TryOut;
-        $expected = array_fill_keys(array_keys(TryOutService::SESSIONS), 30);
+        $expected = ['vocabulary_kanji' => 30, 'grammar_reading' => 60, 'audio' => 30];
         $this->assertSame($expected, $tryOut->session_duration_minutes);
         $tryOut->session_duration_minutes = null;
         $this->assertSame($expected, $tryOut->session_duration_minutes);
@@ -41,8 +41,11 @@ final class TryOutDefaultTimingTest extends TestCase
 
         $custom = array_fill_keys(array_keys(TryOutService::SESSIONS), 45);
         $tryOut->session_duration_minutes = $custom;
-        $this->assertSame($custom, $tryOut->session_duration_minutes);
-        $this->assertSame($custom, $tryOut->only(['session_duration_minutes'])['session_duration_minutes']);
+        $normalized = ['vocabulary_kanji' => 45, 'grammar_reading' => 90, 'audio' => 45];
+        $this->assertSame($normalized, $tryOut->session_duration_minutes);
+        $this->assertSame($normalized, $tryOut->only(['session_duration_minutes'])['session_duration_minutes']);
+        $tryOut->session_duration_minutes = $normalized;
+        $this->assertSame($normalized, $tryOut->session_duration_minutes);
         $this->assertTrue($startedAt->copy()->addMinutes(45)->equalTo($deadline->invoke($service, $tryOut, $startedAt)));
     }
 }

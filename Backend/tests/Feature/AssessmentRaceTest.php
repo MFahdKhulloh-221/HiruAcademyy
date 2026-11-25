@@ -336,11 +336,11 @@ PHP;
                 $this->assertContains($codes, $operation === 'timeout' ? [[200, 200], [200, 409]] : [[200, 409]]);
                 $attempt = TryOutAttempt::findOrFail($fixture['id']);
                 $this->assertSame($operation === 'timeout' ? 2 : 1, $attempt->current_session);
-                $this->assertSame($operation === 'timeout' ? ['vocabulary_kanji', 'grammar'] : ['vocabulary_kanji'], $attempt->completed_sessions);
+                $this->assertSame($operation === 'timeout' ? ['vocabulary_kanji', 'grammar_reading'] : ['vocabulary_kanji'], $attempt->completed_sessions);
                 $this->assertSame($fixture['revision'] + 1, $attempt->revision);
                 $this->assertSame($operation === 'next-session' ? 'session' : 'break', $attempt->phase);
                 if ($operation === 'next-session') {
-                    $this->assertSame(300, (int) $attempt->session_started_at->diffInSeconds($attempt->expires_at));
+                    $this->assertSame(600, (int) $attempt->session_started_at->diffInSeconds($attempt->expires_at));
                 }
             } finally {
                 while (DB::transactionLevel() > 0) DB::rollBack();
@@ -349,20 +349,20 @@ PHP;
         }
     }
 
-    public function test_all_four_timed_sessions_finalize_with_same_score_and_no_answer_key_leak(): void
+    public function test_three_timed_sessions_finalize_four_scoring_categories_without_answer_key_leak(): void
     {
         $fixture = $this->fixture('try_out', false, true);
         $service = app(TryOutAttemptService::class);
         $attempt = TryOutAttempt::findOrFail($fixture['id']);
         try {
-            foreach (array_keys(TryOutService::SESSIONS) as $index => $session) {
+            foreach (TryOutService::TIMING_CATEGORIES as $session => $categories) {
                 $payload = $service->payload($attempt);
-                $this->assertSame([$session], array_values(array_unique(array_column($payload['questions'], 'session'))));
+                $this->assertSame($categories, array_values(array_unique(array_column($payload['questions'], 'session'))));
                 $this->assertArrayNotHasKey('correct_option', $payload['questions'][0]);
                 $this->assertArrayNotHasKey('explanation', $payload['questions'][0]);
                 $answers = array_fill_keys(array_column($payload['questions'], 'id'), 'B');
                 $attempt = $service->save($this->student, $this->tryOut, $attempt, $answers, $attempt->revision, true);
-                if ($index < 3) {
+                if ($session !== 'audio') {
                     $this->assertSame('break', $attempt->phase);
                     $this->assertNull($attempt->expires_at);
                     $this->assertSame([], $service->payload($attempt)['questions']);
@@ -372,12 +372,38 @@ PHP;
             }
             $this->assertSame('completed', $attempt->status);
             $this->assertSame(180, $attempt->result_snapshot['earned']);
-            $this->assertSame(array_keys(TryOutService::SESSIONS), $attempt->completed_sessions);
+            $this->assertSame(array_keys(TryOutService::TIMING_SESSIONS), $attempt->completed_sessions);
+            $this->assertSame(3, $attempt->current_session);
+            $this->assertCount(4, $attempt->result_snapshot['sessions']);
             $this->assertCount(4, $service->payload($attempt, true)['questions']);
             $this->assertSame($attempt->revision, $service->submit($this->student, $this->tryOut, $attempt, 0)->revision);
         } finally {
             $this->travelBack();
         }
+    }
+
+    public function test_legacy_four_session_snapshot_stays_frozen_until_completion(): void
+    {
+        $fixture = $this->fixture('try_out', false, true);
+        $service = app(TryOutAttemptService::class);
+        $attempt = TryOutAttempt::findOrFail($fixture['id']);
+        $snapshot = $attempt->grading_snapshot;
+        $snapshot['session_duration_minutes'] = array_fill_keys(array_keys(TryOutService::SESSIONS), 5);
+        $attempt->update(['grading_snapshot' => $snapshot]);
+        foreach (array_keys(TryOutService::SESSIONS) as $session) {
+            $payload = $service->payload($attempt);
+            $this->assertSame([$session], array_values(array_unique(array_column($payload['questions'], 'session'))));
+            $attempt = $service->save($this->student, $this->tryOut, $attempt, array_fill_keys(array_column($payload['questions'], 'id'), 'B'), $attempt->revision, true);
+            if ($session !== 'audio') {
+                $attempt = $service->nextSession($this->student, $this->tryOut, $attempt, $attempt->revision);
+                $this->assertSame(300, (int) $attempt->session_started_at->diffInSeconds($attempt->expires_at));
+            }
+        }
+        $this->assertSame('completed', $attempt->status);
+        $this->assertSame($snapshot, $attempt->grading_snapshot);
+        $this->assertSame(array_keys(TryOutService::SESSIONS), $attempt->completed_sessions);
+        $this->assertSame(4, $attempt->current_session);
+        $this->assertSame(180, $attempt->result_snapshot['earned']);
     }
 
     public function test_per_session_rejects_future_answers_and_allows_skipping_break_and_default_timing(): void
@@ -397,7 +423,7 @@ PHP;
         $this->assertSame('session', $attempt->phase);
         $this->assertNull($attempt->break_ends_at);
         $this->assertSame(1, $attempt->current_session);
-        $this->assertSame(300, (int) $attempt->session_started_at->diffInSeconds($attempt->expires_at));
+        $this->assertSame(600, (int) $attempt->session_started_at->diffInSeconds($attempt->expires_at));
         $this->tryOut->update(['session_duration_minutes' => null, 'break_duration_minutes' => null]);
         $defaultAttempt = $service->start($this->student, $this->tryOut);
         $this->assertSame(1800, (int) $defaultAttempt->session_started_at->diffInSeconds($defaultAttempt->expires_at));
@@ -423,8 +449,8 @@ PHP;
             $this->assertSame([], $service->payload($attempt)['questions']);
             $this->assertSame('per_session', $service->history($this->student, $this->tryOut)['attempts'][0]['timing_mode']);
             $attempt = $service->nextSession($this->student, $this->tryOut, $attempt, $attempt->revision);
-            $this->assertSame(300, (int) $attempt->session_started_at->diffInSeconds($attempt->expires_at));
-            $this->assertSame(['grammar'], array_values(array_unique(array_column($service->payload($attempt)['questions'], 'session'))));
+            $this->assertSame(600, (int) $attempt->session_started_at->diffInSeconds($attempt->expires_at));
+            $this->assertSame(['grammar', 'reading'], array_values(array_unique(array_column($service->payload($attempt)['questions'], 'session'))));
         } finally {
             $this->travelBack();
         }

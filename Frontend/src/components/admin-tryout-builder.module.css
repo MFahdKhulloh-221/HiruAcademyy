@@ -19,6 +19,23 @@
 .summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; max-width: 360px; white-space: normal; }
 .packageFields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .packageFields > fieldset { grid-column: 1 / -1; min-width: 0; }
+.timingFields { display:grid; gap:16px; padding:16px; border:1px solid #dfe2e8; border-radius:12px; background:#f9f9ff; }
+.timingFields legend { padding:0 6px; font-weight:800; }
+.timingFields p { margin:0; color:#526078; font-size:13px; }
+.timingCards { display:grid; grid-template-columns:repeat(3, minmax(0, 1fr)); gap:12px; }
+.timingCard { display:grid; align-content:start; gap:8px; min-width:0; padding:14px; border:1px solid #dfe2e8; border-radius:10px; background:#fff; }
+.timingCard strong { min-height:2.8em; }
+.timingFields input { width:100%; min-height:44px; }
+.timingBreak { display:grid; grid-template-columns:minmax(180px, 1fr) 2fr; align-items:center; gap:12px; }
+.timingSummary { display:grid; gap:8px; margin:0; padding-top:12px; border-top:1px solid #dfe2e8; }
+.timingSummary > div { display:flex; flex-wrap:wrap; justify-content:space-between; gap:4px 16px; }
+.timingSummary dt { min-width:0; overflow-wrap:anywhere; }
+.timingSummary dd { margin:0; text-align:right; white-space:nowrap; }
+.timingSummary > div:last-child { font-weight:800; color:#172033; }
+@media (max-width: 1023px) {
+  .timingCards, .timingBreak { grid-template-columns:minmax(0, 1fr); }
+  .timingCard strong { min-height:0; }
+}
 @media (max-width: 639px) {
   .filters { flex-basis: 100%; flex-direction: column; align-items: stretch; }
   .filters label { flex-basis: auto; width: 100%; }

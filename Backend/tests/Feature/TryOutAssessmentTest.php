@@ -232,6 +232,21 @@ class TryOutAssessmentTest extends TestCase
         return $this->postJson($this->base.'/attempts/'.$attempt['id'].'/submit', ['revision' => $attempt['revision']])->assertOk()->json('data');
     }
 
+    public function test_timing_accepts_legacy_and_grouped_values_and_rejects_invalid_input(): void
+    {
+        $this->actingAs($this->admin);
+        $grouped = ['vocabulary_kanji' => 5, 'grammar_reading' => 10, 'audio' => 5];
+        $this->patchJson($this->adminBase, ['session_duration_minutes' => array_fill_keys(array_keys(TryOutService::SESSIONS), 5)])
+            ->assertOk()->assertJsonPath('data.session_duration_minutes', $grouped)
+            ->assertJsonPath('data.sessions', TryOutService::SESSIONS)
+            ->assertJsonPath('data.timing_sessions', TryOutService::TIMING_SESSIONS);
+        $this->patchJson($this->adminBase, ['session_duration_minutes' => $grouped])->assertOk();
+        foreach ([[], ['grammar_reading' => 5], $grouped + ['grammar' => 5], array_replace($grouped, ['audio' => true]), array_replace($grouped, ['audio' => 1.5]), array_replace($grouped, ['audio' => 2147483648]), ['vocabulary_kanji' => 5, 'grammar' => 2147483647, 'reading' => 1, 'audio' => 5]] as $invalid) {
+            $this->patchJson($this->adminBase, ['session_duration_minutes' => $invalid])->assertUnprocessable();
+        }
+        $this->assertSame($grouped, $this->tryOut->fresh()->session_duration_minutes);
+    }
+
     public function test_builder_configuration_round_trip_and_attempt_snapshot(): void
     {
         $this->actingAs($this->admin);

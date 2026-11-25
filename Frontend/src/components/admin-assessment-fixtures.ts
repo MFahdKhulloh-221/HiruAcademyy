@@ -1,4 +1,4 @@
-import { assessmentSessions } from "@/lib/assessment-attempt";
+import { assessmentSessions, tryOutTimingSessions } from "@/lib/assessment-attempt";
 import type { TryOutSessionCode } from "@/lib/admin-assessment-store";
 import type { AssessmentImage, AssessmentPassageBlock } from "@/lib/assessment-image";
 import { passageBlocksError } from "@/lib/assessment-passage-blocks";
@@ -79,14 +79,14 @@ function positiveInteger(value: string) {
   return /^\d+$/.test(value) && Number.isSafeInteger(Number(value)) && Number(value) > 0;
 }
 export function tryOutTimingError(item: Pick<AdminAssessment, "sessionDurationMinutes" | "breakDurationMinutes">) {
-  if (assessmentSessions.some(session => !positiveInteger(item.sessionDurationMinutes?.[session] ?? "") || Number(item.sessionDurationMinutes?.[session]) > 2147483647)) return "Isi durasi setiap sesi dengan bilangan bulat positif (menit).";
+  if (tryOutTimingSessions.some(session => !positiveInteger(item.sessionDurationMinutes?.[session] ?? "") || Number(item.sessionDurationMinutes?.[session]) > 2147483647)) return "Isi durasi setiap sesi dengan bilangan bulat positif (menit).";
   if (!positiveInteger(item.breakDurationMinutes ?? "") || Number(item.breakDurationMinutes) > 2147483647) return "Isi waktu istirahat dengan bilangan bulat positif (menit).";
   return "";
 }
 export function tryOutTimingTotals(item: Pick<AdminAssessment, "sessionDurationMinutes" | "breakDurationMinutes">) {
   if (tryOutTimingError(item)) return null;
-  const work = assessmentSessions.reduce((sum, session) => sum + Number(item.sessionDurationMinutes![session]), 0);
-  const rest = Number(item.breakDurationMinutes) * 3;
+  const work = tryOutTimingSessions.reduce((sum, session) => sum + Number(item.sessionDurationMinutes![session]), 0);
+  const rest = Number(item.breakDurationMinutes) * (tryOutTimingSessions.length - 1);
   return { work, rest, total: work + rest };
 }
 export function assessmentImageError(content: AssessmentImage) {

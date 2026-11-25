@@ -20,8 +20,8 @@ class TryOut extends Model
     protected function sessionDurationMinutes(): Attribute
     {
         return Attribute::make(get: fn ($value) => $value === null
-            ? array_fill_keys(array_keys(TryOutService::SESSIONS), 30)
-            : $this->fromJson($value));
+            ? ['vocabulary_kanji' => 30, 'grammar_reading' => 60, 'audio' => 30]
+            : TryOutService::normalizeTiming($this->fromJson($value)));
     }
 
     protected function breakDurationMinutes(): Attribute

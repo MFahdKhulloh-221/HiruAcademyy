@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
 import { apiRequest, ApiError } from "@/lib/api";
-import { assessmentSessions, AttemptPersistence, readAttempt, startAttempt, type AttemptDomain, type ServerAttempt } from "@/lib/assessment-attempt";
+import { attemptTimingGroups, AttemptPersistence, readAttempt, startAttempt, type AttemptDomain, type ServerAttempt } from "@/lib/assessment-attempt";
 
 export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?: string, resumeAudio = false, resultOnly = false) {
   const { user, loading } = useAuth();
@@ -122,7 +122,7 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
   function answer(id: number, option: string) {
     if (!current?.attempt || current.attempt.status === "completed" || !persistence.current) return;
     if (pending.current) return;
-    if (current.attempt.timing_mode === "per_session" && (current.attempt.phase !== "session" || current.attempt.questions.find(question => question.id === id)?.session !== assessmentSessions[current.attempt.current_session ?? 0])) return;
+    if (current.attempt.timing_mode === "per_session" && (current.attempt.phase !== "session" || !attemptTimingGroups(current.attempt)[current.attempt.current_session ?? 0]?.categories.some(category => current.attempt!.questions.find(question => question.id === id)?.session === category))) return;
     const answers = { ...latestAnswers.current, [id]: option };
     latestAnswers.current = answers;
     const version = generation.current;

@@ -31,7 +31,7 @@ import "./assessment-layout.css";
 import "./answer-review.css";
 import "./tryout-timing.css";
 
-import { assessmentSessions, assessmentSessionLabels, tryOutRemaining, type AttemptDomain } from "@/lib/assessment-attempt";
+import { assessmentSessions, assessmentSessionLabels, attemptTimingGroups, normalizeTryOutDurations, tryOutTimingSessions, tryOutTimingSessionLabels, tryOutRemaining, type AttemptDomain } from "@/lib/assessment-attempt";
 
 
 
@@ -171,13 +171,17 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
   const perSession = domain === "tryout" && attempt?.timing_mode === "per_session";
   const sessionLocked = perSession && attempt?.status === "in_progress";
   const onBreak = sessionLocked && attempt?.phase === "break";
-  const activeSession = assessmentSessions[attempt?.current_session ?? 0];
-  const activeSessions = sessionLocked ? assessmentSessions.filter(session => session === activeSession) : domain === "checkpoint" ? attempt?.active_sessions ?? assessmentSessions : assessmentSessions;
+  const timingGroups = attempt ? attemptTimingGroups(attempt) : [];
+  const activeGroup = timingGroups[attempt?.current_session ?? 0];
+  const activeSession = activeGroup?.key ?? assessmentSessions[0];
+  const activeSessions = sessionLocked ? activeGroup?.categories ?? [] : domain === "checkpoint" ? attempt?.active_sessions ?? assessmentSessions : assessmentSessions;
+  const combinedSession = sessionLocked && activeSession === "grammar_reading";
   const prestartPerSession = domain === "tryout" && info.data?.timing_mode === "per_session";
-  const sessionDurations = info.data?.session_duration_minutes;
+  const sessionDurations = normalizeTryOutDurations(info.data?.session_duration_minutes);
+  const prestartSessions = prestartPerSession ? tryOutTimingSessions.map((code, index) => [code, tryOutTimingSessionLabels[index]] as const) : Object.entries(info.data?.sessions ?? {});
   const totalMinutes = prestartPerSession
-    ? assessmentSessions.every(session => typeof sessionDurations?.[session] === "number") && typeof info.data?.break_duration_minutes === "number"
-      ? assessmentSessions.reduce((sum, session) => sum + sessionDurations![session], 0) + info.data.break_duration_minutes * (assessmentSessions.length - 1)
+    ? tryOutTimingSessions.every(session => typeof sessionDurations[session] === "number") && typeof info.data?.break_duration_minutes === "number"
+      ? tryOutTimingSessions.reduce((sum, session) => sum + sessionDurations[session]!, 0) + info.data.break_duration_minutes * (tryOutTimingSessions.length - 1)
       : null
     : info.data?.duration_minutes;
 
@@ -191,7 +195,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
   const isReading = domain === "learning" && "kind" in startBody && startBody.kind === "reading";
 
-  const questions = sessionLocked ? onBreak ? [] : (attempt?.questions ?? []).filter(item => item.session === activeSession) : attempt?.questions ?? [];
+  const questions = sessionLocked ? onBreak ? [] : (attempt?.questions ?? []).filter(item => activeSessions.some(category => item.session === category)) : attempt?.questions ?? [];
   const index = Math.min(requestedIndex, Math.max(questions.length - 1, 0));
 
   const question = questions[Math.min(index, Math.max(questions.length - 1, 0))];
@@ -200,7 +204,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
   const sessionLabel = assessmentSessionLabels[sessionIndex];
 
-  const sessionQuestions = tryoutExperience ? questions.filter(item => item.session === question?.session) : questions;
+  const sessionQuestions = tryoutExperience && !combinedSession ? questions.filter(item => item.session === question?.session) : questions;
 
   function navigateTryOut(position: number, check = false) {
 
@@ -282,7 +286,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
       if (tryOutRemaining(synced, performance.now()) === 0) { await flow.expire(); return; }
 
-      const unanswered = synced.questions.filter(item => (!sessionLocked || item.session === activeSession) && !synced.answers[item.id]).length;
+      const unanswered = synced.questions.filter(item => (!sessionLocked || activeSessions.some(category => item.session === category)) && !synced.answers[item.id]).length;
 
       setPendingUnanswered(unanswered);
 
@@ -383,7 +387,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
   if (resultOnly && !attempt) return <section className={className}>{flow.error ? <p role="alert">{flow.error}</p> : <p role="status">Hasil tidak tersedia.</p>}</section>;
 
-  if (!attempt && tryoutExperience) return <section className="tryout-prestart">{examDialog}<div className="tryout-prestart-layout"><div className="tryout-prestart-main"><section className="tryout-prestart-info"><p className="dash-kicker">INFORMASI SIMULASI</p><h1>{title}</h1><div className="tryout-info-tiles"><div><FiClock aria-hidden="true" /><strong>{totalMinutes == null ? "—" : `${totalMinutes} Menit`}</strong><span>{prestartPerSession ? "Total perkiraan waktu" : "Total Waktu"}</span></div><div><FiList aria-hidden="true" /><strong>{info.data ? Object.keys(info.data.sessions).length : "—"}</strong><span>Pembagian</span></div><div><FiBarChart2 aria-hidden="true" /><strong>{info.data?.max_score ?? "—"}</strong><span>Skor Maksimal</span></div><div><FiCheckSquare aria-hidden="true" /><strong>Review Mode</strong><span>Tersedia: —</span></div></div></section><section className="assessment-warning"><h2><FiAlertTriangle aria-hidden="true" />Instruksi & Ketentuan Ujian</h2><p>{prestartPerSession ? `Setiap sesi memiliki batas waktu sendiri. Total waktu mencakup ${assessmentSessions.length - 1} jeda${info.data?.break_duration_minutes == null ? "" : `, masing-masing ${info.data.break_duration_minutes} menit`}. Timer sesi berikutnya hanya dimulai setelah kamu menekan Mulai Sesi Berikutnya. Sesi yang selesai tidak dapat dibuka kembali selama ujian.` : info.data?.duration_minutes != null ? `Pengerjaan dibatasi ${info.data.duration_minutes} menit sesuai durasi yang ditampilkan. Waktu berjalan sejak ${examName} dimulai.` : "Ikuti informasi waktu yang ditampilkan saat pengerjaan."}</p><p>Pastikan koneksi internet stabil. Periksa jawaban sebelum menyelesaikan kuis. Setelah submit final, jawaban tidak dapat diubah; gunakan Review Jawaban pada hasil untuk memeriksa jawaban.</p></section></div><section className="tryout-sections"><h2>Materi Sesi</h2>{Object.entries(info.data?.sessions ?? {}).map(([code, label]) => { const Icon = code === "audio" ? FiHeadphones : code === "reading" ? FiBookOpen : code === "grammar" ? FiFileText : FiList; return <div key={code}><Icon aria-hidden="true" /><strong><PlacementRichText value={label} /></strong>{prestartPerSession && <span className="tryout-session-duration">{sessionDurations?.[code] == null ? "Durasi belum tersedia" : `${sessionDurations[code]} menit`}</span>}</div>; })}</section><div className="tryout-prestart-action"><p className="exam-start-notice">Dengan menekan Mulai, kamu menyatakan telah membaca dan memahami instruksi serta ketentuan ujian di atas.</p>{startActions?.(flow.busy)}{flow.error && <p role="alert">{flow.error}</p>}<button className="button button-primary" type="button" disabled={flow.busy} onClick={requestStart}>Mulai {examName}</button>{onBack && <button className="button button-secondary" type="button" disabled={flow.busy} onClick={onBack}>Kembali</button>}</div>{info.error && <p className="tryout-prestart-error" role="alert">{info.error}</p>}</div></section>;
+  if (!attempt && tryoutExperience) return <section className="tryout-prestart">{examDialog}<div className="tryout-prestart-layout"><div className="tryout-prestart-main"><section className="tryout-prestart-info"><p className="dash-kicker">INFORMASI SIMULASI</p><h1>{title}</h1><div className="tryout-info-tiles"><div><FiClock aria-hidden="true" /><strong>{totalMinutes == null ? "—" : `${totalMinutes} Menit`}</strong><span>{prestartPerSession ? "Total perkiraan waktu" : "Total Waktu"}</span></div><div><FiList aria-hidden="true" /><strong>{info.data ? prestartSessions.length : "—"}</strong><span>Pembagian</span></div><div><FiBarChart2 aria-hidden="true" /><strong>{info.data?.max_score ?? "—"}</strong><span>Skor Maksimal</span></div><div><FiCheckSquare aria-hidden="true" /><strong>Review Mode</strong><span>Tersedia: —</span></div></div></section><section className="assessment-warning"><h2><FiAlertTriangle aria-hidden="true" />Instruksi & Ketentuan Ujian</h2><p>{prestartPerSession ? `Tiga sesi waktu: Kosakata & Kanji, Tata Bahasa & Reading, dan Audio. Tata Bahasa dan Reading menggunakan waktu yang sama dalam Sesi 2. Kamu dapat berpindah di antara keduanya selama sesi aktif. Empat bagian penilaian tetap terpisah. Total waktu mencakup ${tryOutTimingSessions.length - 1} jeda${info.data?.break_duration_minutes == null ? "" : `, masing-masing ${info.data.break_duration_minutes} menit`}. Timer sesi berikutnya hanya dimulai setelah kamu menekan Mulai Sesi Berikutnya. Sesi yang selesai tidak dapat dibuka kembali selama ujian.` : info.data?.duration_minutes != null ? `Pengerjaan dibatasi ${info.data.duration_minutes} menit sesuai durasi yang ditampilkan. Waktu berjalan sejak ${examName} dimulai.` : "Ikuti informasi waktu yang ditampilkan saat pengerjaan."}</p><p>Pastikan koneksi internet stabil. Periksa jawaban sebelum menyelesaikan kuis. Setelah submit final, jawaban tidak dapat diubah; gunakan Review Jawaban pada hasil untuk memeriksa jawaban.</p></section></div><section className="tryout-sections"><h2>Materi Sesi</h2>{prestartSessions.map(([code, label], index) => { const Icon = code === "audio" ? FiHeadphones : code === "reading" ? FiBookOpen : code === "grammar" ? FiFileText : FiList; return <div key={code}><Icon aria-hidden="true" /><strong>{prestartPerSession && `Sesi ${index + 1} — `}<PlacementRichText value={label} /></strong>{prestartPerSession && <span className="tryout-session-duration">{sessionDurations[code as keyof typeof sessionDurations] == null ? "Durasi belum tersedia" : `${sessionDurations[code as keyof typeof sessionDurations]} menit`}</span>}</div>; })}</section><div className="tryout-prestart-action"><p className="exam-start-notice">Dengan menekan Mulai, kamu menyatakan telah membaca dan memahami instruksi serta ketentuan ujian di atas.</p>{startActions?.(flow.busy)}{flow.error && <p role="alert">{flow.error}</p>}<button className="button button-primary" type="button" disabled={flow.busy} onClick={requestStart}>Mulai {examName}</button>{onBack && <button className="button button-secondary" type="button" disabled={flow.busy} onClick={onBack}>Kembali</button>}</div>{info.error && <p className="tryout-prestart-error" role="alert">{info.error}</p>}</div></section>;
 
   if (!attempt) return <section className={className}><header className="learning-question-head"><h1>{title}</h1></header>{flow.error && <p role="alert">{flow.error}</p>}<button className="button button-primary" type="button" disabled={flow.busy || domain === "placement"} onClick={() => void flow.start(startBody)}>Mulai</button></section>;
 
@@ -488,14 +492,13 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
   if (attempt.status === "completed" && result && !reviewing) return <section className="checkpoint-result tryout-result-report"><h1>Hasil {title}</h1>{flow.error && <p role="alert">{flow.error}</p>}<div className="checkpoint-result-stats"><div><span>Skor</span><strong>{result.earned ?? result.percentage ?? "—"}{result.max !== undefined ? ` / ${result.max}` : ""}</strong></div><div><span>Jawaban benar</span><strong>{result.correct}</strong></div><div><span>Tidak Dijawab</span><strong>{result.unanswered}</strong></div></div>{result.sessions && <section className="tryout-section-scores">{result.sessions.map(section => <article key={section.code}><strong>{tryoutExperience ? assessmentSessionLabels[assessmentSessions.findIndex(code => code === section.code)] ?? section.label : section.label}</strong><b>{section.earned} / {section.max}</b><small>Passing score: {section.passing_score} • {section.passing_score_basis === "points" ? "Skor" : "Jawaban benar"}</small>{(!tryoutExperience || result.total_passing_score != null) && <span>{section.pass ? "LULUS" : "TIDAK LULUS"}</span>}</article>)}</section>}{(!tryoutExperience || result.total_passing_score != null) && <p>{passed === true ? "LULUS" : passed === false ? "TIDAK LULUS" : "—"}</p>}<section className="checkpoint-recommendation"><p className="dash-kicker">REKOMENDASI</p><p>{isReading ? "Data topik bacaan belum cukup untuk memberikan rekomendasi belajar." : result.recommendation_level ?? "—"}</p></section>{domain !== "placement" && <button className="button button-secondary" type="button" disabled={flow.busy} onClick={async () => { if (await flow.review()) { setIndex(0); setReviewing(true); } }}>Review Jawaban</button>}<button className="button button-secondary" type="button" disabled={flow.busy} onClick={() => { setIndex(0); void flow.start(startBody); }}>Coba Lagi</button></section>;
 
   if (onBreak) {
-    const finishedSession = assessmentSessions[(attempt.current_session ?? 0) - 1];
-    const finishedLabel = assessmentSessionLabels[assessmentSessions.indexOf(finishedSession)];
-    const nextLabel = assessmentSessionLabels[assessmentSessions.indexOf(activeSession)];
+    const finishedLabel = timingGroups[(attempt.current_session ?? 0) - 1]?.label;
+    const nextLabel = activeGroup?.label;
     return <section className="tryout-break" aria-labelledby="tryout-break-title" aria-busy={flow.busy}>
       <FiClock aria-hidden="true" />
       <p className="dash-kicker">JEDA ANTAR SESI</p>
-      <h1 ref={breakHeading} tabIndex={-1} id="tryout-break-title">Sesi {finishedLabel} selesai</h1>
-      <p>Jawaban sesi ini sudah dikumpulkan dan tidak dapat diubah.</p>
+      <h1 ref={breakHeading} tabIndex={-1} id="tryout-break-title">Sesi {attempt.current_session} selesai!</h1>
+      <p>Jawaban {finishedLabel} sudah tersimpan dan tidak dapat diubah.</p>
       <h2>Waktu Istirahat</h2>
       <p>Gunakan waktu ini untuk beristirahat, atau tekan Mulai Sesi Berikutnya jika sudah siap.</p>
       <div className="tryout-break-timer" role="timer" aria-label="Sisa waktu jeda"><strong>{breakRemaining === null ? "—" : `${String(Math.floor(breakRemaining / 60)).padStart(2, "0")}:${String(breakRemaining % 60).padStart(2, "0")}`}</strong><span>Sisa waktu jeda</span></div>
@@ -518,7 +521,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
       <dialog ref={finishDialog} className="tryout-finish-dialog" aria-labelledby="tryout-finish-title" aria-describedby="tryout-finish-description" onCancel={event => { event.preventDefault(); decideFinish(false); }}>
 
-        <div className="tryout-finish-icon"><FiCheckSquare aria-hidden="true" /></div><h2 id="tryout-finish-title">{sessionLocked ? "Selesaikan Sesi?" : "Selesaikan Kuis?"}</h2><p id="tryout-finish-description">{sessionLocked ? `Jawaban sesi ${sessionLabel} akan dikumpulkan dan tidak dapat diubah. Pastikan kamu sudah memeriksa jawaban sesi ini.` : "Jawaban akan dikumpulkan secara final dan tidak dapat diubah. Pastikan kamu sudah memeriksa jawabanmu."}</p>
+        <div className="tryout-finish-icon"><FiCheckSquare aria-hidden="true" /></div><h2 id="tryout-finish-title">{sessionLocked ? "Selesaikan Sesi?" : "Selesaikan Kuis?"}</h2><p id="tryout-finish-description">{sessionLocked ? `Jawaban sesi ${activeGroup?.label ?? sessionLabel} akan dikumpulkan dan tidak dapat diubah. Pastikan kamu sudah memeriksa jawaban sesi ini.` : "Jawaban akan dikumpulkan secara final dan tidak dapat diubah. Pastikan kamu sudah memeriksa jawabanmu."}</p>
 
         {pendingUnanswered > 0 && <p className="tryout-check-warning">Masih ada {pendingUnanswered} soal yang belum dijawab. Kamu tetap dapat menyelesaikan {sessionLocked ? "sesi ini" : examName}, tetapi soal yang kosong akan dihitung sebagai tidak benar.</p>}
 
@@ -579,7 +582,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
   const navigatorGroups = tryoutExperience ? sessionQuestions.reduce<{ key: string; instruction: typeof question.instruction; items: typeof sessionQuestions }[]>((groups, item) => {
 
-    const key = JSON.stringify(item.instruction ?? null);
+    const key = JSON.stringify([combinedSession ? item.session : null, item.instruction ?? null]);
 
     const previous = groups[groups.length - 1];
 
@@ -594,7 +597,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
   const saveStatus = flow.busy ? "Menyimpan…" : flow.error ? "—" : "Tersimpan";
 
   const mobileTryout = domain === "tryout" && !reviewing && attempt.status === "in_progress";
-  const mobileQuestions = questions.filter(item => item.session === (sessionLocked ? activeSession : mobileSession ?? question?.session));
+  const mobileQuestions = questions.filter(item => item.session === (mobileSession && activeSessions.some(category => category === mobileSession) ? mobileSession : question?.session));
   const answeredCount = questions.filter(item => flow.answers[item.id]).length;
   const answerReview = reviewing && attempt.status === "completed";
   const reviewAnswerAvailable = answerReview && question?.correct_option !== undefined && Object.hasOwn(question.options, question.correct_option);
@@ -634,7 +637,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
         <dialog ref={mobileNavigator} id="tryout-mobile-navigator" className="tryout-mobile-sheet" aria-labelledby="tryout-mobile-navigator-title" aria-describedby="tryout-mobile-navigator-description" onClick={event => { if (event.target === event.currentTarget) { const box = event.currentTarget.getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) event.currentTarget.close(); } }}>
           <header><div><h2 id="tryout-mobile-navigator-title">Navigator Soal</h2><p id="tryout-mobile-navigator-description">{sessionLocked ? "Pilih nomor soal pada sesi aktif" : "Pilih sesi atau nomor soal"}</p></div><button type="button" className="button button-secondary" aria-label="Tutup Navigator" autoFocus onClick={() => mobileNavigator.current?.close()}><FiX aria-hidden="true" /></button></header>
           <div className="tryout-mobile-sheet-content">
-            {sessionLocked ? <section className="tryout-active-session" aria-label="Sesi aktif"><span>Sesi {(attempt.current_session ?? 0) + 1} dari {assessmentSessions.length}</span><strong>{assessmentSessionLabels[assessmentSessions.indexOf(activeSession)]}</strong></section> : <div className="tryout-mobile-sessions" role="group" aria-label="Pilihan sesi">
+            {sessionLocked ? <section className="tryout-active-session" aria-label="Sesi aktif"><span>Sesi {(attempt.current_session ?? 0) + 1} dari {timingGroups.length}</span><strong>{activeGroup?.label}</strong>{combinedSession && <div className="tryout-mobile-sessions" role="group" aria-label="Pilihan bagian sesi aktif">{activeSessions.map(category => <button type="button" key={category} aria-pressed={(mobileSession ?? question?.session) === category} onClick={() => setMobileSession(category)}>{assessmentSessionLabels[assessmentSessions.indexOf(category)]}</button>)}</div>}</section> : <div className="tryout-mobile-sessions" role="group" aria-label="Pilihan sesi">
               {activeSessions.map(session => {
                 const position = assessmentSessions.indexOf(session);
                 const items = questions.filter(item => item.session === session);
@@ -654,7 +657,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
         {readingLayout ? <div><h1>{answerReview ? `Review Jawaban · ${title}` : title}</h1>{readingContext && <p>{readingContext.label}</p>}</div> : tryoutExperience ? <h1>{reviewing ? "Review Jawaban · " : ""}<strong>{title.split(" - ")[0]}</strong><span>{title.includes(" - ") ? ` | ${title.split(" - ").slice(1).join(" - ")}` : ""}{sessionLabel ? ` - ${sessionLabel}` : ""}</span></h1> : tryoutExperience ? <><h1>{reviewing ? "Review Jawaban · " : ""}Soal {Math.min(index + 1, questions.length)} dari {questions.length}</h1><p>{title}{sessionLabel ? ` • ${sessionLabel}` : ""}</p><p className="tryout-runner-status">{questions.filter(item => flow.answers[item.id]).length} / {questions.length} Terjawab<span role="status">{saveStatus}</span></p></> : <h1>{answerReview ? `Review Jawaban ? ${title}` : title}</h1>}
 
-        {sessionLocked && <p className="tryout-active-session">Sesi {(attempt.current_session ?? 0) + 1} dari {assessmentSessions.length} — {sessionLabel}</p>}
+        {sessionLocked && <p className="tryout-active-session">Sesi {(attempt.current_session ?? 0) + 1} dari {timingGroups.length} — {activeGroup?.label}</p>}
 
         {mobileTryout && <div className="tryout-mobile-status"><span>{sessionLabel}</span><strong>Soal {sessionPosition + 1} dari {sessionQuestions.length}</strong><progress aria-label="Progress jawaban Try Out" value={answeredCount} max={questions.length || 1} /></div>}
 
@@ -860,6 +863,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
             {navigatorGroups.map((group, groupIndex) => <section className={tryoutExperience ? "tryout-navigator-group" : undefined} key={`${group.key}-${groupIndex}`}>
 
+              {combinedSession && (groupIndex === 0 || navigatorGroups[groupIndex - 1].items[0]?.session !== group.items[0]?.session) && <h3>{assessmentSessionLabels[assessmentSessions.findIndex(category => category === group.items[0]?.session)]}</h3>}
               {tryoutExperience && group.instruction && <h3><PlacementRichText value={group.instruction} /></h3>}
 
               <div className={tryoutExperience ? "tryout-group-number-grid" : undefined}>
@@ -902,7 +906,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
           </nav>
 
-          {tryoutExperience ? <>{sessionLocked ? <section className="tryout-active-session" aria-label="Sesi aktif"><span>Sesi {(attempt.current_session ?? 0) + 1} dari {assessmentSessions.length}</span><strong>{assessmentSessionLabels[assessmentSessions.indexOf(activeSession)]}</strong><small>Sesi dikerjakan berurutan. Lanjutkan setelah sesi ini selesai.</small></section> : <><h2>PILIH SESI</h2><div className="tryout-session-list">{activeSessions.map(session => <button type="button" key={session} aria-pressed={question?.session === session} disabled={!questions.some(item => item.session === session)} onClick={() => setIndex(questions.findIndex(item => item.session === session))}>{assessmentSessionLabels[assessmentSessions.indexOf(session)]}</button>)}</div></>}{!reviewing && attempt.status !== "completed" && <div className="tryout-sidebar-actions">{questions.length > 0 && <button type="button" className="button button-primary tryout-check-answer" disabled={flow.submitting} onClick={() => navigateTryOut(index, true)}>Periksa Jawaban</button>}{onBack && <button type="button" className="button button-secondary" disabled={flow.busy} onClick={() => { if (!tryoutExperience) { onBack(); return; } setExamAction("exit"); actionDialog.current?.showModal(); }}>Keluar Sesi</button>}</div>}</> : <span role="status">{saveStatus}</span>}
+          {tryoutExperience ? <>{sessionLocked ? <section className="tryout-active-session" aria-label="Sesi aktif"><span>Sesi {(attempt.current_session ?? 0) + 1} dari {timingGroups.length}</span><strong>{activeGroup?.label}</strong><small>Sesi dikerjakan berurutan. Lanjutkan setelah sesi ini selesai.</small>{combinedSession && <div className="tryout-session-list" role="group" aria-label="Pilihan bagian sesi aktif">{activeSessions.map(category => <button type="button" key={category} aria-pressed={question?.session === category} disabled={!questions.some(item => item.session === category)} onClick={() => setIndex(questions.findIndex(item => item.session === category))}>{assessmentSessionLabels[assessmentSessions.indexOf(category)]}</button>)}</div>}</section> : <><h2>PILIH SESI</h2><div className="tryout-session-list">{activeSessions.map(session => <button type="button" key={session} aria-pressed={question?.session === session} disabled={!questions.some(item => item.session === session)} onClick={() => setIndex(questions.findIndex(item => item.session === session))}>{assessmentSessionLabels[assessmentSessions.indexOf(session)]}</button>)}</div></>}{!reviewing && attempt.status !== "completed" && <div className="tryout-sidebar-actions">{questions.length > 0 && <button type="button" className="button button-primary tryout-check-answer" disabled={flow.submitting} onClick={() => navigateTryOut(index, true)}>Periksa Jawaban</button>}{onBack && <button type="button" className="button button-secondary" disabled={flow.busy} onClick={() => { if (!tryoutExperience) { onBack(); return; } setExamAction("exit"); actionDialog.current?.showModal(); }}>Keluar Sesi</button>}</div>}</> : <span role="status">{saveStatus}</span>}
 
         </aside>
 

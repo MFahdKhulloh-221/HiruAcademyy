@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { normalizeTryOutDurations, tryOutTimingSessions } from "@/lib/assessment-attempt";
 
 export const ASSESSMENT_STORAGE_KEY = "hiru-admin-assessments:v1";
 export const ASSESSMENT_CHANGE_EVENT = "hiru:assessments-change";
 export const assessmentLevels = ["DASAR", "N5", "N4", "N3", "N2", "SSW"] as const;
 export const practiceCategories = ["Kosakata", "Kanji", "Tata Bahasa", "Audio", "Reading"] as const;
 export type AssessmentType = "practice" | "checkpoint" | "tryout" | "mini";
-export type TryOutSessionCode = "vocabulary_kanji" | "grammar" | "reading" | "audio";
+export type TryOutSessionCode = "vocabulary_kanji" | "grammar_reading" | "audio";
 export type TryOutSessionDurations = Record<TryOutSessionCode, number>;
 export type AssessmentStatus = "Draft" | "Published";
 export type AssessmentOption = { id: string; text: string; isCorrect: boolean };
@@ -34,11 +35,11 @@ function normalizeAssessment(value: unknown): Assessment | null {
   const type = types.includes(item.type as AssessmentType) ? item.type as AssessmentType : null;
   if (!type) return null;
   const level = text(item.level);
-  const timings = item.sessionDurationMinutes as Record<string, unknown> | undefined;
-  const sessionCodes: TryOutSessionCode[] = ["vocabulary_kanji", "grammar", "reading", "audio"];
   const positiveMinutes = (value: unknown): value is number => typeof value === "number" && Number.isSafeInteger(value) && value > 0 && value <= 2147483647;
+  const rawTimings = item.sessionDurationMinutes;
+  const timings = normalizeTryOutDurations(rawTimings && typeof rawTimings === "object" && Object.values(rawTimings).every(positiveMinutes) ? rawTimings as Partial<TryOutSessionDurations> : undefined);
   const timingConfig = type === "tryout" ? {
-    sessionDurationMinutes: timings && sessionCodes.every(code => positiveMinutes(timings[code])) ? Object.fromEntries(sessionCodes.map(code => [code, timings[code]])) as TryOutSessionDurations : undefined,
+    sessionDurationMinutes: tryOutTimingSessions.every(session => positiveMinutes(timings[session])) ? timings as TryOutSessionDurations : undefined,
     breakDurationMinutes: positiveMinutes(item.breakDurationMinutes) ? item.breakDurationMinutes : undefined,
   } : {};
   const questionIds = new Set<string>();

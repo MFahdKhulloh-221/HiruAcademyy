@@ -9,35 +9,40 @@ import { createElement } from "react";
 
 const sessions = ["vocabulary_kanji", "grammar", "reading", "audio"];
 const compile = source => ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-const fixtures = vm.createContext({ exports: {}, require: () => ({ assessmentSessions: sessions }) });
+const runtime = vm.createContext({ exports: {}, require: () => ({}) });
+vm.runInContext(compile(readFileSync(new URL("../src/lib/assessment-attempt.ts", import.meta.url), "utf8")), runtime);
+const fixtures = vm.createContext({ exports: {}, require: () => runtime.exports });
 vm.runInContext(compile(readFileSync(new URL("../src/components/admin-assessment-fixtures.ts", import.meta.url), "utf8")), fixtures);
-const timing = { sessionDurationMinutes: { vocabulary_kanji: "11", grammar: "12", reading: "13", audio: "14" }, breakDurationMinutes: "2" };
+const timing = { sessionDurationMinutes: { vocabulary_kanji: "11", grammar_reading: "25", audio: "14" }, breakDurationMinutes: "2" };
 
 test("Admin preview uses total with breaks and active session timer, never legacy Try Out duration", () => {
   const require = createRequire(import.meta.url);
   const context = vm.createContext({ exports: {}, require: path => path.endsWith("admin-assessment-fixtures") ? {
     ...fixtures.exports, assessmentSections: () => sessions, orderedAssessmentQuestions: item => item.questions,
-  } : path.endsWith("assessment-attempt") ? { assessmentSessions: sessions } : path.startsWith("@/") ? { AssessmentContent: ({ children }) => children, PlacementRichText: () => null } : require(path) });
+  } : path.endsWith("assessment-attempt") ? runtime.exports : path.startsWith("@/") ? { AssessmentContent: ({ children }) => children, PlacementRichText: () => null } : require(path) });
   vm.runInContext(compile(readFileSync(new URL("../src/components/admin-assessment-preview.tsx", import.meta.url), "utf8")), context);
   const assessment = { id: "1", kind: "tryout", title: "Preview", duration: "999", questions: [], ...timing };
   const render = (item, initialQuestionId) => renderToStaticMarkup(createElement(context.exports.AdminAssessmentPreview, { assessment: item, initialQuestionId }));
-  assert.match(render(assessment), /56 Menit/);
+  assert.match(render(assessment), /54 Menit/);
   assert.doesNotMatch(render(assessment), /999/);
   const question = { id: "q", section: "reading", answers: [], status: "Draft" };
-  assert.match(render({ ...assessment, questions: [question] }, "q"), /Timer sesi<\/span><strong>13:00/);
+  assert.match(render({ ...assessment, questions: [question] }, "q"), /Timer sesi<\/span><strong>25:00/);
+  assert.match(render({ ...assessment, questions: [{ ...question, section: "grammar" }] }, "q"), /Timer sesi<\/span><strong>25:00/);
+  assert.match(render(assessment), /3 Sesi/);
+  assert.match(render(assessment), /Total waktu istirahat \(2 kali\): 4 menit/);
   assert.match(render({ ...assessment, sessionDurationMinutes: undefined }), /Belum diatur/);
   assert.match(render({ ...assessment, kind: "checkpoint" }), /999 Menit/);
   assert.match(render({ ...assessment, kind: "checkpoint", questions: [question] }, "q"), /Timer<\/span><strong>999:00/);
 });
 
-test("Try Out requires all five positive integer durations; sums work plus three breaks", () => {
+test("Try Out requires four positive integer durations; sums work plus two breaks", () => {
   const { tryOutTimingError, tryOutTimingTotals } = fixtures.exports;
   assert.equal(tryOutTimingError(timing), "");
-  assert.deepEqual(JSON.parse(JSON.stringify(tryOutTimingTotals(timing))), { work: 50, rest: 6, total: 56 });
+  assert.deepEqual(JSON.parse(JSON.stringify(tryOutTimingTotals(timing))), { work: 50, rest: 4, total: 54 });
   assert.equal(tryOutTimingTotals({}), null);
   for (const value of ["", "0", "-1", "1.5", "Infinity", "2147483648"]) {
     assert.ok(tryOutTimingError({ ...timing, breakDurationMinutes: value }));
-    for (const session of sessions) assert.ok(tryOutTimingError({ ...timing, sessionDurationMinutes: { ...timing.sessionDurationMinutes, [session]: value } }));
+    for (const session of runtime.exports.tryOutTimingSessions) assert.ok(tryOutTimingError({ ...timing, sessionDurationMinutes: { ...timing.sessionDurationMinutes, [session]: value } }));
   }
 });
 
@@ -45,7 +50,7 @@ test("Try Out API roundtrips session timing; Checkpoint sends legacy duration on
   const calls = [];
   const assessment = { id: 1, program_id: 1, max_score: 180, sort_order: 1, questions: [], session_duration_minutes: { vocabulary_kanji: 11, grammar: 12, reading: 13, audio: 14 }, break_duration_minutes: 2 };
   const context = vm.createContext({ exports: {}, require: path => path.endsWith("admin-assessment-fixtures") ? fixtures.exports : {
-    assessmentSessions: sessions, jlptTryoutSessions: [],
+    ...runtime.exports, jlptTryoutSessions: [],
     apiRequest: async (path, options) => {
       calls.push({ path, options });
       return { data: path === "/api/admin/programs" ? [{ id: 1, code: "n5" }] : /(?:try-outs|checkpoint-packages)$/.test(path) ? [assessment] : assessment };
@@ -60,7 +65,8 @@ test("Try Out API roundtrips session timing; Checkpoint sends legacy duration on
     await api.saveAdminTryOut(item);
     const payload = JSON.parse(calls.findLast(call => call.path.endsWith("/studio")).options.body).settings;
     if (kind === "tryout") {
-      assert.deepEqual(payload.session_duration_minutes, assessment.session_duration_minutes);
+      assert.deepEqual(JSON.parse(JSON.stringify(loaded.sessionDurationMinutes)), timing.sessionDurationMinutes);
+      assert.deepEqual(payload.session_duration_minutes, { vocabulary_kanji: 11, grammar_reading: 25, audio: 14 });
       assert.equal(payload.break_duration_minutes, 2);
       assert.ok(!("duration_minutes" in payload));
       const writes = calls.filter(call => call.options?.method).length;

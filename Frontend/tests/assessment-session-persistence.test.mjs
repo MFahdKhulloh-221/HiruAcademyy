@@ -118,6 +118,21 @@ test("invalid answer errors remain errors even if another tab closed session", a
   assert.equal(store.attempt.phase, "session");
 });
 
+test("shared grammar-reading timer saves both categories and drops autosave queued after finish", async () => {
+  const state = { ...initial(), current_session: 1, session_duration_minutes: { vocabulary_kanji: 30, grammar_reading: 60, audio: 30 }, questions: [{ id: 2, session: "grammar" }, { id: 3, session: "reading" }, { id: 4, session: "audio" }] };
+  const calls = [];
+  const store = new AttemptPersistence(state, "/attempts/1", "tryout", async (path, options) => {
+    const body = JSON.parse(options.body);
+    calls.push({ path, body });
+    assert.deepEqual(body.answers, { 2: "A", 3: "B" });
+    return { data: { ...state, answers: body.answers, revision: 1, current_session: 2, phase: "break", expires_at: null } };
+  });
+  await Promise.all([store.save({ 2: "A", 3: "B", 4: "C" }, true), store.save({ 2: "D", 3: "D" })]);
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].body.finish_session, true);
+  assert.equal(store.attempt.phase, "break");
+});
+
 test("checkpoint and legacy tryout keep global submission and unfiltered answers", async () => {
   for (const domain of ["checkpoint", "tryout"]) {
     const state = initial();

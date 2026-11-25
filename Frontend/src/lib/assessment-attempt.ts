@@ -4,9 +4,27 @@ import type { AssessmentImage, AssessmentPassageBlock } from "./assessment-image
 export type AttemptQuestion = AssessmentImage & { id: number; instruction?: string | null; japanese?: { text: string; reading?: string | null } | null; question?: string; prompt?: string; session?: string | number; part?: number; duration_minutes?: number; title?: string; options: Record<string, string>; audio_url?: string | null; audio_url_resolved_url?: string | null; image_url?: string | null; reading_passage?: string | null; passage?: AssessmentImage & { id?: number; title: string; body: string; blocks?: AssessmentPassageBlock[] | null }; correct_option?: string; explanation?: string | null; selected_answer?: string | null; status?: string };
 export type AttemptResult = { correct: number; wrong: number; unanswered: number; total?: number; percentage?: number; earned?: number; max?: number; passed?: boolean; passing_score?: number; overall_pass?: boolean | null; total_passing_score?: number | null; recommendation_level?: string | null; sessions?: { code: string; label: string; earned: number; max: number; correct: number; wrong: number; unanswered: number; passing_score: number; passing_score_basis?: "points" | "correct_answers"; pass: boolean }[] };
 export type MiniQuestion = AttemptQuestion & { session: number; part: number; duration_minutes: number };
-export type ServerAttempt = { timing_mode?: "per_session"; phase?: "session" | "break"; session_started_at?: string | null; break_ends_at?: string | null; session_duration_minutes?: Partial<Record<(typeof assessmentSessions)[number], number>>; break_duration_minutes?: number; adaptive?: boolean; question_limit?: number; passing_score?: number; request_started_at?: number; received_at?: number; session?: number; part?: number; duration_minutes?: number; server_now?: string; kind?: string; chapter_id?: number; id: number; status: "in_progress" | "completed"; revision?: number; scoring_version?: string; current_session?: number; active_sessions?: (typeof assessmentSessions)[number][]; completed_sessions?: string[]; questions: AttemptQuestion[]; answers: Record<string, string>; result: AttemptResult | null; expires_at?: string | null; started_at?: string; completed_at?: string | null };
+export type ServerAttempt = { timing_mode?: "per_session"; phase?: "session" | "break"; session_started_at?: string | null; break_ends_at?: string | null; session_duration_minutes?: Partial<Record<(typeof assessmentSessions)[number] | TryOutTimingSession, number>>; break_duration_minutes?: number; adaptive?: boolean; question_limit?: number; passing_score?: number; request_started_at?: number; received_at?: number; session?: number; part?: number; duration_minutes?: number; server_now?: string; kind?: string; chapter_id?: number; id: number; status: "in_progress" | "completed"; revision?: number; scoring_version?: string; current_session?: number; active_sessions?: (typeof assessmentSessions)[number][]; completed_sessions?: string[]; questions: AttemptQuestion[]; answers: Record<string, string>; result: AttemptResult | null; expires_at?: string | null; started_at?: string; completed_at?: string | null };
 export const assessmentSessions = ["vocabulary_kanji", "grammar", "reading", "audio"] as const;
 export const assessmentSessionLabels = ["Kosakata & Kanji", "Tata Bahasa", "Reading (Dokkai)", "Audio (Choukai)"] as const;
+export const tryOutTimingSessions = ["vocabulary_kanji", "grammar_reading", "audio"] as const;
+export type TryOutTimingSession = (typeof tryOutTimingSessions)[number];
+export const tryOutTimingSessionLabels = ["Kosakata & Kanji", "Tata Bahasa & Reading (Dokkai)", "Audio (Choukai)"] as const;
+export const tryOutTimingCategories: Record<TryOutTimingSession, readonly (typeof assessmentSessions)[number][]> = {
+  vocabulary_kanji: ["vocabulary_kanji"], grammar_reading: ["grammar", "reading"], audio: ["audio"],
+};
+export function normalizeTryOutDurations(durations?: Partial<Record<(typeof assessmentSessions)[number] | TryOutTimingSession, number>>): Partial<Record<TryOutTimingSession, number>> {
+  return {
+    ...(durations?.vocabulary_kanji !== undefined ? { vocabulary_kanji: durations.vocabulary_kanji } : {}),
+    ...(durations?.grammar_reading !== undefined ? { grammar_reading: durations.grammar_reading } : durations?.grammar !== undefined && durations?.reading !== undefined ? { grammar_reading: durations.grammar + durations.reading } : {}),
+    ...(durations?.audio !== undefined ? { audio: durations.audio } : {}),
+  };
+}
+export function attemptTimingGroups(attempt: ServerAttempt) {
+  return attempt.session_duration_minutes && Object.hasOwn(attempt.session_duration_minutes, "grammar_reading")
+    ? tryOutTimingSessions.map((key, index) => ({ key, label: tryOutTimingSessionLabels[index], categories: tryOutTimingCategories[key] }))
+    : assessmentSessions.map((key, index) => ({ key, label: assessmentSessionLabels[index], categories: [key] as readonly (typeof assessmentSessions)[number][] }));
+}
 export type AttemptDomain = "learning" | "tryout" | "checkpoint" | "placement";
 export function chapterAttemptPath(program: number, chapter: number) {
   if (!Number.isSafeInteger(program) || program < 1 || !Number.isSafeInteger(chapter) || chapter < 1) throw new ApiError(404);
@@ -23,8 +41,10 @@ export async function startAttempt(path: string, body: object = {}) {
   return { ...attempt, request_started_at, received_at: performance.now() };
 }
 export function currentAnswers(attempt: ServerAttempt, answers: Record<string, string>) {
-  const session = (attempt.active_sessions ?? assessmentSessions)[attempt.current_session ?? 0];
-  const ids = new Set(attempt.questions.filter(question => question.session === session).map(question => String(question.id)));
+  const categories = attempt.timing_mode === "per_session"
+    ? attemptTimingGroups(attempt)[attempt.current_session ?? 0]?.categories ?? []
+    : [(attempt.active_sessions ?? assessmentSessions)[attempt.current_session ?? 0]];
+  const ids = new Set(attempt.questions.filter(question => categories.some(category => question.session === category)).map(question => String(question.id)));
   return Object.fromEntries(Object.entries(answers).filter(([id]) => ids.has(id)));
 }
 export function tryOutRemaining(attempt: ServerAttempt, now: number) {
