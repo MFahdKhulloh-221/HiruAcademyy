@@ -11,6 +11,7 @@ import { AssessmentContent } from "@/components/assessment-content";
 import { AssessmentPassageContent } from "@/components/assessment-passage-content";
 
 import Link from "next/link";
+import { Noto_Sans_JP } from "next/font/google";
 
 
 
@@ -34,6 +35,14 @@ import "./tryout-timing.css";
 import { assessmentSessions, assessmentSessionLabels, attemptTimingGroups, normalizeTryOutDurations, tryOutTimingSessions, tryOutTimingSessionLabels, tryOutRemaining, type AttemptDomain } from "@/lib/assessment-attempt";
 
 
+
+const tryOutJapaneseFont = Noto_Sans_JP({
+  variable: "--font-tryout-japanese",
+  weight: ["400", "700"],
+  display: "swap",
+  preload: false,
+  fallback: ["Hiragino Kaku Gothic ProN", "Yu Gothic", "Meiryo", "sans-serif"],
+});
 
 export function BackendAssessmentRunner({ path, domain = "learning", title, startBody = {}, className = "learning-question-page", onComplete, onBack, scope, autoStart = false, startActions, readingContext, resultContext, resultOnly = false }: { resultOnly?: boolean; resultContext?: { level: string; bestScore: number | null }; readingContext?: { label: string; href: string }; startActions?: (busy: boolean) => ReactNode; onBack?: () => void; autoStart?: boolean; scope?: string; path: string; domain?: AttemptDomain; title: string; startBody?: object; className?: string; onComplete?: () => void }) {
 
@@ -624,7 +633,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
   return (
 
-    <div className={tryoutExperience ? `${className} tryout-runner-polished${tryoutExperience ? " tryout-placement-style" : ""}${domain === "tryout" ? " tryout-readable-content" : ""}${mobileTryout ? " tryout-mobile-exam" : ""}` : `${className}${readingLayout ? " reading-workspace" : ""}${domain === "learning" && (attempt.kind === "audio" || attempt.kind === "reading") && !answerReview ? " daily-practice-runner" : ""}`}>
+    <div className={tryoutExperience ? `${className} tryout-runner-polished${tryoutExperience ? " tryout-placement-style" : ""}${domain === "tryout" ? ` tryout-readable-content ${tryOutJapaneseFont.variable}` : ""}${mobileTryout ? " tryout-mobile-exam" : ""}` : `${className}${readingLayout ? " reading-workspace" : ""}${domain === "learning" && (attempt.kind === "audio" || attempt.kind === "reading") && !answerReview ? " daily-practice-runner" : ""}`}>
 
       {examDialog}
 

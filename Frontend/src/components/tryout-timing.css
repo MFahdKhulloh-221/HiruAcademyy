@@ -1,7 +1,7 @@
 .tryout-readable-content.tryout-placement-style .learning-question-card > h2 {
   font-size: clamp(16px, 1.5vw, 20px);
   line-height: 1.8;
-  font-weight: 500;
+  font-weight: 400;
   overflow-wrap: break-word;
   word-break: normal;
 }
@@ -12,6 +12,26 @@
   scrollbar-gutter: auto;
   font-size: clamp(16px, 1.3vw, 18px);
   line-height: 2;
+}
+
+/* Scope content only; keep UI typography and intentional rich-text formatting. */
+.tryout-readable-content :is(.placement-rich-content, .exam-reading-scroll, [lang="ja"]) {
+  font-family: var(--font-tryout-japanese), "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
+  font-weight: 400;
+}
+
+.tryout-readable-content .placement-rich-content :is(strong, b) {
+  font-weight: 700;
+}
+
+.tryout-readable-content rt {
+  font-size: .55em;
+  line-height: 1;
+}
+
+.tryout-readable-content rt,
+.tryout-readable-content .placement-rich-content rt :is(strong, b) {
+  font-weight: 400;
 }
 
 .tryout-active-session {
