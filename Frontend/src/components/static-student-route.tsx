@@ -16,7 +16,7 @@ import { StudentNavigation } from "@/components/student-navigation";
 import { StudentTopbar } from "@/components/student-topbar";
 import { learningMembership } from "@/lib/learning-api";
 
-type RouteKind = "dashboard" | "levels" | "journey" | "learning" | "video" | "grammar" | "kanji" | "flashcards" | "audio" | "reading" | "checkpoint" | "tryout" | "schedule" | "class-detail" | "replay" | "replay-player" | "mini";
+type RouteKind = "dashboard" | "levels" | "journey" | "learning" | "video" | "grammar" | "kanji" | "flashcards" | "audio" | "reading" | "mini-checkpoint" | "checkpoint" | "tryout" | "schedule" | "class-detail" | "replay" | "replay-player" | "mini";
 
 export function StaticStudentRoute({ kind, level, chapter }: { kind: RouteKind; level?: string; chapter?: string }) {
   if (kind === "dashboard") return <LearningDashboard />;
@@ -25,17 +25,17 @@ export function StaticStudentRoute({ kind, level, chapter }: { kind: RouteKind; 
     return level && chapter ? <LearningVertical key={`${level}/${chapter}/${kind}`} kind={kind} level={level} chapter={chapter} /> : <LearningJourney />;
   }
   if (kind === "checkpoint" && !level && !chapter) return <StudentServiceRoute kind={kind} />;
-  if (kind === "audio" || kind === "reading" || kind === "checkpoint") {
+  if (kind === "audio" || kind === "reading" || kind === "mini-checkpoint") {
     return level && chapter ? <AssessmentRoute key={`${level}/${chapter}/${kind}`} kind={kind} level={level} chapter={chapter} /> : <LearningJourney />;
   }
   return <StudentServiceRoute kind={kind} />;
 }
 
-function AssessmentRoute({ kind, level, chapter }: { kind: "audio" | "reading" | "checkpoint"; level: string; chapter: string }) {
+function AssessmentRoute({ kind, level, chapter }: { kind: "audio" | "reading" | "mini-checkpoint"; level: string; chapter: string }) {
   const load = useCallback((signal: AbortSignal) => loadChapterContext(level, chapter, signal), [level, chapter]);
   const request = useLearningRequest(load, `${level}/${chapter}`);
   if (!request.data) return request.error ? <main className="learning-content"><p role="alert">{request.error}</p><button type="button" onClick={request.retry}>Coba Lagi</button></main> : <StudentLoading shell="learning" variant="assessment" label="Memuat…" />;
-  return <LearningShell membership={learningMembership(request.data.access)} level={level} chapter={chapter} current={kind === "audio" ? "audio" : "reading"} breadcrumbLabel={kind === "checkpoint" ? "Mini Checkpoint" : kind === "audio" ? "Audio" : "Reading"}><ChapterAssessment context={request.data} level={level} chapterSlug={chapter} kind={kind === "checkpoint" ? "mini" : kind} /></LearningShell>;
+  return <LearningShell membership={learningMembership(request.data.access)} level={level} chapter={chapter} current={kind === "audio" ? "audio" : "reading"} breadcrumbLabel={kind === "mini-checkpoint" ? "Mini Checkpoint" : kind === "audio" ? "Audio" : "Reading"}><ChapterAssessment context={request.data} level={level} chapterSlug={chapter} kind={kind === "mini-checkpoint" ? "mini" : kind} /></LearningShell>;
 }
 
 function StudentServiceRoute({ kind }: { kind: RouteKind }) {

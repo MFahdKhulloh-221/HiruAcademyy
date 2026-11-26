@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { LuFileCheck, LuArrowLeft } from "react-icons/lu";
 import { ChapterAssessment } from "@/components/chapter-assessment";
@@ -14,6 +14,7 @@ import type { Membership } from "@/lib/dashboard-mock";
 export function MiniCheckpointScreen({ membership = "sensei", resolvedCatalog }: { membership?: Membership; resolvedCatalog?: LearningCatalog } = {}) {
   const { user } = useAuth();
   const params = useSearchParams();
+  const router = useRouter();
   const level = params.get("mini_level");
   const chapterSlug = params.get("mini_chapter");
   const selected = user && level && chapterSlug ? { level, chapterSlug } : undefined;
@@ -140,7 +141,7 @@ export function MiniCheckpointScreen({ membership = "sensei", resolvedCatalog }:
                       }
                       url.searchParams.set("mini_level", level);
                       url.searchParams.set("mini_chapter", chapterSlug);
-                      window.history.replaceState(null, "", url);
+                      router.push(`/learn/${level}/${chapterSlug}/mini-checkpoint${url.search}`);
                     }}
                   >
                     Mulai Mini Checkpoint

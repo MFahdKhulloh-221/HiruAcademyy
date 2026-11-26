@@ -1,15 +1,15 @@
-import type { Metadata } from "next";
-import { Suspense } from "react";
-import { LoadingSkeleton } from "@/components/loading-skeleton";
-import { StaticStudentRoute } from "@/components/static-student-route";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = { title: "Checkpoint", robots: { index: false, follow: false } };
-
-export function generateStaticParams() {
-  return ["dasar", "n5", "n4", "n3", "n2", "n1"].flatMap((level) => ["chapter-1", "chapter-2", "chapter-3", "chapter-4"].map((chapter) => ({ level, chapter })));
-}
-
-export default async function CheckpointPage({ params }: { params: Promise<{ level: string; chapter: string }> }) {
+export default async function LegacyMiniCheckpointPage({ params, searchParams }: {
+  params: Promise<{ level: string; chapter: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
   const { level, chapter } = await params;
-  return <Suspense fallback={<main className="public-main"><LoadingSkeleton variant="assessment" /></main>}><StaticStudentRoute kind="checkpoint" level={level} chapter={chapter} /></Suspense>;
+  const query = new URLSearchParams();
+  for (const [key, value] of Object.entries(await searchParams)) {
+    if (Array.isArray(value)) value.forEach(item => query.append(key, item));
+    else if (value !== undefined) query.append(key, value);
+  }
+  const suffix = query.size ? `?${query}` : "";
+  redirect(`/learn/${encodeURIComponent(level)}/${encodeURIComponent(chapter)}/mini-checkpoint${suffix}`);
 }

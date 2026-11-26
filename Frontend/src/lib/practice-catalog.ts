@@ -18,7 +18,7 @@ export function practiceActivities(data: Awaited<ReturnType<typeof learningDashb
         : progress.activities[kind];
       if (!activity || activity.total < 1) return [];
       const base = `/learn/${encodeURIComponent(programSlug(program.code))}/chapter-${chapter.chapter_number}`;
-      const href = kind === "flashcard" ? `${base}/flashcards` : kind === "mini" ? `${base}/checkpoint` : `/practice?practice_level=${encodeURIComponent(programSlug(program.code))}&practice_chapter=chapter-${chapter.chapter_number}&practice_kind=${kind}`;
+      const href = kind === "flashcard" ? `${base}/flashcards` : kind === "mini" ? `${base}/mini-checkpoint` : `/practice?practice_level=${encodeURIComponent(programSlug(program.code))}&practice_chapter=chapter-${chapter.chapter_number}&practice_kind=${kind}`;
       return [{ id: `${program.id}/${chapter.id}/${kind}`, program, chapter, kind, activity, href }];
     }));
 }
