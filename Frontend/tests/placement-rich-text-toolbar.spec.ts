@@ -12,13 +12,20 @@ test("placement toolbar emits semantic bold italic underline and retains them af
   await page.getByRole("button", { name: "+ Tambah Soal", exact: true }).click();
   const dialog = page.getByRole("dialog");
   await dialog.getByRole("combobox", { name: "Jenis soal", exact: true }).selectOption("Reading");
+  await page.route("**/api/furigana", route => route.fulfill({ json: { reading: "にほんご" } }));
   const labels = ["Pertanyaan", "Pilihan A", "Teks bacaan"];
   for (const label of labels) {
     const field = dialog.getByRole("textbox", { name: label, exact: true });
-    await field.fill(`${label} formatted`);
+    await field.fill("日本語");
     await expect(field).toHaveCSS("font-weight", "400");
     await expect(field).toHaveCSS("font-style", "normal");
     await expect(field).toHaveCSS("text-decoration-line", "none");
+    await field.press("Control+a");
+    const editor = dialog.locator(".placement-text-editor").filter({ has: page.getByRole("textbox", { name: label, exact: true }) });
+    await editor.getByRole("button", { name: /Furigana/ }).click();
+    await expect(editor.getByRole("textbox", { name: "Bacaan Hiragana" })).toHaveValue("にほんご");
+    await editor.getByRole("button", { name: "Terapkan", exact: true }).click();
+    await expect(field.locator("ruby rt")).toHaveText("にほんご");
     // Ambient browser CSS mode must not change the toolbar's persisted HTML format.
     await page.evaluate(() => document.execCommand("styleWithCSS", false, "true"));
     const toolbar = dialog.getByRole("toolbar", { name: `Format ${label}`, exact: true });
@@ -37,15 +44,18 @@ test("placement toolbar emits semantic bold italic underline and retains them af
     expect(html).toMatch(/<(b|strong)>/);
     expect(html).toMatch(/<(i|em)>/);
     expect(html).toContain("<u>");
+    expect(html).toContain("<ruby>");
+    expect(html).toContain("にほんご");
     expect(html).not.toContain("style=");
   }
   await page.reload();
   await page.getByRole("button", { name: "Edit soal 1", exact: true }).click();
   for (const label of labels) {
     const field = dialog.getByRole("textbox", { name: label, exact: true });
-    await expect(field.locator("b, strong")).toHaveCSS("font-weight", "700");
-    await expect(field.locator("i, em")).toHaveCSS("font-style", "italic");
-    await expect(field.locator("u")).toHaveCSS("text-decoration-line", "underline");
+    await expect(field.locator("b, strong").first()).toHaveCSS("font-weight", "700");
+    await expect(field.locator("i, em").first()).toHaveCSS("font-style", "italic");
+    await expect(field.locator("u").first()).toHaveCSS("text-decoration-line", "underline");
+    await expect(field.locator("ruby rt")).toHaveText("にほんご");
   }
 });
 

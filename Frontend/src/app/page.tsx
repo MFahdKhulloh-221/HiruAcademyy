@@ -81,7 +81,7 @@ export default function Home() {
     "Placement test, pembelajaran, flashcard, latihan, try out, komunitas, dan kelas bersama Sensei tersedia dalam satu pengalaman belajar yang konsisten.";
   const currentOffers = offers.map(offer => {
     const available = pricing.data.filter(item => item.plan_code === offer.id && programs.data.some(program => program.family === "jlpt" && ["n5", "n4", "n3", "n2", "n1"].includes(program.code.toLowerCase()) && program.code.toLowerCase() === item.program.code.toLowerCase())).sort((a, b) => a.effective_price - b.effective_price);
-    return { ...offer, href: available[0] ? `/program?level=${encodeURIComponent(available[0].program.code)}&plan=${encodeURIComponent(available[0].plan_code)}` : offer.href, pricing: available[0], price: offer.id === "free" ? offer.price : pricing.loading ? "Memuat harga…" : pricing.error ? "Harga gagal dimuat" : offerPrice(available[0]).split("/")[0], period: offer.id === "free" ? offer.period : available[0] ? `/${available[0].duration_months} bulan` : "" };
+    return { ...offer, href: "/program", pricing: available[0], price: offer.id === "free" ? offer.price : pricing.loading ? "Memuat harga…" : pricing.error ? "Harga gagal dimuat" : offerPrice(available[0]).split("/")[0], period: offer.id === "free" ? offer.period : available[0] ? `/${available[0].duration_months} bulan` : "" };
   });
   const previews = showcase.data.map(item => ({ key: item.key, label: item.label, imageSrc: contentMedia(item.image_src) }));
 

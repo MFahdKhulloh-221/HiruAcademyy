@@ -196,20 +196,22 @@ test("admin promo editor handles optional dates and rounding preview", async ({ 
   expect(api.mutations.length).toBeGreaterThan(0);
 });
 
-test("landing minimum price CTA preserves chosen API offer", async ({ page }) => {
-  const api = await catalogApi(page);
-  api.offers.find(item => item.id === 10)!.base_price = 500000;
-  await page.goto("/");
-  const card = page.locator(".landing-price-card").filter({ has: page.getByRole("link", { name: "Pilih Mandiri", exact: true }) });
-  await expect(card).toContainText(formatProgramPrice(200000));
-  const link = card.getByRole("link", { name: "Pilih Mandiri", exact: true });
-  await expect(link).toHaveAttribute("href", /\/program\?(?=.*level=n1)(?=.*plan=lms)/);
-  await link.click();
-  await expect(summary(page)).toContainText("JLPT N1");
-  await expect(summary(page)).toContainText(formatProgramPrice(200000));
-  await expect(summary(page)).toContainText("3 bulan");
-  expect(api.writes).toEqual([]);
-});
+for (const cta of ["Pilih Coba Gratis", "Pilih Bersama Sensei", "Pilih Mandiri"]) {
+  test(`landing ${cta} opens program selection without preselecting offer`, async ({ page }) => {
+    const api = await catalogApi(page);
+    api.offers.find(item => item.id === 10)!.base_price = 500000;
+    await page.goto("/");
+    const card = page.locator(".landing-price-card").filter({ has: page.getByRole("link", { name: "Pilih Mandiri", exact: true }) });
+    await expect(card).toContainText(formatProgramPrice(200000));
+    const link = page.getByRole("link", { name: cta, exact: true });
+    await expect(link).toHaveAttribute("href", "/program");
+    await link.click();
+    await expect(page).toHaveURL(/\/program$/);
+    await expect(page.getByRole("heading", { name: "Mulai perjalanan bahasa Jepangmu" })).toBeInViewport();
+    await expect(page.getByRole("region", { name: "Program JLPT", exact: true })).toBeInViewport();
+    expect(api.writes).toEqual([]);
+  });
+}
 
 test("catalog API error offers explicit retry", async ({ page }) => {
   const api = await catalogApi(page);
