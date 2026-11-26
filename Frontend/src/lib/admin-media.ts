@@ -6,13 +6,14 @@ export function rememberAdminMedia(item: Record<string, unknown>) {
   for (const [key, value] of Object.entries(item)) if (key.endsWith("_resolved_url") && typeof value === "string" && typeof item[key.slice(0, -13)] === "string") resolvedMedia.set(item[key.slice(0, -13)] as string, value);
 }
 
-export type MediaKind = "image" | "audio" | "video";
-export const mediaAccept = { image: "image/jpeg,image/png,image/webp", audio: "audio/mpeg,audio/wav,audio/x-wav,audio/ogg", video: "video/mp4,video/webm" };
+export type MediaKind = "image" | "audio" | "video" | "pdf";
+export const mediaAccept = { image: "image/jpeg,image/png,image/webp", audio: "audio/mpeg,audio/wav,audio/x-wav,audio/ogg", video: "video/mp4,video/webm", pdf: "application/pdf" };
 export function validMediaFile(file: File, kind: MediaKind) {
-  const extensions = { image: /\.(jpe?g|png|webp)$/i, audio: /\.(mp3|wav|ogg)$/i, video: /\.(mp4|webm)$/i };
+  const extensions = { image: /\.(jpe?g|png|webp)$/i, audio: /\.(mp3|wav|ogg)$/i, video: /\.(mp4|webm)$/i, pdf: /\.pdf$/i };
   return file.size > 0 && mediaAccept[kind].split(",").includes(file.type) && extensions[kind].test(file.name);
 }
 export async function uploadAdminMedia(file: File, kind: MediaKind) {
+  if (kind === "pdf" && file.size > 5 * 1024 * 1024) throw new Error("Ukuran PDF maksimal 5 MB.");
   if (!validMediaFile(file, kind)) throw new Error("Pilih file dengan format yang didukung dan tidak kosong.");
   const body = new FormData();
   body.append("file", file); body.append("kind", kind);

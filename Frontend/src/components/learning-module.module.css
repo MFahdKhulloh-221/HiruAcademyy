@@ -1,0 +1,35 @@
+.actions.actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+  width: 100%;
+  margin: 24px 0 0;
+  padding: 0;
+}
+.actions.actions > a { margin: 0; }
+.actions > :is(a, button) {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 12px 20px;
+  border: 1px solid #CBD5E1;
+  border-radius: 10px;
+  background: white;
+  color: #162C46;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.actions > button:not(:disabled) { background: #F48220; border-color: #F48220; color: #5A2A00; }
+.actions > a:hover { background: #F48220; border-color: #F48220; color: #5A2A00; }
+.actions > button:not(:disabled):hover { background: #954900; border-color: #954900; color: white; }
+.actions > :is(a, button):focus-visible { outline: 3px solid #954900; outline-offset: 3px; }
+.actions > button:disabled { opacity: .6; cursor: default; }
+.actions > button[data-completed="true"] { background: #F48220; border-color: #F48220; color: #5A2A00; opacity: 1; }
+.actions > button[data-completed="true"]:hover { background: #954900; border-color: #954900; color: white; }
+@media (max-width: 639px) { .actions > :is(a, button) { width: 100%; } }

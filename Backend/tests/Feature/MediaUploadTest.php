@@ -30,6 +30,18 @@ class MediaUploadTest extends TestCase
         $this->admin->forceFill(['role' => 'admin', 'account_status' => 'active'])->save();
     }
 
+    public function test_pdf_upload_accepts_valid_content_and_rejects_oversize_or_mismatch(): void
+    {
+        $this->actingAs($this->admin);
+        $pdf = "%PDF-1.4\n1 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF";
+        $response = $this->post('/api/admin/media', ['kind' => 'pdf', 'file' => UploadedFile::fake()->createWithContent('module.pdf', $pdf)], ['Accept' => 'application/json'])->assertCreated()->assertJsonPath('data.mime_type', 'application/pdf');
+        $path = $response->json('data.path');
+        $this->assertTrue(app(MediaService::class)->managed($path, 'pdf'));
+        Storage::disk('public')->assertExists($path);
+        $this->post('/api/admin/media', ['kind' => 'pdf', 'file' => UploadedFile::fake()->createWithContent('large.pdf', $pdf.str_repeat(' ', 5 * 1024 * 1024))], ['Accept' => 'application/json'])->assertUnprocessable();
+        $this->post('/api/admin/media', ['kind' => 'pdf', 'file' => UploadedFile::fake()->createWithContent('invalid.pdf', 'not a PDF')], ['Accept' => 'application/json'])->assertUnprocessable();
+    }
+
     private function image(): UploadedFile
     {
         return UploadedFile::fake()->createWithContent('photo.png', base64_decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aWQAAAABJRU5ErkJggg=='));

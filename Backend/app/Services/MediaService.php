@@ -14,6 +14,7 @@ class MediaService
         'image' => ['image/jpeg' => 'jpg', 'image/png' => 'png', 'image/webp' => 'webp'],
         'audio' => ['audio/mpeg' => 'mp3', 'audio/wav' => 'wav', 'audio/x-wav' => 'wav', 'audio/ogg' => 'ogg'],
         'video' => ['video/mp4' => 'mp4', 'video/webm' => 'webm'],
+        'pdf' => ['application/pdf' => 'pdf'],
     ];
 
     public const FIELDS = ['photo', 'image_src', 'image', 'thumbnail', 'video_url', 'audio_url', 'file_url'];
