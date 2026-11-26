@@ -175,12 +175,15 @@
 .questionBuilder :global(.placement-furigana-panel > div) { display:flex; flex-wrap:wrap; gap:8px; }
 .settings, .actionMenu { min-width:0; border-top:1px solid #e2e5ec; }
 .settings > .studioGrid { align-items:start; padding-top:8px; }
+.settingsHeading { margin:0; padding:16px 0 8px; font-size:13px; font-weight:600; }
 .settingsHint { color:#596579; font-size:12px; font-weight:400; line-height:1.6; }
 .settingsNote { margin:12px 0 0; padding:12px 14px; border:1px solid #e2e5ec; border-radius:8px; background:#F9F9FF; color:#596579; font-size:13px; line-height:1.6; }
 .secondaryActions { display:flex; flex-wrap:wrap; gap:8px; padding:8px 0; }
 .questionBuilder .danger { color:#b42318; }
 .editorFooter { display:flex; align-items:center; justify-content:space-between; gap:8px; border-top:1px solid #e2e5ec; padding-top:12px; }
 .editorFooter > span { font-size:12px; color:#526078; text-align:center; }
+:global(.admin-assessment-preview) .previewNavigation { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); }
+:global(.admin-assessment-preview) .previewNavigation > button { min-width:0; white-space:normal; padding:8px; }
 .previewReading { overflow-wrap:anywhere; }
 .previewOptions { display:grid; gap:12px; min-width:0; max-width:none; margin:0; padding:0; border:0; }
 .previewOptions label { display:flex; align-items:center; gap:12px; min-height:44px; min-width:0; padding:12px; border:1px solid #dfe2e8; border-radius:8px; }

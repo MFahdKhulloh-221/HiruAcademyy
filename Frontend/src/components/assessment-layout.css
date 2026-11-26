@@ -9,7 +9,7 @@
 .tryout-prestart .exam-start-notice { margin: 0; color: var(--muted); font-size: 13px; line-height: 1.6; }
 .tryout-runner-polished .exam-reading-passage { margin-bottom: 16px; padding: 20px; border: 1px solid var(--line); border-radius: 16px; background: white; min-width: 0; }
 .tryout-runner-polished .exam-reading-passage > h2 { display: flex; align-items: center; gap: 8px; margin: 0 0 12px; font-size: 18px; }
-.tryout-runner-polished .exam-reading-scroll { max-height: clamp(180px, 30dvh, 340px); overflow-y: auto; scrollbar-width: thin; scrollbar-color: #aeb5c2 #f5f6f8; scrollbar-gutter: stable; padding: 14px; border-radius: 10px; background: #f5f6f8; font-family: 'Noto Sans JP', 'Yu Gothic', Meiryo, sans-serif; font-size: 18px; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
+.tryout-runner-polished .exam-reading-scroll { max-height: none; overflow: visible; padding: 14px; border-radius: 10px; background: #f5f6f8; font-family: 'Noto Sans JP', 'Yu Gothic', Meiryo, sans-serif; font-size: 18px; line-height: 1.9; white-space: pre-wrap; overflow-wrap: anywhere; }
 .tryout-runner-polished .exam-reading-scroll h3 { margin: 0 0 10px; font-size: 18px; }
 .tryout-runner-polished .learning-question-card.exam-reading-questions { max-height: none; overflow: visible; }
 .tryout-runner-polished :is(.exam-reading-scroll, .exam-reading-questions):focus-visible { outline: 2px solid #954900; outline-offset: 3px; }
@@ -1277,6 +1277,13 @@
   .tryout-mobile-sheet > footer { padding: 12px 16px calc(16px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); }
   .tryout-mobile-sheet footer p { margin: 0 0 10px; font-size: 13px; font-weight: 600; }
   .tryout-mobile-sheet footer .button { width: 100%; }
+}
+
+.learning-question-page .learning-question-actions > .button[data-navigation="back"] { margin-left: 0; margin-right: 0; flex: 0 1 auto; border: 1px solid #CBD5E1; background: white; color: #162C46; }
+.learning-question-page .learning-question-actions > .button[data-navigation="next"] { margin-left: auto; flex: 0 1 auto; background: #F48220; border-color: #F48220; color: #5A2A00; }
+.assessment-review-back { display: flex; justify-content: flex-start; margin-bottom: 20px; }
+@media (hover: hover) {
+  .learning-question-page .learning-question-actions > .button[data-navigation="next"]:hover:not(:disabled) { background: #954900; border-color: #954900; color: white; }
 }
 
 /* Mobile exam controls stay compact without shrinking touch targets below 44px. */

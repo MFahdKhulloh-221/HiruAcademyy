@@ -1,0 +1,13 @@
+/* Shared action hover tokens. Important keeps page-specific hover rules from overriding these colors. */
+@media (hover: hover) {
+  :is(.button, .button-secondary, .sensei-back, .learning-top-back, .activity-action-button, .document-toolbar > a, .document-footer > a, [class*="_back"], [class*="_secondary"], .daily-result-retry):not(:disabled):not([aria-disabled="true"]):hover {
+    background-color: #F48220 !important;
+    border-color: #F48220 !important;
+    color: #5A2A00 !important;
+  }
+  :is(.button-primary, .activity-action-button, .public-login, [class*="_primary"], [class*="_start"], .document-footer > button, .daily-result-review, .runner-next-btn, button[aria-selected="true"], button[aria-pressed="true"]):not(:disabled):not([aria-disabled="true"]):hover {
+    background-color: #954900 !important;
+    border-color: #954900 !important;
+    color: #FFFFFF !important;
+  }
+}

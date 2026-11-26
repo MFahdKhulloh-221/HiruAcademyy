@@ -90,7 +90,7 @@ export default function ForgotPasswordPage() {
       <div className="auth-field"><label htmlFor="email">Email</label><input id="email" type="email" autoComplete="email" maxLength={255} required value={email} onChange={(event) => setEmail(event.target.value)} /></div>
       {sent && <div className="auth-field"><label htmlFor="otp">Kode OTP 6 digit</label><input id="otp" type="text" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} required value={otp} onChange={(event) => setOtp(event.target.value.replace(/\D/g, ""))} /><small>Jangan bagikan kode OTP kepada siapa pun.</small></div>}
       {error && <p className="recovery-error" role="alert">{error}</p>}
-      <div className="runner-actions"><button className="button button-primary" type="submit" disabled={busy || (!sent && remaining > 0)}>{busy ? "Memuat..." : sent ? "Verifikasi OTP" : remaining > 0 ? `Kirim OTP dalam ${remaining} detik` : "Kirim OTP"}</button>
+      <div className="runner-actions recovery-actions"><button className="button button-primary" type="submit" disabled={busy || (!sent && remaining > 0)}>{busy ? "Memuat..." : sent ? "Verifikasi OTP" : remaining > 0 ? `Kirim OTP dalam ${remaining} detik` : "Kirim OTP"}</button>
         {sent && <button className="button button-dark" type="button" disabled={busy || remaining > 0} onClick={() => void request(false)}>{remaining > 0 ? `Kirim ulang dalam ${remaining} detik` : "Kirim Ulang OTP"}</button>}
         <Link className="button button-dark" href="/login">Kembali ke Login</Link></div>
     </form>

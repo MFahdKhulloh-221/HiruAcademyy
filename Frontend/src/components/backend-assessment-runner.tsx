@@ -525,7 +525,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
       {!isReading && result.recommendation_level && result.recommendation_level.trim() !== "—" && <section className="daily-result-note"><h2>Rekomendasi</h2><p>{result.recommendation_level}</p></section>}
 
-      <footer className="daily-result-actions"><button className="button daily-result-review" type="button" disabled={flow.busy} onClick={async () => { if (await flow.review()) { setIndex(0); setReviewing(true); } }}>Review Jawaban<FiArrowRight aria-hidden="true" /></button><button className="button daily-result-retry" type="button" disabled={flow.busy} onClick={() => { setIndex(0); void flow.start(startBody); }}>Coba Lagi</button></footer>
+      <footer className="daily-result-actions"><button className="button daily-result-retry" type="button" disabled={flow.busy} onClick={() => { setIndex(0); void flow.start(startBody); }}>Coba Lagi</button><button className="button daily-result-review" type="button" disabled={flow.busy} onClick={async () => { if (await flow.review()) { setIndex(0); setReviewing(true); } }}>Review Jawaban<FiArrowRight aria-hidden="true" /></button></footer>
 
     </section>
 
@@ -664,7 +664,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
   return (
 
-    <div className={tryoutExperience ? `${className} tryout-runner-polished${tryoutExperience ? " tryout-placement-style" : ""}${domain === "tryout" ? ` tryout-readable-content ${tryOutJapaneseFont.variable}` : ""}${mobileTryout ? " tryout-mobile-exam" : ""}` : `${className}${readingLayout ? " reading-workspace" : ""}${domain === "learning" && (attempt.kind === "audio" || attempt.kind === "reading") && !answerReview ? " daily-practice-runner" : ""}`}>
+    <div className={tryoutExperience ? `${className}${domain === "checkpoint" ? ` checkpoint-readable-content ${tryOutJapaneseFont.variable}` : ""} tryout-runner-polished${tryoutExperience ? " tryout-placement-style" : ""}${domain === "tryout" ? ` tryout-readable-content ${tryOutJapaneseFont.variable}` : ""}${mobileTryout ? " tryout-mobile-exam" : ""}` : `${className}${domain === "learning" && attempt.kind === "mini" ? ` checkpoint-readable-content ${tryOutJapaneseFont.variable}` : ""}${readingLayout ? " reading-workspace" : ""}${domain === "learning" && (attempt.kind === "audio" || attempt.kind === "reading") && !answerReview ? " daily-practice-runner" : ""}`}>
 
       {examDialog}
 
@@ -692,6 +692,8 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
           <footer><p>{answeredCount} / {questions.length} dijawab</p><button type="button" className="button button-primary tryout-check-answer" disabled={flow.submitting} onClick={() => { mobileNavigator.current?.close(); navigateTryOut(index, true); }}>Periksa Jawaban</button></footer>
         </dialog>
       </>}
+
+      {reviewing && <div className="assessment-review-back"><button type="button" className="button button-secondary" onClick={() => setReviewing(false)}>Kembali ke Hasil</button></div>}
 
       <header className={`learning-question-head${tryoutExperience ? " tryout-exam-topbar" : ""}`} aria-label={tryoutExperience ? `Informasi pengerjaan ${examName}` : undefined}>
 
@@ -821,9 +823,9 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
               {reviewing && attempt.status === "completed" && (
 
-                <section>
+                <section className={readingLayout ? "reading-answer-explanation" : undefined}>
 
-                  <p>Penjelasan: {question.explanation ? <PlacementRichText value={question.explanation} /> : "Belum tersedia."}</p>
+                  <p>Penjelasan: {question.explanation ? <PlacementRichText value={readingLayout ? question.explanation.replace(/\s*Jawaban benar\s*:\s*[A-D]\s*\.?\s*(?=(?:<\/[^>]+>\s*)*$)/i, "") : question.explanation} /> : "Belum tersedia."}</p>
 
                 </section>
 
@@ -841,11 +843,9 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
               <>
 
-                {!isFirst && <button className="button button-secondary" type="button" onClick={() => setIndex(value => value - 1)}>Sebelumnya</button>}
+                {!isFirst && <button className="button button-secondary" data-navigation="back" type="button" onClick={() => setIndex(value => value - 1)}>Sebelumnya</button>}
 
-                {!isLast && <button className="button button-secondary" type="button" onClick={() => setIndex(value => value + 1)}>{readingLayout ? "Soal Berikutnya" : "Selanjutnya"}</button>}
-
-                <button type="button" className="button button-primary" onClick={() => setReviewing(false)}>Kembali ke Hasil</button>
+                {!isLast && <button className="button button-primary" data-navigation="next" type="button" onClick={() => setIndex(value => value + 1)}>{readingLayout ? "Soal Berikutnya" : "Selanjutnya"}</button>}
 
               </>
 
@@ -855,7 +855,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
                 {!isFirst && (
 
-                  <button className="button button-secondary" type="button" onClick={() => setIndex(value => value - 1)}>
+                  <button className="button button-secondary" data-navigation="back" type="button" onClick={() => setIndex(value => value - 1)}>
 
                     Sebelumnya
 
@@ -865,7 +865,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
                 {!isLast && (
 
-                  <button className="button button-secondary" type="button" onClick={() => setIndex(value => value + 1)}>
+                  <button className="button button-primary" data-navigation="next" type="button" onClick={() => setIndex(value => value + 1)}>
 
                     {readingLayout ? "Soal Berikutnya" : "Selanjutnya"}
 
@@ -873,11 +873,11 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
                 )}
 
-                {tryoutExperience && isLast && questions.length > 0 && <button type="button" className="button button-primary tryout-check-answer" disabled={flow.submitting} onClick={() => navigateTryOut(index, true)}>Periksa Jawaban</button>}
+                {tryoutExperience && isLast && questions.length > 0 && <button type="button" className="button button-primary tryout-check-answer" data-navigation="next" disabled={flow.submitting} onClick={() => navigateTryOut(index, true)}>Periksa Jawaban</button>}
 
                 {!tryoutExperience && isLast && questions.length > 0 && (
 
-                  <button type="button" className="button button-primary" disabled={flow.busy || Boolean(flow.error)} onClick={() => { if (!allAnswered) { unansweredDialog.current?.showModal(); return; } void flow.submit(); }}>
+                  <button type="button" className="button button-primary" data-navigation="next" disabled={flow.busy || Boolean(flow.error)} onClick={() => { if (!allAnswered) { unansweredDialog.current?.showModal(); return; } void flow.submit(); }}>
 
                     {flow.submitting ? "Mengumpulkan…" : flow.busy ? "Menyimpan…" : "Kumpulkan Jawaban"}
 

@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { StudentTopbar } from "@/components/student-topbar";
 import { StudentBreadcrumb } from "@/components/student-breadcrumb";
 import { StudentNavigation } from "@/components/student-navigation";
+import videoStyles from "./learning-video.module.css";
+import flashcardStyles from "./flashcard-session.module.css";
 import type { Membership } from "@/lib/dashboard-mock";
 
 export function LearningShell({ membership, level, chapter, current, breadcrumbLabel, children }: { membership: Membership; level: string; chapter: string; current: "overview" | "video" | "document" | "flashcards" | "audio" | "reading"; breadcrumbLabel: string; children: ReactNode }) {
@@ -19,7 +21,7 @@ export function LearningShell({ membership, level, chapter, current, breadcrumbL
   return (
     <div className="learning-shell student-shell">
       <StudentNavigation membership={membership} />
-      <div className="learning-main"><StudentTopbar membership={membership}><Link href={journeyHref}>← Journey</Link></StudentTopbar><main className={current === "flashcards" ? "learning-content flashcard-page" : "learning-content"}>{current !== "flashcards" && <StudentBreadcrumb items={breadcrumbs} />}{children}</main></div>
+      <div className="learning-main"><StudentTopbar membership={membership}><Link href={journeyHref}>← {current === "video" ? "Perjalanan Belajar" : "Journey"}</Link></StudentTopbar><main className={current === "flashcards" ? `learning-content flashcard-page ${flashcardStyles.content}` : current === "video" ? `learning-content ${videoStyles.content}` : "learning-content"}>{current !== "flashcards" && <StudentBreadcrumb items={breadcrumbs} />}{children}</main></div>
     </div>
   );
 }

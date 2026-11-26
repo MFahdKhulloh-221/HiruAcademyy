@@ -22,7 +22,7 @@
 .page [role="status"] { color: #162c46; }
 .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 .stats > div { display: flex; align-items: center; gap: 16px; padding: 20px; border: 1px solid var(--daily-border); border-radius: 14px; background: white; }
-.stats svg { width: 44px; height: 44px; padding: 11px; border-radius: 12px; background: #fff1e5; color: #162c46; }
+.stats svg { width: 44px; height: 44px; padding: 11px; border-radius: 12px; background: #fff; color: #F48220; }
 .stats span { color: #526275; font-size: 13px; }
 .stats strong { display: block; margin-top: 4px; color: #162c46; font-size: 26px; }
 .toolbar { display: grid; gap: 20px; }
@@ -35,7 +35,8 @@
 .filters .search input { width: 100%; }
 .filters > select { flex: 0 0 260px; }
 .search svg { position: absolute; left: 14px; }
-.search input { padding-left: 42px; }
+.page .filters .search input { padding-left: 44px; }
+.search svg { pointer-events: none; width: 18px; height: 18px; }
 .filters > select { max-width: 260px; }
 .list { min-width: 0; padding: 0; border: 1px solid var(--daily-border); border-radius: 14px; background: white; overflow: hidden; }
 .list :global(.admin-data-table-wrap) { border: 0; }

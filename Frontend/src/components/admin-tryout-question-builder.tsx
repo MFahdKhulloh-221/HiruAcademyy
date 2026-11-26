@@ -49,6 +49,7 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
   }
   const title = studioTitle ?? (draft.kind === "checkpoint" ? "Checkpoint" : "Try Out");
   const grammarLabel = fixedSession !== undefined ? "Pola Kalimat" : "Tata Bahasa";
+  const SettingsContainer = draft.kind === "tryout" ? "section" : "details";
   const sections = assessmentSections(draft);
   const [session, setSession] = useState(() => fixedSession ?? (audioOnly ? 3 : readingOnly ? 2 : Math.max(0, sections.indexOf(initialQuestion?.section ?? sections[0]))));
   const [activeId, setActiveId] = useState(initialQuestion?.id ?? orderedAssessmentQuestions(draft)[0]?.id ?? "");
@@ -185,8 +186,8 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
                 <section className={styles.answerSection} aria-label="Pilihan Jawaban"><h3>Pilihan Jawaban</h3><div className={styles.studioGrid}>{active.answers.map((answer, index) => <div key={index} className={`${styles.studioAnswer} ${index === active.correctAnswer ? styles.correctAnswer : ""}`}><PlacementTextEditor shared disabled={busy} label={`Pilihan ${assessmentLetters[index]}`} value={answer} onChange={value => update({ ...active, answers: active.answers.map((answer, position) => index === position ? value : answer) })} /></div>)}</div></section>
                 <label className="admin-field">Kunci Jawaban<select aria-label="Jawaban Benar" value={active.correctAnswer} onChange={event => update({ ...active, correctAnswer: Number(event.target.value) })}><option value={-1}>Pilih kunci jawaban</option>{active.answers.map((_, index) => <option key={index} value={index}>{assessmentLetters[index]}</option>)}</select></label>
                 <PlacementTextEditor shared disabled={busy} label="Pembahasan" value={active.explanation} onChange={explanation => update({ ...active, explanation })} />
-                <details className={styles.settings}>
-                  <summary>Pengaturan soal</summary>
+                <SettingsContainer className={styles.settings}>
+                  {draft.kind === "tryout" ? <h3 className={styles.settingsHeading}>Pengaturan soal</h3> : <summary>Pengaturan soal</summary>}
                   <div className={styles.studioGrid}>
                     {!chapterOnly && <label className="admin-field">Bobot poin
                       <input type="number" aria-label="Bobot poin" min="1" max="180" step={draft.kind === "tryout" ? 0.25 : 1} aria-describedby={draft.kind === "tryout" ? "tryout-point-hint" : undefined} value={active.pointValue ?? ""} onChange={event => update({ ...active, pointValue: event.target.value === "" ? undefined : Number(event.target.value) })} />
@@ -195,7 +196,7 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
                     <label className="admin-field">Status soal<select value={active.status} onChange={event => update({ ...active, status: event.target.value as AdminAssessmentQuestion["status"] })}><option>Draft</option><option>Published</option></select></label>
                   </div>
                   {draft.kind === "tryout" && !chapterOnly && fixedSession === undefined && <p className={styles.settingsNote}>Nilai sesi dan total dibulatkan setelah penjumlahan. Contoh: <strong>81,75 menjadi 82.</strong></p>}
-                </details>
+                </SettingsContainer>
               </fieldset>
               {questionNavigation}
             </section>

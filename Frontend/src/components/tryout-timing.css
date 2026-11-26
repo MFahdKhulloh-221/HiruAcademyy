@@ -35,6 +35,21 @@
   font-weight: 400;
 }
 
+.checkpoint-readable-content.checkpoint-readable-content .learning-question-card h2 {
+  font-size: clamp(16px, 1.5vw, 20px);
+  line-height: 1.8;
+  font-weight: 400;
+  overflow-wrap: anywhere;
+}
+.checkpoint-readable-content .placement-rich-content {
+  font-family: var(--font-tryout-japanese), "Hiragino Kaku Gothic ProN", "Yu Gothic", Meiryo, sans-serif;
+  font-weight: 400;
+}
+.checkpoint-readable-content .placement-rich-content :is(strong, b) { font-weight: 700; }
+.checkpoint-readable-content .placement-rich-content :is(em, i) { font-style: italic; }
+.checkpoint-readable-content .placement-rich-content u { text-decoration: underline; text-underline-offset: .15em; }
+.checkpoint-readable-content .placement-rich-content rt { font-size: .55em; line-height: 1; font-weight: 400; }
+
 .tryout-active-session {
   display: grid;
   gap: .5rem;

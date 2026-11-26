@@ -110,6 +110,8 @@ function AssessmentWorkspace({ kind, navigation }: { kind: AdminAssessmentKind; 
   }
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
+    const invalid = event.currentTarget.querySelector<HTMLInputElement | HTMLSelectElement>(":invalid");
+    if (invalid) { invalid.focus(); reportError(`${invalid.labels?.[0]?.childNodes[0]?.textContent?.trim() || "Isian paket"}: ${invalid.validationMessage}`); return; }
     if (draft) await persist(draft);
   }
   const packageDirty = Boolean(draft && JSON.stringify(draft) !== JSON.stringify(rows.find(row => row.id === draft.id)));

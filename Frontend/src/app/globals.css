@@ -202,6 +202,9 @@ a { color:inherit; text-decoration:none; }
 .auth-footnote { margin:24px auto 0; color:#9296a1; font-size:11px; text-align:center; }
 .auth-page .auth-card { min-width:0; overflow-wrap:anywhere; }
 .auth-page .runner-actions { display:flex; flex-wrap:wrap; gap:12px; }
+.auth-page .recovery-actions { flex-direction:column; align-items:flex-end; }
+.auth-page .runner-actions.recovery-actions > .button { flex:0 1 auto; width:auto; }
+.auth-page .recovery-actions > a { align-self:flex-start; }
 .auth-page .runner-actions .button { min-width:0; max-width:100%; flex:1 1 180px; padding:12px 16px; white-space:normal; text-align:center; }
 .auth-page .auth-field input { min-width:0; }
 .auth-page .auth-form-row { flex-wrap:wrap; }

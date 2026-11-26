@@ -67,7 +67,8 @@
 .resultStats [data-outcome="wrong"] dd { color: #9B303C; }
 .resultFooter { display: flex; flex-direction: column; align-items: center; gap: 20px; text-align: center; }
 .resultFooter > p { max-width: 50ch; color: #43546A; font-size: .9rem; }
-.resultActions { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; }
+.resultActions { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 12px; width: 100%; }
+.resultActions > button + button { margin-left: auto; }
 .resultActions button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 @media (max-width: 639px) { .resultSummary { grid-template-columns: minmax(0, 1fr); padding: 16px; gap: 20px; } .resultScore { text-align: center; } .resultStats { gap: 8px; } .resultStats > div { padding: 12px 6px; } .resultActions { width: 100%; } .resultActions button { width: 100%; } }
 .progress { display: grid; gap: 8px; }

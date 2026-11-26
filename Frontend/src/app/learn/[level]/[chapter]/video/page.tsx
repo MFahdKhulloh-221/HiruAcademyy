@@ -3,7 +3,7 @@ import { Suspense } from "react";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { LearningVertical } from "@/components/learning-vertical";
 
-export const metadata: Metadata = { title: "Video Lesson", description: "Pelajaran video HIRU Academy.", robots: { index: false, follow: false } };
+export const metadata: Metadata = { title: "Video Pembelajaran", description: "Pelajaran video HIRU Academy.", robots: { index: false, follow: false } };
 
 export function generateStaticParams() {
   return ["dasar", "n5", "n4", "n3", "n2", "n1"].flatMap((level) => ["chapter-1", "chapter-2", "chapter-3", "chapter-4"].map((chapter) => ({ level, chapter })));

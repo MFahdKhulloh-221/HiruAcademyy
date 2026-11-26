@@ -63,7 +63,8 @@
 .certificateGrid{display:grid;gap:20px;margin-top:20px}
 .certificateCard{min-width:0}
 .certificateCard>a{margin-top:12px}
-.pagination{display:flex;flex-wrap:wrap;align-items:center;gap:12px;margin-top:20px;font-size:13px}
+.pagination{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;margin-top:20px;font-size:13px}
+.pagination>button:last-child{margin-left:auto}
 .filter{font-size:14px;line-height:1.75;margin-bottom:24px}
 .filter a{color:#142c49;text-decoration:underline;font-weight:700}
 @media(max-width:1023px){.layout{grid-template-columns:1fr}.empty{min-height:390px}.page{padding:24px}.checkHeading{margin-bottom:20px}}

@@ -978,19 +978,14 @@ rt { color: var(--secondary); }
   font-weight: 700;
   color: var(--secondary);
 }
-.placement-question-prompt {
-  max-height: 32vh;
-  max-height: 32dvh;
-  overflow-y: auto;
+.placement-assessment .question-card .placement-question-prompt {
   overflow-wrap: anywhere;
   white-space: pre-wrap;
-  scrollbar-gutter: stable;
-  padding-right: 12px;
   margin: 0 0 24px;
-  font-size: clamp(20px, 2.5vw, 26px);
-  line-height: 1.4;
+  font-size: 18px;
+  line-height: 1.8;
   color: var(--navy);
-  font-weight: 700;
+  font-weight: 400;
 }
 .placement-audio-hint {
   display: flex;
@@ -2227,9 +2222,16 @@ rt { color: var(--secondary); }
   margin-bottom: 24px;
 }
 .register-actions .button-primary {
-  min-width: 260px;
+  min-width: min(260px, 100%);
+  max-width: 100%;
+  width: auto;
+  align-self: flex-end;
   justify-content: center;
-  margin: 0 auto;
+  margin: 0;
+}
+.register-actions > .text-link {
+  align-self: flex-start;
+  text-align: left;
 }
 .register-actions .auth-switch {
   margin-top: 16px;
@@ -5795,7 +5797,7 @@ video { height: auto; }
 .flashcard-complete > header h1 { font-size: clamp(24px, 3vw, 36px); line-height: 1.25; margin: 12px 0; overflow-wrap: anywhere; }
 .flashcard-complete > header p { line-height: 1.6; }
 .flashcard-complete .flashcard-confidence-summary { gap: 12px; margin: 24px 0; }
-.flashcard-complete .flashcard-complete-actions { justify-content: center; margin: 24px 0; }
+.flashcard-complete .flashcard-complete-actions { justify-content: space-between; margin: 24px 0; }
 .flashcard-complete .flashcard-difficult article { display: grid; gap: 8px; overflow-wrap: anywhere; }
 .flashcard-complete .flashcard-difficult article span { color: var(--muted); font-size: 13px; }
 .flashcard-complete > aside { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
@@ -5804,7 +5806,7 @@ video { height: auto; }
   .flashcard-complete { padding: 20px 16px; }
   .flashcard-complete .flashcard-confidence-summary { gap: 8px; }
   .flashcard-complete .flashcard-confidence-summary > div { padding: 14px 6px; }
-  .flashcard-complete .flashcard-complete-actions > * { width: 100%; justify-content: center; text-align: center; }
+  .flashcard-complete .flashcard-complete-actions > * { max-width: 100%; justify-content: center; text-align: center; }
   .flashcard-complete .flashcard-difficult > div { grid-template-columns: minmax(0, 1fr); }
 }
 
@@ -7150,7 +7152,7 @@ video { height: auto; }
   .flashcard-confidence { gap: 12px; flex-wrap: wrap; }
   .flashcard-confidence button { flex: 1 1 100px; }
   .flashcard-complete-summary, .flashcard-difficult > div { grid-template-columns: minmax(0, 1fr); }
-  .flashcard-complete-actions { flex-direction: column; }
+  .flashcard-complete-actions { flex-direction: column; align-items: flex-start; }
   .document-paper, .learning-question-card, .reading-passage { padding: 20px 16px; }
   .document-pages { display: flex; overflow-x: auto; max-width: 100%; gap: 8px; padding-block: 4px; }
   .document-pages button { flex: 0 0 130px; }

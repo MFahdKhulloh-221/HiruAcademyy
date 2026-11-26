@@ -4,6 +4,7 @@
 .header p { color: #595e70; }
 .eyebrow { font-size: 12px; font-weight: 800; letter-spacing: .12em; color: #954900; }
 .actions { display: flex; align-items: center; flex-wrap: wrap; gap: 12px; }
+.pagination { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .panel { min-width: 0; padding: 24px; background: #fff; border: 1px solid #e1e4ec; border-radius: 16px; margin-bottom: 20px; }
 .panel h2 { font-size: 18px; font-weight: 700; margin: 0 0 20px; }
 .studio label { display: grid; gap: 8px; margin-bottom: 22px; font-weight: 600; font-size: 14px; }

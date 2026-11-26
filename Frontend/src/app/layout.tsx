@@ -4,6 +4,7 @@ import { AuthProvider } from "@/components/auth-provider";
 import { GoogleAnalytics } from "@/components/google-analytics";
 import "./globals.css";
 import "./stitch-visual.css";
+import "./button-hover.css";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-plus-jakarta-sans",

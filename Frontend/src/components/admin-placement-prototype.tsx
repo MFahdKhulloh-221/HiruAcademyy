@@ -187,7 +187,7 @@ function PlacementEditor({ initial }: { initial: Awaited<ReturnType<typeof loadA
           </div>
         }}
       />
-      {filteredLeads.length > 10 && <div className={styles.bankFooter}><span role="status">Halaman {currentLeadPage} / {leadPages} · {filteredLeads.length} peserta</span><div className={styles.actions}><button type="button" className="button button-secondary" disabled={currentLeadPage <= 1} onClick={() => setLeadPage(currentLeadPage - 1)}>Sebelumnya</button><button type="button" className="button button-secondary" disabled={currentLeadPage >= leadPages} onClick={() => setLeadPage(currentLeadPage + 1)}>Berikutnya</button></div></div>}
+      {filteredLeads.length > 10 && <div className={styles.bankFooter}><span role="status">Halaman {currentLeadPage} / {leadPages} · {filteredLeads.length} peserta</span><div className={styles.pagination}><button type="button" className="button button-secondary" disabled={currentLeadPage <= 1} onClick={() => setLeadPage(currentLeadPage - 1)}>Sebelumnya</button><button type="button" className="button button-secondary" disabled={currentLeadPage >= leadPages} onClick={() => setLeadPage(currentLeadPage + 1)}>Berikutnya</button></div></div>}
     </AdminSection>}
     </AdminTabs>
 

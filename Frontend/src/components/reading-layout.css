@@ -20,7 +20,7 @@
   .reading-assessment:not(.reading-workspace) .learning-question-card > .dash-kicker { margin-block: 0 8px; }
   .reading-assessment:not(.reading-workspace) .reading-panels { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: stretch; }
   .reading-assessment:not(.reading-workspace) .reading-panels > .reading-passage,
-  .reading-assessment:not(.reading-workspace) .reading-panels > div { height: clamp(24rem, calc(100dvh - 240px), 50rem); overflow-y: auto; scrollbar-gutter: stable; }
+  .reading-assessment:not(.reading-workspace) .reading-panels > div { height: auto; max-height: none; overflow: visible; }
   .reading-assessment:not(.reading-workspace) .reading-panels > div { padding: 2px 4px 4px; }
   .reading-assessment:not(.reading-workspace) .learning-question-head { margin-bottom: 8px; }
   .reading-assessment:not(.reading-workspace) .learning-question-head h1 { font-size: 28px; line-height: 1.2; }
@@ -55,12 +55,16 @@
 .reading-workspace .reading-passage, .reading-workspace .learning-question-card { margin: 0; padding: 20px; min-width: 0; border: 1px solid #e2e5ec; border-radius: 16px; background: white; box-shadow: 0 3px 12px #18243b05; overflow-wrap: anywhere; }
 .reading-workspace .reading-passage-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .reading-workspace .reading-passage-header h2 { margin: 0; font-size: 18px; }
-.reading-workspace .reading-passage-body { height: clamp(180px, 30dvh, 340px); overflow-y: auto; scrollbar-gutter: stable; padding: 16px; border-radius: 10px; background: #fffaf4; white-space: pre-wrap; font-family: 'Noto Sans JP', 'Yu Gothic', Meiryo, sans-serif; font-size: 18px; line-height: 1.9; }
+.reading-workspace .reading-passage-body { height: auto; max-height: none; overflow: visible; padding: 16px; border-radius: 10px; background: #fffaf4; white-space: pre-wrap; font-family: 'Noto Sans JP', 'Yu Gothic', Meiryo, sans-serif; font-size: 18px; line-height: 1.9; }
+.reading-workspace .reading-answer-explanation { margin-top: 24px; padding: 20px; border: 1px solid #E3E9F0; border-radius: 12px; background: #F9F9FF; line-height: 1.8; overflow-wrap: anywhere; }
+.reading-workspace .reading-answer-explanation p { margin: 0; }
 .reading-workspace .reading-passage-body h3 { margin: 0 0 12px; font-size: 18px; }
-.reading-workspace .reading-question-copy { max-height: clamp(140px, 22dvh, 240px); overflow-y: auto; scrollbar-gutter: stable; white-space: pre-wrap; overflow-wrap: anywhere; }
+.reading-workspace .reading-question-copy { max-height: none; overflow: visible; white-space: pre-wrap; overflow-wrap: anywhere; }
 .reading-workspace .reading-question-copy h2 { margin: 8px 0; font-size: 20px; line-height: 1.65; }
 .reading-workspace .learning-question-card > .dash-kicker { margin: 0 0 12px; }
-.reading-workspace fieldset { display: grid; gap: 10px; min-inline-size: 0; margin: 16px 0 0; padding: 0; border: 0; }
+.reading-workspace .learning-question-card > fieldset { display: grid; grid-template-columns: minmax(0, 1fr); gap: 10px; min-inline-size: 0; width: 100%; max-width: none; box-sizing: border-box; margin: 16px 0 0; padding: 0; border: 0; }
+.reading-workspace .learning-question-card > fieldset > label,
+.reading-workspace .learning-question-card > .reading-answer-explanation { width: 100%; max-width: none; min-width: 0; box-sizing: border-box; }
 .reading-workspace fieldset label { display: flex; align-items: flex-start; gap: 12px; min-height: 48px; margin: 0; padding: 12px 16px; border: 1px solid #dfe3eb; border-radius: 12px; background: white; cursor: pointer; line-height: 1.6; }
 .reading-workspace fieldset label span { min-width: 0; overflow-wrap: anywhere; }
 .reading-workspace fieldset input { flex: 0 0 18px; width: 18px; height: 18px; margin-top: 4px; accent-color: #954900; }
