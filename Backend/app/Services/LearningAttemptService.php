@@ -28,6 +28,10 @@ class LearningAttemptService
                 if ($session !== 1 || $part !== 1) {
                     throw ValidationException::withMessages(['session' => 'Mini Checkpoint requires session=1 and part=1.']);
                 }
+                $errors = app(LearningContentService::class)->miniReadiness($chapter);
+                if ($errors !== []) {
+                    throw ValidationException::withMessages($errors);
+                }
                 $configuration = $this->chapterMiniConfiguration($chapter);
                 $questions = $chapter->miniCheckpointQuestions()->where('status', 'published')->get();
             } else {
@@ -46,7 +50,8 @@ class LearningAttemptService
                     $passage = $question->readingPassage;
                     $item['passage'] = ['id' => $passage->id, 'title' => $passage->title, 'body' => $passage->body];
                 } elseif ($kind === 'mini') {
-                    $item += $configuration;
+                    $item += $configuration + $question->only(['category', 'instruction', 'image_url', 'image_alt', 'image_position', 'audio_url', 'passage']);
+                    $item['image'] = $question->image_url;
                 }
                 $content[] = $item;
                 $grading[$question->id] = ['correct_option' => $question->correct_option, 'explanation' => $question->explanation];
@@ -270,6 +275,9 @@ class LearningAttemptService
         $questions = [];
         foreach ($attempt->content_snapshot as $question) {
             $item = array_intersect_key($question, array_flip(['id', 'question', 'title', 'audio_url', 'session', 'part', 'duration_minutes']));
+            if ($attempt->kind === 'mini') {
+                $item += array_intersect_key($question, array_flip(['category', 'instruction', 'image_url', 'image', 'image_alt', 'image_position', 'passage']));
+            }
             $item['options'] = array_intersect_key($question['options'], array_flip(['A', 'B', 'C', 'D']));
             if (isset($question['passage'])) {
                 $item['passage'] = array_intersect_key($question['passage'], array_flip(['id', 'title', 'body']));

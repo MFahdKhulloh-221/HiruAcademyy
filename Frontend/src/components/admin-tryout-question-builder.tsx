@@ -37,7 +37,8 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
   const [uploading, setUploading] = useState(false);
   const busy = saving || uploading;
   const chapterOnly = readingOnly || audioOnly;
-  const imagesEnabled = draft.kind === "tryout" && !chapterOnly && draft.builderCapabilities?.images === true;
+  const mini = draft.kind === "mini";
+  const imagesEnabled = (draft.kind === "tryout" || mini) && !chapterOnly && draft.builderCapabilities?.images === true;
   const draftRef = useRef(draft);
   useEffect(() => { draftRef.current = draft; }, [draft]);
   const pendingUpload = useRef(false);
@@ -48,7 +49,7 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
     onChange(group ? { ...current, passages: current.passages?.map(item => item.id === owner ? { ...item, ...metadata } : item) } : { ...current, questions: current.questions.map(item => item.id === owner ? { ...item, ...metadata } : item) });
   }
   const title = studioTitle ?? (draft.kind === "checkpoint" ? "Checkpoint" : "Try Out");
-  const grammarLabel = fixedSession !== undefined ? "Pola Kalimat" : "Tata Bahasa";
+  const grammarLabel = fixedSession !== undefined || mini ? "Pola Kalimat" : "Tata Bahasa";
   const SettingsContainer = draft.kind === "tryout" ? "section" : "details";
   const sections = assessmentSections(draft);
   const [session, setSession] = useState(() => fixedSession ?? (audioOnly ? 3 : readingOnly ? 2 : Math.max(0, sections.indexOf(initialQuestion?.section ?? sections[0]))));
@@ -80,7 +81,7 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
     onChange({ ...draft, questions: draft.questions.map(item => item.id === question.id ? question : item) });
   }
   function newQuestion(passageId?: string, offset = 0): AdminAssessmentQuestion {
-    return { id: crypto.randomUUID(), section: sections[session], type: session === 2 ? "Reading" : session === 3 ? "Audio" : "Multiple choice", prompt: "", answers: ["", "", "", ""], correctAnswer: -1, instruction: "", explanation: "", passage: "", passageId: passageId ?? null, file: null, order: String(questions.reduce((max, question) => Math.max(max, Number(question.order)), -1) + 1 + offset), status: "Draft" };
+    return { id: crypto.randomUUID(), ...(mini ? { miniCategory: (["vocabulary", "grammar", "reading", "audio"] as const)[session] } : {}), section: sections[session], type: session === 2 ? "Reading" : session === 3 ? "Audio" : "Multiple choice", prompt: "", answers: ["", "", "", ""], correctAnswer: -1, instruction: "", explanation: "", passage: "", passageId: passageId ?? null, file: null, order: String(questions.reduce((max, question) => Math.max(max, Number(question.order)), -1) + 1 + offset), status: "Draft" };
   }
   function add(passageId?: string) {
     const question = newQuestion(passageId);
@@ -146,7 +147,7 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
     <AdminErrorDialog error={popup} close={() => { setPopup(null); setIssue(""); }} />
     {error && <p role="alert">{error}</p>}
     {issue && <p role="alert">{issue}</p>}
-    {!chapterOnly && fixedSession === undefined && <AdminTabs tabs={labels} active={labels[session]} label={`Sesi ${title}`} onChange={label => { if (pendingUpload.current) return; const next = labels.indexOf(label); setSession(next); setActiveId(orderedAssessmentQuestions(draft).find(question => question.section === sections[next])?.id ?? ""); setSearch(""); setPreview(false); }} />}
+    {!chapterOnly && fixedSession === undefined && <AdminTabs tabs={labels} active={labels[session]} label={`${mini ? "Kategori" : "Sesi"} ${title}`} onChange={label => { if (pendingUpload.current) return; const next = labels.indexOf(label); setSession(next); setActiveId(orderedAssessmentQuestions(draft).find(question => question.section === sections[next])?.id ?? ""); setSearch(""); setPreview(false); }} />}
     <div className={styles.sessionContext}>
       <div><h2>{session === 1 ? grammarLabel : labels[session]}</h2><p>{questions.length} soal{groupEnabled && passage ? ` / ${passage.title} / Nomor ${groupRange}` : ""}</p></div>
       <div className={styles.studioNavigation} inert={uploading}>{navigation}<AdminTabs tabs={["Editor", "Pratinjau Siswa"]} active={preview ? "Pratinjau Siswa" : "Editor"} label="Mode editor" onChange={value => setPreview(value !== "Editor")} /></div>
@@ -164,7 +165,7 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
       <section className={styles.studioEditor} aria-label="Editor Konten">
         {active ? preview ? <div className={styles.previewReading} aria-label="Pratinjau Siswa" role="region" key={active.id}>
           {(session === 2 || grammarStimulus && passage) && <section className={styles.passageEditor} aria-label="Teks bacaan"><span className={styles.eyebrow}>{passage ? "Bacaan Bersama" : "Teks Bacaan"}</span><h3>{passage?.title ?? "Teks Bacaan"}</h3>{passage ? <AssessmentPassageContent passage={passage} /> : <PlacementRichText value={active.passage} />}</section>}
-          <section className={styles.questionCard}><span className={styles.eyebrow}>Pertanyaan</span><h3>Soal {position + 1} dari {questions.length}</h3>{active.instruction && <PlacementRichText value={active.instruction} />}{active.type === "Audio" && active.audioUrl && <audio controls src={adminMediaUrl(active.audioUrl)} />}<AssessmentContent content={imagesEnabled ? active : {}}><h3><PlacementRichText value={active.prompt} /></h3></AssessmentContent><fieldset className={`${styles.previewOptions} ${fixedSession !== undefined ? daily.previewOptions : ""}`}><legend>Pilihan jawaban pratinjau</legend>{active.answers.map((answer, index) => <label key={index}><input type="radio" name={`preview-${active.id}`} /><b>{assessmentLetters[index]}</b><PlacementRichText value={answer} /></label>)}</fieldset>{questionNavigation}</section>
+          <section className={styles.questionCard}><span className={styles.eyebrow}>Pertanyaan</span><h3>Soal {position + 1} dari {questions.length}</h3>{active.instruction && <PlacementRichText value={active.instruction} />}{(active.type === "Audio" || mini) && active.audioUrl && <audio controls src={adminMediaUrl(active.audioUrl)} />}<AssessmentContent content={imagesEnabled ? active : {}}><h3><PlacementRichText value={active.prompt} /></h3></AssessmentContent><fieldset className={`${styles.previewOptions} ${fixedSession !== undefined ? daily.previewOptions : ""}`}><legend>Pilihan jawaban pratinjau</legend>{active.answers.map((answer, index) => <label key={index}><input type="radio" name={`preview-${active.id}`} /><b>{assessmentLetters[index]}</b><PlacementRichText value={answer} /></label>)}</fieldset>{questionNavigation}</section>
         </div> : <PlacementEditorProvider key={active.id}>
           <div className={styles.editorStack}>
             {(session === 2 || grammarStimulus && passage) && <details open className={styles.passageEditor} key={passage?.id ?? active.id}><summary><span><span className={styles.eyebrow}>{passage ? "BACAAN BERSAMA" : "BACAAN MANDIRI"}</span><strong>{passage?.title ?? "Teks Bacaan"}</strong></span><FiChevronDown className={styles.passageChevron} aria-hidden="true" /></summary><fieldset className={styles.editorFields} disabled={busy}>
@@ -181,7 +182,11 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
               <fieldset className={styles.editorFields} disabled={busy}>
                 {grammarStimulus && !passage && sessionPassages.length > 0 && <label className="admin-field">Hubungkan ke grup bacaan<select value="" onChange={event => update({ ...active, passageId: event.target.value || null, passage: "" })}><option value="">Tanpa bacaan</option>{sessionPassages.map(item => <option key={item.id} value={item.id}>{item.title}</option>)}</select></label>}
                 {active.type === "Audio" && <>{audioOnly && <label className="admin-field">Judul audio<input value={active.audioTitle ?? ""} onChange={event => update({ ...active, audioTitle: event.target.value })} /></label>}<AdminMediaUpload kind="audio" onBusyChange={uploadBusy} onError={message => reportIssue(`${assessmentQuestionLocation(active, draft)} — Upload audio: ${message}\nPilih file audio yang sesuai lalu unggah kembali. Isian soal tetap tersedia.`)} onUploaded={audioUrl => update({ ...active, audioUrl })} /><label className="admin-field">URL audio<input value={active.audioUrl ?? ""} onChange={event => update({ ...active, audioUrl: event.target.value })} /></label></>}
-                {draft.kind === "tryout" && !chapterOnly && <AssessmentImageEditor key={`question-${active.id}`} content={active} enabled={imagesEnabled} label="Gambar Soal (Opsional)" onBusyChange={uploadBusy} onChange={image => updateImage(active.id, false, image)} />}
+                {(draft.kind === "tryout" || mini) && !chapterOnly && <AssessmentImageEditor key={`question-${active.id}`} content={active} enabled={imagesEnabled} label="Gambar Soal (Opsional)" onBusyChange={uploadBusy} onChange={image => updateImage(active.id, false, image)} />}
+                {mini && active.passageId && <button type="button" className="button" onClick={() => update({ ...active, passageId: null, passage: "" })}>Lepaskan dari grup bacaan</button>}
+                {mini && <label className="admin-field">Kategori (opsional)<select value={active.miniCategory ?? ""} onChange={event => { const category = event.target.value as AdminAssessmentQuestion["miniCategory"]; const index = ["vocabulary", "grammar", "reading", "audio"].indexOf(category ?? ""); if (active.passageId && index !== 2) { reportIssue("Lepaskan grup bacaan sebelum mengganti kategori."); return; } update({ ...active, miniCategory: category || null, section: sections[Math.max(0, index)], type: category === "audio" ? "Audio" : category === "reading" ? "Reading" : "Multiple choice" }); setSession(Math.max(0, index)); }}><option value="">Tanpa kategori</option><option value="vocabulary">Kosakata & Kanji</option><option value="grammar">Pola Kalimat</option><option value="reading">Reading</option><option value="audio">Audio</option></select></label>}
+                {mini && <PlacementTextEditor shared disabled={busy} label="Instruksi (opsional)" value={active.instruction} onChange={instruction => update({ ...active, instruction })} />}
+                {mini && active.audioUrl && <audio controls preload="metadata" src={adminMediaUrl(active.audioUrl)} aria-label="Pratinjau audio" />}
                 <PlacementTextEditor shared disabled={busy} label="Pertanyaan" value={active.prompt} onChange={prompt => update({ ...active, prompt })} />
                 <section className={styles.answerSection} aria-label="Pilihan Jawaban"><h3>Pilihan Jawaban</h3><div className={styles.studioGrid}>{active.answers.map((answer, index) => <div key={index} className={`${styles.studioAnswer} ${index === active.correctAnswer ? styles.correctAnswer : ""}`}><PlacementTextEditor shared disabled={busy} label={`Pilihan ${assessmentLetters[index]}`} value={answer} onChange={value => update({ ...active, answers: active.answers.map((answer, position) => index === position ? value : answer) })} /></div>)}</div></section>
                 <label className="admin-field">Kunci Jawaban<select aria-label="Jawaban Benar" value={active.correctAnswer} onChange={event => update({ ...active, correctAnswer: Number(event.target.value) })}><option value={-1}>Pilih kunci jawaban</option>{active.answers.map((_, index) => <option key={index} value={index}>{assessmentLetters[index]}</option>)}</select></label>
@@ -189,11 +194,11 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
                 <SettingsContainer className={styles.settings}>
                   {draft.kind === "tryout" ? <h3 className={styles.settingsHeading}>Pengaturan soal</h3> : <summary>Pengaturan soal</summary>}
                   <div className={styles.studioGrid}>
-                    {!chapterOnly && <label className="admin-field">Bobot poin
+                    {!chapterOnly && !mini && <label className="admin-field">Bobot poin
                       <input type="number" aria-label="Bobot poin" min="1" max="180" step={draft.kind === "tryout" ? 0.25 : 1} aria-describedby={draft.kind === "tryout" ? "tryout-point-hint" : undefined} value={active.pointValue ?? ""} onChange={event => update({ ...active, pointValue: event.target.value === "" ? undefined : Number(event.target.value) })} />
                       {draft.kind === "tryout" && <span id="tryout-point-hint" className={styles.settingsHint}>Rentang 1–180. Contoh: 2 · 2,25 · 2,50 · 2,75.</span>}
                     </label>}
-                    <label className="admin-field">Status soal<select value={active.status} onChange={event => update({ ...active, status: event.target.value as AdminAssessmentQuestion["status"] })}><option>Draft</option><option>Published</option></select></label>
+                    <label className="admin-field">Status soal<select value={active.status} onChange={event => update({ ...active, status: event.target.value as AdminAssessmentQuestion["status"] })}><option value="Draft">Draft</option><option value="Published">{mini ? "Terbit" : "Published"}</option></select></label>
                   </div>
                   {draft.kind === "tryout" && !chapterOnly && fixedSession === undefined && <p className={styles.settingsNote}>Nilai sesi dan total dibulatkan setelah penjumlahan. Contoh: <strong>81,75 menjadi 82.</strong></p>}
                 </SettingsContainer>

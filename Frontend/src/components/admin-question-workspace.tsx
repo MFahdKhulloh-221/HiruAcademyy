@@ -16,6 +16,7 @@ import { adminMediaUrl, rememberAdminMedia } from "@/lib/admin-media";
 import { FiBookOpen } from "react-icons/fi";
 import { AdminAudioWorkspace } from "@/components/admin-audio-workspace";
 import { AdminReadingWorkspace } from "@/components/admin-reading-workspace";
+import { AdminMiniCheckpointWorkspace } from "@/components/admin-mini-checkpoint-workspace";
 
 type Kind = "Audio" | "Reading" | "Mini Checkpoint" | "Checkpoint";
 type Question = { id: number; chapter_id?: number; reading_passage_id?: number; question: string; title?: string; audio_url?: string; options: Record<string, string>; correct_option: string; explanation: string | null; sort_order: number; status: "draft" | "published" };
@@ -27,7 +28,7 @@ function QuestionWorkspaceFrame({ nested, route, className, children }: { nested
 }
 
 export function AdminQuestionWorkspace(props: { kind: Kind; navigation?: ReactNode; nested?: boolean }) {
-  return props.kind === "Checkpoint" ? <AdminCheckpointWorkspace /> : props.kind === "Reading" ? <AdminReadingWorkspace navigation={props.navigation} nested={props.nested} /> : props.kind === "Audio" ? <AdminAudioWorkspace navigation={props.navigation} nested={props.nested} /> : <ChapterQuestionWorkspace {...props} />;
+  return props.kind === "Checkpoint" ? <AdminCheckpointWorkspace /> : props.kind === "Reading" ? <AdminReadingWorkspace navigation={props.navigation} nested={props.nested} /> : props.kind === "Audio" ? <AdminAudioWorkspace navigation={props.navigation} nested={props.nested} /> : props.kind === "Mini Checkpoint" ? <AdminMiniCheckpointWorkspace navigation={props.navigation} nested={props.nested} /> : <ChapterQuestionWorkspace {...props} />;
 }
 
 function ChapterQuestionWorkspace({ kind, navigation, nested = false }: { kind: Kind; navigation?: ReactNode; nested?: boolean }) {

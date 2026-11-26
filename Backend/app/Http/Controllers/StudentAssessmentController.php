@@ -49,8 +49,11 @@ class StudentAssessmentController extends Controller
 
     public function current(Request $request, Program $program, Chapter $chapter, LearningAttemptService $attempts, LearningProgressService $progress)
     {
-        $data = $this->input($request, ['kind' => ['required', Rule::in(['audio', 'reading'])]]);
+        $data = $this->input($request, ['kind' => ['required', Rule::in(['audio', 'reading', 'mini'])]]);
         $progress->authorize($request->user(), $program, $chapter);
+        if ($data['kind'] === 'mini') {
+            abort_unless($progress->miniEligible($request->user(), $program), 403);
+        }
         $attempt = LearningAttempt::where('user_id', $request->user()->id)
             ->where('chapter_id', $chapter->id)->where('kind', $data['kind'])
             ->latest('id')->first();

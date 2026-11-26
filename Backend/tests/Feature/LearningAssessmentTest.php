@@ -177,6 +177,66 @@ class LearningAssessmentTest extends TestCase
         $this->travelBack();
     }
 
+    public function test_mini_rich_content_snapshot_is_private_and_current_resumes_without_creation(): void
+    {
+        $this->withoutMiddleware(ThrottleRequests::class);
+        $this->prerequisites(true);
+        $fields = [
+            'category' => 'reading', 'instruction' => '<p>Read first</p>',
+            'image_url' => 'https://media.example.test/mini.png', 'image_alt' => 'Mini illustration', 'image_position' => 'after',
+            'audio_url' => 'https://media.example.test/mini.mp3',
+            'passage' => ['id' => 'shared-1', 'title' => 'Original passage', 'body' => '<p>Original body</p>'],
+        ];
+        $question = app(LearningContentService::class)->save('mini-checkpoint-questions', $this->question([
+            'chapter_id' => $this->chapter->id, ...$fields,
+        ]));
+        $this->assertSame([], app(LearningContentService::class)->miniReadiness($this->chapter));
+        $count = LearningAttempt::count();
+        $this->getJson($this->base.'/attempts/current?kind=mini')->assertOk()->assertJsonPath('data', null);
+        $this->assertSame($count, LearningAttempt::count());
+        $attempt = $this->start('mini');
+        foreach ($fields as $field => $value) {
+            $this->assertSame($value, $attempt['questions'][0][$field]);
+        }
+        $this->assertSame($fields['image_url'], $attempt['questions'][0]['image']);
+        $model = LearningAttempt::findOrFail($attempt['id']);
+        $snapshot = $model->content_snapshot;
+        $grading = $model->grading_snapshot;
+        app(LearningContentService::class)->save('mini-checkpoint-questions', ['instruction' => 'Changed', 'correct_option' => 'A'], $question);
+        $url = $this->base.'/attempts/'.$attempt['id'];
+        $this->putJson($url.'/answers', ['answers' => [$question->id => 'B'], 'revision' => 0])->assertOk();
+        $count = LearningAttempt::count();
+        $response = $this->getJson($this->base.'/attempts/current?kind=mini')->assertOk()
+            ->assertJsonPath('data.id', $attempt['id'])->assertJsonPath('data.status', 'in_progress')
+            ->assertJsonPath('data.answers.'.$question->id, 'B')
+            ->assertJsonPath('data.questions.0.instruction', $fields['instruction'])
+            ->assertJsonPath('data.expires_at', $attempt['expires_at']);
+        foreach (['correct_option', 'explanation', 'grading_snapshot'] as $secret) {
+            $this->assertStringNotContainsString($secret, $response->getContent());
+        }
+        $this->postJson($url.'/submit', ['answers' => [$question->id => 'B'], 'revision' => 1])->assertOk()->assertJsonPath('data.result.percentage', 100);
+        $this->getJson($this->base.'/attempts/current?kind=mini')->assertOk()
+            ->assertJsonPath('data.id', $attempt['id'])->assertJsonPath('data.status', 'completed');
+        $this->assertSame($count, LearningAttempt::count());
+        $this->assertSame($snapshot, $model->fresh()->content_snapshot);
+        $this->assertSame($grading, $model->fresh()->grading_snapshot);
+    }
+
+    public function test_mini_readiness_accepts_plain_legacy_questions_without_categories(): void
+    {
+        $service = app(LearningContentService::class);
+        $question = MiniCheckpointQuestion::create($this->question([
+            'chapter_id' => $this->chapter->id, 'session' => 2, 'part' => 3,
+        ]));
+        $service->save('mini-checkpoint-questions', ['explanation' => 'Updated'], $question);
+        $this->assertSame(2, $question->fresh()->session);
+        $this->assertSame(3, $question->fresh()->part);
+        $this->assertSame([], $service->miniReadiness($this->chapter));
+        $this->getJson($this->base)->assertOk()->assertJsonPath('data.mini_checkpoints.0.configuration_valid', true);
+        $question->update(['category' => 'audio']);
+        $this->assertArrayHasKey('questions.'.$question->id.'.audio_url', $service->miniReadiness($this->chapter));
+    }
+
     public function test_legacy_mini_attempt_keeps_snapshot_group_and_settings_without_chapter_config(): void
     {
         $this->prerequisites(true);
@@ -187,6 +247,9 @@ class LearningAssessmentTest extends TestCase
         foreach ($snapshot as &$item) {
             $item['session'] = 2;
             $item['part'] = 3;
+            foreach (['category', 'instruction', 'image_url', 'image', 'image_alt', 'image_position', 'audio_url', 'passage'] as $field) {
+                unset($item[$field]);
+            }
         }
         unset($item);
         DB::table('learning_attempts')->where('id', $model->id)->update(['content_snapshot' => json_encode($snapshot)]);
@@ -195,6 +258,8 @@ class LearningAssessmentTest extends TestCase
         $this->getJson($url)->assertOk()->assertJsonPath('data.session', 2)->assertJsonPath('data.part', 3)->assertJsonPath('data.duration_minutes', 5);
         $this->postJson($url.'/submit', ['answers' => [], 'revision' => 0])->assertOk();
         $this->getJson($url.'/review')->assertOk()->assertJsonPath('data.session', 2)->assertJsonPath('data.part', 3);
+        $this->getJson($this->base.'/attempts/current?kind=mini')->assertOk()->assertJsonPath('data.id', $model->id);
+        $this->assertSame($snapshot, $model->fresh()->content_snapshot);
         $this->postJson($this->base.'/attempts', ['kind' => 'mini', 'session' => 1, 'part' => 1])->assertUnprocessable();
     }
 

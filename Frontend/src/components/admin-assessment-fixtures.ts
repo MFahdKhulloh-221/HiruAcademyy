@@ -13,6 +13,7 @@ export const tryoutAssessmentContexts = ["N5", "N4", "N3", "N2", "N1"] as const;
 export type AdminAssessmentKind = "mini" | "tryout" | "checkpoint";
 export type { AssessmentImage } from "@/lib/assessment-image";
 export type AdminAssessmentQuestion = AssessmentImage & {
+  miniCategory?: "vocabulary" | "grammar" | "reading" | "audio" | null;
   passageId?: string | null;
   id: string;
   section: string;
@@ -105,7 +106,7 @@ export function assessmentQuestionError(question: AdminAssessmentQuestion, item:
   if (!["Multiple choice", "Audio", "Reading"].includes(question.type) || (["DASAR", "SSW"].includes(item.context) && question.type !== "Multiple choice")) return "DASAR dan SSW hanya memakai Multiple choice.";
   if (!placementText(question.prompt).trim() || question.answers.length !== 4 || question.answers.some((answer) => !placementText(answer).trim())) return "Isi pertanyaan dan pilihan A–D.";
   if (!Number.isInteger(question.correctAnswer) || question.correctAnswer < 0 || question.correctAnswer > 3) return "Pilih jawaban benar A–D.";
-  if (item.kind !== "mini" ? !/^\d+$/.test(question.order) || !Number.isSafeInteger(Number(question.order)) : !positiveInteger(question.order)) return item.kind !== "mini" ? "Urutan harus berupa bilangan bulat nonnegatif." : "Urutan harus berupa bilangan bulat positif.";
+  if (!/^\d+$/.test(question.order) || !Number.isSafeInteger(Number(question.order))) return "Urutan harus berupa bilangan bulat nonnegatif.";
   if (!["Draft", "Published"].includes(question.status)) return "Pilih status yang valid.";
   if (item.kind !== "mini" && assessmentPointValueError(question.pointValue, item.kind)) return assessmentPointValueError(question.pointValue, item.kind);
   if (question.japanese?.reading && !question.japanese.text.trim()) return "Isi Teks Jepang.";

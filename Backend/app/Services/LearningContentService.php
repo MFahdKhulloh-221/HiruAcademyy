@@ -99,6 +99,22 @@ class LearningContentService
         }
 
         if ($resource === 'mini-checkpoint-questions') {
+            $rules += [
+                'category' => ['sometimes', 'nullable', Rule::in(['vocabulary', 'grammar', 'reading', 'audio'])],
+                'instruction' => ['sometimes', 'nullable', 'string'],
+                'image_url' => ['sometimes', 'nullable', 'string', app(MediaService::class)->rule('image')],
+                'image_alt' => ['sometimes', 'nullable', 'string', 'max:1000'],
+                'image_position' => ['sometimes', 'nullable', Rule::in(['before', 'after'])],
+                'audio_url' => ['sometimes', 'nullable', 'string', app(MediaService::class)->rule('audio')],
+                'passage' => ['sometimes', 'nullable', 'array:id,title,body'],
+                'passage.id' => ['required_with:passage', function ($attribute, $value, $fail) {
+                    if ((! is_string($value) && ! is_int($value)) || trim((string) $value) === '') {
+                        $fail('Passage ID must be a nonempty string or integer.');
+                    }
+                }],
+                'passage.title' => ['required_with:passage', 'string', 'max:255'],
+                'passage.body' => ['required_with:passage', 'string'],
+            ];
             foreach (['session', 'part', 'duration_minutes', 'passing_score'] as $field) {
                 $rules[$field] = ['prohibited'];
             }
@@ -127,6 +143,16 @@ class LearningContentService
             foreach (['question', 'explanation', 'body'] as $field) {
                 if (isset($data[$field])) {
                     $data[$field] = PlacementRichText::sanitize($data[$field]);
+                }
+            }
+            if ($resource === 'mini-checkpoint-questions') {
+                if (isset($data['instruction'])) {
+                    $data['instruction'] = PlacementRichText::sanitize($data['instruction']);
+                }
+                if (isset($data['passage'])) {
+                    foreach (['title', 'body'] as $field) {
+                        $data['passage'][$field] = PlacementRichText::sanitize($data['passage'][$field]);
+                    }
                 }
             }
             if (isset($data['options'])) {
@@ -217,10 +243,13 @@ class LearningContentService
                     }
                 }
                 if ($resource === 'mini-checkpoint-questions') {
-                    $model->session = 1;
-                    $model->part = 1;
+                    if (! $model->exists) {
+                        $model->session = 1;
+                        $model->part = 1;
+                    }
                     $model->duration_minutes = $chapter->mini_checkpoint_duration_minutes;
                     $model->passing_score = $chapter->mini_checkpoint_passing_score;
+                    $this->assertMiniQuestion($model, $model->status === 'published');
                     if ($model->status === 'published') {
                         if (! in_array($chapter->program->code, ['n5', 'n4', 'n3', 'n2'], true)) {
                             throw ValidationException::withMessages(['chapter_id' => 'Mini Checkpoint requires an N5–N2 program.']);
@@ -242,6 +271,12 @@ class LearningContentService
                 $moved = $model->exists && $resource !== 'chapters'
                     && $model->isDirty($resource === 'reading-questions' ? 'reading_passage_id' : 'chapter_id');
                 $model->save();
+                if ($resource === 'mini-checkpoint-questions' && $model->status === 'published') {
+                    $errors = $this->miniReadiness($chapter);
+                    if ($errors !== []) {
+                        throw ValidationException::withMessages($errors);
+                    }
+                }
                 if ($moved && in_array(self::RESOURCES[$resource][1], ['video', 'module', 'flashcard', 'audio', 'reading'], true)) {
                     $ids = $resource === 'reading-passages' ? $model->questions()->pluck('id')->all() : [$model->id];
                     ActivityCompletion::where('type', self::RESOURCES[$resource][1])->whereIn('resource_id', $ids)
@@ -287,6 +322,66 @@ class LearningContentService
                 $this->normalizeChapters($this->chapterSiblings($model->program_id));
             }
         }, 3);
+    }
+
+    public function assertMiniQuestion(MiniCheckpointQuestion $question, bool $published = true): void
+    {
+        Validator::make(array_intersect_key($question->toArray(), $this->rules('mini-checkpoint-questions')),
+            array_diff_key($this->rules('mini-checkpoint-questions'), array_flip(['session', 'part', 'duration_minutes', 'passing_score'])))->validate();
+        $text = $question->only(['question', 'options']);
+        if ($question->passage !== null) {
+            $text['passage'] = array_intersect_key($question->passage, array_flip(['title', 'body']));
+        }
+        foreach (\Illuminate\Support\Arr::dot($text) as $field => $value) {
+            if (trim(html_entity_decode(strip_tags(PlacementRichText::sanitize($value)), ENT_QUOTES | ENT_HTML5, 'UTF-8'), " \t\n\r\0\x0B\xc2\xa0") === '') {
+                throw ValidationException::withMessages([$field => 'Text must not be empty.']);
+            }
+        }
+        if ($question->image_url && trim($question->image_alt ?? '') === '') {
+            throw ValidationException::withMessages(['image_alt' => 'Alternative text is required for an image.']);
+        }
+        if ($published && $question->category === 'audio' && ! $question->audio_url) {
+            throw ValidationException::withMessages(['audio_url' => 'Audio questions require an audio URL before publishing.']);
+        }
+        if ($published && $question->category === 'reading' && $question->passage === null) {
+            throw ValidationException::withMessages(['passage' => 'Reading questions require a passage before publishing.']);
+        }
+    }
+
+    public function miniReadiness(Chapter $chapter): array
+    {
+        $errors = [];
+        try {
+            app(LearningAttemptService::class)->chapterMiniConfiguration($chapter);
+        } catch (ValidationException $exception) {
+            $errors = $exception->errors();
+        }
+        if (! in_array($chapter->program->code, ['n5', 'n4', 'n3', 'n2'], true)) {
+            $errors['chapter_id'] = ['Mini Checkpoint requires an N5–N2 program.'];
+        }
+        $questions = $chapter->miniCheckpointQuestions()->where('status', 'published')->get();
+        if ($questions->isEmpty()) {
+            $errors['questions'] = ['Publish at least one Mini Checkpoint question.'];
+        }
+        $passages = [];
+        foreach ($questions as $question) {
+            try {
+                $this->assertMiniQuestion($question);
+                if ($question->passage !== null) {
+                    $id = (string) $question->passage['id'];
+                    if (isset($passages[$id]) && $passages[$id] !== $question->passage) {
+                        throw ValidationException::withMessages(['passage' => 'Questions sharing a passage ID must share its title and body.']);
+                    }
+                    $passages[$id] = $question->passage;
+                }
+            } catch (ValidationException $exception) {
+                foreach ($exception->errors() as $field => $messages) {
+                    $errors["questions.{$question->id}.{$field}"] = $messages;
+                }
+            }
+        }
+
+        return $errors;
     }
 
     private function lockChapters(): void

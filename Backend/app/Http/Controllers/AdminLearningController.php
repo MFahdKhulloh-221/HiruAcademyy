@@ -27,7 +27,13 @@ class AdminLearningController extends Controller
     {
         $class = $this->content->model($this->resource($request));
 
-        return response()->json(['data' => app(MediaService::class)->payload($class::query()->whereKey($this->id($request))->firstOrFail()->toArray())]);
+        $model = $class::query()->whereKey($this->id($request))->firstOrFail();
+        $data = $model->toArray();
+        if ($this->resource($request) === 'chapters') {
+            $data['mini_checkpoint_readiness_errors'] = $this->content->miniReadiness($model);
+        }
+
+        return response()->json(['data' => app(MediaService::class)->payload($data)]);
     }
 
     public function update(Request $request): JsonResponse

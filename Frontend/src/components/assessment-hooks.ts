@@ -5,7 +5,7 @@ import { useAuth } from "@/components/auth-provider";
 import { apiRequest, ApiError } from "@/lib/api";
 import { attemptTimingGroups, AttemptPersistence, readAttempt, startAttempt, type AttemptDomain, type ServerAttempt } from "@/lib/assessment-attempt";
 
-export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?: string, resumeAudio = false, resultOnly = false, learningKind?: "audio" | "reading") {
+export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?: string, resumeAudio = false, resultOnly = false, learningKind?: "audio" | "reading" | "mini") {
   const { user, loading } = useAuth();
   const identity = loading ? undefined : domain === "placement" ? `placement:${user?.id ?? "guest"}` : user?.id;
   const persistence = useRef<AttemptPersistence | null>(null);
@@ -36,13 +36,16 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
     const params = new URLSearchParams(window.location.search);
     let remembered: string | null = null;
     try { if (resumeKey) remembered = sessionStorage.getItem(resumeKey); } catch { /* Storage unavailable; explicit attempt URL still works. */ }
-    const id = scope ? params.get(`mini_attempt_${scope}`) ?? (params.get("attempt_scope") === scope ? params.get("attempt") : null) : params.get("attempt") ?? remembered;
-    const discoverLearning = domain === "learning" && Boolean(learningKind) && !params.get("attempt");
+    const id = scope ? params.get(`mini_attempt_${scope}`) ?? (params.get("attempt_scope") === scope || (learningKind === "mini" && !params.has("attempt_scope")) ? params.get("attempt") : null) : params.get("attempt") ?? remembered;
+    const discoverLearning = domain === "learning" && Boolean(learningKind) && (learningKind === "mini" ? !id : !params.get("attempt"));
     const discoverPlacement = domain === "placement" && path === "/api/placement/attempts" && Boolean(user?.id) && !id;
     if (identity && ((id && /^[1-9]\d*$/.test(id)) || discoverPlacement || discoverLearning)) {
       setState({ requestKey, answers: {}, loadingAttempt: true, busy: false });
       const load = discoverLearning
-        ? apiRequest<{ data: ServerAttempt | null }>(`${path}/current?kind=${learningKind}`, { signal: controller.signal }).then(({ data }) => data ?? undefined)
+        ? (() => {
+          const request_started_at = performance.now();
+          return apiRequest<{ data: ServerAttempt | null }>(`${path}/current?kind=${learningKind}`, { signal: controller.signal }).then(({ data }) => data ? { ...data, request_started_at, received_at: performance.now() } : undefined);
+        })()
         : discoverPlacement
         ? apiRequest<{ data: ServerAttempt | null }>(`${path}/current`, { signal: controller.signal }).then(({ data }) => data ? readAttempt(`${path}/${data.id}`, controller.signal) : undefined)
         : readAttempt(`${path}/${id}${resultOnly ? "/result" : ""}`, controller.signal);
@@ -56,9 +59,13 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
         if (discoverPlacement || discoverLearning) {
           const url = new URL(window.location.href);
           url.searchParams.set("attempt", String(attempt.id));
+          if (scope) {
+            url.searchParams.set("attempt_scope", scope);
+            url.searchParams.set(`mini_attempt_${scope}`, String(attempt.id));
+          }
           window.history.replaceState(null, "", url);
         }
-        if (scope && `${identity}/${path.split("/")[4]}/${attempt.chapter_id}/mini/${attempt.session}/${attempt.part}` !== scope) throw new ApiError(404);
+        if (scope && (learningKind === "mini" ? `${identity}/${path.split("/")[4]}/${attempt.chapter_id}/mini` !== scope.split("/").slice(0, 4).join("/") : `${identity}/${path.split("/")[4]}/${attempt.chapter_id}/mini/${attempt.session}/${attempt.part}` !== scope)) throw new ApiError(404);
         if (learningKind && attempt.kind !== learningKind) throw new ApiError(404);
         if (resumeAudio && attempt.kind !== "audio") throw new ApiError(404);
         if (resumeKey) {
@@ -149,7 +156,7 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
     return run(() => persistence.current!.save(latestAnswers.current));
   }
   async function synchronize() {
-    if ((domain !== "tryout" && domain !== "checkpoint") || !persistence.current || !current || pending.current) return;
+    if ((domain !== "tryout" && domain !== "checkpoint" && learningKind !== "mini") || !persistence.current || !current || pending.current) return;
     pending.current = true;
     const result = await run(() => persistence.current!.save(latestAnswers.current));
     pending.current = false;

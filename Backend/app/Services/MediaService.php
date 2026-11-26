@@ -17,7 +17,7 @@ class MediaService
         'pdf' => ['application/pdf' => 'pdf'],
     ];
 
-    public const FIELDS = ['photo', 'image_src', 'image', 'thumbnail', 'video_url', 'audio_url', 'file_url'];
+    public const FIELDS = ['photo', 'image_src', 'image', 'image_url', 'thumbnail', 'video_url', 'audio_url', 'file_url'];
 
     public function rule(string $kind = 'reference'): \Closure
     {
@@ -240,6 +240,10 @@ class MediaService
             DB::statement('LOCK TABLE try_out_passages IN SHARE ROW EXCLUSIVE MODE');
         }
         $this->assertTryOutImagesUnreferenced($path);
+        if (\Illuminate\Support\Facades\Schema::hasColumn('mini_checkpoint_questions', 'image_url')) {
+            DB::statement('LOCK TABLE mini_checkpoint_questions IN SHARE ROW EXCLUSIVE MODE');
+            abort_if(DB::table('mini_checkpoint_questions')->where('image_url', $path)->orWhere('audio_url', $path)->exists(), 409, 'Media is still referenced by Mini Checkpoint content.');
+        }
         foreach (['daily_practice_questions' => ['audio_url', 'image'], 'daily_practice_passages' => ['image', 'blocks'], 'daily_practice_attempts' => ['content_snapshot', 'grading_snapshot']] as $table => $fields) {
             if (! \Illuminate\Support\Facades\Schema::hasTable($table)) continue;
             DB::statement('LOCK TABLE '.$table.' IN SHARE ROW EXCLUSIVE MODE');

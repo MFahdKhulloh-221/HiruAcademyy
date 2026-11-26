@@ -3,6 +3,7 @@
 namespace App\Http\Resources;
 
 use App\Services\LearningAttemptService;
+use App\Services\LearningContentService;
 use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\JsonResource;
 use Illuminate\Validation\ValidationException;
@@ -23,12 +24,13 @@ class StudentChapterResource extends JsonResource
             $configuration = null;
         }
         $questions = $this->resource->miniCheckpointQuestions;
+        $readinessErrors = app(LearningContentService::class)->miniReadiness($this->resource);
         $data['mini_checkpoints'] = $questions->isEmpty() ? [] : [[
             'session' => 1, 'part' => 1,
             'duration_minutes' => $configuration['duration_minutes'] ?? null,
             'passing_score' => $configuration['passing_score'] ?? null,
             'question_count' => $questions->count(),
-            'configuration_valid' => $configuration !== null,
+            'configuration_valid' => $configuration !== null && $readinessErrors === [],
         ]];
         foreach ([
             'video_lessons' => ['videoLessons', ['id', 'title', 'video_url', 'description', 'sort_order']],
