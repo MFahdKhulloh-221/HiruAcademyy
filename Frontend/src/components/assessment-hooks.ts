@@ -5,7 +5,7 @@ import { useAuth } from "@/components/auth-provider";
 import { apiRequest, ApiError } from "@/lib/api";
 import { attemptTimingGroups, AttemptPersistence, readAttempt, startAttempt, type AttemptDomain, type ServerAttempt } from "@/lib/assessment-attempt";
 
-export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?: string, resumeAudio = false, resultOnly = false) {
+export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?: string, resumeAudio = false, resultOnly = false, learningKind?: "audio" | "reading") {
   const { user, loading } = useAuth();
   const identity = loading ? undefined : domain === "placement" ? `placement:${user?.id ?? "guest"}` : user?.id;
   const persistence = useRef<AttemptPersistence | null>(null);
@@ -15,7 +15,7 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
   const saveVersion = useRef(0);
   // ponytail: tab-session reference only; cross-device resume needs backend attempt discovery.
   const resumeKey = resumeAudio && identity ? `audio-attempt:${identity}:${path}` : undefined;
-  const requestKey = JSON.stringify([identity, path, domain, scope, resumeAudio, resultOnly]);
+  const requestKey = JSON.stringify([identity, path, domain, scope, resumeAudio, resultOnly, learningKind]);
   const [state, setState] = useState<{ requestKey: string; attempt?: ServerAttempt; answers: Record<string, string>; loadingAttempt: boolean; busy: boolean; error?: string }>({ requestKey: "", answers: {}, loadingAttempt: true, busy: false });
   const current = state.requestKey === requestKey && !loading ? state : undefined;
   const loadingAttempt = current?.loadingAttempt ?? true;
@@ -37,10 +37,13 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
     let remembered: string | null = null;
     try { if (resumeKey) remembered = sessionStorage.getItem(resumeKey); } catch { /* Storage unavailable; explicit attempt URL still works. */ }
     const id = scope ? params.get(`mini_attempt_${scope}`) ?? (params.get("attempt_scope") === scope ? params.get("attempt") : null) : params.get("attempt") ?? remembered;
+    const discoverLearning = domain === "learning" && Boolean(learningKind) && !params.get("attempt");
     const discoverPlacement = domain === "placement" && path === "/api/placement/attempts" && Boolean(user?.id) && !id;
-    if (identity && ((id && /^[1-9]\d*$/.test(id)) || discoverPlacement)) {
+    if (identity && ((id && /^[1-9]\d*$/.test(id)) || discoverPlacement || discoverLearning)) {
       setState({ requestKey, answers: {}, loadingAttempt: true, busy: false });
-      const load = discoverPlacement
+      const load = discoverLearning
+        ? apiRequest<{ data: ServerAttempt | null }>(`${path}/current?kind=${learningKind}`, { signal: controller.signal }).then(({ data }) => data ?? undefined)
+        : discoverPlacement
         ? apiRequest<{ data: ServerAttempt | null }>(`${path}/current`, { signal: controller.signal }).then(({ data }) => data ? readAttempt(`${path}/${data.id}`, controller.signal) : undefined)
         : readAttempt(`${path}/${id}${resultOnly ? "/result" : ""}`, controller.signal);
       load.then(attempt => {
@@ -50,12 +53,13 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
           return;
         }
         if (resultOnly && (attempt.status !== "completed" || !attempt.result)) throw new ApiError(403);
-        if (discoverPlacement) {
+        if (discoverPlacement || discoverLearning) {
           const url = new URL(window.location.href);
           url.searchParams.set("attempt", String(attempt.id));
           window.history.replaceState(null, "", url);
         }
         if (scope && `${identity}/${path.split("/")[4]}/${attempt.chapter_id}/mini/${attempt.session}/${attempt.part}` !== scope) throw new ApiError(404);
+        if (learningKind && attempt.kind !== learningKind) throw new ApiError(404);
         if (resumeAudio && attempt.kind !== "audio") throw new ApiError(404);
         if (resumeKey) {
           try { sessionStorage.setItem(resumeKey, String(attempt.id)); } catch { /* URL remains usable without storage. */ }
@@ -74,7 +78,7 @@ export function useAssessmentAttempt(path: string, domain: AttemptDomain, scope?
       setState({ requestKey, answers: {}, loadingAttempt: false, busy: false });
     }
     return () => { controller.abort(); if (generation.current === version) generation.current = version + 1; };
-  }, [path, domain, identity, scope, requestKey, resumeAudio, resumeKey, user?.id, resultOnly]);
+  }, [path, domain, identity, scope, requestKey, resumeAudio, resumeKey, user?.id, resultOnly, learningKind]);
   async function run(action: () => Promise<ServerAttempt>, replaceAnswers = false) {
     const version = generation.current;
     setState(previous => ({ ...previous, requestKey, busy: true, error: undefined }));

@@ -236,6 +236,7 @@ Route::prefix('api')->middleware(['throttle:api', AuthenticateSession::class])->
             Route::get('progress', [StudentAssessmentController::class, 'progress']);
             Route::post('completions', [StudentAssessmentController::class, 'complete']);
             Route::post('attempts', [StudentAssessmentController::class, 'start'])->name('assessment.learning.start');
+            Route::get('attempts/current', [StudentAssessmentController::class, 'current']);
             Route::get('attempts/{attempt}', [StudentAssessmentController::class, 'show']);
             Route::put('attempts/{attempt}/answers', [StudentAssessmentController::class, 'save'])->name('assessment.learning.answers');
             Route::post('attempts/{attempt}/submit', [StudentAssessmentController::class, 'submit'])->name('assessment.learning.submit');

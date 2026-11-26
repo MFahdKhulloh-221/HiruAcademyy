@@ -858,7 +858,10 @@
 .daily-result-note { margin-top: 20px; padding: 16px; border-radius: 12px; background: #fffaf4; }
 .daily-result-note h2 { margin: 0 0 6px; font-size: 14px; font-weight: 700; }
 .daily-result-note p { margin: 0; font-size: 14px; line-height: 1.6; }
-.daily-result-actions { display: flex; gap: 12px; margin-top: 24px; }
+.daily-result-chapter-link { display: flex; justify-content: flex-end; width: min(860px, 100%); margin: 20px auto 0; }
+.daily-result-chapter-link > a { display: inline-flex; align-items: center; gap: 10px; }
+.daily-result-actions { display: flex; justify-content: space-between; gap: 12px; width: 100%; margin-top: 24px; }
+.daily-result-actions .daily-result-review { margin-left: auto; }
 .daily-practice-result .daily-result-actions .button { display: inline-flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; padding: 12px 20px; border: 1px solid var(--navy); border-radius: 12px; font-size: 14px; font-weight: 700; }
 .daily-practice-result .daily-result-actions .daily-result-review { background: var(--navy); color: white; }
 .daily-practice-result .daily-result-actions .daily-result-retry { background: white; color: var(--navy); }

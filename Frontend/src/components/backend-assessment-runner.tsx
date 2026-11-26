@@ -12,6 +12,7 @@ import { AssessmentContent } from "@/components/assessment-content";
 import { AssessmentPassageContent } from "@/components/assessment-passage-content";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { Noto_Sans_JP } from "next/font/google";
 
 
@@ -48,11 +49,13 @@ const tryOutJapaneseFont = Noto_Sans_JP({
 export function BackendAssessmentRunner({ path, domain = "learning", title, startBody = {}, className = "learning-question-page", onComplete, onBack, scope, autoStart = false, startActions, readingContext, resultContext, resultOnly = false }: { resultOnly?: boolean; resultContext?: { level: string; bestScore: number | null }; readingContext?: { label: string; href: string }; startActions?: (busy: boolean) => ReactNode; onBack?: () => void; autoStart?: boolean; scope?: string; path: string; domain?: AttemptDomain; title: string; startBody?: object; className?: string; onComplete?: () => void }) {
 
   const [reviewing, setReviewing] = useState(false);
+  const pathname = usePathname();
   const tryoutExperience = domain === "tryout" || domain === "checkpoint";
 
   const examName = domain === "checkpoint" ? "Checkpoint" : "Try Out";
 
-  const flow = useAssessmentAttempt(path, domain, scope, domain === "learning" && "kind" in startBody && startBody.kind === "audio", resultOnly);
+  const learningKind = domain === "learning" && "kind" in startBody && (startBody.kind === "audio" || startBody.kind === "reading") ? startBody.kind : undefined;
+  const flow = useAssessmentAttempt(path, domain, scope, domain === "learning" && "kind" in startBody && startBody.kind === "audio", resultOnly, learningKind);
 
   const loadInfo = useCallback((signal: AbortSignal) => tryoutExperience && !resultOnly
 
@@ -447,9 +450,9 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
       {tryoutExperience && <div className="result-hero-summary">
 
-        <section className="result-best-card"><h2>Skor Terbaik</h2><div className="result-hero-value">{resultContext?.bestScore ?? "—"}<span>/ {result.max ?? result.correct + result.wrong + result.unanswered}</span></div><h3>Tetap semangat!</h3><p>Setiap latihan adalah langkah untuk meningkatkan kemampuanmu. Yuk, tinjau jawaban dan coba lagi!</p></section>
+        <section className="result-best-card"><h2>Skor Terbaik</h2><div className="result-hero-value">{resultContext?.bestScore ?? "—"}<span> poin</span></div><h3>Tetap semangat!</h3><p>Setiap latihan adalah langkah untuk meningkatkan kemampuanmu. Yuk, tinjau jawaban dan coba lagi!</p></section>
 
-        <section className="result-total-card"><h2>Total Skor</h2><div className="result-hero-value">{result.earned ?? result.correct}<span>/ {result.max ?? result.correct + result.wrong + result.unanswered}</span></div><span className="result-status">{passed === true ? "Lulus" : passed === false ? "Belum lulus" : "—"}</span><p>Hasil pengerjaan simulasi ini</p></section>
+        <section className="result-total-card"><h2>Jawaban Benar</h2><div className="result-hero-value">{result.correct}<span>/ {result.correct + result.wrong + result.unanswered} soal</span></div><span className="result-status">{passed === true ? "Lulus" : passed === false ? "Belum lulus" : "—"}</span><p>Hasil pengerjaan simulasi ini</p></section>
 
       </div>}
 
@@ -465,7 +468,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
               <h3>{assessmentSessionLabels[assessmentSessions.findIndex(code => code === section.code)] ?? section.label}</h3>
 
-              <div><span>{tryoutExperience ? "Skor bagian" : "Nilai Section"}</span><strong>{section.passing_score_basis === "points" ? section.earned : section.correct} / {section.passing_score_basis === "points" ? section.max : section.correct + section.wrong + section.unanswered}</strong></div>
+              <div><span>Jawaban benar</span><strong>{section.correct} / {section.correct + section.wrong + section.unanswered} soal</strong></div>
 
               {tryoutExperience && <small>Batas lulus: {section.passing_score} {section.passing_score_basis === "points" ? "poin" : "jawaban benar"}</small>}
 
@@ -509,7 +512,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
   if (domain === "learning" && (attempt.kind === "audio" || attempt.kind === "reading") && attempt.status === "completed" && result && !reviewing) return (
 
-    <section className="daily-practice-result" aria-label={`Hasil ${title}`}>
+    <div><section className="daily-practice-result" aria-label={`Hasil ${title}`}>
 
       <header className="daily-result-header"><span className="daily-result-icon">{isReading ? <FiBookOpen aria-hidden="true" /> : <FiHeadphones aria-hidden="true" />}</span><div><p>LATIHAN SELESAI</p><h1>Hasil {title}</h1><p>Ringkasan jawaban latihanmu.</p></div></header>
 
@@ -517,7 +520,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
       <div className="daily-result-summary">
 
-        <div className="daily-result-score"><span>Skor latihan</span><strong>{result.earned ?? result.percentage ?? "—"}{result.max !== undefined && <small> / {result.max}</small>}</strong><span>{result.max === undefined && result.percentage !== undefined ? "dari 100" : "Skor dari sistem"}</span></div>
+        <div className="daily-result-score"><span>Jawaban benar</span><strong>{result.correct}</strong><span>dari {result.correct + result.wrong + result.unanswered} soal</span></div>
 
         <dl className="daily-result-stats"><div><dt>Jawaban benar</dt><dd>{result.correct}</dd></div><div><dt>Jawaban salah</dt><dd>{result.wrong}</dd></div><div><dt>Tidak dijawab</dt><dd>{result.unanswered}</dd></div></dl>
 
@@ -527,11 +530,11 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
       <footer className="daily-result-actions"><button className="button daily-result-retry" type="button" disabled={flow.busy} onClick={() => { setIndex(0); void flow.start(startBody); }}>Coba Lagi</button><button className="button daily-result-review" type="button" disabled={flow.busy} onClick={async () => { if (await flow.review()) { setIndex(0); setReviewing(true); } }}>Review Jawaban<FiArrowRight aria-hidden="true" /></button></footer>
 
-    </section>
+    </section><div className="daily-result-chapter-link"><Link className="button button-primary" href={readingContext?.href ?? pathname.replace(/\/(audio|reading)\/?$/, "")}>Lanjut ke Aktivitas Chapter<FiArrowRight aria-hidden="true" /></Link></div></div>
 
   );
 
-  if (attempt.status === "completed" && result && !reviewing) return <section className="checkpoint-result tryout-result-report"><h1>Hasil {title}</h1>{flow.error && <p role="alert">{flow.error}</p>}<div className="checkpoint-result-stats"><div><span>Skor</span><strong>{result.earned ?? result.percentage ?? "—"}{result.max !== undefined ? ` / ${result.max}` : ""}</strong></div><div><span>Jawaban benar</span><strong>{result.correct}</strong></div><div><span>Tidak Dijawab</span><strong>{result.unanswered}</strong></div></div>{result.sessions && <section className="tryout-section-scores">{result.sessions.map(section => <article key={section.code}><strong>{tryoutExperience ? assessmentSessionLabels[assessmentSessions.findIndex(code => code === section.code)] ?? section.label : section.label}</strong><b>{section.earned} / {section.max}</b><small>Passing score: {section.passing_score} • {section.passing_score_basis === "points" ? "Skor" : "Jawaban benar"}</small>{(!tryoutExperience || result.total_passing_score != null) && <span>{section.pass ? "LULUS" : "TIDAK LULUS"}</span>}</article>)}</section>}{(!tryoutExperience || result.total_passing_score != null) && <p>{passed === true ? "LULUS" : passed === false ? "TIDAK LULUS" : "—"}</p>}<section className="checkpoint-recommendation"><p className="dash-kicker">REKOMENDASI</p><p>{isReading ? "Data topik bacaan belum cukup untuk memberikan rekomendasi belajar." : result.recommendation_level ?? "—"}</p></section>{domain !== "placement" && <button className="button button-secondary" type="button" disabled={flow.busy} onClick={async () => { if (await flow.review()) { setIndex(0); setReviewing(true); } }}>Review Jawaban</button>}<button className="button button-secondary" type="button" disabled={flow.busy} onClick={() => { setIndex(0); void flow.start(startBody); }}>Coba Lagi</button></section>;
+  if (attempt.status === "completed" && result && !reviewing) return <section className="checkpoint-result tryout-result-report"><h1>Hasil {title}</h1>{flow.error && <p role="alert">{flow.error}</p>}<div className="checkpoint-result-stats"><div><span>Jawaban benar dari seluruh soal</span><strong>{result.correct} / {result.correct + result.wrong + result.unanswered}</strong></div><div><span>Jawaban benar</span><strong>{result.correct}</strong></div><div><span>Tidak Dijawab</span><strong>{result.unanswered}</strong></div></div>{result.sessions && <section className="tryout-section-scores">{result.sessions.map(section => <article key={section.code}><strong>{tryoutExperience ? assessmentSessionLabels[assessmentSessions.findIndex(code => code === section.code)] ?? section.label : section.label}</strong><b>{section.correct} / {section.correct + section.wrong + section.unanswered} soal</b><small>Passing score: {section.passing_score} • {section.passing_score_basis === "points" ? "Skor" : "Jawaban benar"}</small>{(!tryoutExperience || result.total_passing_score != null) && <span>{section.pass ? "LULUS" : "TIDAK LULUS"}</span>}</article>)}</section>}{(!tryoutExperience || result.total_passing_score != null) && <p>{passed === true ? "LULUS" : passed === false ? "TIDAK LULUS" : "—"}</p>}<section className="checkpoint-recommendation"><p className="dash-kicker">REKOMENDASI</p><p>{isReading ? "Data topik bacaan belum cukup untuk memberikan rekomendasi belajar." : result.recommendation_level ?? "—"}</p></section>{domain !== "placement" && <button className="button button-secondary" type="button" disabled={flow.busy} onClick={async () => { if (await flow.review()) { setIndex(0); setReviewing(true); } }}>Review Jawaban</button>}<button className="button button-secondary" type="button" disabled={flow.busy} onClick={() => { setIndex(0); void flow.start(startBody); }}>Coba Lagi</button></section>;
 
   if (onBreak) {
     const nextLabel = activeGroup?.label;
@@ -693,11 +696,9 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
         </dialog>
       </>}
 
-      {reviewing && <div className="assessment-review-back"><button type="button" className="button button-secondary" onClick={() => setReviewing(false)}>Kembali ke Hasil</button></div>}
-
       <header className={`learning-question-head${tryoutExperience ? " tryout-exam-topbar" : ""}`} aria-label={tryoutExperience ? `Informasi pengerjaan ${examName}` : undefined}>
 
-        {readingLayout ? <div><h1>{answerReview ? `Review Jawaban · ${title}` : title}</h1>{readingContext && <p>{readingContext.label}</p>}</div> : tryoutExperience ? <h1>{reviewing ? "Review Jawaban · " : ""}<strong>{title.split(" - ")[0]}</strong><span>{title.includes(" - ") ? ` | ${title.split(" - ").slice(1).join(" - ")}` : ""}{sessionLabel ? ` - ${sessionLabel}` : ""}</span></h1> : tryoutExperience ? <><h1>{reviewing ? "Review Jawaban · " : ""}Soal {Math.min(index + 1, questions.length)} dari {questions.length}</h1><p>{title}{sessionLabel ? ` • ${sessionLabel}` : ""}</p><p className="tryout-runner-status">{questions.filter(item => flow.answers[item.id]).length} / {questions.length} Terjawab<span role="status">{saveStatus}</span></p></> : <h1>{answerReview ? `Review Jawaban ? ${title}` : title}</h1>}
+        {readingLayout ? <div><h1>{answerReview ? `Pembahasan ${title}` : title}</h1>{readingContext && <p>{readingContext.label}</p>}</div> : tryoutExperience ? <h1>{reviewing ? "Pembahasan " : ""}<strong>{title.split(" - ")[0]}</strong><span>{title.includes(" - ") ? ` | ${title.split(" - ").slice(1).join(" - ")}` : ""}{sessionLabel ? ` - ${sessionLabel}` : ""}</span></h1> : tryoutExperience ? <><h1>{reviewing ? "Pembahasan " : ""}Soal {Math.min(index + 1, questions.length)} dari {questions.length}</h1><p>{title}{sessionLabel ? ` • ${sessionLabel}` : ""}</p><p className="tryout-runner-status">{questions.filter(item => flow.answers[item.id]).length} / {questions.length} Terjawab<span role="status">{saveStatus}</span></p></> : <h1>{answerReview ? `Pembahasan ${title}` : title}</h1>}
 
         {domain !== "tryout" && sessionLocked && <p className="tryout-active-session">Sesi {(attempt.current_session ?? 0) + 1} dari {timingGroups.length} — {activeGroup?.label}</p>}
 
@@ -823,9 +824,9 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
               {reviewing && attempt.status === "completed" && (
 
-                <section className={readingLayout ? "reading-answer-explanation" : undefined}>
+                <section className={`answer-explanation${readingLayout ? " reading-answer-explanation" : ""}`}>
 
-                  <p>Penjelasan: {question.explanation ? <PlacementRichText value={readingLayout ? question.explanation.replace(/\s*Jawaban benar\s*:\s*[A-D]\s*\.?\s*(?=(?:<\/[^>]+>\s*)*$)/i, "") : question.explanation} /> : "Belum tersedia."}</p>
+                  <p>Penjelasan: {question.explanation ? <PlacementRichText value={question.explanation.replace(/\s*Jawaban benar\s*:\s*[A-D]\s*\.?\s*(?=(?:<\/[^>]+>\s*)*$)/i, "")} /> : "Belum tersedia."}</p>
 
                 </section>
 
@@ -843,7 +844,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
               <>
 
-                {!isFirst && <button className="button button-secondary" data-navigation="back" type="button" onClick={() => setIndex(value => value - 1)}>Sebelumnya</button>}
+                <button className="button button-secondary" data-navigation="back" type="button" onClick={() => setReviewing(false)}>Kembali ke Hasil</button>
 
                 {!isLast && <button className="button button-primary" data-navigation="next" type="button" onClick={() => setIndex(value => value + 1)}>{readingLayout ? "Soal Berikutnya" : "Selanjutnya"}</button>}
 

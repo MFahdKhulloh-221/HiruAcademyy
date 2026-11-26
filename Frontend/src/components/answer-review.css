@@ -3,7 +3,10 @@
 .answer-review > main { min-width: 0; }
 .answer-review .learning-question-sidebar nav > div { grid-template-columns: repeat(auto-fit, minmax(44px, 1fr)); }
 .answer-review .learning-question-card label { min-width: 0; flex-wrap: wrap; overflow-wrap: anywhere; }
-.answer-review .learning-question-card fieldset { min-inline-size: 0; }
+.answer-review .learning-question-card fieldset { display: grid; grid-template-columns: minmax(0, 1fr); min-inline-size: 0; width: 100%; max-width: none; box-sizing: border-box; }
+.answer-review .learning-question-card fieldset > label { width: 100%; max-width: none; box-sizing: border-box; }
+.answer-review .learning-question-card .answer-explanation { width: 100%; min-width: 0; box-sizing: border-box; margin-top: 24px; padding: 20px; border: 1px solid #E3E9F0; border-radius: 12px; background: #F9F9FF; line-height: 1.8; overflow-wrap: anywhere; }
+.answer-review .answer-explanation > p { margin: 0; }
 .answer-review .learning-question-card label > span { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
 .answer-review .tryout-review-label { font-size: 12px; margin-left: auto; }
 .answer-review-legend { font-size: 14px; line-height: 1.6; }

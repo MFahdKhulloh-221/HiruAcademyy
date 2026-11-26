@@ -26,13 +26,13 @@ function PlacementReport({ attempt }: { attempt: PlacementAttempt }) {
   const result = attempt.result!;
   const level = result.recommendation_level?.toUpperCase();
   const programCode = result.recommended_program?.code;
-  const displayedPercentage = result.percentage === undefined ? undefined : Math.round(result.percentage);
+  const totalQuestions = result.total ?? attempt.questions.length;
   const hasPaidOffer = Boolean(result.recommended_program && offers.data.some(offer => offer.program.code.toLowerCase() === programCode?.toLowerCase() && (offer.plan_code === "lms" || offer.plan_code === "sensei")));
   return <main className={`public-main placement-result-page ${styles.report}`}>
     <section className={`placement-result-hero ${styles.hero}`}>
       <p className="placement-result-kicker">HASIL PLACEMENT TEST</p>
       <h1>Rekomendasi Level yang disarankan adalah {level ?? "—"}</h1>
-      <div className={styles.scoreRing} role="progressbar" aria-label="Skor keseluruhan" aria-valuemin={0} aria-valuemax={100} aria-valuenow={result.percentage} style={{ background: `conic-gradient(var(--orange) ${result.percentage ?? 0}%, #e9edf3 0)` }}><strong>{displayedPercentage ?? "—"}%</strong></div>
+      <div className={styles.scoreRing} role="progressbar" aria-label="Jawaban benar" aria-valuemin={0} aria-valuemax={totalQuestions || 1} aria-valuenow={result.correct} aria-valuetext={`${result.correct} dari ${totalQuestions} soal benar`} style={{ background: `conic-gradient(var(--orange) ${result.percentage ?? 0}%, #e9edf3 0)` }}><strong>{result.correct} / {totalQuestions}</strong></div>
       <dl className={styles.stats}><div><dt>Benar</dt><dd>{result.correct}</dd></div><div><dt>Salah</dt><dd>{result.wrong}</dd></div><div><dt>Total soal</dt><dd>{result.total ?? attempt.questions.length}</dd></div>{result.unanswered > 0 && <div><dt>Belum dijawab</dt><dd>{result.unanswered}</dd></div>}</dl>
       {result.recommended_program ? <a className="button button-primary" href="#langkah-belajar">Lihat Program {level ?? result.recommended_program.code}</a> : result.program_message && <p role="status">{result.program_message}</p>}
     </section>
@@ -40,7 +40,7 @@ function PlacementReport({ attempt }: { attempt: PlacementAttempt }) {
       <div className="public-section-head"><h2>Ringkasan Hasil per Kategori</h2></div>
       <div className={styles.categories}>{["Bunpou", "Moji・Goi", "Dokkai", "Choukai"].map(name => {
         const area = result.areas?.find(item => item.name === name);
-        return <article key={name}><h3>{name}</h3>{area && area.total > 0 ? <><strong>{area.score}%</strong><progress className={styles.progress} max={100} value={area.score} aria-label={`Skor ${name}`} /><p>{area.correct ?? "—"} dari {area.total} soal {name} benar</p></> : <p>Belum diuji</p>}</article>;
+        return <article key={name}><h3>{name}</h3>{area && area.total > 0 ? <><strong>{area.correct ?? "—"} / {area.total} soal</strong><progress className={styles.progress} max={100} value={area.score} aria-label={`Skor ${name}`} /><p>{area.correct ?? "—"} dari {area.total} soal {name} benar</p></> : <p>Belum diuji</p>}</article>;
       })}</div>
       <p className={styles.note}>Hasil kategori hanya mencerminkan soal yang dikerjakan.</p>
     </section>

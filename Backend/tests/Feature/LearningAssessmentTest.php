@@ -63,6 +63,29 @@ class LearningAssessmentTest extends TestCase
         return $this->postJson($this->base.'/attempts', ['kind' => $kind, ...($kind === 'mini' ? ['session' => 1, 'part' => 1] : [])])->assertCreated()->json('data');
     }
 
+    public function test_audio_and_reading_reopen_latest_attempt_without_creating_or_resetting_answers(): void
+    {
+        $audio = $this->audio();
+        $passage = ReadingPassage::create(['chapter_id' => $this->chapter->id, 'title' => 'Passage', 'body' => 'Text', 'status' => 'published']);
+        $reading = ReadingQuestion::create($this->question(['reading_passage_id' => $passage->id]));
+        foreach (['audio' => $audio->id, 'reading' => $reading->id] as $kind => $questionId) {
+            $this->getJson($this->base.'/attempts/current?kind='.$kind)->assertOk()->assertJsonPath('data', null);
+            $first = $this->start($kind);
+            $this->postJson($this->base.'/attempts/'.$first['id'].'/submit', ['answers' => [$questionId => 'B'], 'revision' => 0])->assertOk();
+            $count = LearningAttempt::count();
+            for ($request = 0; $request < 2; $request++) {
+                $this->getJson($this->base.'/attempts/current?kind='.$kind)->assertOk()
+                    ->assertJsonPath('data.id', $first['id'])->assertJsonPath('data.status', 'completed')
+                    ->assertJsonPath('data.result.correct', 1)->assertJsonPath('data.answers.'.$questionId, 'B');
+            }
+            $this->assertSame($count, LearningAttempt::count());
+            $retry = $this->start($kind);
+            $this->getJson($this->base.'/attempts/current?kind='.$kind)->assertOk()
+                ->assertJsonPath('data.id', $retry['id'])->assertJsonPath('data.status', 'in_progress');
+            $this->getJson($this->base.'/attempts/'.$first['id'])->assertOk()->assertJsonPath('data.result.correct', 1);
+        }
+    }
+
     private function prerequisites(bool $mini = false): void
     {
         $video = VideoLesson::create(['chapter_id' => $this->chapter->id, 'title' => 'Video', 'video_url' => 'fixture.mp4', 'status' => 'published']);

@@ -47,6 +47,20 @@ class StudentAssessmentController extends Controller
         return response()->json(['data' => $attempts->payload($attempt)], 201);
     }
 
+    public function current(Request $request, Program $program, Chapter $chapter, LearningAttemptService $attempts, LearningProgressService $progress)
+    {
+        $data = $this->input($request, ['kind' => ['required', Rule::in(['audio', 'reading'])]]);
+        $progress->authorize($request->user(), $program, $chapter);
+        $attempt = LearningAttempt::where('user_id', $request->user()->id)
+            ->where('chapter_id', $chapter->id)->where('kind', $data['kind'])
+            ->latest('id')->first();
+        if ($attempt) {
+            $attempt = $attempts->show($request->user(), $program, $chapter, $attempt);
+        }
+
+        return response()->json(['data' => $attempt ? $attempts->payload($attempt) : null]);
+    }
+
     public function show(Request $request, Program $program, Chapter $chapter, LearningAttempt $attempt, LearningAttemptService $attempts)
     {
         $attempt = $attempts->show($request->user(), $program, $chapter, $attempt);
