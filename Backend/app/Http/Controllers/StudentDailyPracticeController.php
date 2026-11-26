@@ -6,7 +6,6 @@ use App\Models\DailyPractice;
 use App\Models\DailyPracticeAttempt;
 use App\Services\DailyPracticeAttemptService;
 use App\Services\DailyPracticeService;
-use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 
 class StudentDailyPracticeController extends Controller
@@ -24,19 +23,17 @@ class StudentDailyPracticeController extends Controller
         if ($attempt) {
             $attempt = $engine->refresh($request->user(), $practice, $attempt);
         }
-        $status = $attempt?->status === 'completed' ? 'completed' : (now()->lessThan($practice->starts_at) ? 'upcoming' : (now()->greaterThanOrEqualTo($practice->ends_at) ? 'closed' : ($attempt ? 'in_progress' : 'open')));
+        $status = $attempt?->status ?? 'open';
 
         return array_replace(app(DailyPracticeService::class)->payload($practice), [
-            'status' => $status, 'can_review' => $attempt?->status === 'completed' && now()->greaterThanOrEqualTo($practice->ends_at),
+            'status' => $status, 'can_review' => $attempt?->status === 'completed',
             'attempt' => $attempt ? ['id' => $attempt->id, 'status' => $attempt->status, 'result' => $engine->payload($attempt)['result']] : null,
         ]);
     }
 
     public function index(Request $request)
     {
-        $data = $request->validate(['date' => ['nullable', 'date_format:Y-m-d']]);
-        $day = CarbonImmutable::parse($data['date'] ?? now('Asia/Jakarta')->toDateString(), 'Asia/Jakarta')->startOfDay();
-        $practices = DailyPractice::where('status', 'published')->where('starts_at', '>=', $day->utc()->toISOString())->where('starts_at', '<', $day->addDay()->utc()->toISOString())->orderBy('starts_at')->orderBy('id')->get();
+        $practices = DailyPractice::where('status', 'published')->orderByDesc('id')->get();
 
         return response()->json(['data' => $practices->map(fn ($p) => $this->catalog($request, $p))])->header('Cache-Control', 'private, no-store');
     }

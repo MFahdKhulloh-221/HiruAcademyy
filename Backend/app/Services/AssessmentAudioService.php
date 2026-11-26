@@ -97,7 +97,7 @@ class AssessmentAudioService
             $questions = $payload['questions'];
         }
         abort_unless($attempt->status === 'in_progress' && $attempt->getAttribute('abandoned_at') === null, 409, 'Attempt is not active.');
-        $expires = $payload['expires_at'] ?? $attempt->expires_at;
+        $expires = $domain === 'daily-practice' ? null : ($payload['expires_at'] ?? $attempt->expires_at);
         abort_if($expires !== null && now()->gte(Carbon::parse($expires)), 409, 'Attempt deadline reached.');
         if ($domain === 'tryout' && ($attempt->grading_snapshot['timing_mode'] ?? null) === 'per_session') {
             abort_unless($attempt->phase === 'session', 409, 'Attempt is not in an active session.');

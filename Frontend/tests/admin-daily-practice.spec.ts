@@ -1,6 +1,6 @@
 import { expect, test } from "./canonical-fixture";
 
-test("daily admin keeps WIB schedule, fixed category, atomic studio and daily analytics", async ({ page }) => {
+test("daily admin has no schedule, keeps fixed category, atomic studio and daily analytics", async ({ page }) => {
   let item: Record<string, unknown> | null = null;
   const writes: { path: string; body: Record<string, unknown> }[] = [];
   const reports: string[] = [];
@@ -15,7 +15,7 @@ test("daily admin keeps WIB schedule, fixed category, atomic studio and daily an
       item = { ...body, id: 9, question_count: 1, attempts_count: 0, studio_revision: "revision-1", builder_capabilities: { images: false, decimal_points: true }, passages: [], questions: [{ id: 91, session: "grammar", question: "Pertanyaan uji", options: { A: "Satu", B: "Dua", C: "Tiga", D: "Empat" }, correct_option: "A", explanation: "Pembahasan", point_value: 1, sort_order: 0, status: "published" }] };
       return route.fulfill({ status: 201, json: { data: item } });
     }
-    if (method === "PATCH") { const body = route.request().postDataJSON(); writes.push({ path, body }); expect(Object.keys(body).sort()).toEqual(["title", "category", "target_level", "status", "starts_at", "ends_at"].sort()); item = { ...item, ...body }; return route.fulfill({ json: { data: item } }); }
+    if (method === "PATCH") { const body = route.request().postDataJSON(); writes.push({ path, body }); expect(Object.keys(body).sort()).toEqual(["title", "category", "target_level", "status"].sort()); item = { ...item, ...body }; return route.fulfill({ json: { data: item } }); }
     if (method === "PUT") { writes.push({ path, body: route.request().postDataJSON() }); return route.fulfill({ json: { data: item } }); }
     if (path.endsWith("/reports/participants")) { reports.push(path); return route.fulfill({ json: { data: [], meta: { current_page: 1, last_page: 1, total: 0, per_page: 20 } } }); }
     if (path.endsWith("/reports")) { reports.push(path); return route.fulfill({ json: { data: { summary: { responses: 0, unique_participants: 0, mean: null, median: null, min: null, max: null, passed: 0, failed: 0 }, histogram: [], questions: [], hardest: [] } } }); }
@@ -28,13 +28,7 @@ test("daily admin keeps WIB schedule, fixed category, atomic studio and daily an
   await dialog.getByLabel("Judul", { exact: true }).fill("Latihan Grammar Harian");
   await dialog.getByRole("combobox", { name: /^Kategori/ }).selectOption("grammar");
   await dialog.getByRole("combobox", { name: /^Target level/ }).selectOption("n5");
-  await dialog.getByLabel("Tanggal (WIB)").fill("2026-11-13");
-  await dialog.getByLabel("Mulai (WIB)").fill("08:00");
-  await dialog.getByLabel("Selesai (WIB)").fill("07:00");
-  await dialog.getByRole("button", { name: "Simpan Draft" }).click();
-  await expect(dialog.getByRole("alert")).toContainText("tanggal WIB yang sama");
-  expect(writes).toHaveLength(0);
-  await dialog.getByLabel("Selesai (WIB)").fill("10:00");
+  await expect(dialog.locator('input[type="date"], input[type="time"], input[type="datetime-local"]')).toHaveCount(0);
   await dialog.getByRole("button", { name: "Simpan Draft" }).click();
   await expect(page.getByRole("status")).toContainText("Pengaturan tersimpan");
   expect(writes[0].body.status).toBe("draft");
@@ -45,9 +39,9 @@ test("daily admin keeps WIB schedule, fixed category, atomic studio and daily an
   await page.setViewportSize({ width: 1280, height: 720 });
   await expect(dialog.getByRole("combobox", { name: /^Kategori/ })).toBeDisabled();
   await dialog.getByRole("button", { name: "Kelola Soal", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Tata Bahasa", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Pola Kalimat", exact: true })).toBeVisible();
   await expect(page.getByRole("tab", { name: "Audio (Choukai)", exact: true })).toHaveCount(0);
-  expect(writes[0].body).toMatchObject({ category: "grammar", target_level: "n5", starts_at: "2026-11-13T08:00:00+07:00", ends_at: "2026-11-13T10:00:00+07:00" });
+  expect(writes[0].body).toEqual({ title: "Latihan Grammar Harian", category: "grammar", target_level: "n5", status: "draft" });
   await page.getByRole("button", { name: "Simpan Latihan Harian", exact: true }).click();
   await expect(page.getByRole("status").filter({ hasText: "Seluruh soal dan bacaan tersimpan." })).toBeVisible();
   expect(writes[2].path).toBe("/api/admin/daily-practices/9/studio");
@@ -59,9 +53,7 @@ test("daily admin keeps WIB schedule, fixed category, atomic studio and daily an
   page.once("dialog", dialog => dialog.accept());
   await page.getByRole("button", { name: "Kembali ke Pengaturan", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Edit Latihan Harian", exact: true })).toBeVisible();
-  await expect(page.getByLabel("Tanggal (WIB)")).toHaveValue("2026-11-13");
-  await expect(page.getByLabel("Mulai (WIB)")).toHaveValue("08:00");
-  await expect(page.getByLabel("Selesai (WIB)")).toHaveValue("10:00");
+  await expect(dialog.locator('input[type="date"], input[type="time"], input[type="datetime-local"]')).toHaveCount(0);
   await page.getByLabel("Judul", { exact: true }).fill("Latihan Grammar Diperbarui");
   await page.getByRole("button", { name: "Publikasikan", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("berhasil dipublikasikan");
@@ -95,7 +87,7 @@ test("daily admin keeps WIB schedule, fixed category, atomic studio and daily an
   await page.screenshot({ path: "C:/Users/Tulo/AppData/Local/Temp/opencode/daily-redesign-admin-mobile.png", fullPage: true });
   await page.getByRole("button", { name: "Analisis", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Analisis Hasil Latihan Harian", exact: true })).toBeVisible();
-  await expect(page.getByText("Belum ada attempt selesai sesuai filter.", { exact: true })).toBeVisible();
+  await expect(page.getByText("Belum ada pengerjaan selesai sesuai filter.", { exact: true })).toBeVisible();
   expect(reports).toContain("/api/admin/daily-practices/9/reports");
   expect(reports).toContain("/api/admin/daily-practices/9/reports/participants");
   expect(tryoutRequests).toBe(0);
@@ -106,7 +98,7 @@ test("daily admin preserves attempt locks, empty draft publication guard and ret
   let failList = true;
   let failSave = true;
   let mutations = 0;
-  const base = { category: "grammar", target_level: "n5", status: "draft", starts_at: "2026-11-13T08:00:00+07:00", ends_at: "2026-11-13T10:00:00+07:00", questions: [], passages: [], question_count: 0 };
+  const base = { category: "grammar", target_level: "n5", status: "draft", questions: [], passages: [], question_count: 0 };
   const items = [{ ...base, id: 1, title: "Latihan terkunci", attempts_count: 1 }, { ...base, id: 2, title: "Draft kosong", attempts_count: 0 }];
   await page.route("**/api/admin/programs", route => route.fulfill({ json: { data: [{ code: "n5", name: "JLPT N5", status: "active" }] } }));
   await page.route("**/api/admin/daily-practices**", route => {
@@ -135,7 +127,7 @@ test("daily admin preserves attempt locks, empty draft publication guard and ret
   await page.getByRole("button", { name: "Kembali ke daftar", exact: true }).click();
   await expect(page.getByLabel("Judul", { exact: true })).toHaveValue("Perubahan belum disimpan");
   await page.getByRole("button", { name: "Simpan Draft", exact: true }).click();
-  await expect(page.getByRole("main").getByRole("alert")).toContainText("Periksa judul latihan.");
+  await expect(page.getByRole("main").getByRole("alert")).toContainText("Periksa kembali informasi latihan dan kelengkapan soal sebelum menyimpan.");
   await expect(page.getByLabel("Judul", { exact: true })).toHaveValue("Perubahan belum disimpan");
   await page.getByRole("button", { name: "Simpan Draft", exact: true }).click();
   await expect(page.getByRole("status")).toContainText("Pengaturan tersimpan");

@@ -7,10 +7,9 @@ import ts from "typescript";
 const source = readFileSync(new URL("../src/lib/student-daily-practice-api.ts", import.meta.url), "utf8");
 const context = vm.createContext({ exports: {}, Intl, Date, require: () => ({ apiRequest: () => {}, ApiError: Error }) });
 vm.runInContext(ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, context);
-const { DailyPracticePersistence, wibDate } = context.exports;
+const { DailyPracticePersistence } = context.exports;
 const initial = () => ({ id: 1, daily_practice_id: 2, revision: 0, status: "in_progress", answers: {}, questions: [], result: null });
 
-test("WIB date crosses UTC date boundary", () => assert.equal(wibDate(new Date("2026-11-12T18:00:00Z")), "2026-11-13"));
 test("serialized saves preserve revisions and double submit remains idempotent", async () => {
   let canonical = initial();
   const writes = [];

@@ -2,7 +2,9 @@
   --daily-navy: #162c46;
   --daily-border: #e3e9f0;
   color: var(--daily-navy);
-  background: #f5f7fa;
+  background: #F9F9FF;
+  width: 100%;
+  box-sizing: border-box;
   padding: 28px;
   border-radius: 20px;
   min-width: 0;
@@ -13,7 +15,7 @@
 .page :global(.button-primary) { background: #ff7900; border-color: #ff7900; color: #162c46; }
 .page button:disabled { opacity: .5; cursor: not-allowed; }
 .page :is(button, input, select):focus-visible { outline: 3px solid #162c46; outline-offset: 3px; }
-.page :is(input, select) { min-height: 46px; min-width: 0; width: 100%; border: 1px solid var(--daily-border); border-radius: 10px; background: white; color: #162c46; padding: 10px 12px; }
+.page :is(input:not([type="radio"]):not([type="checkbox"]), select) { box-sizing: border-box; min-height: 44px; min-width: 0; width: 100%; border: 1px solid var(--daily-border); border-radius: 10px; background: white; color: #162c46; padding: 10px 12px; }
 .page :global(.admin-page-header) { margin-bottom: 0; }
 .page :global(.admin-page-header) h1 { color: #162c46; }
 .page [role="alert"] { white-space: pre-line; color: #9b281b; }
@@ -44,11 +46,12 @@
 .list :global(.admin-row-actions) { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .list :global(.admin-row-actions) button { font-size: 12px; padding: 8px; margin: 0; }
 .list :global(.admin-row-actions) span { grid-column: 1 / -1; font-size: 12px; color: #526275; }
-.questionCount { display: block; margin-top: 6px; color: #526275; font-size: 12px; }
 .badge { display: inline-flex; white-space: nowrap; padding: 6px 10px; border: 1px solid var(--daily-border); border-radius: 999px; background: #f5f7fa; color: #162c46; font-size: 12px; font-weight: 600; }
-.badge[data-published="true"] { background: #fff1e5; border-color: #ffd2ab; }
-.form { display: grid; grid-template-columns: minmax(0, 1fr) 320px; align-items: start; gap: 24px; }
-.fields { display: grid; gap: 20px; min-width: 0; border: 0; padding: 0; margin: 0; }
+.badge[data-published="true"] { background: #E6F4EC; border-color: #B7DEC7; color: #185C37; }
+.page .form { display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 340px); align-items: start; gap: 24px; width: 100%; max-width: none; margin: 0; }
+.form > * { min-width: 0; }
+.form > aside { position: sticky; top: 24px; }
+.page .fields { display: grid; gap: 20px; min-width: 0; width: 100%; max-width: none; border: 0; padding: 0; margin: 0; }
 .card { min-width: 0; display: grid; gap: 18px; padding: 24px; background: white; border: 1px solid var(--daily-border); border-radius: 16px; }
 .card h2 { margin: 0; color: #162c46; font-size: 18px; font-weight: 700; }
 .card h3 { overflow-wrap: anywhere; margin: 0; font-size: 20px; }
@@ -65,7 +68,8 @@
 .formActions { display: grid; gap: 10px; }
 @media (max-width: 1023px) {
   .page { padding: 20px; }
-  .form { grid-template-columns: 1fr; }
+  .page .form { grid-template-columns: minmax(0, 1fr); }
+  .form > aside { position: static; }
   .list :is(th, td) { padding: 12px 8px; }
 }
 @media (max-width: 639px) {
@@ -94,7 +98,7 @@
   .list.list td:nth-child(1) { font-size: 18px; font-weight: 600; line-height: 1.4; }
   .list.list td:nth-child(2)::before { content: "Kategori"; }
   .list.list td:nth-child(3)::before { content: "Target level"; }
-  .list.list td:nth-child(4)::before { content: "Jadwal WIB"; }
+  .list.list td:nth-child(4)::before { content: "Jumlah soal"; }
   .list.list td:nth-child(5)::before { content: "Status"; }
   .list.list :global(.admin-row-actions) { grid-template-columns: repeat(2, minmax(0, 1fr)); min-width: 0; }
   .list.list :global(.admin-row-actions) button { min-height: 44px; min-width: 44px; width: 100%; }

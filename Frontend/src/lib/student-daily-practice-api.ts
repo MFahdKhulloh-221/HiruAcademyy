@@ -1,11 +1,11 @@
 import { apiRequest, ApiError } from "./api";
 import type { ServerAttempt } from "./assessment-attempt";
 
-export const dailyPracticeCategories = { vocabulary: "Kosakata dan Kanji", grammar: "Tata Bahasa", reading: "Reading", audio: "Audio" } as const;
+export const dailyPracticeCategories = { vocabulary: "Kosakata & Kanji", grammar: "Pola Kalimat", reading: "Reading", audio: "Audio" } as const;
 export type DailyPractice = {
   id: number; title: string; category: keyof typeof dailyPracticeCategories; target_level: string;
-  starts_at: string; ends_at: string; question_count: number;
-  status: "upcoming" | "open" | "in_progress" | "completed" | "closed";
+  starts_at?: string | null; ends_at?: string | null; question_count: number;
+  status: "open" | "in_progress" | "completed";
   can_review?: boolean;
 };
 export type DailyPracticeAttempt = ServerAttempt & { revision: number; daily_practice_id: number };
@@ -14,12 +14,8 @@ function path(id: number) {
   if (!Number.isSafeInteger(id) || id < 1) throw new ApiError(404);
   return `${base}/${id}`;
 }
-export function wibDate(date = new Date()) {
-  return new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Jakarta", year: "numeric", month: "2-digit", day: "2-digit" }).format(date);
-}
-export async function dailyPractices(date: string, signal?: AbortSignal) {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new ApiError(422);
-  return (await apiRequest<{ data: DailyPractice[] }>(`${base}?date=${date}`, { signal })).data;
+export async function dailyPractices(signal?: AbortSignal) {
+  return (await apiRequest<{ data: DailyPractice[] }>(base, { signal })).data;
 }
 export async function dailyPractice(id: number, signal?: AbortSignal) {
   return (await apiRequest<{ data: DailyPractice }>(path(id), { signal })).data;

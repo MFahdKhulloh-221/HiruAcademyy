@@ -208,8 +208,8 @@ class TryOutAttemptService
             if ($locked->revision !== $beforeCatchUp) {
                 return $locked;
             }
-            abort_unless($locked->status === 'in_progress', 409, 'Try out attempt is already finished.');
-            abort_unless($locked->revision === $revision, 409, 'Stale answer revision.');
+            abort_unless($locked->status === 'in_progress', 409, $this->attemptMessage('Try out attempt is already finished.'));
+            abort_unless($locked->revision === $revision, 409, $this->attemptMessage('Stale answer revision.'));
             if ($this->perSession($locked)) {
                 abort_unless($locked->phase === 'session', 409, 'Answers are locked during break or review.');
             }
@@ -219,7 +219,7 @@ class TryOutAttemptService
             $allIds = array_map('strval', array_column($activeQuestions, 'id'));
             foreach ($answers as $id => $answer) {
                 if (! in_array((string) $id, $allIds, true) || ! in_array($answer, ['A', 'B', 'C', 'D'], true)) {
-                    throw ValidationException::withMessages(['answers' => 'Only valid try out questions and A–D options allowed.']);
+                    throw ValidationException::withMessages(['answers' => $this->attemptMessage('Only valid try out questions and A–D options allowed.')]);
                 }
             }
             $persisted = array_replace($locked->answers, $answers);
@@ -262,7 +262,7 @@ class TryOutAttemptService
                 if ($locked->revision !== $beforeCatchUp) {
                     return $locked;
                 }
-                abort_unless($locked->revision === $revision, 409, 'Stale answer revision.');
+                abort_unless($locked->revision === $revision, 409, $this->attemptMessage('Stale answer revision.'));
                 if ($locked->phase === 'review') {
                     return $this->finalize($user, $tryOut, $locked);
                 }
@@ -271,14 +271,19 @@ class TryOutAttemptService
                 return $this->finishActiveSession($user, $tryOut, $locked, now());
             }
             if (! $this->expired($locked)) {
-                abort_unless($locked->revision === $revision, 409, 'Stale answer revision.');
+                abort_unless($locked->revision === $revision, 409, $this->attemptMessage('Stale answer revision.'));
             }
 
             return $this->finalize($user, $tryOut, $locked);
         }, 3);
     }
 
-    private function expired(Model $attempt): bool
+    protected function attemptMessage(string $message): string
+    {
+        return $message;
+    }
+
+    protected function expired(Model $attempt): bool
     {
         return $attempt->status === 'in_progress' && $attempt->expires_at !== null && now()->greaterThanOrEqualTo($attempt->expires_at);
     }

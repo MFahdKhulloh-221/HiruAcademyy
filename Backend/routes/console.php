@@ -9,6 +9,4 @@ Artisan::command('inspire', function () {
 
 Artisan::command('daily-practices:finalize', function () {
     $this->info('Finalized: '.app(\App\Services\DailyPracticeAttemptService::class)->finalizeDue());
-})->purpose('Finalize daily practice attempts past their window');
-
-\Illuminate\Support\Facades\Schedule::command('daily-practices:finalize')->everyMinute()->withoutOverlapping();
+})->purpose('Legacy no-op: daily practices have no deadline');

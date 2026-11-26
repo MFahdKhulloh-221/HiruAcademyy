@@ -44,8 +44,6 @@ class DailyPracticeAttemptService extends TryOutAttemptService
             if ($existing) {
                 return $this->refresh($user, $parent, $existing);
             }
-            abort_unless(now()->greaterThanOrEqualTo($parent->starts_at) && now()->lessThan($parent->ends_at), 403, 'Practice window is closed.');
-
             return parent::start($user, $parent);
         });
     }
@@ -62,7 +60,22 @@ class DailyPracticeAttemptService extends TryOutAttemptService
 
     protected function deadline(Model $assessment, $startedAt)
     {
-        return $assessment->ends_at;
+        return null;
+    }
+
+    protected function attemptMessage(string $message): string
+    {
+        return match ($message) {
+            'Try out attempt is already finished.' => 'Latihan sudah dikumpulkan.',
+            'Stale answer revision.' => 'Jawaban telah diperbarui. Muat ulang latihan sebelum menyimpan kembali.',
+            'Only valid try out questions and A–D options allowed.' => 'Jawaban harus memakai soal latihan ini dan pilihan A–D.',
+            default => $message,
+        };
+    }
+
+    protected function expired(Model $attempt): bool
+    {
+        return false;
     }
 
     protected function snapshotMetadata(Model $assessment, array $questions): array
@@ -92,26 +105,14 @@ class DailyPracticeAttemptService extends TryOutAttemptService
 
     public function payload(Model $attempt, bool $review = false, bool $incorrectOnly = false): array
     {
-        abort_if($review && now()->lessThan($attempt->expires_at), 403, 'Review opens after the practice window.');
+        abort_if($review && $attempt->status !== 'completed', 403, 'Pembahasan tersedia setelah latihan dikumpulkan.');
 
-        return parent::payload($attempt, $review, $incorrectOnly);
+        return array_replace(parent::payload($attempt, $review, $incorrectOnly), ['expires_at' => null]);
     }
 
     public function finalizeDue(?int $practiceId = null): int
     {
-        $count = 0;
-        DailyPracticeAttempt::where('status', 'in_progress')->where('expires_at', '<=', now()->toISOString())
-            ->when($practiceId, fn ($q) => $q->where('daily_practice_id', $practiceId))
-            ->orderBy('id')->eachById(function ($attempt) use (&$count) {
-                DB::transaction(function () use ($attempt, &$count) {
-                    $locked = DailyPracticeAttempt::whereKey($attempt->id)->lockForUpdate()->firstOrFail();
-                    if ($locked->status === 'in_progress' && now()->greaterThanOrEqualTo($locked->expires_at)) {
-                        $this->finalize(User::findOrFail($locked->user_id), DailyPractice::findOrFail($locked->daily_practice_id), $locked);
-                        $count++;
-                    }
-                }, 3);
-            });
-
-        return $count;
+        // Retain compatibility with callers of the retired scheduler command.
+        return 0;
     }
 }

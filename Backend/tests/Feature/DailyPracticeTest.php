@@ -32,6 +32,7 @@ class DailyPracticeTest extends TestCase
         if (! Schema::hasTable('daily_practices')) {
             (require database_path('migrations/2026_11_13_000001_create_daily_practices_tables.php'))->up();
         }
+        (require database_path('migrations/2026_11_26_000001_make_daily_practices_untimed.php'))->up();
         Program::firstOrCreate(['code' => 'n5'], ['slug' => 'n5', 'name' => 'N5', 'family' => 'jlpt', 'status' => 'active', 'sort_order' => 1]);
         $reports = \Mockery::mock(AdminDailyPracticeReportService::class)->makePartial();
         $reports->shouldReceive('readSnapshot')->andReturnUsing(fn ($read) => $read());
@@ -50,19 +51,21 @@ class DailyPracticeTest extends TestCase
     private function practice(): DailyPractice
     {
         $content = app(DailyPracticeService::class);
-        $p = $content->save(['title' => 'Daily', 'category' => 'grammar', 'target_level' => 'n5', 'starts_at' => now()->subHour()->toISOString(), 'ends_at' => now()->addHour()->toISOString()]);
+        $p = $content->save(['title' => 'Daily', 'category' => 'grammar', 'target_level' => 'n5']);
+        // Historical dates belong to stored legacy data, never current request settings.
+        $p->forceFill(['starts_at' => now()->subHour(), 'ends_at' => now()->addHour()])->save();
         $content->saveStudio($p, ['revision' => $content->studioRevision($p), 'settings' => ['status' => 'published'], 'passages' => [], 'questions' => [['id' => 'new', 'content' => ['session' => 'grammar', 'question' => '<p>Question<script>alert(1)</script></p>', 'options' => ['A' => 'One', 'B' => 'Two', 'C' => 'Three', 'D' => 'Four'], 'correct_option' => 'B', 'explanation' => 'Secret explanation', 'point_value' => 1.25, 'status' => 'published']]], 'deleted_question_ids' => [], 'deleted_passage_ids' => []]);
 
         return $p->fresh();
     }
 
-    public function test_free_student_window_single_attempt_stale_revision_scoring_review_and_ownership(): void
+    public function test_free_student_untimed_single_attempt_stale_revision_scoring_review_and_ownership(): void
     {
         $user = $this->user();
         $p = $this->practice();
         $base = '/api/student/daily-practices/'.$p->id;
         $this->actingAs($user)->getJson($base)->assertOk()->assertJsonPath('data.status', 'open')->assertJsonPath('data.attempt', null);
-        $first = $this->postJson($base.'/attempt')->assertOk()->assertJsonPath('data.expires_at', $p->ends_at->toISOString())->json('data');
+        $first = $this->postJson($base.'/attempt')->assertOk()->assertJsonPath('data.expires_at', null)->json('data');
         $this->postJson($base.'/attempt')->assertOk()->assertJsonPath('data.id', $first['id']);
         $this->assertArrayNotHasKey('correct_option', $first['questions'][0]);
         $this->assertArrayNotHasKey('grading_snapshot', $first);
@@ -73,28 +76,37 @@ class DailyPracticeTest extends TestCase
         $this->postJson($base.'/submit', ['revision' => 0])->assertStatus(409);
         $done = $this->postJson($base.'/submit', ['revision' => 1])->assertOk()->assertJsonPath('data.result.earned', 1.25)->assertJsonPath('data.result.max', 1.25)->assertJsonPath('data.result.overall_pass', null)->json('data');
         $this->postJson($base.'/submit', ['revision' => 0])->assertOk()->assertJsonPath('data.revision', $done['revision']);
-        $this->getJson($base.'/review')->assertForbidden();
+        $this->getJson($base.'/review')->assertOk()->assertJsonPath('data.questions.0.correct_option', 'B');
+        $this->getJson($base)->assertOk()->assertJsonPath('data.can_review', true)->assertJsonPath('data.status', 'completed');
+        $this->putJson($base.'/answers', ['answers' => [$id => 'A'], 'revision' => 1])->assertStatus(409);
         $this->actingAs($this->user())->getJson($base.'/attempt')->assertNotFound();
         $this->travelTo($p->ends_at);
         $this->actingAs($user)->getJson($base.'/review')->assertOk()->assertJsonPath('data.questions.0.correct_option', 'B');
         $this->assertSame(1, DailyPracticeAttempt::where('daily_practice_id', $p->id)->count());
     }
 
-    public function test_deadline_ignores_late_answers_command_and_lazy_expiry_reports_and_immutable_content(): void
+    public function test_old_deadline_does_not_finalize_answers_or_reports_and_content_stays_immutable(): void
     {
         $p = $this->practice();
         $user = $this->user();
         $base = '/api/student/daily-practices/'.$p->id;
         $first = $this->actingAs($user)->postJson($base.'/attempt')->assertOk()->json('data');
+        DB::table('daily_practice_attempts')->where('id', $first['id'])->update(['expires_at' => $p->ends_at]);
         $this->travelTo($p->ends_at);
-        $this->putJson($base.'/answers', ['answers' => [$first['questions'][0]['id'] => 'B'], 'revision' => 0])->assertOk()->assertJsonPath('data.status', 'completed')->assertJsonPath('data.result.earned', 0);
-        $this->actingAs($this->user())->postJson($base.'/attempt')->assertForbidden();
+        $this->putJson($base.'/answers', ['answers' => [$first['questions'][0]['id'] => 'B'], 'revision' => 0])->assertOk()->assertJsonPath('data.status', 'in_progress')->assertJsonPath('data.expires_at', null);
+        $this->getJson($base.'/review')->assertForbidden();
+        $this->actingAs($this->user())->postJson($base.'/attempt')->assertOk();
         $admin = $this->user('admin');
         $adminBase = '/api/admin/daily-practices/'.$p->id;
         $this->actingAs($admin)->patchJson($adminBase, ['title' => 'changed'])->assertStatus(409);
         $this->deleteJson($adminBase)->assertStatus(409);
         $this->putJson($adminBase.'/studio', [])->assertStatus(409);
-        $this->getJson($adminBase.'/reports')->assertOk()->assertJsonPath('data.summary.responses', 1)->assertJsonPath('data.try_out.level', 'n5');
+        $this->getJson($adminBase.'/reports')->assertOk()->assertJsonPath('data.summary.responses', 0);
+        $this->getJson($adminBase.'/reports/participants')->assertOk()->assertJsonPath('meta.total', 0);
+        $this->getJson($adminBase.'/reports/attempts/'.$first['id'])->assertNotFound();
+        $this->assertSame('in_progress', DailyPracticeAttempt::findOrFail($first['id'])->status);
+        $this->actingAs($user)->postJson($base.'/submit', ['revision' => 1])->assertOk();
+        $this->actingAs($admin)->getJson($adminBase.'/reports')->assertOk()->assertJsonPath('data.summary.responses', 1)->assertJsonPath('data.try_out.level', 'n5');
         $this->getJson($adminBase.'/reports/participants')->assertOk()->assertJsonPath('meta.total', 1);
         $this->getJson($adminBase.'/reports/attempts/'.$first['id'])->assertOk()->assertJsonPath('data.questions.0.correct_option', 'B');
         $other = $this->practice();
@@ -103,27 +115,32 @@ class DailyPracticeTest extends TestCase
         $this->actingAs($user)->getJson($adminBase)->assertForbidden();
     }
 
-    public function test_refresh_at_exact_deadline_finalizes_without_extending_window(): void
+    public function test_legacy_expiry_refresh_resume_stale_save_and_manual_submit(): void
     {
         $p = $this->practice();
         $base = '/api/student/daily-practices/'.$p->id;
         $first = $this->actingAs($this->user())->postJson($base.'/attempt')->assertOk()->json('data');
-        $this->travelTo($p->ends_at->subSecond());
-        $this->getJson($base.'/attempt')->assertOk()->assertJsonPath('data.status', 'in_progress')->assertJsonPath('data.expires_at', $first['expires_at']);
-        $this->travelTo($p->ends_at);
-        $this->getJson($base.'/attempt')->assertOk()->assertJsonPath('data.status', 'completed')->assertJsonPath('data.result.unanswered', 1)->assertJsonPath('data.revision', 1);
-        $this->getJson($base.'/attempt')->assertOk()->assertJsonPath('data.revision', 1);
-        $this->postJson($base.'/submit')->assertOk()->assertJsonPath('data.revision', 1);
+        DB::table('daily_practice_attempts')->where('id', $first['id'])->update(['expires_at' => $p->ends_at]);
+        $this->travelTo($p->ends_at->addDays(10));
+        $this->getJson($base.'/attempt')->assertOk()->assertJsonPath('data.status', 'in_progress')->assertJsonPath('data.expires_at', null)->assertJsonPath('data.revision', 0);
+        $this->postJson($base.'/attempt')->assertOk()->assertJsonPath('data.id', $first['id']);
+        $id = $first['questions'][0]['id'];
+        $this->putJson($base.'/answers', ['answers' => [$id => 'B'], 'revision' => 0])->assertOk();
+        $this->putJson($base.'/answers', ['answers' => [$id => 'A'], 'revision' => 0])->assertStatus(409);
+        $this->postJson($base.'/submit', ['revision' => 0])->assertStatus(409);
+        $done = $this->postJson($base.'/submit', ['revision' => 1])->assertOk()->assertJsonPath('data.result.earned', 1.25)->json('data');
+        $this->postJson($base.'/submit', ['revision' => 0])->assertOk()->assertExactJson(['data' => $done]);
+        $this->getJson($base.'/review')->assertOk()->assertJsonPath('data.questions.0.correct_option', 'B');
     }
 
-    public function test_scheduled_finalization_scores_only_started_attempts(): void
+    public function test_retired_scheduled_finalization_never_scores_started_attempts(): void
     {
         $p = $this->practice();
         $this->actingAs($this->user())->postJson('/api/student/daily-practices/'.$p->id.'/attempt')->assertOk();
         $this->travelTo($p->ends_at);
-        $this->artisan('daily-practices:finalize')->expectsOutput('Finalized: 1')->assertSuccessful();
         $this->artisan('daily-practices:finalize')->expectsOutput('Finalized: 0')->assertSuccessful();
-        $this->assertSame(1, DailyPracticeAttempt::where('daily_practice_id', $p->id)->where('status', 'completed')->count());
+        $this->artisan('daily-practices:finalize')->expectsOutput('Finalized: 0')->assertSuccessful();
+        $this->assertSame(0, DailyPracticeAttempt::where('daily_practice_id', $p->id)->where('status', 'completed')->count());
     }
 
     public function test_catalog_wib_dates_overlaps_future_and_target_level_labels(): void
@@ -131,10 +148,9 @@ class DailyPracticeTest extends TestCase
         $content = app(DailyPracticeService::class);
         Program::firstOrCreate(['code' => 'n4'], ['slug' => 'n4', 'name' => 'N4', 'family' => 'jlpt', 'status' => 'active', 'sort_order' => 2]);
         $user = $this->user();
-        $day = now('Asia/Jakarta')->toDateString();
         $ids = [];
         foreach (DailyPracticeService::CATEGORIES as $category => $session) {
-            $p = $content->save(['title' => $category, 'category' => $category, 'target_level' => 'n4', 'starts_at' => now()->subHour()->toISOString(), 'ends_at' => now()->addHour()->toISOString()]);
+            $p = $content->save(['title' => $category, 'category' => $category, 'target_level' => 'n4']);
             $content->saveQuestion($p, ['session' => $session, 'question' => 'Question', 'options' => ['A' => 'One', 'B' => 'Two', 'C' => 'Three', 'D' => 'Four'], 'correct_option' => 'B', 'point_value' => 1, 'status' => 'published', 'audio_url' => $category === 'audio' ? 'https://example.test/audio.mp3' : null]);
             $p = $content->save(['status' => 'published'], $p);
             $ids[] = $p->id;
@@ -142,13 +158,68 @@ class DailyPracticeTest extends TestCase
         }
         $listed = $this->getJson('/api/student/daily-practices')->assertOk()->json('data');
         $this->assertEmpty(array_diff($ids, array_column($listed, 'id')));
-        $this->assertEmpty($this->getJson('/api/student/daily-practices?date='.now('Asia/Jakarta')->subDay()->toDateString())->assertOk()->json('data'));
-        $this->getJson('/api/student/daily-practices?date=not-a-date')->assertUnprocessable();
+        $this->assertSame(array_column($listed, 'id'), array_column($this->getJson('/api/student/daily-practices?date='.now('Asia/Jakarta')->subDay()->toDateString())->assertOk()->json('data'), 'id'));
+        $this->assertSame(array_column($listed, 'id'), array_column($this->getJson('/api/student/daily-practices?date=not-a-date')->assertOk()->json('data'), 'id'));
         $future = $this->practice();
-        $future = $content->save(['starts_at' => now()->addHours(2)->toISOString(), 'ends_at' => now()->addHours(3)->toISOString()], $future);
-        $this->getJson('/api/student/daily-practices/'.$future->id)->assertOk()->assertJsonPath('data.status', 'upcoming');
-        $this->postJson('/api/student/daily-practices/'.$future->id.'/attempt')->assertForbidden();
-        $this->assertSame($day, $future->starts_at->setTimezone('Asia/Jakarta')->toDateString());
+        $future->forceFill(['starts_at' => now()->addDays(2), 'ends_at' => now()->addDays(3)])->save();
+        $this->getJson('/api/student/daily-practices/'.$future->id)->assertOk()->assertJsonPath('data.status', 'open');
+        $this->postJson('/api/student/daily-practices/'.$future->id.'/attempt')->assertOk()->assertJsonPath('data.expires_at', null);
+        $past = $this->practice();
+        $past->forceFill(['starts_at' => now()->subDays(20), 'ends_at' => now()->subDays(19)])->save();
+        $draft = $content->save(['title' => 'No schedule', 'category' => 'grammar', 'target_level' => 'n5']);
+        $this->assertNull($draft->starts_at);
+        $this->assertNull($draft->ends_at);
+        $catalogIds = array_column($this->getJson('/api/student/daily-practices')->assertOk()->json('data'), 'id');
+        $this->assertContains($past->id, $catalogIds);
+        $this->assertContains($future->id, $catalogIds);
+        $this->assertNotContains($draft->id, $catalogIds);
+        $this->postJson('/api/student/daily-practices/'.$past->id.'/attempt')->assertOk();
+    }
+
+    public function test_legacy_expired_audio_remains_one_play_until_manual_completion(): void
+    {
+        if (! Schema::hasTable('assessment_audio_plays')) {
+            (require database_path('migrations/2026_11_25_000001_create_assessment_audio_plays_table.php'))->up();
+        }
+        $content = app(DailyPracticeService::class);
+        $p = $content->save(['title' => 'Audio', 'category' => 'audio', 'target_level' => 'n5']);
+        $question = $content->saveQuestion($p, ['session' => 'audio', 'question' => 'Listen', 'options' => ['A' => 'One', 'B' => 'Two', 'C' => 'Three', 'D' => 'Four'], 'correct_option' => 'B', 'point_value' => 1, 'status' => 'published', 'audio_url' => 'https://example.test/audio.mp3']);
+        $p = $content->save(['status' => 'published'], $p);
+        $user = $this->user();
+        $base = '/api/student/daily-practices/'.$p->id;
+        $attempt = $this->actingAs($user)->postJson($base.'/attempt')->assertOk()->json('data');
+        DB::table('daily_practice_attempts')->where('id', $attempt['id'])->update(['expires_at' => now()->subDay()]);
+        $audio = '/api/assessment-audio/daily-practice/'.$attempt['id'].'/'.$question->id;
+        $token = (string) \Illuminate\Support\Str::uuid();
+        $this->getJson($audio)->assertOk()->assertJsonPath('data.status', 'available');
+        $this->postJson($audio.'/reserve', ['token' => $token])->assertOk();
+        $this->postJson($audio.'/commit', ['token' => $token])->assertOk()->assertJsonPath('data.status', 'used');
+        $this->getJson($base.'/attempt')->assertOk()->assertJsonPath('data.expires_at', null);
+        $this->postJson($audio.'/reserve', ['token' => (string) \Illuminate\Support\Str::uuid()])->assertConflict();
+        $this->actingAs($this->user())->getJson($audio)->assertNotFound();
+        $this->actingAs($user)->postJson($base.'/submit', ['revision' => 0])->assertOk();
+        $this->getJson($audio)->assertConflict();
+    }
+
+    public function test_untimed_migration_clears_only_in_progress_expiry_and_keeps_completed_snapshots(): void
+    {
+        $p = $this->practice();
+        $engine = app(DailyPracticeAttemptService::class);
+        $user = $this->user();
+        $active = $engine->start($user, $p);
+        DB::table('daily_practice_attempts')->where('id', $active->id)->update(['expires_at' => $p->ends_at]);
+        $other = $this->user();
+        $done = $engine->start($other, $p);
+        DB::table('daily_practice_attempts')->where('id', $done->id)->update(['expires_at' => $p->ends_at]);
+        $done = $engine->submit($other, $p, $done, 0);
+        $before = $done->getAttributes();
+        (require database_path('migrations/2026_11_26_000001_make_daily_practices_untimed.php'))->up();
+        $this->assertNull($active->fresh()->expires_at);
+        $this->assertSame('in_progress', $active->fresh()->status);
+        $this->assertSame($before, $done->fresh()->getAttributes());
+        $this->assertSame($active->content_snapshot, $active->fresh()->content_snapshot);
+        $this->expectException(\LogicException::class);
+        $done->update(['status' => 'in_progress']);
     }
 
     public function test_shared_passage_blocks_snapshot_and_foreign_ownership(): void
@@ -213,7 +284,9 @@ class DailyPracticeTest extends TestCase
     public function test_validation_atomic_studio_sanitization_and_foreign_passage(): void
     {
         $admin = $this->user('admin');
-        $this->actingAs($admin)->postJson('/api/admin/daily-practices', ['title' => 'bad', 'category' => 'grammar', 'target_level' => 'n5', 'starts_at' => '2026-11-13T23:00:00+07:00', 'ends_at' => '2026-11-14T01:00:00+07:00'])->assertUnprocessable();
+        $settings = ['title' => 'Daily', 'category' => 'grammar', 'target_level' => 'n5'];
+        $this->actingAs($admin)->postJson('/api/admin/daily-practices', $settings)->assertCreated()->assertJsonPath('data.starts_at', null)->assertJsonPath('data.ends_at', null);
+        $this->postJson('/api/admin/daily-practices', $settings + ['starts_at' => '2026-11-13T23:00:00+07:00', 'ends_at' => '2026-11-14T01:00:00+07:00'])->assertUnprocessable()->assertJsonValidationErrors(['starts_at', 'ends_at']);
         $p = $this->practice();
         $this->assertStringNotContainsString('<script', $p->questions()->first()->question);
         $content = app(DailyPracticeService::class);

@@ -5,7 +5,6 @@ namespace App\Services;
 use App\Models\DailyPractice;
 use App\Models\DailyPracticePassage;
 use App\Models\DailyPracticeQuestion;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -44,7 +43,7 @@ class DailyPracticeService extends TryOutService
 
     public function assertMutable(Model $practice): void
     {
-        abort_if(DB::table($this->attemptTable)->where($this->parentKey, $practice->id)->exists(), 409, 'Practice with attempts is immutable.');
+        abort_if(DB::table($this->attemptTable)->where($this->parentKey, $practice->id)->exists(), 409, 'Latihan yang sudah dikerjakan tidak dapat diubah atau dihapus.');
     }
 
     public function save(array $input, ?Model $tryOut = null): Model
@@ -55,25 +54,14 @@ class DailyPracticeService extends TryOutService
                 $this->assertMutable($model);
             }
             $required = $model->exists ? 'sometimes' : 'required';
-            $timestamp = ['required', 'string', 'date', 'regex:/(?:Z|[+-]\d{2}:\d{2})$/i'];
             $data = $this->validateInput($input, [
                 'title' => [$required, 'required', 'string', 'max:255'],
                 'category' => [$required, 'required', Rule::in(array_keys(self::CATEGORIES))],
                 'target_level' => [$required, 'required', 'string', Rule::exists('programs', 'code')],
                 'status' => ['sometimes', 'required', Rule::in(['draft', 'published'])],
-                'starts_at' => [$required, ...$timestamp],
-                'ends_at' => [$required, ...$timestamp],
             ]);
-            foreach (['starts_at', 'ends_at'] as $key) {
-                if (isset($data[$key])) {
-                    $data[$key] = CarbonImmutable::parse($data[$key])->utc();
-                }
-            }
             $model->fill($data);
             $model->status ??= 'draft';
-            if ($model->ends_at <= $model->starts_at || $model->starts_at->setTimezone('Asia/Jakarta')->toDateString() !== $model->ends_at->setTimezone('Asia/Jakarta')->toDateString()) {
-                throw ValidationException::withMessages(['ends_at' => 'Window must end after start on the same WIB date.']);
-            }
             $model->save();
             if ($model->status === 'published') {
                 $this->assertPublishable($model);
@@ -87,7 +75,7 @@ class DailyPracticeService extends TryOutService
     {
         $questions = $tryOut->questions()->get();
         if ($questions->isEmpty() || $questions->contains(fn ($q) => $q->status !== 'published' || $q->session !== self::CATEGORIES[$tryOut->category])) {
-            throw ValidationException::withMessages(['status' => 'Publish requires published questions matching the practice category.']);
+            throw ValidationException::withMessages(['status' => 'Latihan hanya dapat diterbitkan jika semua soal sudah diterbitkan dan sesuai dengan kategori latihan.']);
         }
         foreach ($questions as $question) {
             $this->assertQuestion($question);
@@ -128,7 +116,7 @@ class DailyPracticeService extends TryOutService
     public function payload(Model $tryOut): array
     {
         return $tryOut->only(['id', 'title', 'category', 'target_level', 'status']) + [
-            'starts_at' => $tryOut->starts_at->toISOString(), 'ends_at' => $tryOut->ends_at->toISOString(),
+            'starts_at' => $tryOut->starts_at?->toISOString(), 'ends_at' => $tryOut->ends_at?->toISOString(),
             'locked' => DB::table($this->attemptTable)->where($this->parentKey, $tryOut->id)->exists(),
             'question_count' => $tryOut->questions()->count(), 'max_score' => (float) $tryOut->questions()->sum('point_value'),
             'server_now' => now()->toISOString(),

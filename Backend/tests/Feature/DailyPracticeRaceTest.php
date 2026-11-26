@@ -24,6 +24,7 @@ class DailyPracticeRaceTest extends TestCase
         if (! Schema::hasTable('daily_practices')) {
             (require database_path('migrations/2026_11_13_000001_create_daily_practices_tables.php'))->up();
         }
+        (require database_path('migrations/2026_11_26_000001_make_daily_practices_untimed.php'))->up();
         $program = Program::where('code', 'n5')->first();
         $createdProgram = ! $program;
         $program ??= Program::create(['code' => 'n5', 'slug' => 'n5', 'name' => 'N5', 'family' => 'jlpt', 'status' => 'active', 'sort_order' => 1]);
@@ -32,7 +33,7 @@ class DailyPracticeRaceTest extends TestCase
         $practice = null;
         try {
             $content = app(DailyPracticeService::class);
-            $practice = $content->save(['title' => 'Daily race', 'category' => 'grammar', 'target_level' => 'n5', 'starts_at' => now()->subMinute()->toISOString(), 'ends_at' => now()->addMinute()->toISOString()]);
+            $practice = $content->save(['title' => 'Daily race', 'category' => 'grammar', 'target_level' => 'n5']);
             $q = $content->saveQuestion($practice, ['session' => 'grammar', 'question' => 'Question', 'options' => ['A' => 'One', 'B' => 'Two', 'C' => 'Three', 'D' => 'Four'], 'correct_option' => 'B', 'point_value' => 1.25, 'status' => 'published']);
             $practice = $content->save(['status' => 'published'], $practice);
             $results = $this->collide($user, $practice, ['start', 'start'], 'daily_practices', $practice->id);
@@ -49,16 +50,22 @@ class DailyPracticeRaceTest extends TestCase
             $this->assertEquals(1.25, $attempt->fresh()->result_snapshot['earned']);
             $this->assertSame($snapshot, $attempt->fresh()->grading_snapshot);
             $this->assertSame('B', $attempt->fresh()->answers[$q->id]);
-            // New practice: expired autosave races scheduled finalization and manual submit.
-            $other = $content->save(['title' => 'Deadline race', 'category' => 'grammar', 'target_level' => 'n5', 'starts_at' => now()->subMinute()->toISOString(), 'ends_at' => now()->addMinute()->toISOString()]);
+            // Legacy expiry must not bypass revision checks during save/submit collisions.
+            $other = $content->save(['title' => 'Deadline race', 'category' => 'grammar', 'target_level' => 'n5']);
+            $other->forceFill(['starts_at' => now()->subMinute(), 'ends_at' => now()->addMinute()])->save();
             $otherQ = $content->saveQuestion($other, ['session' => 'grammar', 'question' => 'Question', 'options' => ['A' => 'One', 'B' => 'Two', 'C' => 'Three', 'D' => 'Four'], 'correct_option' => 'B', 'point_value' => 1, 'status' => 'published']);
             $other = $content->save(['status' => 'published'], $other);
             $due = app(DailyPracticeAttemptService::class)->start($user, $other);
-            $results = $this->collide($user, $other, ['save', 'scheduled', 'submit'], 'daily_practice_attempts', $due->id, $otherQ->id, $other->ends_at->toISOString());
-            $this->assertContains($this->statuses($results), [[200, 200, 200], [200, 200, 409]]);
-            $this->assertSame(1, $due->fresh()->revision);
-            $this->assertSame([], $due->fresh()->answers);
-            $this->assertSame(0, $due->fresh()->result_snapshot['earned']);
+            DB::table('daily_practice_attempts')->where('id', $due->id)->update(['expires_at' => $other->ends_at]);
+            $this->assertSame(0, app(DailyPracticeAttemptService::class)->finalizeDue($other->id));
+            $results = $this->collide($user, $other, ['save', 'submit'], 'daily_practice_attempts', $due->id, $otherQ->id, $other->ends_at->toISOString());
+            $this->assertContains($this->statuses($results), [[200, 200], [200, 409]]);
+            $due = $due->fresh();
+            $this->assertSame('B', $due->answers[$otherQ->id]);
+            $this->assertSame(1, $due->revision - ($due->status === 'completed' ? 1 : 0));
+            $done = app(DailyPracticeAttemptService::class)->submit($user, $other, $due, $due->revision);
+            $this->assertSame(2, $done->revision);
+            $this->assertEquals(1, $done->result_snapshot['earned']);
         } finally {
             while (DB::transactionLevel() > 0) {
                 DB::rollBack();

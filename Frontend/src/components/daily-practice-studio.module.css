@@ -10,7 +10,15 @@
   gap: 20px;
   min-width: 0;
 }
-.builder[data-assessment-kind] { --builder-accent: #ff7900; --builder-soft: #f5f7fa; }
+.builder[data-assessment-kind] { --builder-accent: #ff7900; --builder-soft: #f5f7fa; padding: 0; background: transparent; }
+.builder[data-assessment-kind] .previewOptions { margin: 16px 0 0; padding: 0; border: 0; }
+.builder[data-assessment-kind] .previewOptions legend { margin-bottom: 12px; font-size: 13px; color: #526275; }
+.builder[data-assessment-kind] .previewOptions label { display: flex; align-items: center; justify-content: flex-start; gap: 12px; min-height: 52px; padding: 12px 16px; background: white; cursor: pointer; }
+.builder[data-assessment-kind] .previewOptions input[type="radio"] { width: 18px; height: 18px; min-width: 18px; min-height: 18px; max-width: 18px; padding: 0; margin: 0; flex: 0 0 18px; accent-color: #954900; }
+.builder[data-assessment-kind] .previewOptions label:has(input:checked) { background: #FFF3E8; border-color: #954900; }
+.builder[data-assessment-kind] .previewOptions label:focus-within { outline: 2px solid #954900; outline-offset: 2px; }
+.builder[data-assessment-kind] .previewOptions label > b { flex: 0 0 auto; }
+.builder[data-assessment-kind] .previewOptions label > :last-child { min-width: 0; overflow-wrap: anywhere; }
 .builder[data-assessment-kind] .header {
   padding: 0 0 20px;
   border-color: var(--daily-border);
@@ -76,7 +84,8 @@
 .reports > details { margin: 0; padding: 0 16px; border: 1px solid var(--daily-border); border-radius: 10px; background: #fff; }
 .reports > details[open] { padding-bottom: 12px; }
 .reports summary { color: var(--daily-navy); }
-.reports .filters { grid-template-columns: minmax(0, 2fr) repeat(2, minmax(0, 1fr)); gap: 12px; }
+.reports .filters { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 12px; }
+.reports > :global(.admin-tabs) { justify-content: flex-end; flex-wrap: wrap; }
 .reports :global(.admin-field[hidden]) { display: none; }
 .reports :global(.admin-field), .reports :global(.admin-field select), .reports :global(.admin-field input) { min-width: 0; max-width: 100%; width: 100%; }
 .reports :global(.admin-tabs) { max-width: 100%; overflow-x: auto; flex-wrap: nowrap; }

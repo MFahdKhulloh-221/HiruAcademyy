@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Models\DailyPractice;
 use App\Services\AdminDailyPracticeReportService;
-use App\Services\DailyPracticeAttemptService;
 use App\Services\DailyPracticeService;
 use Illuminate\Http\Request;
 
@@ -12,7 +11,7 @@ class AdminDailyPracticeController extends Controller
 {
     public function index(Request $request, DailyPracticeService $content)
     {
-        return response()->json(['data' => DailyPractice::orderByDesc('starts_at')->orderByDesc('id')->get()->map(fn ($p) => $content->payload($p))]);
+        return response()->json(['data' => DailyPractice::orderByDesc('id')->get()->map(fn ($p) => $content->payload($p))]);
     }
 
     public function store(Request $request, DailyPracticeService $content)
@@ -57,7 +56,6 @@ class AdminDailyPracticeController extends Controller
             'user_id' => ['nullable', 'integer', 'min:1'], 'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
         ]);
-        app(DailyPracticeAttemptService::class)->finalizeDue($practice->id);
 
         return $filters;
     }
