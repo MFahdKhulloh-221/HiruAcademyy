@@ -19,7 +19,7 @@ function shuffled(cards: FlashcardItem[]) {
   return copy;
 }
 
-export function FlashcardSession({ cards, membership, chapter, chapterNumber, activityCompleted = false, onComplete }: { cards: FlashcardItem[]; membership: Membership; level: string; chapter: string; chapterNumber?: number; activityCompleted?: boolean; onComplete?: () => Promise<void> }) {
+export function FlashcardSession({ cards, membership, level, chapter, chapterNumber, activityCompleted = false, onComplete }: { cards: FlashcardItem[]; membership: Membership; level: string; chapter: string; chapterNumber?: number; activityCompleted?: boolean; onComplete?: () => Promise<void> }) {
   const [deck, setDeck] = useState(cards);
   const [index, setIndex] = useState(0);
   const [flipped, setFlipped] = useState(false);
@@ -88,7 +88,7 @@ export function FlashcardSession({ cards, membership, chapter, chapterNumber, ac
       <button className={styles.choice} type="button" onClick={() => start("all")}><LuRotateCcw aria-hidden="true" /><span><strong>Ulangi semua kartu</strong><small>Pelajari kembali seluruh {cards.length} kartu dari awal.</small></span><LuArrowRight aria-hidden="true" /></button>
       <button className={styles.choice} type="button" onClick={() => start("shuffle")}><LuShuffle aria-hidden="true" /><span><strong>Acak kartu</strong><small>Latih ingatan tanpa menghafal urutan kartu.</small></span><LuArrowRight aria-hidden="true" /></button>
       <button className={styles.choice} type="button" onClick={() => setView("list")}><LuBookOpen aria-hidden="true" /><span><strong>Lihat daftar kosakata</strong><small>Baca kembali semua kata dan artinya.</small></span><LuArrowRight aria-hidden="true" /></button>
-    </div></section><footer className={styles.footer}>{back}</footer>
+    </div></section><footer className={styles.footer}>{back}<Link className={styles.primary} href={`/learn/${level}/${chapter}?membership=${membership}`}>Lanjut ke Aktivitas Chapter<LuArrowRight aria-hidden="true" /></Link></footer>
   </div></section>;
 
   if (view === "list") {

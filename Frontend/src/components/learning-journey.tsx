@@ -21,10 +21,12 @@ export function LearningJourney({ level }: { level?: string }) {
     const chapters: JourneyChapter[] = !program ? [] : await Promise.all((await learningChapters(program.id, signal)).map(async chapter => {
       const locked = chapter.access === "locked" || chapter.access === "none";
       const progress = locked ? undefined : await learningProgress(program.id, chapter.id, signal);
-      const activities = Object.values(progress?.activities ?? {});
+      const includeMini = chapter.mini_checkpoint?.exists === true && progress?.mini_eligible === true;
+      const chapterActivities = { ...progress?.activities, ...(includeMini ? { mini: { total: 1, completed: progress?.mini_completed ? 1 : 0, complete: progress?.mini_completed === true } } : {}) };
+      const activities = Object.values(chapterActivities);
       const required = activities.filter(activity => activity.total > 0);
       const state = locked ? "entitlementLocked" as const : required.length > 0 && required.every(activity => activity.complete) ? "completed" as const : activities.some(activity => activity.completed > 0) ? "current" as const : "available" as const;
-      return { key: `chapter-${chapter.chapter_number}`, orderLabel: String(chapter.chapter_number).padStart(2, "0"), title: chapter.title, description: chapter.description ?? "", state, statusLabel: state === "completed" ? "Selesai" : state === "current" ? "Sedang berjalan" : locked ? "Terkunci" : "Belum dimulai", progress: completionPercent(progress?.activities ?? {}), components: Object.entries(progress?.activities ?? {}).map(([label, activity]) => ({ label, weight: 0, complete: activity.complete })), checkpointUnlocked: progress?.mini_unlocked ?? false, checkpointLabel: ["ssw", "interview"].includes(program.family) ? "Checkpoint: belum tersedia; kontrak attempt siswa belum disetujui." : undefined, href: locked ? undefined : `/learn/${programSlug(program.code)}/chapter-${chapter.chapter_number}` };
+      return { key: `chapter-${chapter.chapter_number}`, orderLabel: String(chapter.chapter_number).padStart(2, "0"), title: chapter.title, description: chapter.description ?? "", state, statusLabel: state === "completed" ? "Selesai" : state === "current" ? "Sedang berjalan" : locked ? "Terkunci" : "Belum dimulai", progress: completionPercent(chapterActivities), components: Object.entries(chapterActivities).map(([label, activity]) => ({ label, weight: 0, complete: activity.complete })), checkpointUnlocked: progress?.mini_unlocked ?? false, checkpointLabel: ["ssw", "interview"].includes(program.family) ? "Checkpoint: belum tersedia; kontrak attempt siswa belum disetujui." : undefined, href: locked ? undefined : `/learn/${programSlug(program.code)}/chapter-${chapter.chapter_number}` };
     }));
     return { levels, chapters, membership: learningMembership(catalog.access) };
   }, [level]);
