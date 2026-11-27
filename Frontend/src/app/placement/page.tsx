@@ -1,13 +1,19 @@
 "use client";
 
 import Link from "next/link";
-import { useRef, useState } from "react";
+import { useRef, useState, useSyncExternalStore } from "react";
 import { useRouter } from "next/navigation";
 import { ApiError } from "@/lib/api";
 import { startAttempt } from "@/lib/assessment-attempt";
 import { PublicPage } from "@/components/public-shell";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { usePublishedPlacement } from "@/lib/placement-store";
+
+const subscribeLocation = () => () => {};
+const readResumeAttempt = () => {
+  const id = new URLSearchParams(window.location.search).get("attempt");
+  return id && /^[1-9]\d*$/.test(id) ? id : null;
+};
 
 const outcomes = [
   ["Analisis 4 kemampuan", "Lihat hasil Bunpou, Moji・Goi, Dokkai, dan Choukai."],
@@ -20,6 +26,7 @@ export default function PlacementPage() {
   const router = useRouter();
   const pending = useRef(false);
   const [busy, setBusy] = useState(false);
+  const resumeAttempt = useSyncExternalStore(subscribeLocation, readResumeAttempt, () => null);
   const [error, setError] = useState<string>();
   const [name, setName] = useState("");
   const [whatsapp, setWhatsapp] = useState("");
@@ -87,7 +94,7 @@ export default function PlacementPage() {
               <span>Hasil langsung</span>
             </div>
             <div className="result-actions">
-              <Link className="button button-primary placement-start-cta" href="#placement-form">Mulai Tes</Link>
+              <Link className="button button-primary placement-start-cta" href={resumeAttempt ? `/placement/question?attempt=${resumeAttempt}` : "#placement-form"}>{resumeAttempt ? "Lanjutkan Tes" : "Mulai Tes"}</Link>
             </div>
           </div>
           <aside className="placement-outcomes">
