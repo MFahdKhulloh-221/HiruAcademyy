@@ -30,7 +30,7 @@ class AdminUserController extends Controller
             });
         }
 
-        $fields = ['id', 'name', 'email', 'whatsapp', 'account_status', 'target_jlpt'];
+        $fields = ['id', 'name', 'email', 'whatsapp', 'account_status', 'target_jlpt', 'created_at'];
         $users = $query->orderBy('id')->get([...$fields, 'role']);
         if (($data['include'] ?? null) === 'effective_access') {
             $grants = $entitlements->qualifyingGrants()->whereIn('user_id', $users->modelKeys())->get()->groupBy('user_id');

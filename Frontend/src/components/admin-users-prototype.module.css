@@ -1,3 +1,10 @@
+:global(.admin-shell .admin-dialog-layer) > .simpleDetail { width: min(600px, calc(100vw - 32px)); }
+.facts { display: grid; grid-template-columns: minmax(110px, 1fr) minmax(0, 2fr); gap: 18px 24px; margin: 12px 0; }
+.facts dt { color: var(--muted); }
+.facts dd { margin: 0; color: var(--navy); overflow-wrap: anywhere; line-height: 1.6; }
+.facts dd > div + div { margin-top: 8px; }
+@media (max-width: 639px) { .facts { grid-template-columns: minmax(90px, 1fr) minmax(0, 1.5fr); gap: 16px 12px; font-size: 13px; } }
+
 .userCount {
   display: inline-flex;
   align-items: center;
