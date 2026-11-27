@@ -9,9 +9,24 @@ import { useAuth } from "@/components/auth-provider";
 import { PublicPage } from "@/components/public-shell";
 import { LoadingSkeleton } from "@/components/loading-skeleton";
 import { useCommercialOrder } from "@/components/commercial-hooks";
-import { commercialWrite, commercialSelection } from "@/lib/commercial-api";
+import { commercialWrite, commercialSelection, type ReferralQuote } from "@/lib/commercial-api";
 import { invoiceWhatsAppUrl } from "@/lib/admin-whatsapp";
 import { writeRegistrationIntent } from "@/lib/registration-intent";
+
+const referralReasons: Record<ReferralQuote["referral_eligibility_reason"], string> = {
+  program_disabled: "Program referral sedang tidak aktif.",
+  offer_ineligible: "Program atau paket ini tidak memenuhi syarat diskon referral.",
+  no_referral: "Belum ada kode referral yang tercatat untuk pesanan ini.",
+  not_first_purchase: "Diskon referral hanya berlaku untuk pembelian pertama yang memenuhi syarat.",
+  below_minimum_purchase: "Harga pembelian belum memenuhi minimum diskon referral.",
+  eligible: "Pesanan ini memenuhi syarat diskon referral. Potongan aktual tercantum di ringkasan.",
+};
+const creditReasons: Record<ReferralQuote["credit_eligibility_reason"], string> = {
+  offer_ineligible: "Program atau paket ini tidak memenuhi syarat penggunaan kredit.",
+  no_available_credit: "Belum ada kredit yang tersedia untuk digunakan.",
+  no_payable_balance: "Tidak ada sisa tagihan yang dapat dipotong dengan kredit.",
+  eligible: "Pesanan ini memenuhi syarat penggunaan kredit.",
+};
 
 function CheckoutContent() {
   const params = useSearchParams();
@@ -29,7 +44,7 @@ function CheckoutSelection() {
   const plan = planKey === "sensei" ? "Belajar dengan Sensei" : "Belajar Mandiri";
   const [referral, setReferral] = useState(params.get("referral") ?? "");
   const [useCredit, setUseCredit] = useState(false);
-  const [quote, setQuote] = useState<{ base_price: number; referral_discount: number; credit_discount: number; promo_discount: number; total_price: number; available_credit: number } | null>(null);
+  const [quote, setQuote] = useState<ReferralQuote | null>(null);
   const [quoteError, setQuoteError] = useState("");
   const requestKey = useRef<string | null>(null);
   const [applied, setApplied] = useState(false);
@@ -37,6 +52,7 @@ function CheckoutSelection() {
   const quoteKey = `${order.offer?.id}:${applied ? referral.trim() : ""}:${useCredit}`;
   const [quotedKey, setQuotedKey] = useState("");
   const quoteReady = quote !== null && quotedKey === quoteKey;
+  const currentQuote = quoteReady ? quote : null;
   const [referralError, setReferralError] = useState("");
   const referralRequest = useRef(0);
   async function applyReferral() {
@@ -65,6 +81,7 @@ function CheckoutSelection() {
   });
 
   async function createInvoice() {
+    if (order.busy || referralBusy || (!order.invoice && (!quoteReady || quoteError))) return;
     setModal(null);
     const storageKey = `hiru.invoice-request:${user?.id}:${level}:${planKey}:${applied ? referral.trim() : ""}:${useCredit}`;
     try { requestKey.current = sessionStorage.getItem(storageKey) ?? requestKey.current; } catch { /* Storage is optional. */ }
@@ -79,7 +96,8 @@ function CheckoutSelection() {
   }
 
   const programName = order.offer?.program.name ?? "Program belum tersedia";
-  const basePrice = order.invoice?.base_price ?? order.offer?.base_price;
+  const basePrice = order.invoice?.base_price ?? currentQuote?.base_price ?? order.offer?.base_price;
+  const referralMessage = currentQuote ? referralReasons[currentQuote.referral_eligibility_reason] || "Kelayakan referral belum tersedia." : "Menunggu pemeriksaan kelayakan server.";
   const duration = order.invoice ? order.invoice.duration_months : order.offer?.duration_months;
   const registerQuery = new URLSearchParams({ program: level, plan: planKey });
   if (referral.trim()) registerQuery.set("referral", referral.trim());
@@ -97,13 +115,14 @@ function CheckoutSelection() {
         <h2 id="referral-heading">Kode referral <span>(opsional)</span></h2>
         <p>Teman baru mendapat diskon pembelian LMS pertama yang memenuhi syarat. Pengundang mendapat Kredit Diskon Belajar setelah pembayaran diverifikasi.</p>
         <label htmlFor="checkout-referral-code">Kode Referral</label>
-        <div className="checkout-referral-controls"><input id="checkout-referral-code" value={referral} onChange={(event) => { setReferral(event.target.value); setApplied(false); setReferralError(""); requestKey.current = null; }} disabled={!!order.invoice || order.busy || referralBusy} placeholder="Masukkan kode jika ada" /><button className="button button-dark" type="button" disabled={!authenticated || !referral.trim() || !!order.invoice || order.busy || referralBusy} onClick={() => void applyReferral()}>{referralBusy ? "Memeriksa?" : applied ? "Diterapkan" : "Terapkan"}</button></div>
-        {applied && <small role="status">Kode referral valid. Server akan memeriksa ulang saat invoice dibuat.</small>}
+        <div className="checkout-referral-controls"><input id="checkout-referral-code" value={referral} onChange={(event) => { setReferral(event.target.value); setApplied(false); setReferralError(""); requestKey.current = null; }} disabled={!!order.invoice || order.busy || referralBusy} placeholder="Masukkan kode jika ada" /><button className="button button-dark" type="button" disabled={!authenticated || !referral.trim() || !!order.invoice || order.busy || referralBusy} onClick={() => void applyReferral()}>{referralBusy ? "Memeriksa…" : applied ? "Diterapkan" : "Terapkan"}</button></div>
+        {applied && <small>Kode valid tidak selalu berarti pesanan mendapat diskon. Server memeriksa ulang saat invoice dibuat.</small>}
+        {authenticated && !order.invoice && <p role="status">{referralMessage}{currentQuote && currentQuote.referral_discount > 0 && <> Diskon referral diterapkan: <strong>{money(currentQuote.referral_discount)}</strong>.</>}</p>}
         {referralError && <p role="alert">{referralError}</p>}{!authenticated && <small>Daftar atau masuk untuk memvalidasi kode referral.</small>}
       </section>
       {authenticated && <section className="checkout-credit" aria-labelledby="credit-heading">
-        <div className="checkout-credit-value"><span className="checkout-credit-tag">KUPON KREDIT DISKON</span><h2 id="credit-heading">Kredit Diskon Tersedia</h2><strong>{quote ? money(quote.available_credit) : "Memuat..."}</strong><p id="credit-description">Kredit hanya untuk LMS, upgrade, dan perpanjangan. Sisa kredit tidak hangus.</p></div>
-        <div className="checkout-credit-action"><button type="button" className="button button-primary" aria-label="Gunakan Kredit Diskon Saya" aria-pressed={useCredit} aria-describedby="credit-description" disabled={!!order.invoice || order.busy || !quote || (!useCredit && quote.available_credit <= 0)} onClick={() => { setUseCredit(value => !value); requestKey.current = null; }}>{useCredit ? "Batalkan" : "Gunakan"}</button>{useCredit && <small role="status">Kredit dipilih</small>}</div>
+        <div className="checkout-credit-value"><span className="checkout-credit-tag">KUPON KREDIT DISKON</span><h2 id="credit-heading">Kredit Diskon Tersedia</h2><strong>{currentQuote ? money(currentQuote.available_credit) : "Menunggu perhitungan server…"}</strong><p id="credit-description">Kredit untuk pembelian LMS, upgrade, dan perpanjangan yang memenuhi syarat. Saldo tersedia berbeda dari potongan aktual; sisa kredit mengikuti masa berlaku.</p>{currentQuote && <p role="status">{creditReasons[currentQuote.credit_eligibility_reason] || "Kelayakan kredit belum tersedia."}{useCredit ? ` Potongan kredit aktual: ${money(currentQuote.credit_discount)}.` : currentQuote.credit_eligible ? " Pilih Gunakan untuk menghitung potongan aktual." : ""}</p>}</div>
+        <div className="checkout-credit-action"><button type="button" className="button button-primary" aria-label="Gunakan Kredit Diskon Saya" aria-pressed={useCredit} aria-describedby="credit-description" disabled={!!order.invoice || order.busy || !currentQuote || (!useCredit && (currentQuote.available_credit <= 0 || currentQuote.credit_eligible === false))} onClick={() => { setUseCredit(value => !value); requestKey.current = null; }}>{useCredit ? "Batalkan" : "Gunakan"}</button>{useCredit && <small role="status">Kredit dipilih</small>}</div>
         {quoteError && <p className="checkout-credit-error" role="alert">{quoteError}</p>}
       </section>}
       <section className="checkout-before"><h2>Sebelum membuat invoice</h2><ol><li>Pastikan program dan paket pembelajaran yang Anda pilih sudah sesuai.</li><li>Periksa kembali harga dan masa berlaku paket sebelum melanjutkan pembayaran.</li><li>Akses paket pembelajaran akan diaktifkan setelah pembayaran dikonfirmasi oleh Admin HiruAcademy.</li><li>Harap membaca Syarat dan Ketentuan serta <Link href="/kebijakan-privasi" className="underline underline-offset-2">Kebijakan Privasi</Link> sebelum menyelesaikan pembelian.</li></ol></section>
@@ -111,11 +130,11 @@ function CheckoutSelection() {
     <aside className="checkout-summary" aria-labelledby="checkout-summary-heading">
       <header className="checkout-summary-header"><span aria-hidden="true">&#27880;</span><div><h2 id="checkout-summary-heading">Ringkasan pesanan</h2><p><strong>{programName}</strong><span>{plan}</span></p></div></header>
       {!order.offer && <p role="alert">{order.error || "Program atau paket belum tersedia."} <Link href="/program">Pilih program lain</Link> <button className="button button-secondary" type="button" onClick={order.reload}>Muat ulang penawaran</button></p>}
-      <dl><div><dt>Program</dt><dd>{programName}</dd></div><div><dt>Plan</dt><dd>{plan}</dd></div><div><dt>Periode</dt><dd>{duration != null ? `${duration} bulan` : "Belum tersedia"}</dd></div><div><dt>Harga</dt><dd>{basePrice != null ? money(basePrice) : "Belum tersedia"}</dd></div><div><dt>Referral</dt><dd>{applied ? order.invoice ? "Tercatat" : "Kode valid" : "Belum diterapkan"}</dd></div>
+      <dl><div><dt>Program</dt><dd>{programName}</dd></div><div><dt>Plan</dt><dd>{plan}</dd></div><div><dt>Periode</dt><dd>{duration != null ? `${duration} bulan` : "Belum tersedia"}</dd></div><div><dt>Harga</dt><dd>{basePrice != null ? money(basePrice) : "Belum tersedia"}</dd></div><div><dt>Referral</dt><dd>{order.invoice ? "Sesuai invoice" : currentQuote?.referral_discount ? "Diskon berlaku" : applied || (currentQuote && !["no_referral", "program_disabled"].includes(currentQuote.referral_eligibility_reason)) ? "Lihat kelayakan referral" : "Belum diterapkan"}</dd></div>
 
-        <div><dt>Diskon referral teman baru</dt><dd>{money(order.invoice?.referral_discount ?? quote?.referral_discount ?? 0)}</dd></div>
-        <div><dt>Promo lain</dt><dd>{money(order.invoice?.promo_discount ?? quote?.promo_discount ?? 0)}</dd></div>
-        <div><dt>Kredit diskon digunakan</dt><dd>{money(order.invoice?.credit_discount ?? quote?.credit_discount ?? 0)}</dd></div>
+        <div><dt>Diskon referral teman baru</dt><dd>{order.invoice ? money(order.invoice.referral_discount ?? 0) : currentQuote ? money(currentQuote.referral_discount) : "Menunggu server"}</dd></div>
+        <div><dt>Promo lain</dt><dd>{order.invoice ? money(order.invoice.promo_discount ?? 0) : currentQuote ? money(currentQuote.promo_discount) : "Menunggu server"}</dd></div>
+        <div><dt>Kredit diskon digunakan</dt><dd>{order.invoice ? money(order.invoice.credit_discount ?? 0) : currentQuote ? money(currentQuote.credit_discount) : "Menunggu server"}</dd></div>
         <div className="checkout-total"><dt>Total Tagihan</dt><dd aria-live="polite">{validTotal ? money(total) : applied ? "Menunggu perhitungan server" : "Belum tersedia"}</dd></div>
       </dl>
       <p className="checkout-payment-note">Pembayaran diverifikasi Admin, lalu akses diaktifkan. Membuka WhatsApp tidak mengaktifkan akses.</p>

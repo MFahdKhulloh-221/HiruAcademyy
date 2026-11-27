@@ -78,7 +78,7 @@ function itemsFor(membership: Membership, current: StudentNavKey | null): NavIte
       { key: "testimonial", label: "Testimoni Saya", href: `/profile/testimoni${query}`, entitlement: "available" },
       { key: "membership", label: "Membership", href: `/renewal${query}`, entitlement: "available" },
       { key: "invoice", label: "Pesanan Saya", href: "/invoice", entitlement: "available" },
-      { key: "affiliate", label: "Ajak Teman", href: `/affiliate${query}`, entitlement: "available" },
+      { key: "affiliate", label: "Ajak Teman & Hemat Belajar", href: `/affiliate${query}`, entitlement: "available" },
     ] },
   ];
   return items.map((item) => ({ ...item, active: item.key === current || item.children?.some((child) => child.key === current) }));

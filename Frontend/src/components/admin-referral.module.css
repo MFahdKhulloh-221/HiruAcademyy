@@ -1,0 +1,29 @@
+.layout { display: grid; gap: 20px; min-width: 0; }
+.layout > :global(.admin-tabs) { display: flex; flex-wrap: wrap; gap: 6px; padding: 5px; border: 1px solid #e2e6ef; border-radius: 14px; background: #fff; }
+.layout > :global(.admin-tabs) button { min-height: 44px; padding: 10px 16px; border: 0; border-radius: 10px; background: transparent; color: var(--navy); font: inherit; font-weight: 600; cursor: pointer; }
+.layout > :global(.admin-tabs) button[aria-selected="true"] { background: var(--navy); color: #fff; }
+.layout > :global([role="tabpanel"]) { min-width: 0; }
+.layout :global(.admin-metric-card) strong { overflow-wrap: anywhere; }
+.fields :global(.admin-field) input, .fields :global(.admin-field) select, .fields :global(.admin-field) textarea { max-width: 100%; min-width: 0; }
+.fields :global(.admin-field) small { font-weight: 400; }
+.metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+.fields { display: grid; gap: 16px; min-width: 0; }
+.fields fieldset { border: 1px solid #e2e6ef; border-radius: 12px; padding: 16px; display: grid; gap: 10px; min-width: 0; }
+.fields legend { font-weight: 700; padding: 0 6px; }
+.choice { display: flex; align-items: center; gap: 10px; min-height: 44px; cursor: pointer; }
+.choice input { width: 18px; height: 18px; flex: 0 0 auto; }
+.fields small, .muted { color: #5c677e; line-height: 1.6; }
+.notice { padding: 14px 18px; background: #fff1e6; border: 1px solid #f4c69e; border-radius: 12px; overflow-wrap: anywhere; }
+.facts { display: grid; grid-template-columns: minmax(120px, 1fr) minmax(0, 2fr); gap: 12px 20px; margin: 0; }
+.facts dt { color: #5c677e; }
+.facts dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+.dialog > :global(.admin-dialog-content) { display: block; min-width: 0; overflow-y: auto; }
+.dialog { max-height: calc(100dvh - 32px); }
+.dialog .actions > :global(.button):not(:global(.button-secondary)):not(:disabled):hover { background: #f48220; border-color: #f48220; color: #5a2a00; }
+.fields :global(.admin-field) { display: grid; gap: 8px; }
+.fields :global(.admin-field) input, .fields :global(.admin-field) select, .fields :global(.admin-field) textarea { width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid #d9dfea; border-radius: 10px; background: #fff; color: var(--navy); font: inherit; }
+.fields :global(.admin-field) textarea { min-height: 96px; resize: vertical; }
+.changes { display: grid; gap: 12px; padding-left: 20px; overflow-wrap: anywhere; }
+@media (max-width: 767px) { .metrics, .grid { grid-template-columns: 1fr; } .facts { grid-template-columns: 1fr; gap: 6px; } .facts dd { margin-bottom: 10px; } }

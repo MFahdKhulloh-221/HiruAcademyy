@@ -203,7 +203,8 @@ function RegisterForm() {
               </select>
             </label>
 
-            {(!editingSelection || plan !== "Free Member") && <label className="referral-field">Kode Referral (Opsional)<input name="referral" type="text" maxLength={255} value={referral} onChange={event => setReferral(event.target.value)} placeholder="Masukkan kode referral" />
+            {(!editingSelection || plan !== "Free Member") && <label className="referral-field">Kode Referral (Opsional)<input name="referral" type="text" maxLength={255} value={referral} onChange={event => setReferral(event.target.value)} placeholder="Masukkan kode referral" aria-describedby="register-referral-help" />
+              <small id="register-referral-help">Kode dikirim saat pendaftaran dan dibawa ke checkout. Diskon pembelian pertama mengikuti kelayakan program dan perhitungan server; membuat akun Free tidak mengaktifkan diskon atau membership berbayar.</small>
             </label>}
           </div>
 

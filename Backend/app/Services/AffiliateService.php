@@ -53,8 +53,14 @@ class AffiliateService
     {
         $data = Validator::make(['code' => is_string($code) ? strtoupper(trim($code)) : $code], ['code' => ['required', 'string', 'max:255', 'regex:/^[A-Z0-9_-]+$/D']])->validate();
         $affiliate = Affiliate::where('code', $data['code'])->first();
-        if (! app(ReferralCreditService::class)->policy()->enabled || ! $affiliate || $affiliate->status !== 'active' || ! $affiliate->user()->where('role', 'student')->exists()) {
-            throw ValidationException::withMessages(['referral_code' => 'Kode referral tidak ditemukan atau tidak aktif.']);
+        if (! app(ReferralCreditService::class)->policy()->enabled) {
+            throw ValidationException::withMessages(['referral_code' => 'Program referral sedang tidak aktif.']);
+        }
+        if (! $affiliate || ! $affiliate->user()->where('role', 'student')->exists()) {
+            throw ValidationException::withMessages(['referral_code' => 'Kode referral tidak ditemukan.']);
+        }
+        if ($affiliate->status !== 'active') {
+            throw ValidationException::withMessages(['referral_code' => 'Kode referral tidak aktif.']);
         }
         if ($affiliate->user_id === $user->id) {
             throw ValidationException::withMessages(['referral_code' => 'Kode referral sendiri tidak dapat digunakan.']);

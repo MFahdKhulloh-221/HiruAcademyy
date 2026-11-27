@@ -42,6 +42,42 @@ class ReferralCreditTest extends TestCase
         return $invoice;
     }
 
+    public function test_credit_projections_keep_reservations_and_control_rules(): void
+    {
+        $this->assertSame('hiru_academy_test', DB::connection()->getDatabaseName());
+        $owner = $this->student();
+        $buyer = $this->student();
+        $service = app(ReferralCreditService::class);
+        $workflow = app(InvoiceWorkflowService::class);
+        $offer = $this->offer();
+        $invoice = $workflow->create($buyer, $offer, ['credit_request_key' => (string) Str::uuid()]);
+        $this->assertSame(['hold', 'cancel'], $service->allowedActions($invoice));
+        $creditId = DB::table('referral_learning_credits')->insertGetId([
+            'reference' => (string) Str::uuid(), 'user_id' => $owner->id, 'source_invoice_id' => $invoice->id,
+            'amount' => 25000, 'status' => 'available', 'expires_at' => now()->addDay(),
+        ]);
+        DB::table('referral_credit_uses')->insert(['invoice_id' => $invoice->id, 'credit_id' => $creditId, 'amount' => 10000, 'status' => 'reserved']);
+        $row = $service->creditRows($owner->id)->sole();
+        $this->assertSame($owner->name, $row->name);
+        $this->assertSame($invoice->reference, $row->source_reference);
+        $this->assertSame(15000, $row->available);
+        $this->assertSame(10000, $row->reserved);
+        $this->assertSame(['hold', 'reverse', 'cancel'], $service->allowedActions($invoice));
+        DB::table('referral_credit_uses')->where('credit_id', $creditId)->update(['status' => 'used']);
+        $this->assertSame(['hold', 'cancel'], $service->allowedActions($invoice));
+        DB::table('referral_credit_uses')->where('credit_id', $creditId)->update(['amount' => 25000]);
+        $this->assertSame('used', $service->creditRows($owner->id)->sole()->effective_status);
+        DB::table('referral_credit_uses')->where('credit_id', $creditId)->update(['status' => 'reserved']);
+        $this->assertSame('reserved', $service->creditRows($owner->id)->sole()->effective_status);
+        DB::table('referral_learning_credits')->where('id', $creditId)->update(['status' => 'held']);
+        $this->assertSame(0, $service->creditRows($owner->id)->sole()->available);
+        DB::table('referral_invoice_controls')->insert(['invoice_id' => $invoice->id, 'status' => 'cancelled', 'reason' => 'Projection check']);
+        $this->assertSame([], $service->allowedActions($invoice));
+        $quote = $service->price($buyer, $offer, []);
+        $this->assertFalse($quote['credit_eligible']);
+        $this->assertSame('no_available_credit', $quote['credit_eligibility_reason']);
+    }
+
     public function test_double_sided_snapshot_retry_credit_purchase_upgrade_renewal_and_limits(): void
     {
         $this->assertSame('hiru_academy_test', DB::connection()->getDatabaseName());
