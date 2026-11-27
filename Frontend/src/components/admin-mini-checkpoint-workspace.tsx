@@ -1,7 +1,6 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { AdminAssessmentPreview } from "@/components/admin-assessment-preview";
 import { AdminDialog, AdminShell } from "@/components/admin-primitives";
 import { AdminJourneyHeader, AdminJourneyToolbar } from "@/components/admin-journey-toolbar";
 import { AdminTryoutQuestionBuilder } from "@/components/admin-tryout-question-builder";
@@ -16,14 +15,14 @@ import layout from "./admin-mini-checkpoint.module.css";
 
 type Category = "vocabulary" | "grammar" | "reading" | "audio";
 type Passage = { id: string | number; title: string; body: string };
-type Question = { id: number; chapter_id: number; category: Category | null; instruction: string | null; image_url: string | null; image_alt?: string | null; image_position?: "before" | "after" | null; image_resolved_url?: string | null; audio_url: string | null; passage: Passage | null; question: string; options: Record<string, string>; correct_option: string; explanation: string | null; sort_order: number; status: "draft" | "published" };
+type Question = { id: number; updated_at: string; chapter_id: number; category: Category | null; instruction: string | null; image_url: string | null; image_alt?: string | null; image_position?: "before" | "after" | null; image_resolved_url?: string | null; audio_url: string | null; passage: Passage | null; question: string; options: Record<string, string>; correct_option: string; explanation: string | null; sort_order: number; status: "draft" | "published" };
 const categories: Category[] = ["vocabulary", "grammar", "reading", "audio"];
 const letters = ["A", "B", "C", "D"];
 const endpoint = "/api/admin/mini-checkpoint-questions";
 const sections = assessmentSections({ kind: "mini", context: "" });
 function toDraft(chapter: string, questions: Question[]): AdminAssessment {
   const rows = questions.filter(item => String(item.chapter_id) === chapter);
-  return { id: chapter, kind: "mini", title: "Mini Checkpoint", context: "", chapter, session: "", part: "", duration: "", maxScore: "100", passingScore: "", order: "0", status: "Draft", builderCapabilities: { images: true, decimal_points: false }, passages: Array.from(new Map(rows.flatMap(item => item.passage ? [[String(item.passage.id), { ...item.passage, id: String(item.passage.id) }] as const] : [])).values()), questions: rows.map(item => ({ id: String(item.id), miniCategory: item.category ?? null, section: sections[Math.max(0, categories.indexOf(item.category!))], type: item.category === "audio" ? "Audio" : item.category === "reading" ? "Reading" : "Multiple choice", prompt: item.question, instruction: item.instruction ?? "", answers: letters.map(key => item.options[key] ?? ""), correctAnswer: letters.indexOf(item.correct_option), explanation: item.explanation ?? "", image: item.image_url, image_alt: item.image_alt ?? null, image_position: item.image_position ?? "before", image_resolved_url: item.image_resolved_url, audioUrl: item.audio_url ?? "", passage: "", passageId: item.passage ? String(item.passage.id) : null, file: null, order: String(item.sort_order), status: item.status === "published" ? "Published" : "Draft" })) };
+  return { id: chapter, kind: "mini", title: "Mini Checkpoint", context: "", chapter, session: "", part: "", duration: "", maxScore: "100", passingScore: "", order: "0", status: rows.some(item => item.status === "published") ? "Published" : "Draft", builderCapabilities: { images: true, decimal_points: false }, passages: Array.from(new Map(rows.flatMap(item => item.passage ? [[String(item.passage.id), { ...item.passage, id: String(item.passage.id) }] as const] : [])).values()), questions: rows.map(item => ({ id: String(item.id), miniCategory: item.category ?? null, section: sections[Math.max(0, categories.indexOf(item.category!))], type: item.category === "audio" ? "Audio" : item.category === "reading" ? "Reading" : "Multiple choice", prompt: item.question, instruction: item.instruction ?? "", answers: letters.map(key => item.options[key] ?? ""), correctAnswer: letters.indexOf(item.correct_option), explanation: item.explanation ?? "", image: item.image_url, image_alt: item.image_alt ?? null, image_position: item.image_position ?? "before", image_resolved_url: item.image_resolved_url, audioUrl: item.audio_url ?? "", passage: "", passageId: item.passage ? String(item.passage.id) : null, file: null, order: String(item.sort_order), status: item.status === "published" ? "Published" : "Draft" })) };
 }
 function errorMessage(cause: unknown) { return cause instanceof ApiError && Object.keys(cause.errors).length ? Object.values(cause.errors).flat().join(" ") : cause instanceof Error ? cause.message : "Permintaan gagal."; }
 
@@ -34,7 +33,10 @@ export function AdminMiniCheckpointWorkspace({ navigation, nested = false }: { n
     return { ...context, questions: questions.data };
   }, []);
   const request = useLearningRequest(load, "admin-mini-checkpoint-studio");
-  const [preview, setPreview] = useState(false);
+  const [publishConfirm, setPublishConfirm] = useState(false);
+  const publishDraft = useRef<AdminAssessment | undefined>(undefined);
+  const [notice, setNotice] = useState<{ title: string; text: string }>();
+  const savedQuestions = useRef<Question[] | undefined>(undefined);
   const [program, setProgram] = useState("");
   const [chapter, setChapter] = useState("");
   const [draft, setDraft] = useState<AdminAssessment>();
@@ -47,7 +49,6 @@ export function AdminMiniCheckpointWorkspace({ navigation, nested = false }: { n
   const [savedSettings, setSavedSettings] = useState<Record<string, { duration: string; passing: string }>>({});
   const writing = useRef(false);
   const pendingUpload = useRef(false);
-  const baseline = useRef<AdminAssessment | undefined>(undefined);
   useEffect(() => {
     if (!dirty && !busy && !uploading && !settings) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
@@ -58,17 +59,26 @@ export function AdminMiniCheckpointWorkspace({ navigation, nested = false }: { n
   const current = draft ?? toDraft(chapter, request.data?.questions ?? []);
   const config = savedSettings[chapter] ?? { duration: String(selected?.mini_checkpoint_duration_minutes ?? ""), passing: String(selected?.mini_checkpoint_passing_score ?? "") };
   const configured = Number.isSafeInteger(Number(config.duration)) && Number(config.duration) > 0 && config.passing !== "" && Number.isSafeInteger(Number(config.passing)) && Number(config.passing) >= 0 && Number(config.passing) <= 100;
-  const withContext = { ...current, context: request.data?.programs.find(item => item.id === selected?.program_id)?.name ?? "", duration: config.duration, passingScore: config.passing };
+  const withContext = { ...current, status: current.questions.some(item => item.status === "Published") ? "Published" as const : "Draft" as const, context: request.data?.programs.find(item => item.id === selected?.program_id)?.name ?? "", duration: config.duration, passingScore: config.passing };
   function change(value: AdminAssessment) {
     if (writing.current) return;
-    if (!baseline.current) baseline.current = current;
+    savedQuestions.current ??= request.data?.questions.filter(item => String(item.chapter_id) === chapter);
     const standalone = value.questions.filter(item => placementText(item.passage).trim() && !item.passageId);
     setDraft({ ...value, passages: [...value.passages ?? [], ...standalone.map(item => ({ id: `mini-passage-${item.id}`, title: "Bacaan mandiri", body: item.passage }))], questions: value.questions.map(item => standalone.includes(item) ? { ...item, passageId: `mini-passage-${item.id}`, passage: "" } : item) }); setDirty(true); setError(""); setMessage("");
   }
   function switchFilter(value: string, isProgram = false) {
     if (writing.current || pendingUpload.current || ((dirty || settings) && !window.confirm("Buang perubahan Mini Checkpoint yang belum disimpan?"))) return;
     if (isProgram) { setProgram(value); setChapter(""); } else setChapter(value);
-    baseline.current = undefined; setDraft(undefined); setSettings(undefined); setDirty(false); setError(""); setMessage("");
+    savedQuestions.current = undefined; setDraft(undefined); setSettings(undefined); setDirty(false); setError(""); setMessage("");
+  }
+  function requestPublish(value: AdminAssessment) {
+    publishDraft.current = value;
+    if (!configured || settings) {
+      setSettings(settings ?? config);
+      setNotice({ title: "Belum bisa diterbitkan", text: "Durasi dan nilai minimal lulus wajib diisi dan disimpan terlebih dahulu melalui Pengaturan Mini Checkpoint. Setelah itu, lengkapi soal lalu pilih Simpan & Terbitkan." });
+      return;
+    }
+    setPublishConfirm(true);
   }
   async function saveSettings() {
     if (!settings || writing.current || pendingUpload.current || !selected) return;
@@ -83,52 +93,34 @@ export function AdminMiniCheckpointWorkspace({ navigation, nested = false }: { n
   }
   async function persist(value: AdminAssessment, publish = false) {
     if (writing.current || pendingUpload.current || !selected) return;
-    let next = { ...value, questions: value.questions.map(item => publish ? { ...item, status: "Published" as const } : item) };
-    if (next.questions.some(item => item.image && !item.image_alt?.trim())) { setError("Isi teks alternatif setiap gambar soal."); return; }
-    if (next.questions.some(item => !placementText(item.prompt).trim() || item.answers.length !== 4 || item.answers.some(answer => !placementText(answer).trim()) || !Number.isInteger(item.correctAnswer) || item.correctAnswer < 0 || item.correctAnswer > 3 || !/^\d+$/.test(item.order) || Number(item.order) > 2147483647 || (item.passageId && !next.passages?.some(p => p.id === item.passageId)))) { setError("Lengkapi pertanyaan, pilihan A–D, kunci jawaban, urutan valid, dan grup bacaan."); return; }
-    if (next.passages?.some(p => !p.title.trim() || p.title.length > 255 || !placementText(p.body).trim())) { setError("Isi judul (maksimal 255 karakter) dan teks setiap grup bacaan."); return; }
-    if (next.questions.some(item => item.status === "Published") && (!configured || settings)) { setError("Simpan durasi dan nilai minimal lulus chapter sebelum publish."); return; }
+    const next = { ...value, questions: value.questions.map(item => publish ? { ...item, status: "Published" as const } : item) };
+    const fail = (text: string) => { setError(text); setNotice({ title: publish ? "Mini Checkpoint belum diterbitkan" : "Mini Checkpoint belum disimpan", text }); };
+    if (publish && !next.questions.length) { fail("Tambahkan soal sebelum menerbitkan Mini Checkpoint."); return; }
+    if (next.questions.some(item => item.image && !item.image_alt?.trim())) { fail("Isi teks alternatif setiap gambar soal."); return; }
+    if (next.questions.some(item => !placementText(item.prompt).trim() || item.answers.length !== 4 || item.answers.some(answer => !placementText(answer).trim()) || !Number.isInteger(item.correctAnswer) || item.correctAnswer < 0 || item.correctAnswer > 3 || !/^\d+$/.test(item.order) || Number(item.order) > 2147483647 || (item.passageId && !next.passages?.some(p => p.id === item.passageId)))) { fail("Lengkapi pertanyaan, pilihan A–D, kunci jawaban, urutan valid, dan grup bacaan."); return; }
+    if (next.passages?.some(p => !p.title.trim() || p.title.length > 255 || !placementText(p.body).trim())) { fail("Isi judul (maksimal 255 karakter) dan teks setiap grup bacaan."); return; }
+    if (next.questions.some(item => item.status === "Published") && (!configured || settings)) { fail("Buka Pengaturan Mini Checkpoint, lalu simpan durasi dan nilai minimal lulus sebelum menerbitkan soal."); return; }
+    if (next.questions.some(item => item.status === "Published" && ((item.miniCategory === "audio" && !item.audioUrl?.trim()) || (item.miniCategory === "reading" && !item.passageId)))) { fail("Tambahkan audio pada soal menyimak dan bacaan pada soal reading sebelum menerbitkan."); return; }
     writing.current = true; setBusy(true); setError(""); setMessage("");
-    let confirmed = baseline.current ?? current;
-    const checkpoint = () => { baseline.current = confirmed; setDraft(next); };
     const body = (item: AdminAssessment["questions"][number], owner: AdminAssessment) => {
       const passage = owner.passages?.find(p => p.id === item.passageId);
       return { chapter_id: selected.id, category: item.miniCategory ?? null, instruction: item.instruction || null, image_url: item.image || null, image_alt: item.image ? item.image_alt || null : null, image_position: item.image ? item.image_position ?? "before" : null, audio_url: item.audioUrl || null, passage: passage ? { id: passage.id, title: passage.title, body: passage.body } : null, question: item.prompt, options: Object.fromEntries(item.answers.map((answer, index) => [letters[index], answer])), correct_option: letters[item.correctAnswer], explanation: item.explanation || null, sort_order: Number(item.order), status: item.status.toLowerCase() };
     };
     try {
-      // Published shared passages cannot change one member at a time. Stage chapter drafts first.
-      const desiredStatuses = new Map(next.questions.map(item => [item.id, item.status]));
-      for (const question of confirmed.questions.filter(item => item.status === "Published")) {
-        await apiRequest(`${endpoint}/${question.id}`, { method: "PATCH", body: JSON.stringify({ status: "draft" }) });
-        confirmed = { ...confirmed, questions: confirmed.questions.map(item => item.id === question.id ? { ...item, status: "Draft" } : item) }; checkpoint();
-      }
-      const targets = new Set(next.questions.filter(item => desiredStatuses.get(item.id) === "Published").map(item => item.id));
-      const staged = { ...next, questions: next.questions.map(item => ({ ...item, status: "Draft" as const })) };
-      // Checkpoint confirmed IDs and inline passage payloads; partial retries never create duplicate questions.
-      for (const question of staged.questions) {
-        const previous = confirmed.questions.find(item => item.id === question.id);
-        if (previous && JSON.stringify(body(previous, confirmed)) === JSON.stringify(body(question, next))) continue;
-        const exists = /^\d+$/.test(question.id);
-        const result = (await apiRequest<{ data: Question }>(`${endpoint}${exists ? `/${question.id}` : ""}`, { method: exists ? "PATCH" : "POST", body: JSON.stringify(body(question, next)) })).data;
-        const replacement = { ...question, id: String(result.id) };
-        if (targets.delete(question.id)) targets.add(replacement.id);
-        next = { ...next, questions: next.questions.map(item => item.id === question.id ? { ...replacement, status: targets.has(replacement.id) ? "Published" : "Draft" } : item) };
-        confirmed = { ...confirmed, questions: [...confirmed.questions.filter(item => item.id !== question.id), replacement] };
-        checkpoint();
-      }
-      for (const question of confirmed.questions.filter(item => !next.questions.some(kept => kept.id === item.id))) {
-        await apiRequest(`${endpoint}/${question.id}`, { method: "DELETE" });
-        confirmed = { ...confirmed, questions: confirmed.questions.filter(item => item.id !== question.id) }; checkpoint();
-      }
-      for (const question of next.questions.filter(item => targets.has(item.id))) {
-        await apiRequest(`${endpoint}/${question.id}`, { method: "PATCH", body: JSON.stringify({ status: "published" }) });
-        confirmed = { ...confirmed, questions: confirmed.questions.map(item => item.id === question.id ? { ...item, status: "Published" } : item) }; checkpoint();
-      }
-      baseline.current = next; setDraft(next); setDirty(false); setMessage(publish ? "Mini Checkpoint dipublikasikan." : "Mini Checkpoint tersimpan."); request.retry();
-    } catch (cause) { checkpoint(); setDirty(true); setError(`Penyimpanan belum selesai. Perubahan berhasil tetap tersimpan; isian lain tetap di editor. Coba simpan lagi. ${errorMessage(cause)}`); }
+      const expected = savedQuestions.current ?? request.data?.questions.filter(item => item.chapter_id === selected.id) ?? [];
+      const result = await apiRequest<{ data: (Question & { client_id: string })[] }>(`${endpoint}/batch`, { method: "POST", body: JSON.stringify({ chapter_id: selected.id, expected_questions: expected.map(item => ({ id: item.id, updated_at: item.updated_at })), questions: next.questions.map(item => ({ ...body(item, next), client_id: item.id, ...(/^\d+$/.test(item.id) ? { id: Number(item.id) } : {}) })) }) });
+      const saved = toDraft(chapter, result.data);
+      savedQuestions.current = result.data;
+      setDraft(saved); setDirty(false);
+      const text = publish ? `${result.data.length} soal berhasil diterbitkan. Akses siswa tetap mengikuti aturan chapter dan keanggotaan.` : "Perubahan Mini Checkpoint berhasil disimpan. Gunakan Terbitkan Semua Soal untuk menerbitkan seluruh soal.";
+      setMessage(text); setNotice({ title: publish ? "Mini Checkpoint berhasil diterbitkan" : "Mini Checkpoint berhasil disimpan", text }); request.retry();
+    } catch (cause) {
+      setDraft(value); setDirty(true);
+      fail(cause instanceof ApiError && cause.status === 409 ? "Data chapter sudah berubah sejak editor dibuka. Isian Anda tetap di editor. Salin perubahan yang diperlukan, lalu muat ulang halaman sebelum menyimpan kembali." : `Penyimpanan belum dapat dikonfirmasi. Isian Anda tetap di editor; jangan muat ulang halaman. ${errorMessage(cause)}`);
+    }
     finally { writing.current = false; setBusy(false); }
   }
-  const content = <main className={`admin-page curriculum-admin-page admin-learning-question-prototype ${layout.page}`}>{navigation}{!nested && <AdminJourneyHeader tab="Mini Checkpoint" />}<div inert={busy || uploading}><AdminJourneyToolbar singleChapter programs={request.data?.programs ?? []} chapters={request.data?.chapters ?? []} program={program} chapter={chapter} onProgram={value => switchFilter(value, true)} onChapter={value => switchFilter(value)}>{selected && <button type="button" className="button button-primary" onClick={() => setSettings(config)}>Pengaturan Mini Checkpoint</button>}</AdminJourneyToolbar></div>{request.error && <p role="alert">{request.error}<button type="button" onClick={request.retry}>Coba Lagi</button></p>}{request.loading && !request.data && <p role="status">Memuat Mini Checkpoint...</p>}{selected && <>{settings && <form className={styles.form} onSubmit={event => { event.preventDefault(); void saveSettings(); }}><fieldset disabled={busy || uploading} className={styles.fields}><legend>Pengaturan chapter</legend><label className="admin-field">Durasi (menit)<input required type="number" min="1" step="1" value={settings.duration} onChange={event => setSettings({ ...settings, duration: event.target.value })} /></label><label className="admin-field">Nilai minimal lulus (%)<input required type="number" min="0" max="100" step="1" value={settings.passing} onChange={event => setSettings({ ...settings, passing: event.target.value })} /></label><button type="submit" className="button button-primary">Simpan Pengaturan</button><button type="button" className="button" onClick={() => setSettings(undefined)}>Batal</button></fieldset></form>}<AdminTryoutQuestionBuilder key={chapter} studioTitle="Mini Checkpoint" saveLabel="Simpan Mini Checkpoint" draft={withContext} initialQuestion={null} onDirtyChange={ignoreDirtyChange} onUploadBusyChange={value => { pendingUpload.current = value; setUploading(value); }} busy={busy} error={error} onChange={change} onSave={persist} onClose={() => switchFilter("")} onDelete={async () => {}} saveStatus={dirty ? "Perubahan belum disimpan" : message || "Tidak ada perubahan"} bulkAction={<><button type="button" className="button" disabled={busy || uploading} onClick={() => setPreview(true)}>Pratinjau Seluruh Ujian</button><button type="button" className="button" disabled={busy || uploading || !current.questions.length} onClick={() => void persist(withContext, true)}>Simpan & Terbitkan Mini Checkpoint</button></>} /><AdminDialog open={preview} title="Pratinjau Mini Checkpoint" close={() => setPreview(false)}>{preview && <AdminAssessmentPreview assessment={withContext} />}</AdminDialog></>}{!selected && error && <p role="alert">{error}</p>}</main>;
+  const content = <main className={`admin-page curriculum-admin-page admin-learning-question-prototype ${layout.page}`}>{navigation}{!nested && <AdminJourneyHeader tab="Mini Checkpoint" />}<div inert={busy || uploading}><AdminJourneyToolbar singleChapter programs={request.data?.programs ?? []} chapters={request.data?.chapters ?? []} program={program} chapter={chapter} onProgram={value => switchFilter(value, true)} onChapter={value => switchFilter(value)}>{selected && <button type="button" className="button button-primary" onClick={() => setSettings(config)}>Pengaturan Mini Checkpoint</button>}</AdminJourneyToolbar></div>{request.error && <p role="alert">{request.error}<button type="button" onClick={request.retry}>Coba Lagi</button></p>}{request.loading && !request.data && <p role="status">Memuat Mini Checkpoint...</p>}{selected && <>{settings && <form className={styles.form} onSubmit={event => { event.preventDefault(); void saveSettings(); }}><fieldset disabled={busy || uploading} className={styles.fields}><legend>Pengaturan chapter</legend><label className="admin-field">Durasi (menit)<input required type="number" min="1" step="1" value={settings.duration} onChange={event => setSettings({ ...settings, duration: event.target.value })} /></label><label className="admin-field">Nilai minimal lulus (%)<input required type="number" min="0" max="100" step="1" value={settings.passing} onChange={event => setSettings({ ...settings, passing: event.target.value })} /></label><button type="submit" className="button button-primary">Simpan Pengaturan</button><button type="button" className="button" onClick={() => setSettings(undefined)}>Batal</button></fieldset></form>}<AdminTryoutQuestionBuilder key={chapter} studioTitle="Mini Checkpoint" saveLabel="Simpan & Terbitkan" draft={withContext} initialQuestion={null} onDirtyChange={ignoreDirtyChange} onUploadBusyChange={value => { pendingUpload.current = value; setUploading(value); }} busy={busy} error={error} onChange={change} onSave={async value => { requestPublish(value); }} onClose={() => switchFilter("")} onDelete={async () => {}} saveStatus={dirty ? "" : message || ""}  /><AdminDialog className={layout.publishDialog} open={publishConfirm} title="Terbitkan Mini Checkpoint?" close={() => { if (!busy) setPublishConfirm(false); }} actions={<><button type="button" className="button button-secondary" disabled={busy} onClick={() => setPublishConfirm(false)}>Batal</button><button type="button" className="button button-primary" disabled={busy || uploading} onClick={() => { setPublishConfirm(false); void persist(publishDraft.current ?? withContext, true); }}>Ya, Terbitkan</button></>}><div className={layout.publishSummary}><strong>Chapter {selected.chapter_number} · {selected.title}</strong><span>{current.questions.length} soal akan diterbitkan</span></div><p>Perubahan akan disimpan dan seluruh soal, termasuk yang masih draft, akan diterbitkan.</p><p>Pastikan soal, kunci jawaban, durasi, dan nilai minimal lulus sudah benar sebelum melanjutkan.</p></AdminDialog></>}{!selected && error && <p role="alert">{error}</p>}<AdminDialog className={layout.publishDialog} open={!!notice} title={notice?.title ?? "Hasil penyimpanan"} close={() => setNotice(undefined)} actions={<button type="button" className="button button-primary" onClick={() => setNotice(undefined)}>Mengerti</button>}><p role="status">{notice?.text}</p></AdminDialog></main>;
   return nested ? content : <AdminShell current="/admin/mini-checkpoint">{content}</AdminShell>;
 }
 function ignoreDirtyChange() {}

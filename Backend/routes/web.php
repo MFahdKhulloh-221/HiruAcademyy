@@ -90,6 +90,7 @@ Route::prefix('api')->middleware(['throttle:api', AuthenticateSession::class])->
             Route::patch("$resource/{content}", [AdminScheduleReplayController::class, 'update'])->whereNumber('content')->defaults('resource', $resource);
             Route::delete("$resource/{content}", [AdminScheduleReplayController::class, 'destroy'])->whereNumber('content')->defaults('resource', $resource);
         }
+        Route::post('mini-checkpoint-questions/batch', [AdminLearningController::class, 'miniBatch']);
         foreach (array_keys(LearningContentService::RESOURCES) as $resource) {
             Route::get($resource, [AdminLearningController::class, 'index'])->defaults('resource', $resource);
             Route::post($resource, [AdminLearningController::class, 'store'])->defaults('resource', $resource);

@@ -6,6 +6,11 @@
 .page :global(.admin-journey-filters select) { width: 100%; min-width: 0; min-height: 44px; }
 .page :global(.admin-journey-actions) { display: flex; flex-wrap: wrap; gap: 12px; }
 .page :global(.admin-journey-actions .button) { min-height: 44px; padding: 10px 16px; border: 1px solid #f48220; border-radius: 10px; background: #f48220; color: #5a2a00; font-weight: 700; }
+.publishDialog :global(.admin-dialog-content) { display: flex; flex-direction: column; gap: 16px; }
+.publishDialog :global(.admin-dialog-content) > * { width: 100%; min-width: 0; margin: 0; }
+.publishDialog :global(.admin-dialog-content) p { line-height: 1.7; }
+.publishSummary { display: grid; gap: 8px; padding: 16px; border: 1px solid #e1e4ec; border-radius: 12px; background: #f9f9ff; line-height: 1.6; overflow-wrap: anywhere; }
+.publishSummary span { color: #595e70; }
 .summary { margin: 0; padding: 16px 20px; border: 1px solid #e1e4ec; border-left: 4px solid #f48220; border-radius: 12px; background: #fff; line-height: 1.8; overflow-wrap: anywhere; }
 .help { padding: 14px 20px; border: 1px solid #e1e4ec; border-radius: 12px; background: #fff; color: #595e70; line-height: 1.7; }
 .help summary { min-height: 44px; align-content: center; cursor: pointer; color: var(--navy); font-weight: 600; }

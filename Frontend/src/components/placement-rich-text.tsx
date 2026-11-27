@@ -145,6 +145,8 @@ function TextEditor({ value, onChange, label, contextual = false, shared = false
   const { activate, unregister, active } = context;
   const editor = useRef<HTMLDivElement>(null);
   const change = useRef(onChange);
+  const currentValue = useRef(value);
+  useLayoutEffect(() => { currentValue.current = value; }, [value]);
   const blocked = useRef(disabled);
   useLayoutEffect(() => { change.current = onChange; blocked.current = disabled; }, [onChange, disabled]);
   const id = useId();
@@ -160,7 +162,11 @@ function TextEditor({ value, onChange, label, contextual = false, shared = false
         if (element.innerHTML !== html) { controller.range = null; element.innerHTML = html; }
       },
       compose(composing) { controller.composing = composing; controller.remember(); if (!composing) controller.emit(); },
-      emit() { if (controller.writable() && controller.element && !controller.composing) change.current(placementHtml(controller.element.innerHTML)); },
+      emit() {
+        if (!controller.writable() || !controller.element || controller.composing) return;
+        const html = placementHtml(controller.element.innerHTML);
+        if (html !== placementHtml(currentValue.current)) { currentValue.current = html; change.current(html); }
+      },
       restore(saved = controller.range ?? undefined) {
         const element = controller.element;
         if (!controller.writable() || !element || controller.composing || !saved || !element.contains(saved.startContainer) || !element.contains(saved.endContainer)) return false;
@@ -196,6 +202,6 @@ function TextEditor({ value, onChange, label, contextual = false, shared = false
   return <div className={`placement-text-editor${contextual ? " contextual-text-editor" : ""}`} data-active={active?.id === id ? "true" : undefined}>
     <span className="placement-editor-label">{label}</span>
     {!shared && <PlacementEditorToolbar disabled={disabled} />}
-    <div ref={editor} contentEditable={!disabled} aria-disabled={disabled || undefined} suppressContentEditableWarning role="textbox" aria-label={label} aria-multiline="true" onFocus={controller.remember} onBlur={controller.remember} onInput={() => { controller.remember(); controller.emit(); }} onCompositionStart={() => controller.compose(true)} onCompositionEnd={() => controller.compose(false)} onKeyUp={controller.remember} onMouseUp={controller.remember} onBeforeInput={event => { if (!controller.writable()) event.preventDefault(); }} onKeyDown={event => { if (!controller.writable()) event.preventDefault(); }} onCut={event => { if (!controller.writable()) event.preventDefault(); }} onDrop={event => event.preventDefault()} onPaste={event => { event.preventDefault(); if (!controller.writable() || controller.composing) return; document.execCommand("insertText", false, event.clipboardData.getData("text/plain")); controller.remember(); controller.emit(); }} />
+    <div ref={editor} contentEditable={!disabled} aria-disabled={disabled || undefined} suppressContentEditableWarning role="textbox" aria-label={label} aria-multiline="true" onFocus={controller.remember} onBlur={() => { controller.remember(); controller.compose(false); }} onInput={() => { controller.remember(); controller.emit(); }} onCompositionStart={() => controller.compose(true)} onCompositionEnd={() => controller.compose(false)} onKeyUp={controller.remember} onMouseUp={controller.remember} onBeforeInput={event => { if (!controller.writable()) event.preventDefault(); }} onKeyDown={event => { if (!controller.writable()) event.preventDefault(); }} onCut={event => { if (!controller.writable()) event.preventDefault(); }} onDrop={event => event.preventDefault()} onPaste={event => { event.preventDefault(); if (!controller.writable() || controller.composing) return; document.execCommand("insertText", false, event.clipboardData.getData("text/plain")); controller.remember(); controller.emit(); }} />
   </div>;
 }

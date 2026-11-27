@@ -139,6 +139,83 @@ class LearningContentTest extends TestCase
         $this->assertSame($expected, $keys);
     }
 
+    public function test_mini_batch_updates_shared_passages_atomically_and_returns_client_ids(): void
+    {
+        $chapter = $this->chapter();
+        $passage = ['id' => 'shared', 'title' => 'Reading', 'body' => 'Old body'];
+        $first = $this->item('mini-checkpoint-questions', $chapter, ['status' => 'published', 'passage' => $passage]);
+        $second = $this->item('mini-checkpoint-questions', $chapter, ['status' => 'published', 'passage' => $passage]);
+        $this->actingAs($this->admin)->postJson('/api/admin/mini-checkpoint-questions/batch', [
+            'chapter_id' => $chapter->id,
+            'expected_questions' => array_map(fn ($question) => $question->only(['id', 'updated_at']), [$first, $second]),
+            'questions' => array_map(fn ($question) => [
+                'id' => $question->id, 'client_id' => 'client-'.$question->id,
+                'question' => 'Edited Mini Checkpoint question',
+                'options' => ['A' => 'Updated A', 'B' => 'Updated B', 'C' => 'Updated C', 'D' => 'Updated D'],
+                'correct_option' => 'B',
+                'passage' => [...$passage, 'body' => 'New body'], 'status' => 'published',
+            ], [$first, $second]),
+        ])->assertOk()->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.client_id', 'client-'.$first->id)
+            ->assertJsonPath('data.0.question', 'Edited Mini Checkpoint question')
+            ->assertJsonPath('data.0.options.B', 'Updated B')
+            ->assertJsonPath('data.0.correct_option', 'B')
+            ->assertJsonPath('data.0.passage.body', 'New body')
+            ->assertJsonPath('data.1.status', 'published');
+        $this->assertDatabaseHas('mini_checkpoint_questions', ['id' => $first->id, 'question' => 'Edited Mini Checkpoint question', 'correct_option' => 'B', 'status' => 'published']);
+        $this->assertNotSame($first->toArray()['updated_at'], $first->fresh()->toArray()['updated_at']);
+    }
+
+    public function test_mini_batch_rolls_back_deletions_edits_and_publication_when_final_readiness_fails(): void
+    {
+        $chapter = $this->chapter();
+        $passage = ['id' => 'shared', 'title' => 'Reading', 'body' => 'Old body'];
+        $first = $this->item('mini-checkpoint-questions', $chapter, ['status' => 'published', 'passage' => $passage]);
+        $second = $this->item('mini-checkpoint-questions', $chapter, ['status' => 'published', 'passage' => $passage]);
+        $removed = $this->item('mini-checkpoint-questions', $chapter, ['status' => 'published']);
+        $before = MiniCheckpointQuestion::where('chapter_id', $chapter->id)->orderBy('id')->get()->toArray();
+        $this->actingAs($this->admin)->postJson('/api/admin/mini-checkpoint-questions/batch', [
+            'chapter_id' => $chapter->id,
+            'expected_questions' => array_map(fn ($question) => $question->only(['id', 'updated_at']), [$first, $second, $removed]),
+            'questions' => [
+                ['id' => $first->id, 'client_id' => 'first', 'status' => 'published', 'passage' => [...$passage, 'body' => 'Changed body']],
+                ['id' => $second->id, 'client_id' => 'second', 'status' => 'published'],
+            ],
+        ])->assertUnprocessable();
+        $this->assertSame($before, MiniCheckpointQuestion::where('chapter_id', $chapter->id)->orderBy('id')->get()->toArray());
+    }
+
+    public function test_mini_batch_rejects_stale_snapshots_after_addition_or_same_second_edit(): void
+    {
+        $chapter = $this->chapter();
+        $question = $this->item('mini-checkpoint-questions', $chapter);
+        $snapshot = [$question->only(['id', 'updated_at'])];
+        $added = $this->item('mini-checkpoint-questions', $chapter);
+        $this->actingAs($this->admin)->postJson('/api/admin/mini-checkpoint-questions/batch', [
+            'chapter_id' => $chapter->id, 'expected_questions' => $snapshot, 'questions' => [],
+        ])->assertConflict();
+        $this->assertNotNull($added->fresh());
+        $snapshot[] = $added->only(['id', 'updated_at']);
+        $this->patchJson('/api/admin/mini-checkpoint-questions/'.$question->id, ['question' => 'Concurrent edit'])->assertOk();
+        $this->postJson('/api/admin/mini-checkpoint-questions/batch', [
+            'chapter_id' => $chapter->id, 'expected_questions' => $snapshot, 'questions' => [],
+        ])->assertConflict();
+        $this->assertSame('Concurrent edit', $question->fresh()->question);
+    }
+
+    public function test_mini_batch_rejects_other_chapter_ids_without_mutation(): void
+    {
+        $chapter = $this->chapter();
+        $other = $this->chapter(number: 2);
+        $question = $this->item('mini-checkpoint-questions', $other);
+        $this->actingAs($this->admin)->postJson('/api/admin/mini-checkpoint-questions/batch', [
+            'chapter_id' => $chapter->id, 'expected_questions' => [],
+            'questions' => [['id' => $question->id, 'client_id' => 'foreign', 'question' => 'Overwritten']],
+        ])->assertUnprocessable();
+        $this->assertSame($other->id, $question->fresh()->chapter_id);
+        $this->assertSame('Fixture question?', $question->fresh()->question);
+    }
+
     public static function resources(): array
     {
         return array_combine(array_keys(self::MODELS), array_map(fn ($resource) => [$resource], array_keys(self::MODELS)));

@@ -95,6 +95,10 @@
 .questionBuilder svg { width:18px; height:18px; flex:none; }
 .questionBuilder :global(:focus-visible) { outline:2px solid #954900; outline-offset:3px; }
 .navigatorActions { display:grid; gap:8px; }
+.statusChoices { display:flex; flex-wrap:wrap; gap:12px; min-width:0; margin:0; padding:0; border:0; }
+.statusChoices legend { margin-bottom:8px; font-weight:600; }
+.statusChoices label { display:flex; align-items:center; gap:8px; min-height:44px; padding:8px 14px; border:1px solid #e2e5ec; border-radius:10px; cursor:pointer; }
+.statusChoices input { width:18px; height:18px; accent-color:#954900; }
 .studioActions { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px; padding:16px 0; border-top:1px solid #e2e5ec; }
 .studioActions p { margin:0; color:#526078; font-size:12px; }
 .studioActions > div { display:flex; flex-wrap:wrap; gap:8px; }

@@ -23,6 +23,11 @@ class AdminLearningController extends Controller
         return response()->json(['data' => app(MediaService::class)->payload($this->content->save($this->resource($request), $request->all())->toArray())], 201);
     }
 
+    public function miniBatch(Request $request): JsonResponse
+    {
+        return response()->json(['data' => app(MediaService::class)->payload($this->content->saveMiniBatch($request->all()))]);
+    }
+
     public function show(Request $request): JsonResponse
     {
         $class = $this->content->model($this->resource($request));

@@ -131,7 +131,8 @@ async function request(path: string, options: RequestInit): Promise<Response> {
     const studentTryOut = /^\/api\/student\/try-outs\/\d+\/attempts\/\d+(?:\/(?:answers|submit|next-session))?$/.test(path);
     const dailyPractice = /^\/api\/(?:admin|student)\/daily-practices(?:\/|\?|$)/.test(path);
     const placement = /^\/api\/(?:admin\/placement-(?:configs|questions|previews)(?:\/.*)?|placement(?:\/.*)?)$/.test(path);
-    const learningRequest = /^\/api\/admin\/(?:programs|chapters|flashcards|video-lessons|modules|reading-passages|reading-questions|audio-questions|mini-checkpoint-questions)(?:\/\d+)?$/.test(path);
+    const miniBatch = path === "/api/admin/mini-checkpoint-questions/batch";
+    const learningRequest = miniBatch || /^\/api\/admin\/(?:programs|chapters|flashcards|video-lessons|modules|reading-passages|reading-questions|audio-questions|mini-checkpoint-questions)(?:\/\d+)?$/.test(path);
     const body = response.status === 422 || studentTryOut ? await response.json().catch(() => null) : null;
     if (response.status === 422) {
       if (body?.errors && typeof body.errors === "object") {
@@ -139,7 +140,9 @@ async function request(path: string, options: RequestInit): Promise<Response> {
           const field = key === "email_normalized" ? "email" : key === "whatsapp_normalized" ? "whatsapp" : key === "identifier" ? "identity" : key;
           if (learningRequest && Object.keys(errors).length < 20 && Array.isArray(body.errors[key])) {
             const safe = body.errors[key].filter((message: unknown): message is string => typeof message === "string" && Object.hasOwn(learningMessages, message)).map((message: string) => learningMessages[message]);
-            errors[field] = safe.length ? safe.slice(0, 3) : [learningFields[field.split(".")[0]] ?? "Periksa isian materi dan ketentuan publikasinya."];
+            const parts = field.split(".");
+            const label = learningFields[miniBatch && parts[0] === "questions" ? parts[2] : parts[0]] ?? "Periksa isian materi dan ketentuan publikasinya.";
+            errors[field] = safe.length ? safe.slice(0, 3) : [miniBatch && parts[0] === "questions" && /^\d+$/.test(parts[1]) ? `Soal ${Number(parts[1]) + 1}: ${label}` : label];
           } else if (referralRequest && Object.keys(errors).length < 20 && Array.isArray(body.errors[key]) && Object.hasOwn(referralFields, field.split(".")[0])) {
             const safe = body.errors[key].filter((message: unknown): message is string => typeof message === "string" && Object.hasOwn(referralMessages, message)).map((message: string) => referralMessages[message]).slice(0, 3);
             const safeField = field.split(".")[0];

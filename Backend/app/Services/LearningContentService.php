@@ -128,6 +128,83 @@ class LearningContentService
         return app(MediaService::class)->locked(fn () => $this->saveContent($resource, $input, $model));
     }
 
+    public function saveMiniBatch(array $input): array
+    {
+        $data = Validator::make($input, [
+            'chapter_id' => ['required', 'integer', 'exists:chapters,id'],
+            'expected_questions' => ['present', 'array'],
+            'expected_questions.*' => ['required', 'array:id,updated_at'],
+            'expected_questions.*.id' => ['required', 'integer', 'distinct'],
+            'expected_questions.*.updated_at' => ['required', 'string'],
+            'questions' => ['present', 'array'],
+            'questions.*' => ['required', 'array'],
+            'questions.*.id' => ['sometimes', 'required', 'integer', 'distinct'],
+            'questions.*.client_id' => ['required', 'string', 'distinct'],
+        ])->validate();
+
+        // Envelope validation filters unlisted nested fields; content is validated by save() below.
+        $data['questions'] = $input['questions'];
+
+        return app(MediaService::class)->locked(fn () => DB::transaction(function () use ($data) {
+            $chapter = Chapter::whereKey($data['chapter_id'])->lockForUpdate()->firstOrFail();
+            $existing = $chapter->miniCheckpointQuestions()->orderBy('id')->lockForUpdate()->get()->keyBy('id');
+            $expected = collect($data['expected_questions'])->keyBy('id');
+            abort_if($existing->count() !== $expected->count() || $existing->contains(
+                fn ($question) => ! isset($expected[$question->id])
+                    || $expected[$question->id]['updated_at'] !== $question->toArray()['updated_at']
+            ), 409, 'Mini Checkpoint changed. Reload before saving.');
+
+            foreach ($data['questions'] as $index => $question) {
+                if (isset($question['id']) && ! $existing->has($question['id'])) {
+                    throw ValidationException::withMessages(["questions.{$index}.id" => 'Question must belong to this chapter.']);
+                }
+                if (isset($question['chapter_id']) && (string) $question['chapter_id'] !== (string) $chapter->id) {
+                    throw ValidationException::withMessages(["questions.{$index}.chapter_id" => 'Question must belong to this chapter.']);
+                }
+                Validator::make($question, ['status' => ['sometimes', 'required', Rule::in(['draft', 'published'])]])->validate();
+            }
+
+            // Stage publication only inside this transaction so shared passages change together.
+            foreach ($existing as $question) {
+                if ($question->status === 'published') {
+                    $question->newQuery()->whereKey($question->id)->toBase()->update([
+                        'status' => 'draft', 'updated_at' => $question->updated_at->copy()->addSecond(),
+                    ]);
+                }
+            }
+            $retained = array_map('intval', array_column($data['questions'], 'id'));
+            foreach ($existing as $question) {
+                if (! in_array($question->id, $retained, true)) {
+                    $this->delete('mini-checkpoint-questions', $question->id);
+                }
+            }
+            $saved = [];
+            $statuses = [];
+            foreach ($data['questions'] as $index => $question) {
+                $model = isset($question['id']) ? $existing[$question['id']] : null;
+                $statuses[$index] = $question['status'] ?? $model?->status ?? 'draft';
+                unset($question['id'], $question['client_id']);
+                try {
+                    $saved[$index] = $this->save('mini-checkpoint-questions', [
+                        ...$question, 'chapter_id' => $chapter->id, 'status' => 'draft',
+                    ], $model);
+                } catch (ValidationException $exception) {
+                    throw ValidationException::withMessages(collect($exception->errors())
+                        ->mapWithKeys(fn ($messages, $field) => ["questions.{$index}.{$field}" => $messages])->all());
+                }
+            }
+            foreach ($saved as $index => $question) {
+                if ($statuses[$index] === 'published') {
+                    $saved[$index] = $this->save('mini-checkpoint-questions', ['status' => 'published'], $question);
+                }
+            }
+
+            return collect($saved)->map(fn ($question, $index) => [
+                ...$question->toArray(), 'client_id' => $data['questions'][$index]['client_id'],
+            ])->values()->all();
+        }, 3));
+    }
+
     private function saveContent(string $resource, array $input, ?Model $model): Model
     {
         $class = $this->model($resource);
@@ -270,6 +347,11 @@ class LearningContentService
                 }
                 $moved = $model->exists && $resource !== 'chapters'
                     && $model->isDirty($resource === 'reading-questions' ? 'reading_passage_id' : 'chapter_id');
+                if ($resource === 'mini-checkpoint-questions' && $model->exists && $model->isDirty()
+                    && $model->updated_at !== null && $model->freshTimestamp()->startOfSecond()->lessThanOrEqualTo($model->updated_at)) {
+                    // DB timestamps have second precision; keep snapshot tokens changing within one second.
+                    $model->updated_at = $model->updated_at->copy()->addSecond();
+                }
                 $model->save();
                 if ($resource === 'mini-checkpoint-questions' && $model->status === 'published') {
                     $errors = $this->miniReadiness($chapter);

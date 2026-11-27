@@ -50,7 +50,7 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
   }
   const title = studioTitle ?? (draft.kind === "checkpoint" ? "Checkpoint" : "Try Out");
   const grammarLabel = fixedSession !== undefined || mini ? "Pola Kalimat" : "Tata Bahasa";
-  const SettingsContainer = draft.kind === "tryout" ? "section" : "details";
+  const SettingsContainer = draft.kind === "tryout" || mini ? "section" : "details";
   const sections = assessmentSections(draft);
   const [session, setSession] = useState(() => fixedSession ?? (audioOnly ? 3 : readingOnly ? 2 : Math.max(0, sections.indexOf(initialQuestion?.section ?? sections[0]))));
   const [activeId, setActiveId] = useState(initialQuestion?.id ?? orderedAssessmentQuestions(draft)[0]?.id ?? "");
@@ -73,7 +73,7 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
     return linked.length ? linked.every(question => question.section === sections[session]) : session === 2;
   });
   const questions = orderedAssessmentQuestions(draft).filter(question => question.section === sections[session]);
-  const active = questions.find(question => question.id === activeId) ?? (chapterOnly ? questions[0] : undefined);
+  const active = questions.find(question => question.id === activeId) ?? (chapterOnly || mini ? questions[0] : undefined);
   const passage = sessionPassages.find(item => item.id === active?.passageId);
   const linked = questions.filter(question => question.passageId === passage?.id && passage);
   useEffect(() => { onDirtyChange(false); }, [onDirtyChange]);
@@ -192,13 +192,13 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
                 <label className="admin-field">Kunci Jawaban<select aria-label="Jawaban Benar" value={active.correctAnswer} onChange={event => update({ ...active, correctAnswer: Number(event.target.value) })}><option value={-1}>Pilih kunci jawaban</option>{active.answers.map((_, index) => <option key={index} value={index}>{assessmentLetters[index]}</option>)}</select></label>
                 <PlacementTextEditor shared disabled={busy} label="Pembahasan" value={active.explanation} onChange={explanation => update({ ...active, explanation })} />
                 <SettingsContainer className={styles.settings}>
-                  {draft.kind === "tryout" ? <h3 className={styles.settingsHeading}>Pengaturan soal</h3> : <summary>Pengaturan soal</summary>}
+                  {draft.kind === "tryout" || mini ? <h3 className={styles.settingsHeading}>Pengaturan soal</h3> : <summary>Pengaturan soal</summary>}
                   <div className={styles.studioGrid}>
                     {!chapterOnly && !mini && <label className="admin-field">Bobot poin
                       <input type="number" aria-label="Bobot poin" min="1" max="180" step={draft.kind === "tryout" ? 0.25 : 1} aria-describedby={draft.kind === "tryout" ? "tryout-point-hint" : undefined} value={active.pointValue ?? ""} onChange={event => update({ ...active, pointValue: event.target.value === "" ? undefined : Number(event.target.value) })} />
                       {draft.kind === "tryout" && <span id="tryout-point-hint" className={styles.settingsHint}>Rentang 1–180. Contoh: 2 · 2,25 · 2,50 · 2,75.</span>}
                     </label>}
-                    <label className="admin-field">Status soal<select value={active.status} onChange={event => update({ ...active, status: event.target.value as AdminAssessmentQuestion["status"] })}><option value="Draft">Draft</option><option value="Published">{mini ? "Terbit" : "Published"}</option></select></label>
+                    {mini ? <fieldset className={styles.statusChoices}><legend>Status soal</legend><label><input type="radio" name={`mini-status-${active.id}`} checked={active.status === "Draft"} onChange={() => update({ ...active, status: "Draft" })} />Draft</label><label><input type="radio" name={`mini-status-${active.id}`} checked={active.status === "Published"} onChange={() => update({ ...active, status: "Published" })} />Terbit</label></fieldset> : <label className="admin-field">Status soal<select value={active.status} onChange={event => update({ ...active, status: event.target.value as AdminAssessmentQuestion["status"] })}><option value="Draft">Draft</option><option value="Published">Published</option></select></label>}
                   </div>
                   {draft.kind === "tryout" && !chapterOnly && fixedSession === undefined && <p className={styles.settingsNote}>Nilai sesi dan total dibulatkan setelah penjumlahan. Contoh: <strong>81,75 menjadi 82.</strong></p>}
                 </SettingsContainer>
@@ -209,7 +209,7 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
         </PlacementEditorProvider> : <p>Pilih soal atau tambahkan konten untuk mulai mengedit.</p>}
       </section>
     </div>
-    <footer className={styles.studioActions} aria-label="Aksi Studio"><p role="status">{saveStatus}</p><div>{bulkAction}<button type="button" className="button" disabled={busy} onClick={onClose}>{closeLabel}</button><button type="button" className="button button-primary" disabled={busy} aria-busy={busy} onClick={() => { if (!pendingUpload.current) void onSave(draft); }}><FiSave aria-hidden="true" />{busy ? "Menyimpan..." : saveLabel ?? `Simpan ${title}`}</button></div></footer>
+    <footer className={styles.studioActions} aria-label="Aksi Studio">{mini ? <button type="button" className="button button-secondary" disabled={busy} onClick={onClose}>{closeLabel}</button> : <p role="status">{saveStatus}</p>}<div>{bulkAction}{!mini && <button type="button" className="button" disabled={busy} onClick={onClose}>{closeLabel}</button>}<button type="button" className="button button-primary" disabled={busy} aria-busy={busy} onClick={() => { if (!pendingUpload.current) void onSave(draft); }}><FiSave aria-hidden="true" />{busy ? "Menyimpan..." : saveLabel ?? `Simpan ${title}`}</button></div></footer>
     <AdminDialog open={groupForm} title={grammarStimulus ? `Grup Bacaan ${grammarLabel}` : "Grup Bacaan Reading"} className={styles.packageDialog} close={() => setGroupForm(false)} actions={<><button className="button" type="button" onClick={() => setGroupForm(false)}>Kembali</button><button className="button button-primary" type="submit" form="tryout-reading-group" disabled={busy}>Buat Grup</button></>}>
       <form id="tryout-reading-group" className={styles.groupForm} noValidate onSubmit={event => { event.preventDefault(); const invalid = event.currentTarget.querySelector<HTMLInputElement>("input:invalid"); if (invalid) { reportIssue(`Sesi ${sections[session]} — Grup ${groupLabel} baru: ${invalid.labels?.[0]?.textContent || "Isian"}: ${invalid.validationMessage}\nPerbaiki isian lalu pilih Buat Grup kembali.`); return; } addGroup(); }}>
         <p className={styles.linkedHint}>{grammarStimulus ? `Satu bacaan bersama untuk beberapa soal ${grammarLabel}.` : "Satu bacaan bersama untuk beberapa soal Reading."}</p>
