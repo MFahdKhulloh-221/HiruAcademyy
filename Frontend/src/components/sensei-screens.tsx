@@ -109,7 +109,7 @@ export function ClassDetailScreen({ scheduleId }: { scheduleId?: string } = {}) 
 }
 
 function ReplayPreview({ item }: { item: ReplayPlaylist }) {
-  return <div className="batch3-replay-preview" aria-hidden="true"><span className="replay-play-icon"><LuPlay /></span><span>{item.program?.name || item.program?.code.toUpperCase()}</span><strong>{item.title}</strong></div>;
+  return <div className="batch3-replay-preview" aria-hidden="true"><span className="replay-play-icon"><LuPlay /></span><strong>{item.title}</strong></div>;
 }
 
 export function ReplayScreen(props: { purchasedLevel?: string } = {}) {
@@ -123,9 +123,9 @@ export function ReplayScreen(props: { purchasedLevel?: string } = {}) {
   const visible = playlists.filter(item => (item.program?.code || programs.find(program => program.id === item.program_id)?.code) === selected && item.title.toLowerCase().includes(search.toLowerCase()));
   const featured = visible[0];
   return <div className="replay-page-container batch3-replay">
-    <div className="sensei-title-row replay-head-row"><PageHead eyebrow="BELAJAR DENGAN SENSEI • REPLAY KELAS" title="Rekaman Sesi Kelas Bersama Sensei" description="Tonton kembali penjelasan materi, pembahasan latihan, dan sesi tanya jawab interaktif." /><Link href="/schedule" className="button button-secondary replay-schedule-btn">Lihat Jadwal Kelas</Link></div>
+    <div className="sensei-title-row replay-head-row"><PageHead title="Rekaman Sesi Kelas Bersama Sensei" description="Tonton kembali penjelasan materi, pembahasan latihan, dan sesi tanya jawab interaktif." /><Link href="/schedule" className="button button-secondary replay-schedule-btn">Lihat Jadwal Kelas</Link></div>
     <div className="replay-filter-bar"><label className="replay-search-input"><span aria-hidden="true"><LuSearch /></span><input aria-label="Cari rekaman" value={search} onChange={event => setSearch(event.target.value)} placeholder="Cari judul rekaman, chapter, atau topik..." /></label><div className="replay-tabs-group">{replayLevels.map(level => { const allowed = access.replay_levels.includes(level.toLowerCase()); return <button className={`replay-tab-btn ${selected === level.toLowerCase() ? "active" : ""}`} aria-pressed={selected === level.toLowerCase()} type="button" disabled={!allowed} onClick={() => setFilter(level.toLowerCase())} key={level}>{level}{allowed ? "" : " • Terkunci"}</button>; })}</div></div>
-    {featured && <section className="replay-featured-card"><ReplayPreview item={featured} /><div className="replay-featured-info"><div className="replay-featured-badges"><span className="replay-badge-status">Playlist Pilihan</span><span className="replay-category-tag">{selected.toUpperCase()}</span></div><h2>{featured.title}</h2><p>{featured.description}</p><Link className="button button-primary" href={`/replay/chapter-4?id=${featured.id}`}>Tonton Replay<span className="batch3-sr-only">: {featured.title}</span></Link></div></section>}
+    {featured && <section className="replay-featured-card"><ReplayPreview item={featured} /><div className="replay-featured-info"><h2>{featured.title}</h2><p>{featured.description}</p><Link className="button button-primary" href={`/replay/chapter-4?id=${featured.id}`}>Tonton Replay<span className="batch3-sr-only">: {featured.title}</span></Link></div></section>}
     <div className="replay-section-header"><h2>Daftar Rekaman Sesi</h2><span>{visible.length} playlist tersedia</span></div>
     {visible.length ? <section className="replay-cards-grid">{visible.map(item => <article className="replay-session-card" key={item.id}><ReplayPreview item={item} /><div className="replay-card-body"><span className="replay-category-tag">{selected.toUpperCase()}</span><h3>{item.title}</h3><p>{item.description}</p><Link className="button button-primary" href={`/replay/chapter-4?id=${item.id}`}>Tonton Replay<span className="batch3-sr-only">: {item.title}</span></Link></div></article>)}</section> : <section className="sensei-status-panel"><h2>Belum ada rekaman</h2><p>Replay tampil setelah sesi selesai diverifikasi dan dipublikasikan.</p></section>}
     <section className="sensei-announcement"><strong>Pengumuman</strong><p>Replay tampil setelah rekaman sesi selesai diverifikasi dan dipublikasikan.</p></section>
@@ -165,4 +165,4 @@ function ReplayMedia({ url, title }: { url: string; title: string }) {
   return <div className="batch3-media-empty"><LuPlay aria-hidden="true" /><h2>{title}</h2><a className="button button-primary" href={url} target="_blank" rel="noopener noreferrer">Tonton Replay</a></div>;
 }
 
-function PageHead({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) { return <header className="sensei-page-head"><p className="dash-kicker">{eyebrow}</p><h1>{title}</h1><p>{description}</p></header>; }
+function PageHead({ eyebrow, title, description }: { eyebrow?: string; title: string; description: string }) { return <header className="sensei-page-head">{eyebrow && <p className="dash-kicker">{eyebrow}</p>}<h1>{title}</h1><p>{description}</p></header>; }

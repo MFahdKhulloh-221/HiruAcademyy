@@ -1,5 +1,38 @@
 import { expect, test } from "@playwright/test";
 
+test("Sensei status sends only active and persists, API persistence mocked", async ({ page }) => {
+  let profile = { id: 1, name: "Sensei lama", role: "Pengajar", bio: "", expertise: [], photo: "", level: null, active: true, sort_order: 1 };
+  let fail = false;
+  await page.context().addCookies([{ name: "XSRF-TOKEN", value: "test", url: "http://localhost:3000" }]);
+  await page.route("**/api/**", async route => {
+    const path = new URL(route.request().url()).pathname;
+    if (path === "/api/me") return route.fulfill({ json: { data: { id: 99, name: "Admin", role: "admin", email: "admin@example.test", account_status: "active" } } });
+    if (path === "/api/admin/sensei-profiles/1" && route.request().method() === "PATCH") {
+      const input = route.request().postDataJSON();
+      expect(input).toEqual({ active: !profile.active });
+      if (fail) return route.fulfill({ status: 500, json: { message: "Status gagal disimpan." } });
+      profile = { ...profile, ...input };
+      return route.fulfill({ json: { data: profile } });
+    }
+    return route.fulfill({ json: { data: path.includes("sensei-profiles") ? [profile] : [] } });
+  });
+  await page.goto("/admin/sensei");
+  const row = page.getByRole("row").filter({ hasText: "Sensei lama" });
+  await page.getByRole("button", { name: "Tindakan Sensei lama", exact: true }).click();
+  await page.getByRole("button", { name: "Nonaktifkan Sensei lama", exact: true }).click();
+  await expect(row.getByText("Nonaktif", { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(row.getByText("Nonaktif", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Tindakan Sensei lama", exact: true }).click();
+  await page.getByRole("button", { name: "Aktifkan Sensei lama", exact: true }).click();
+  await expect(row.getByText("Aktif", { exact: true })).toBeVisible();
+  fail = true;
+  await page.getByRole("button", { name: "Tindakan Sensei lama", exact: true }).click();
+  await page.getByRole("button", { name: "Nonaktifkan Sensei lama", exact: true }).click();
+  await expect(page.getByRole("status")).toContainText("Permintaan belum berhasil. Silakan coba lagi.");
+  await expect(row.getByText("Aktif", { exact: true })).toBeVisible();
+});
+
 for (const width of [390, 1440]) {
   test(`Sensei bio edit and order ${width}, API persistence mocked`, async ({ page }) => {
     await page.setViewportSize({ width, height: 900 });
@@ -15,7 +48,7 @@ for (const width of [390, 1440]) {
         const input = route.request().postDataJSON();
         const profile = { ...profiles.find(item => item.id === id)!, ...input };
         profiles = profiles.filter(item => item.id !== id);
-        profiles.splice(input.sort_order - 1, 0, profile);
+        profiles.splice((input.sort_order ?? profile.sort_order) - 1, 0, profile);
         profiles = profiles.map((item, index) => ({ ...item, sort_order: index + 1 }));
         return route.fulfill({ json: { data: profile } });
       }
@@ -25,6 +58,15 @@ for (const width of [390, 1440]) {
     await page.getByRole("button", { name: "Tindakan Sensei 3", exact: true }).click();
     await page.getByRole("button", { name: "Edit Sensei 3", exact: true }).click();
     const editor = page.getByRole("dialog");
+    await expect(editor.getByRole("textbox", { name: "Nama", exact: true })).toHaveValue("Sensei 3");
+    await expect(editor.getByRole("textbox", { name: "Bio singkat", exact: true })).toHaveValue("Bio lama");
+    let writes = 0;
+    page.on("request", request => { if (request.method() === "PATCH") writes += 1; });
+    await editor.getByRole("button", { name: "Simpan Sensei", exact: true }).click();
+    await expect(editor).toHaveCount(0);
+    expect(writes).toBe(0);
+    await page.getByRole("button", { name: "Tindakan Sensei 3", exact: true }).click();
+    await page.getByRole("button", { name: "Edit Sensei 3", exact: true }).click();
     const bio = "Pengajar bahasa Jepang berpengalaman. ".repeat(20);
     await editor.getByRole("textbox", { name: "Bio singkat", exact: true }).fill(bio);
     await editor.getByLabel("Urutan Tampil").fill("1");
@@ -37,6 +79,7 @@ for (const width of [390, 1440]) {
     fail = true;
     await page.getByRole("button", { name: "Tindakan Sensei 3", exact: true }).click();
     await page.getByRole("button", { name: "Edit Sensei 3", exact: true }).click();
+    await editor.getByRole("textbox", { name: "Bio singkat", exact: true }).fill("Perubahan gagal");
     await editor.getByRole("button", { name: "Simpan Sensei", exact: true }).click();
     await expect(editor.getByRole("alert")).toBeVisible();
     await page.goto("/sensei");

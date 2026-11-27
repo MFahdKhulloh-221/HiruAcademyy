@@ -7,6 +7,7 @@ import { type FormEvent, useCallback, useEffect, useRef, useState } from "react"
 import { AdminDataTable, AdminDialog, AdminPageHeader, AdminSection, AdminShell, AdminStatusBadge } from "@/components/admin-primitives";
 import { adminMediaUrl as contentMedia } from "@/lib/admin-media";
 import { useAdminContent } from "@/lib/admin-content-api";
+import { encodeContent } from "@/lib/public-content-api";
 import { apiRequest } from "@/lib/api";
 import { AdminSenseiPreview } from "@/components/admin-profile-preview";
 import styles from "./admin-showcase.module.css";
@@ -61,7 +62,12 @@ export function AdminSenseiPrototype() {
   async function save(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (!draft) return;
+    if (busy || reordering || loading) return;
+    const old = rows.find((row) => row.id === draft.id);
     const expertise = [...new Set(draft.expertise.split(",").map((label) => label.trim()).filter(Boolean))];
+    const fields = { name: draft.name.trim(), role: draft.role.trim(), bio: draft.bio.trim(), expertise, photo: draft.photo, level: draft.level, active: draft.active, order: Number(draft.order) };
+    const changes = Object.fromEntries(Object.entries(fields).filter(([key, value]) => !old || JSON.stringify(value) !== JSON.stringify(old[key as keyof Sensei])));
+    if (old && !Object.keys(changes).length) { closeEditor(); setMessage("Tidak ada perubahan profil Sensei."); return; }
     const order = Number(draft.order);
     const maxOrder = rows.length + (rows.some((row) => row.id === draft.id) ? 0 : 1);
     if (!draft.name.trim()) { setError("Nama Sensei wajib diisi."); return; }
@@ -72,10 +78,39 @@ export function AdminSenseiPrototype() {
     if (draft.level && !levels.includes(draft.level)) { setError("Pilih level utama yang tersedia."); return; }
     if (!/^\d+$/.test(draft.order) || !Number.isSafeInteger(order) || order < 1 || order > maxOrder) { setError(`Urutan harus berupa angka bulat dari 1 hingga ${maxOrder}.`); return; }
     const next: Sensei = { ...draft, name: draft.name.trim(), role: draft.role.trim(), bio: draft.bio.trim(), expertise, order };
-    const old = rows.find((row) => row.id === draft.id);
-    try { await mutate(next); } catch (error) { setError(error instanceof Error ? error.message : "Sensei gagal disimpan."); return; }
+    reorderLock.current = true;
+    setReordering(true);
+    try {
+      if (old) {
+        await apiRequest(`/api/admin/sensei-profiles/${old.id}`, { method: "PATCH", body: JSON.stringify(encodeContent(changes)) });
+        reload();
+      } else {
+        await mutate(next);
+      }
+    } catch (error) {
+      setError(error instanceof Error ? error.message : "Sensei gagal disimpan.");
+      return;
+    } finally {
+      reorderLock.current = false;
+      setReordering(false);
+    }
     if (old && old.photo !== next.photo && !rows.some((row) => row.id !== old.id && row.photo === old.photo)) release(old.photo);
     setDraft(null); setError(""); setMessage("Sensei disimpan.");
+  }
+  async function toggle(row: Sensei) {
+    if (reorderLock.current || busy) return;
+    reorderLock.current = true;
+    setReordering(true);
+    try {
+      await apiRequest(`/api/admin/sensei-profiles/${row.id}`, { method: "PATCH", body: JSON.stringify({ active: !row.active }) });
+      reload();
+      setMessage(`Sensei ${row.name} ${row.active ? "dinonaktifkan" : "diaktifkan"}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Status gagal disimpan.");
+    } finally {
+      reorderLock.current = false;
+      setReordering(false);
+    }
   }
   async function remove() {
     if (!deleting) return;
@@ -106,7 +141,7 @@ export function AdminSenseiPrototype() {
       <div id={`sensei-actions-${row.id}`} popover="auto" className={styles.actionMenu} onClick={event => { if ((event.target as HTMLElement).closest("button:not(:disabled)")) event.currentTarget.hidePopover(); }}>
       <button type="button" className="button" aria-label={`Lihat ${row.name}`} onClick={() => setView(row)}>Lihat</button>
       <button type="button" className="button" aria-label={`Edit ${row.name}`} onClick={() => { setError(""); setDraft({ ...row, expertise: row.expertise.join(", "), order: String(row.order) }); }}>Edit</button>
-      <button type="button" className="button" aria-label={`${row.active ? "Nonaktifkan" : "Aktifkan"} ${row.name}`} disabled={busy} onClick={async () => { try { await mutate({ ...row, active: !row.active }); setMessage("Status Sensei disimpan."); } catch (error) { setMessage(error instanceof Error ? error.message : "Status gagal disimpan."); } }}>{row.active ? "Nonaktifkan" : "Aktifkan"}</button>
+      <button type="button" className="button" aria-label={`${row.active ? "Nonaktifkan" : "Aktifkan"} ${row.name}`} disabled={busy || reordering || loading} onClick={() => void toggle(row)}>{row.active ? "Nonaktifkan" : "Aktifkan"}</button>
       <button type="button" className="button" aria-label={`Hapus ${row.name}`} onClick={() => setDeleting(row)}>Hapus</button>
       </div>
     </> }} /></AdminSection>
@@ -122,7 +157,7 @@ export function AdminSenseiPrototype() {
         <label className="admin-field">Urutan Tampil<input placeholder="Contoh: 1" type="number" min="1" step="1" value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })} required /><small>Mengubah urutan akan menyesuaikan posisi Sensei lainnya secara otomatis.</small></label>
         <AdminSenseiPreview profile={{ ...draft, expertise: [...new Set(draft.expertise.split(",").map((label) => label.trim()).filter(Boolean))] }} onPhotoError={() => setError("Foto tidak dapat dibaca. Pilih foto lain sebelum menyimpan.")} />
         {error && <p role="alert">{error}</p>}
-        <div className="admin-page-actions"><button type="button" className="button" onClick={closeEditor}>Batal</button><button type="submit" disabled={busy} className="button button-primary">Simpan Sensei</button></div>
+        <div className="admin-page-actions"><button type="button" className="button" onClick={closeEditor}>Batal</button><button type="submit" disabled={busy || reordering || loading} className="button button-primary">Simpan Sensei</button></div>
       </form>}
     </AdminDialog>
     <AdminDialog open={Boolean(view)} title="Detail Sensei" close={closeView}>{view && <AdminSenseiPreview profile={view} />}</AdminDialog>
