@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\NotificationContent;
 use App\Models\Program;
 use App\Models\ProgramAchievement;
 use App\Models\User;
@@ -113,6 +114,19 @@ class ProgramAchievementService
                 if ($achievement->save() !== true) {
                     throw new LogicException('Program achievement could not be saved.');
                 }
+
+                NotificationContent::create([
+                    'user_id' => $user->getKey(),
+                    'event_key' => 'program-achievement:'.$achievement->id,
+                    'type' => 'Achievement',
+                    'title' => 'Sertifikat '.$achievement->program_name_snapshot.' berhasil diperoleh!',
+                    'body' => 'Selamat! Kamu telah menyelesaikan program '.$achievement->program_name_snapshot.'. Sertifikatmu sudah tersedia.',
+                    'cta_label' => 'Lihat Sertifikat',
+                    'preset' => 'custom',
+                    'path' => '/certificate/'.$achievement->id,
+                    'status' => 'published',
+                    'time' => $achievement->issued_at,
+                ]);
 
                 return ['achievement' => $achievement, 'reason' => 'issued'];
             }, 3);

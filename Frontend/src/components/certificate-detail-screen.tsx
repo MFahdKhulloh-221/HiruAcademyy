@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { useCallback, useRef, useState } from "react";
 import { useAuth } from "@/components/auth-provider";
-import { DigitalAchievementCard } from "@/components/digital-achievement-card";
 import { CertificateDocument } from "@/components/certificate-document";
 import { downloadCertificatePdf } from "@/lib/certificate-pdf";
 import { useLearningCatalog, useLearningRequest } from "@/components/learning-hooks";
@@ -14,7 +13,7 @@ import { ApiError } from "@/lib/api";
 import { learningMembership, programSlug } from "@/lib/learning-api";
 import { LuAward, LuArrowRight, LuBookOpen, LuCircleCheck, LuClipboardCheck, LuLockKeyhole } from "react-icons/lu";
 import centerStyles from "./student-certificate-center.module.css";
-import { reconcileAchievement, studentAchievement, studentAchievements } from "@/lib/program-achievement-api";
+import { reconcileAchievement, studentAchievement, studentAchievements, type Achievement } from "@/lib/program-achievement-api";
 import styles from "@/components/digital-achievement-card.module.css";
 
 const reasonMessages: Record<string, string> = {
@@ -22,6 +21,7 @@ const reasonMessages: Record<string, string> = {
   existing: "Sertifikat program ini sudah diterbitkan.",
   policy_unresolved: "Kebijakan penyelesaian program belum tersedia.",
   incomplete: "Kriteria penyelesaian program belum terpenuhi.",
+  mini_incomplete: "Selesaikan dan lulus seluruh Mini Checkpoint yang diwajibkan pada program ini.",
   learning_type_unresolved: "Jenis pembelajaran belum dapat diverifikasi.",
   disabled: "Penerbitan otomatis program ini belum diaktifkan.",
   issuance_conflict: "Status penerbitan berubah. Muat ulang daftar untuk memeriksa sertifikat.",
@@ -77,11 +77,11 @@ export function StudentCertificateCenter({ level }: { level?: string }) {
     <div className={centerStyles.layout}>
       <div className={centerStyles.collection}>
         {request.loading ? <div className={centerStyles.card} role="status">Memuat sertifikat…</div> : request.error ? <div className={centerStyles.card}><p role="alert">Daftar sertifikat belum berhasil dimuat.</p><button type="button" className={centerStyles.secondary} onClick={request.retry}>Coba Lagi Sertifikat</button></div> : <>
-          {rows.length ? <section aria-label="Sertifikat yang diterbitkan" className={centerStyles.issued}><h2>Sertifikatmu</h2><div className={centerStyles.certificateGrid}>{rows.map(achievement => <div className={centerStyles.certificateCard} key={achievement.id}><DigitalAchievementCard achievement={achievement} /><Link className={centerStyles.secondary} href={`/certificate/${achievement.id}`}>Lihat Sertifikat <LuArrowRight aria-hidden="true" /></Link></div>)}</div></section> : request.data?.meta.total === 0 ? <section className={`${centerStyles.card} ${centerStyles.empty}`}>
+          {rows.length ? <section aria-label="Sertifikat yang diterbitkan" className={centerStyles.issued}><h2>Sertifikatmu</h2><div className={centerStyles.certificateGrid}>{rows.map(achievement => <CertificatePreview key={achievement.id} achievement={achievement} showDetail />)}</div></section> : !level ? <section className={`${centerStyles.card} ${centerStyles.empty}`}>
             <div className={centerStyles.illustration} aria-hidden="true"><LuAward /><span><LuCircleCheck /></span></div>
-            <span className={centerStyles.badge}>Belum ada sertifikat diterbitkan</span><h2>Pencapaianmu sedang dipersiapkan</h2><p>Lanjutkan program dan selesaikan tugas wajib. Setelah itu, periksa penyelesaian untuk memperoleh sertifikat.</p><Link className={centerStyles.primary} href="/journey">Lanjutkan Belajar <LuArrowRight aria-hidden="true" /></Link>
+            <span className={centerStyles.badge}>Belum ada sertifikat tersedia</span><h2>Pencapaianmu sedang dipersiapkan</h2><p>Lanjutkan program dan selesaikan tugas wajib. Setelah itu, periksa penyelesaian untuk memperoleh sertifikat.</p><Link className={centerStyles.primary} href="/journey">Lanjutkan Belajar <LuArrowRight aria-hidden="true" /></Link>
           </section> : <section className={centerStyles.card}><h2>Belum ada sertifikat yang sesuai</h2><p>Tidak ada sertifikat untuk filter atau halaman ini.</p><Link className={centerStyles.secondary} href="/certificate">Lihat semua sertifikat</Link></section>}
-          {!!rows.length && request.data && request.data.meta.last_page > 1 && <nav className={centerStyles.pagination} aria-label="Halaman sertifikat"><button type="button" className={centerStyles.secondary} disabled={request.data.meta.current_page <= 1 || busy} onClick={() => setPage(request.data!.meta.current_page - 1)}>Sebelumnya</button><span>Halaman {request.data.meta.current_page} dari {request.data.meta.last_page}</span><button type="button" className={centerStyles.secondary} disabled={request.data.meta.current_page >= request.data.meta.last_page || busy} onClick={() => setPage(request.data!.meta.current_page + 1)}>Berikutnya</button></nav>}
+          {request.data && request.data.meta.last_page > 1 && <nav className={centerStyles.pagination} aria-label="Halaman sertifikat"><button type="button" className={centerStyles.secondary} disabled={request.data.meta.current_page <= 1 || busy} onClick={() => setPage(request.data!.meta.current_page - 1)}>Sebelumnya</button><span>Halaman {request.data.meta.current_page} dari {request.data.meta.last_page}</span><button type="button" className={centerStyles.secondary} disabled={request.data.meta.current_page >= request.data.meta.last_page || busy} onClick={() => setPage(request.data!.meta.current_page + 1)}>Berikutnya</button></nav>}
         </>}
       </div>
       <section className={`${centerStyles.card} ${centerStyles.check}`} aria-label="Periksa penyelesaian program">
@@ -113,27 +113,32 @@ function AchievementDetail({ achievementId }: { achievementId: number }) {
     }
   }, [achievementId]);
   const request = useLearningRequest(load, `achievement:${achievementId}`);
+  const achievement = request.data;
+  return <section className={styles.page}><h1>Detail Sertifikat</h1>{request.loading ? <p role="status">Memuat sertifikat…</p> : request.error ? <><p role="alert">{request.error}</p><button type="button" className={`button ${styles.link}`} onClick={request.retry}>Coba Lagi</button></> : achievement && <CertificatePreview achievement={achievement} />}<Link className={`button ${styles.link}`} href="/certificate">Kembali ke Sertifikat</Link></section>;
+}
+
+function CertificatePreview({ achievement, showDetail = false }: { achievement: Achievement; showDetail?: boolean }) {
   const documentRef = useRef<HTMLDivElement>(null);
   const downloadLock = useRef(false);
   const [downloading, setDownloading] = useState(false);
   const [downloadError, setDownloadError] = useState("");
   async function download() {
     const svg = documentRef.current?.querySelector("svg");
-    if (!svg || !request.data || downloadLock.current) return;
+    if (!svg || downloadLock.current) return;
     downloadLock.current = true;
     setDownloading(true); setDownloadError("");
-    try { await downloadCertificatePdf(svg, `HiruAcademy-${request.data.program_code_snapshot || "sertifikat"}.pdf`); }
+    try { await downloadCertificatePdf(svg, `HiruAcademy-${achievement.program_code_snapshot || "sertifikat"}.pdf`); }
     catch { setDownloadError("PDF belum berhasil dibuat. Silakan coba lagi."); }
     finally { downloadLock.current = false; setDownloading(false); }
   }
-  const achievement = request.data;
-  return <section className={styles.page}><h1>Detail Sertifikat</h1>{request.loading ? <p role="status">Memuat sertifikat…</p> : request.error ? <><p role="alert">{request.error}</p><button type="button" className={`button ${styles.link}`} onClick={request.retry}>Coba Lagi</button></> : achievement && <>
+  return <article className={centerStyles.certificateCard} aria-label={`Sertifikat ${achievement.program_name_snapshot ?? "program"}`}>
     <div ref={documentRef}><CertificateDocument studentName={achievement.student_name_snapshot ?? ""} programName={achievement.program_name_snapshot ?? ""} title={achievement.presentation_snapshot.title ?? ""} description={achievement.presentation_snapshot.description ?? ""} issuedAt={achievement.issued_at ?? ""} signatureDataUrl={achievement.presentation_snapshot.signature_data_url} signaturePosition={achievement.presentation_snapshot.signature_position} /></div>
-    <button type="button" className="button button-primary" disabled={downloading} onClick={() => void download()}>{downloading ? "Menyiapkan PDF…" : "Unduh PDF"}</button>
+    <div className={centerStyles.certificateActions}>
+      <button type="button" className={centerStyles.primary} disabled={downloading} onClick={() => void download()}>{downloading ? "Menyiapkan PDF…" : "Unduh PDF"}</button>
+      {showDetail && <Link className={centerStyles.secondary} href={`/certificate/${achievement.id}`}>Lihat Sertifikat <LuArrowRight aria-hidden="true" /></Link>}
+    </div>
     {downloadError && <p role="alert">{downloadError}</p>}
-    <p>Sertifikat ini merupakan bukti penyelesaian program, bukan kelulusan JLPT atau ujian akhir.</p>
-    <section aria-label="Achievement digital"><h2>Achievement</h2><p>Kartu pencapaian digital, terpisah dari dokumen sertifikat.</p><DigitalAchievementCard achievement={achievement} /></section>
-  </>}<Link className={`button ${styles.link}`} href="/certificate">Kembali ke Sertifikat</Link></section>;
+  </article>;
 }
 
 export function CertificateDetailScreen({ level, achievementId }: { level?: string; achievementId?: number } = {}) {

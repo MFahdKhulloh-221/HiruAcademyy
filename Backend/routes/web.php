@@ -200,6 +200,9 @@ Route::prefix('api')->middleware(['throttle:api', AuthenticateSession::class])->
     });
     Route::middleware(['auth:sanctum', 'active', 'role:student'])->prefix('student')->group(function () {
         Route::get('program-achievements', [StudentProgramAchievementController::class, 'index']);
+        Route::get('program-achievements/notices', [StudentProgramAchievementController::class, 'notices']);
+        Route::get('program-achievements/programs/{program}/status', [StudentProgramAchievementController::class, 'status'])->whereNumber('program');
+        Route::post('program-achievements/{achievement}/dismiss-notice', [StudentProgramAchievementController::class, 'dismissNotice'])->whereNumber('achievement');
         Route::get('program-achievements/{achievement}', [StudentProgramAchievementController::class, 'show'])->whereNumber('achievement');
         Route::post('program-achievements/programs/{program}/reconcile', [StudentProgramAchievementController::class, 'reconcile'])->whereNumber('program')->middleware('throttle:20,1');
         Route::get('checkpoint-packages', [StudentCheckpointController::class, 'index']);

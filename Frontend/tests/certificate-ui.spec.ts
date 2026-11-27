@@ -49,7 +49,7 @@ async function mockApi(page: Page, admin = false) {
     if (path === "/sanctum/csrf-cookie" && method === "GET") return route.fulfill({ status: 204, headers: { "set-cookie": "XSRF-TOKEN=mock; Path=/; SameSite=Lax" } });
     if (path === "/api/me" && method === "GET") return route.fulfill({ json: { data: { id: 91, name: "Mock User", email: "mock@example.test", whatsapp: "081234567890", role: admin ? "admin" : "student", account_status: "active" } } });
     if (path === "/api/public/analytics-config" && method === "GET") return route.fulfill({ json: { data: { measurementId: null } } });
-    if (path === "/api/student/notifications" && method === "GET") return route.fulfill({ json: { data: [] } });
+    if ((path === "/api/student/notifications" || path === `${studentPath}/notices`) && method === "GET") return route.fulfill({ json: { data: [] } });
     if (path === "/api/student/dashboard" && method === "GET") return route.fulfill({ json: { data: state.catalog } });
     if (path === adminPath && method === "GET" || path === studentPath && method === "GET") {
       if (state.hold) await state.hold;
@@ -81,14 +81,13 @@ async function clean(page: Page, state: MockState) {
   expect(state.unexpected).toEqual([]);
   expect(state.pdf).toEqual([]);
   expect(state.downloads).toEqual([]);
-  await expect(page.getByRole("button", { name: /PDF|unduh|download/i })).toHaveCount(0);
   await expect(page.getByRole("link", { name: /PDF|unduh|download/i })).toHaveCount(0);
 }
 async function noOverflow(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
 }
 async function cardFits(page: Page) {
-  expect(await page.getByRole("article", { name: "Achievement digital" }).evaluate(element => {
+  expect(await page.getByRole("article", { name: "Sertifikat JLPT N5", exact: true }).evaluate(element => {
     const box = element.getBoundingClientRect();
     return box.left >= 0 && box.right <= innerWidth && element.scrollHeight <= element.clientHeight && element.scrollWidth <= element.clientWidth;
   })).toBe(true);
@@ -111,7 +110,7 @@ for (const width of [1440, 768, 390]) {
       });
       Object.assign(state.snapshots[0].presentation_snapshot, { signature_data_url: signature, signature_position: "bottom-right" });
     }
-    await expect(page.getByRole("article", { name: "Achievement digital" })).toBeVisible();
+    await expect(page.getByRole("article", { name: "Sertifikat JLPT N5", exact: true })).toBeVisible();
     await noOverflow(page);
     await cardFits(page);
     await clean(page, state);
@@ -126,7 +125,7 @@ for (const width of [1440, 768, 390]) {
     await expect(certificate.getByText("Sertifikat snapshot", { exact: true })).toBeVisible();
     await expect(certificate.getByText("20 Oktober 2026", { exact: true })).toBeVisible();
     await expect(page.getByText(/nomor sertifikat|certificate (number|no\.)/i)).toHaveCount(0);
-    await expect(page.getByText("Mandiri", { exact: true })).toBeVisible();
+    await expect(page.getByRole("article", { name: "Achievement digital", exact: true })).toHaveCount(0);
     await noOverflow(page);
     await cardFits(page);
     state.row.settings.title = "Template berubah setelah terbit";
@@ -164,6 +163,24 @@ for (const width of [1440, 768, 390]) {
     expect(state.downloads).toEqual([download.suggestedFilename()]);
   });
 }
+
+test("mock API: certificate center shows template and downloads PDF directly", async ({ page }) => {
+  const state = await mockApi(page);
+  await page.goto("/certificate");
+  const card = page.getByRole("article", { name: "Sertifikat JLPT N5", exact: true });
+  await expect(card.getByRole("img", { name: `Sertifikat penyelesaian JLPT N5 — ${name}`, exact: true })).toBeVisible();
+  await expect(card.getByText("Sertifikat snapshot", { exact: true })).toBeVisible();
+  await expect(page.getByText("ACHIEVEMENT", { exact: true })).toHaveCount(0);
+  const pendingDownload = page.waitForEvent("download");
+  await card.getByRole("button", { name: "Unduh PDF", exact: true }).click();
+  const download = await pendingDownload;
+  expect(download.suggestedFilename()).toBe("HiruAcademy-n5.pdf");
+  const bytes = await readFile((await download.path())!);
+  expect(bytes.subarray(0, 4).toString()).toBe("%PDF");
+  await expect(page).toHaveURL(/\/certificate$/);
+  expect(state.unexpected).toEqual([]);
+  expect(state.writes).toEqual([]);
+});
 
 test("mock API: student loading, error retry, empty, explicit refresh reason", async ({ page }) => {
   const state = await mockApi(page);
@@ -298,7 +315,7 @@ for (const reason of ["existing", "issued"]) {
     await expect(notice.getByRole("link", { name: "Lihat Sertifikat", exact: true })).toHaveAttribute("href", "/certificate/84");
     await expect.poll(() => state.listReads.length).toBeGreaterThan(initialReads);
     if (reason === "issued") {
-      await expect(page.getByRole("article", { name: "Achievement digital", exact: true })).toBeVisible();
+      await expect(page.getByRole("article", { name: "Sertifikat JLPT N5", exact: true })).toBeVisible();
       await expect(page.getByRole("heading", { name: "Pencapaianmu sedang dipersiapkan", exact: true })).toHaveCount(0);
     }
     await expect(page.getByRole("navigation", { name: "Halaman sertifikat" })).toHaveCount(0);

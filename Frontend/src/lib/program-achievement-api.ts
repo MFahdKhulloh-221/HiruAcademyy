@@ -18,6 +18,7 @@ export type Achievement = {
   learning_type_snapshot: "free" | "lms" | "sensei";
   presentation_snapshot: AchievementPresentation;
   issued_at: string | null;
+  completion_summary: { completed_chapters: number; total_chapters: number; required_activities_complete: boolean };
 };
 export type AchievementConfiguration = {
   program: { id: number; code: string; name: string };
@@ -51,12 +52,47 @@ export async function updateAchievement(programId: number, patch: AchievementSet
 export async function previewAchievement(programId: number, signal?: AbortSignal): Promise<AchievementConfiguration> {
   return (await apiRequest<{ data: AchievementConfiguration }>(`${adminPath}/${positiveId(programId)}/preview`, { signal })).data;
 }
-export function studentAchievements(page: number, signal?: AbortSignal): Promise<AchievementPage<Achievement>> {
-  return apiRequest(`${studentPath}?page=${positiveId(page)}`, { signal });
+// Issued snapshots stay intact; current backend eligibility controls student display.
+async function visibleAchievements(rows: Achievement[], signal?: AbortSignal): Promise<Achievement[]> {
+  const visible = await Promise.all(rows.map(async row => (await achievementStatus(row.program_id, signal)).eligible));
+  return rows.filter((_, index) => visible[index]);
+}
+export async function studentAchievements(page: number, signal?: AbortSignal): Promise<AchievementPage<Achievement>> {
+  const result = await apiRequest<AchievementPage<Achievement>>(`${studentPath}?page=${positiveId(page)}`, { signal });
+  return { ...result, data: await visibleAchievements(result.data, signal) };
 }
 export async function studentAchievement(id: number, signal?: AbortSignal): Promise<Achievement> {
-  return (await apiRequest<{ data: Achievement }>(`${studentPath}/${positiveId(id)}`, { signal })).data;
+  const row = (await apiRequest<{ data: Achievement }>(`${studentPath}/${positiveId(id)}`, { signal })).data;
+  if (!(await achievementStatus(row.program_id, signal)).eligible) throw new ApiError(404);
+  return row;
 }
-export function reconcileAchievement(programId: number): Promise<{ data: Achievement | null; reason: string }> {
-  return apiRequest(`${studentPath}/programs/${positiveId(programId)}/reconcile`, { method: "POST" });
+export async function reconcileAchievement(programId: number): Promise<{ data: Achievement | null; reason: string }> {
+  const result = await apiRequest<{ data: Achievement | null; reason: string }>(`${studentPath}/programs/${positiveId(programId)}/reconcile`, { method: "POST" });
+  if (result.data) {
+    const status = await achievementStatus(programId);
+    if (!status.eligible) return { data: null, reason: status.reason };
+  }
+  return result;
+}
+export type AchievementStatus = {
+  achievement: Achievement | null;
+  total_chapters: number;
+  completed_chapters: number;
+  eligible: boolean;
+  reason: string;
+  has_new_material: boolean;
+  certificate_title: string;
+};
+export async function achievementStatus(programId: number, signal?: AbortSignal): Promise<AchievementStatus> {
+  return (await apiRequest<{ data: AchievementStatus }>(`${studentPath}/programs/${positiveId(programId)}/status`, { signal })).data;
+}
+export async function achievementNotices(signal?: AbortSignal): Promise<Achievement[]> {
+  return visibleAchievements((await apiRequest<{ data: Achievement[] }>(`${studentPath}/notices`, { signal })).data, signal);
+}
+export function dismissAchievementNotice(id: number) {
+  return apiRequest(`${studentPath}/${positiveId(id)}/dismiss-notice`, { method: "POST" });
+}
+export function requestAchievementNotice(programId?: number) {
+  window.dispatchEvent(new CustomEvent("hiru:achievement-ready", { detail: { programId } }));
+  window.dispatchEvent(new Event("hiru:notifications-changed"));
 }

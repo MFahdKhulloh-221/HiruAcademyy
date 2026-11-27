@@ -29,6 +29,11 @@ class ProgramAchievementResource extends JsonResource
                 'signature_data_url' => \App\Services\CertificateIssuerSettings::safeDataUrl($presentation['signature_data_url'] ?? null),
                 'signature_position' => ($presentation['signature_position'] ?? null) === 'bottom-left' ? 'bottom-left' : 'bottom-right',
             ],
+            'completion_summary' => [
+                'completed_chapters' => count($this->completion_evidence_snapshot['chapters'] ?? []),
+                'total_chapters' => count($this->completion_evidence_snapshot['chapters'] ?? []),
+                'required_activities_complete' => ! empty($this->completion_evidence_snapshot['chapters']),
+            ],
             'issued_at' => $this->issued_at?->utc()->toIso8601String(),
         ];
     }

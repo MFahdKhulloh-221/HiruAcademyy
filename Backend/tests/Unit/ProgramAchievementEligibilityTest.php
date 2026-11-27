@@ -28,7 +28,36 @@ final class ProgramAchievementEligibilityTest extends TestCase
     public function test_loading_attempt_evidence_keeps_hidden_fields_for_internal_validation(): void
     {
         $source = file_get_contents(dirname(__DIR__, 2).'/app/Services/ProgramAchievementEligibility.php');
-        $this->assertStringContainsString("makeVisible(['content_snapshot', 'grading_snapshot', 'answers'])", $source);
+        $this->assertStringContainsString("makeVisible(['content_snapshot', 'grading_snapshot', 'answers', 'result_snapshot'])", $source);
+    }
+
+    public function test_status_counts_each_chapter_and_detects_new_tasks_without_mutating_evidence(): void
+    {
+        $chapter = $this->chapter();
+        $incomplete = $chapter;
+        $incomplete['id'] = 40;
+        $incomplete['tasks']['video'][0]['chapter_id'] = 40;
+        $service = new class(new LearningProgressService($this->createMock(ChapterAccessPolicy::class))) extends ProgramAchievementEligibility
+        {
+            public array $rows;
+
+            protected function loadEvidence(User $user, Program $program): array
+            {
+                return $this->rows;
+            }
+        };
+        $service->rows = [[$incomplete, $chapter], [$this->completion()], []];
+        $evidence = ['chapters' => [
+            ['chapter_id' => 39, 'tasks' => [['type' => 'video', 'resource_id' => 80]]],
+            ['chapter_id' => 40, 'tasks' => [['type' => 'video', 'resource_id' => 81]]],
+        ]];
+        $achievement = (new \App\Models\ProgramAchievement)->forceFill(['completion_evidence_snapshot' => $evidence]);
+        $this->assertSame([
+            'total_chapters' => 2, 'completed_chapters' => 1,
+            'eligible' => false, 'reason' => 'incomplete', 'has_new_material' => true,
+        ], $service->status($this->user, $this->program, $achievement));
+        $this->assertSame($evidence, $achievement->completion_evidence_snapshot);
+        $this->assertFalse($service->status($this->user, $this->program, null)['has_new_material']);
     }
 
     public function test_draft_program_never_qualifies(): void
@@ -216,7 +245,7 @@ final class ProgramAchievementEligibilityTest extends TestCase
     {
         $result = $this->evaluate([$this->chapter('reading')], [$this->completion('reading')], [$this->attempt('reading')]);
         self::assertSame(['eligible' => true, 'reason' => 'eligible', 'evidence' => [
-            'policy_version' => 1, 'program_id' => 247, 'user_id' => 17,
+            'policy_version' => 2, 'program_id' => 247, 'user_id' => 17,
             'chapters' => [['chapter_id' => 39, 'tasks' => [[
                 'type' => 'reading', 'resource_id' => 81, 'completion_id' => 901,
                 'completed_at' => '2026-11-09T01:00:00Z', 'attempt_id' => 801, 'submitted_at' => '2026-11-09T01:00:00Z',
@@ -226,6 +255,72 @@ final class ProgramAchievementEligibilityTest extends TestCase
         foreach (['answers', 'correct_option', 'content_snapshot', 'grading_snapshot', 'options', 'question'] as $secret) {
             self::assertStringNotContainsString($secret, $serialized);
         }
+    }
+
+    public function test_entitled_mini_requires_all_published_groups_passing_and_records_only_evidence(): void
+    {
+        $chapter = $this->chapter();
+        $completions = [];
+        $attempts = [];
+        foreach (['video', 'module', 'flashcard', 'audio', 'reading'] as $type) {
+            $chapter['tasks'][$type] = $this->chapter($type)['tasks'][$type];
+            $completions[] = $this->completion($type);
+            if (in_array($type, ['audio', 'reading'], true)) {
+                $attempts[] = $this->attempt($type);
+            }
+        }
+        $chapter['mini_required'] = true;
+        $chapter['tasks']['mini_checkpoint'] = [
+            ['id' => 91, 'chapter_id' => 39, 'status' => 'published', 'session' => 1, 'part' => 1],
+            ['id' => 92, 'chapter_id' => 39, 'status' => 'published', 'session' => 1, 'part' => 2],
+            ['id' => 93, 'chapter_id' => 39, 'status' => 'draft', 'session' => 2, 'part' => 1],
+        ];
+        $mini = array_replace($this->attempt('mini'), [
+            'content_snapshot' => [['id' => 91, 'session' => 1, 'part' => 1, 'duration_minutes' => 10, 'passing_score' => 70]],
+            'result_snapshot' => ['total' => 1, 'percentage' => 100, 'passed' => true, 'passing_score' => 70],
+        ]);
+        self::assertSame('mini_incomplete', $this->evaluate([$chapter], $completions, $attempts)['reason']);
+        self::assertSame('mini_incomplete', $this->evaluate([$chapter], $completions, [...$attempts, $mini])['reason']);
+        $second = $mini;
+        $second['id'] = 802;
+        $second['content_snapshot'][0]['id'] = 92;
+        $second['content_snapshot'][0]['part'] = 2;
+        foreach (['user_id' => 18, 'chapter_id' => 40, 'status' => 'in_progress', 'submitted_at' => null] as $key => $value) {
+            self::assertFalse($this->evaluate([$chapter], $completions, [...$attempts, $mini, array_replace($second, [$key => $value])])['eligible'], $key);
+        }
+        $failed = $second;
+        $failed['result_snapshot'] = ['total' => 1, 'percentage' => 0, 'passed' => false, 'passing_score' => 70];
+        self::assertFalse($this->evaluate([$chapter], $completions, [...$attempts, $mini, $failed])['eligible']);
+        $stale = $second;
+        $stale['content_snapshot'][0]['id'] = 94;
+        self::assertFalse($this->evaluate([$chapter], $completions, [...$attempts, $mini, $stale])['eligible']);
+        $result = $this->evaluate([$chapter], $completions, [...$attempts, $mini, $second]);
+        self::assertTrue($result['eligible']);
+        $tasks = $result['evidence']['chapters'][0]['tasks'];
+        self::assertSame([801, 802], array_column(array_slice($tasks, -2), 'attempt_id'));
+        self::assertSame(['2026-11-09T01:00:00Z', '2026-11-09T01:00:00Z'], array_column(array_slice($tasks, -2), 'submitted_at'));
+        $encoded = json_encode($result['evidence'], JSON_THROW_ON_ERROR);
+        foreach (['answers', 'correct_option', 'result_snapshot', 'content_snapshot', 'grading_snapshot'] as $secret) {
+            self::assertStringNotContainsString($secret, $encoded);
+        }
+        unset($chapter['tasks']['audio']);
+        self::assertFalse($this->evaluate([$chapter], $completions, [...$attempts, $mini, $second])['eligible']);
+        $chapter['mini_required'] = false;
+        self::assertTrue($this->evaluate([$chapter], $completions, $attempts)['eligible']);
+    }
+
+    public function test_mini_progress_helper_requires_current_groups_and_server_pass_at_threshold(): void
+    {
+        $progress = new LearningProgressService($this->createMock(ChapterAccessPolicy::class));
+        $resources = [['id' => 91, 'chapter_id' => 39, 'status' => 'published', 'session' => 1, 'part' => 1]];
+        $attempt = array_replace($this->attempt('mini'), [
+            'content_snapshot' => [['id' => 91, 'session' => 1, 'part' => 1, 'duration_minutes' => 10, 'passing_score' => 70]],
+            'result_snapshot' => ['total' => 1, 'percentage' => 70, 'passed' => true, 'passing_score' => 70],
+        ]);
+        self::assertNotNull($progress->miniCompletionEvidence(17, 39, $resources, [$attempt]));
+        self::assertNull($progress->miniCompletionEvidence(17, 39, [], [$attempt]));
+        $attempt['result_snapshot']['percentage'] = 69.99;
+        self::assertNull($progress->miniCompletionEvidence(17, 39, $resources, [$attempt]));
     }
 
     public function test_evaluate_delegates_to_read_only_evidence_hook_without_database(): void

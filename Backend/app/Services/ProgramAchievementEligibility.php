@@ -21,10 +21,53 @@ class ProgramAchievementEligibility
         return $this->evaluateEvidence($user, $program, $chapters, $completions, $attempts);
     }
 
+    public function status(User $user, Program $program, ?\App\Models\ProgramAchievement $achievement): array
+    {
+        [$chapters, $completions, $attempts] = $this->loadEvidence($user, $program);
+        $result = $this->evaluateEvidence($user, $program, $chapters, $completions, $attempts);
+        $completed = 0;
+        foreach ($chapters as $chapter) {
+            if ($this->evaluateEvidence($user, $program, [$chapter], $completions, $attempts)['eligible']) {
+                $completed++;
+            }
+        }
+        $snapshot = [];
+        foreach ($achievement?->completion_evidence_snapshot['chapters'] ?? [] as $chapter) {
+            $snapshot['chapter:'.$chapter['chapter_id']] = true;
+            foreach ($chapter['tasks'] ?? [] as $task) {
+                $snapshot[$chapter['chapter_id'].':'.$task['type'].':'.$task['resource_id']] = true;
+            }
+        }
+        $hasNewMaterial = false;
+        if ($achievement !== null) {
+            foreach ($chapters as $chapter) {
+                if (! isset($snapshot['chapter:'.$chapter['id']])) {
+                    $hasNewMaterial = true;
+                }
+                foreach ($chapter['tasks'] as $type => $tasks) {
+                    foreach ($tasks as $task) {
+                        if ($task['status'] === 'published' && ! isset($snapshot[$chapter['id'].':'.$type.':'.$task['id']])) {
+                            $hasNewMaterial = true;
+                        }
+                    }
+                }
+            }
+        }
+
+        return [
+            'total_chapters' => count($chapters),
+            'completed_chapters' => $completed,
+            'eligible' => $result['eligible'],
+            'reason' => $result['reason'],
+            'has_new_material' => $hasNewMaterial,
+        ];
+    }
+
     protected function loadEvidence(User $user, Program $program): array
     {
         $chapters = Chapter::where('program_id', $program->id)->where('status', 'published')->orderBy('id')->get();
         $rows = [];
+        $miniRequired = $this->progress->miniEligible($user, $program);
         foreach ($chapters as $chapter) {
             $tasks = [];
             foreach (self::TYPES as $type) {
@@ -34,11 +77,16 @@ class ProgramAchievementEligibility
                     'status' => $resource->status,
                 ])->all();
             }
+            if ($miniRequired) {
+                $tasks['mini_checkpoint'] = $chapter->miniCheckpointQuestions()->where('status', 'published')
+                    ->get(['id', 'chapter_id', 'status', 'session', 'part'])->toArray();
+            }
             $rows[] = [
                 'id' => $chapter->id,
                 'program_id' => $chapter->program_id,
                 'status' => $chapter->status,
                 'tasks' => $tasks,
+                'mini_required' => $miniRequired && $tasks['mini_checkpoint'] !== [],
                 'reading_ready' => ! $chapter->readingPassages()->where('status', 'published')
                     ->whereDoesntHave('questions', fn ($query) => $query->where('status', 'published'))->exists(),
             ];
@@ -46,9 +94,9 @@ class ProgramAchievementEligibility
         $completions = ActivityCompletion::where('user_id', $user->id)->whereIn('chapter_id', $chapters->modelKeys())
             ->orderBy('id')->get(['id', 'user_id', 'chapter_id', 'type', 'resource_id', 'completed_at'])->toArray();
         $attempts = LearningAttempt::where('user_id', $user->id)->whereIn('chapter_id', $chapters->modelKeys())
-            ->whereIn('kind', ['audio', 'reading'])->where('status', 'completed')->orderBy('id')
-            ->get(['id', 'user_id', 'chapter_id', 'kind', 'status', 'submitted_at', 'content_snapshot', 'grading_snapshot', 'answers'])
-            ->map(fn ($attempt) => $attempt->makeVisible(['content_snapshot', 'grading_snapshot', 'answers'])->toArray())->all();
+            ->whereIn('kind', ['audio', 'reading', 'mini'])->where('status', 'completed')->orderBy('id')
+            ->get(['id', 'user_id', 'chapter_id', 'kind', 'status', 'submitted_at', 'content_snapshot', 'grading_snapshot', 'answers', 'result_snapshot'])
+            ->map(fn ($attempt) => $attempt->makeVisible(['content_snapshot', 'grading_snapshot', 'answers', 'result_snapshot'])->toArray())->all();
 
         return [$rows, $completions, $attempts];
     }
@@ -63,12 +111,13 @@ class ProgramAchievementEligibility
      *   content_snapshot: list<{id, options: array<string, string>}>,
      *   grading_snapshot: array<question_id, {correct_option: string}>,
      *   answers: array<question_id, string>}. Snapshots must cover every answer.
-     * Only published chapters/tasks count. Mini checkpoints never count.
+     * Only published chapters/tasks count. mini_required comes from existing mini entitlement;
+     * entitled students must pass every published session/part, covering current question IDs.
      * Returned evidence is an allowlist of IDs and timestamps, never answers or snapshots.
      */
     public function evaluateEvidence(User $user, Program $program, array $chapters, array $completions, array $attempts): array
     {
-        $evidence = ['policy_version' => 1, 'program_id' => $program->id, 'user_id' => $user->id, 'chapters' => []];
+        $evidence = ['policy_version' => 2, 'program_id' => $program->id, 'user_id' => $user->id, 'chapters' => []];
         $result = function (string $reason) use (&$evidence): array {
             return ['eligible' => $reason === 'eligible', 'reason' => $reason, 'evidence' => $evidence];
         };
@@ -111,6 +160,10 @@ class ProgramAchievementEligibility
             if ($tasks === []) {
                 return $result('empty_chapter');
             }
+            if (($chapter['mini_required'] ?? false)
+                && array_diff($this->progress->requiredTypes($program), array_keys($tasks)) !== []) {
+                return $result('incomplete');
+            }
             $chapterEvidence = ['chapter_id' => $chapter['id'], 'tasks' => []];
             foreach ($tasks as $type => $ids) {
                 foreach ($ids as $id) {
@@ -143,6 +196,14 @@ class ProgramAchievementEligibility
                     }
                     $chapterEvidence['tasks'][] = $task;
                 }
+            }
+            if ($chapter['mini_required'] ?? false) {
+                $miniEvidence = $this->progress->miniCompletionEvidence($user->id, $chapter['id'],
+                    $chapter['tasks']['mini_checkpoint'] ?? [], $attempts);
+                if ($miniEvidence === null) {
+                    return $result('mini_incomplete');
+                }
+                array_push($chapterEvidence['tasks'], ...$miniEvidence);
             }
             $evidence['chapters'][] = $chapterEvidence;
         }
