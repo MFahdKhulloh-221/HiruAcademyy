@@ -2,11 +2,11 @@
 
 namespace App\Services;
 
+use App\Models\Chapter;
 use App\Models\Invoice;
 use App\Models\NotificationContent;
 use App\Models\NotificationRead;
 use App\Models\User;
-use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
@@ -22,7 +22,7 @@ class NotificationService
 
     public const PRESETS = [
         'None' => null,
-        'chapter' => '/learn/n4/chapter-4',
+        'chapter' => null,
         'schedule' => '/schedule',
         'replay' => '/replay',
         'certificate' => '/certificate',
@@ -92,12 +92,13 @@ class NotificationService
         $changed = $preset !== $content->preset;
         $path = array_key_exists('path', $data) ? $data['path'] : ($changed ? null : $content->path);
         $label = array_key_exists('cta_label', $data) ? $data['cta_label'] : $content->cta_label;
-        if ($preset === 'None') {
+        $unchanged = $content->exists && ! $changed && $path === $content->path && $this->safePath($path);
+        if ($preset === 'None' && ! $unchanged) {
             if ((array_key_exists('path', $data) && $path !== null) || (array_key_exists('cta_label', $data) && $label !== null)) {
                 throw ValidationException::withMessages(['preset' => 'None requires null path and CTA label.']);
             }
             $path = $label = null;
-        } else {
+        } elseif ($preset !== 'None') {
             if (! is_string($label) || trim($label) === '') {
                 throw ValidationException::withMessages(['cta_label' => 'CTA label is required.']);
             }
@@ -105,7 +106,11 @@ class NotificationService
                 if (! $this->safePath($path)) {
                     throw ValidationException::withMessages(['path' => 'Requires a safe unencoded internal path.']);
                 }
-            } else {
+            } elseif ($preset === 'chapter') {
+                if (! $this->safePath($path) || (! $unchanged && ! $this->publishedChapterPath($path))) {
+                    throw ValidationException::withMessages(['path' => 'Select a published chapter.']);
+                }
+            } elseif (! $unchanged) {
                 if (array_key_exists('path', $data) && $path !== self::PRESETS[$preset]) {
                     throw ValidationException::withMessages(['path' => 'Path must match the selected preset.']);
                 }
@@ -114,12 +119,29 @@ class NotificationService
         }
         $data['path'] = $path;
         $data['cta_label'] = $label;
-        if (isset($data['time'])) {
-            $data['time'] = CarbonImmutable::parse($data['time'])->utc();
+        unset($data['time']);
+        if (($data['status'] ?? $content->status) === 'published' && $content->time === null) {
+            $data['time'] = now()->utc();
         }
         $content->fill($data)->save();
 
         return $content->fresh();
+    }
+
+    private function publishedChapterPath(string $path): bool
+    {
+        if (! preg_match('#^/learn/([a-z0-9]+(?:-[a-z0-9]+)*)/chapter-([1-9][0-9]*)$#D', $path, $matches)) {
+            return false;
+        }
+        $number = filter_var($matches[2], FILTER_VALIDATE_INT, ['options' => ['min_range' => 1, 'max_range' => 2147483647]]);
+        if ($number === false) {
+            return false;
+        }
+        $code = $matches[1] === 'ssw-pengolahan-makanan' ? 'ssw-food' : $matches[1];
+
+        return Chapter::query()->where('status', 'published')
+            ->where('chapter_number', $number)
+            ->whereHas('program', fn (Builder $query) => $query->where('code', $code))->exists();
     }
 
     private function safePath(mixed $path): bool

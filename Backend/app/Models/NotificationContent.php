@@ -15,7 +15,7 @@ class NotificationContent extends Model
 
     protected function casts(): array
     {
-        return ['time' => 'immutable_datetime'];
+        return ['time' => 'immutable_datetime', 'popup_dismissed_at' => 'immutable_datetime'];
     }
 
     public function reads(): HasMany
