@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
 import { AdminJourneyHeader, AdminJourneyToolbar } from "@/components/admin-journey-toolbar";
 import { LuSearch } from "react-icons/lu";
 import { AdminMediaUpload, AdminVideoPreview } from "@/components/admin-media-upload";
@@ -77,7 +78,8 @@ export function AdminLearningMediaWorkspace({ kind, initialRows }: { kind: "Vide
   const [view, setView] = useState<LearningMedia | null>(null);
   const [deleting, setDeleting] = useState<LearningMedia | null>(null);
   const [search, setSearch] = useState("");
-  const [program, setProgram] = useState("");
+  const searchParams = useSearchParams();
+  const [program, setProgram] = useState(searchParams.get("program") ?? "");
   const [chapter, setChapter] = useState("");
   const [status, setStatus] = useState("");
   const [type, setType] = useState("");
@@ -103,7 +105,7 @@ export function AdminLearningMediaWorkspace({ kind, initialRows }: { kind: "Vide
     if (!draft) return;
     if (!draft.title.trim()) { setError("Judul wajib diisi."); return; }
     if (!draft.chapterId || !draft.programId) { setError("Pilih program dan chapter."); return; }
-    if (!/^\d+$/.test(draft.order) || !Number.isSafeInteger(Number(draft.order)) || Number(draft.order) < 1) { setError("Urutan harus berupa bilangan bulat positif."); return; }
+    if (!/^\d+$/.test(draft.order) || !Number.isSafeInteger(Number(draft.order)) || Number(draft.order) < 0) { setError("Urutan harus berupa bilangan bulat 0 atau lebih."); return; }
     if (draft.duration && (!Number.isFinite(Number(draft.duration)) || Number(draft.duration) <= 0)) { setError("Durasi harus berupa angka positif."); return; }
     if (draft.file && (!draft.file.name.trim() || draft.file.size === 0 || (video ? !draft.file.type.startsWith("video/") : draft.file.type !== "application/pdf"))) { setError(video ? "Pilih file video yang valid dan tidak kosong." : "Pilih file PDF yang valid dan tidak kosong."); return; }
     if (video ? !validVideoReference(draft.url.trim()) : !(safeVideoUrl(draft.url.trim()) || /^media\/pdf\/[a-f0-9-]+\.pdf$/i.test(draft.url.trim()))) { setError(video ? "Pilih sumber video yang valid." : "Unggah file PDF yang valid, maksimal 5 MB."); return; }
@@ -128,7 +130,7 @@ export function AdminLearningMediaWorkspace({ kind, initialRows }: { kind: "Vide
       { key: "context", header: "Konteks", cell: (row) => `${row.context} • ${row.chapter}` },
       { key: "type", header: "Kategori Materi", cell: (row) => row.type === "Tata Bahasa" ? "Pola Kalimat (Tata Bahasa)" : row.type },
       { key: "file", header: video ? "Sumber" : "File PDF", cell: (row) => row.file?.name || row.filename || row.url },
-      { key: "order", header: "Urutan", cell: (row) => row.order },
+      ...(!video ? [{ key: "order", header: "Urutan", cell: (row: LearningMedia) => row.order }] : []),
       { key: "status", header: "Status", cell: (row) => <AdminStatusBadge status={row.status} /> },
     ]} actions={{ cell: (row) => <div className="admin-page-actions">
       <button type="button" className="button" aria-label={`Lihat ${row.title}`} onClick={() => setView({ ...row })}>Lihat</button>
@@ -145,8 +147,8 @@ export function AdminLearningMediaWorkspace({ kind, initialRows }: { kind: "Vide
         {!video && <label className="admin-field">Kategori Materi<select value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value as LearningMedia["type"] })}><option value="Tata Bahasa">Pola Kalimat (Tata Bahasa)</option><option>Huruf/Kanji</option><option>Umum</option></select></label>}
         <AdminMediaUpload kind={video ? "video" : "pdf"} label={video ? "File video" : "File PDF (maksimal 5 MB)"} onBusyChange={setUploading} onError={setError} onUploaded={(url, resolvedUrl) => { setError(""); setDraft(current => current ? { ...current, url, resolvedUrl, file: null, filename: url.split("/").at(-1) ?? "" } : current); }} />
         {draft.file && <div className="admin-learning-media-file"><span>{draft.file.name} • {draft.file.size.toLocaleString("id-ID")} byte</span><button type="button" className="button" onClick={() => setDraft({ ...draft, file: null, filename: "" })}>Hapus file</button></div>}
-        {video && <><label className="admin-field">URL video (opsional)<input placeholder="Contoh: https://example.com/videos/chapter-1.mp4 atau media/video/chapter-1.mp4" value={draft.url} onChange={(event) => setDraft({ ...draft, url: event.target.value, resolvedUrl: undefined, file: null, filename: "" })} /></label><label className="admin-field">Durasi (menit, opsional)<input placeholder="Contoh: 15" type="number" min="0" step="any" value={draft.duration} onChange={(event) => setDraft({ ...draft, duration: event.target.value })} /></label></>}
-        <label className="admin-field">Urutan<input placeholder="Contoh: 1" type="number" min="1" step="1" required value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })} /></label>
+        {video && <><label className="admin-field">URL video (opsional)<input placeholder="Contoh: https://example.com/videos/chapter-1.mp4 atau media/video/chapter-1.mp4" value={draft.url} onChange={(event) => setDraft({ ...draft, url: event.target.value, resolvedUrl: undefined, file: null, filename: "" })} /></label></>}
+        <label className="admin-field">{video ? "Urutan dalam Chapter" : "Urutan"}<input placeholder="Contoh: 1" type="number" min="0" step="1" required value={draft.order} onChange={(event) => setDraft({ ...draft, order: event.target.value })} />{video && <small>Menentukan urutan video saat siswa membuka chapter ini.</small>}</label>
         <label className="admin-field">Status<select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as LearningMedia["status"] })}><option>Draft</option><option>Published</option></select></label>
         <AdminLearningMediaPreview item={draft} />
         {error && <p role="alert">{error}</p>}

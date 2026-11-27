@@ -97,7 +97,7 @@ function ChapterQuestionWorkspace({ kind, navigation, nested = false }: { kind: 
     } catch (cause) { setError(cause instanceof ApiError && Object.keys(cause.errors).length ? Object.values(cause.errors).flat().join(" ") : cause instanceof Error ? cause.message : "Permintaan belum berhasil. Silakan coba lagi."); }
     finally { setBusy(false); }
   }
-  const chapters = useMemo(() => request.data?.chapters.filter(chapter => (kind === "Mini Checkpoint" || kind === "Checkpoint") || request.data?.programs.find(program => program.id === chapter.program_id)?.family === "jlpt") ?? [], [request.data?.chapters, request.data?.programs, kind]);
+  const chapters = useMemo(() => request.data?.chapters ?? [], [request.data?.chapters]);
   const openGroupDialog = useCallback(() => {
     setError(undefined);
     setGroupError(undefined);

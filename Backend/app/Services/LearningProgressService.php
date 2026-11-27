@@ -64,10 +64,12 @@ class LearningProgressService
         }
         $readingReady = ! in_array('reading', $types, true) || ! $chapter->readingPassages()->where('status', 'published')->whereDoesntHave('questions', fn ($query) => $query->where('status', 'published'))->exists();
 
-        return $this->assemble($program, $chapter, $resources, $completions, $readingReady, $this->miniEligible($user, $program), $this->miniCompleted($user, $chapter));
+        return $this->assemble($program, $chapter, $resources, $completions, $readingReady, $this->miniEligible($user, $program), $this->miniCompleted($user, $chapter),
+            LearningAttempt::where('user_id', $user->id)->where('chapter_id', $chapter->id)
+                ->where('kind', 'mini')->where('status', 'completed')->exists());
     }
 
-    public function assemble(Program $program, Chapter $chapter, array $resources, array $completions, bool $readingReady, bool $miniEligible = false, bool $miniCompleted = false): array
+    public function assemble(Program $program, Chapter $chapter, array $resources, array $completions, bool $readingReady, bool $miniEligible = false, bool $miniCompleted = false, bool $miniAttempted = false): array
     {
         $activities = [];
         foreach ($this->requiredTypes($program) as $type) {
@@ -85,13 +87,83 @@ class LearningProgressService
 
         $required = $program->family === 'jlpt' ? $activities : array_filter($activities, fn ($activity) => $activity['total'] > 0);
 
-        return ['chapter_id' => $chapter->id, 'activities' => $activities, 'mini_eligible' => $miniEligible, 'mini_completed' => $miniCompleted, 'mini_unlocked' => $miniEligible && $required !== [] && ! in_array(false, array_column($required, 'complete'), true)];
+        return ['chapter_id' => $chapter->id, 'activities' => $activities, 'mini_eligible' => $miniEligible, 'mini_completed' => $miniCompleted, 'mini_attempted' => $miniAttempted || $miniCompleted, 'mini_unlocked' => $miniEligible && $required !== [] && ! in_array(false, array_column($required, 'complete'), true)];
     }
 
     private function miniCompleted(User $user, Chapter $chapter): bool
     {
-        return LearningAttempt::where('user_id', $user->id)->where('chapter_id', $chapter->id)
-            ->where('kind', 'mini')->where('status', 'completed')->exists();
+        $resources = $chapter->miniCheckpointQuestions()->where('status', 'published')->get()->toArray();
+        $attempts = LearningAttempt::where('user_id', $user->id)->where('chapter_id', $chapter->id)
+            ->where('kind', 'mini')->where('status', 'completed')->orderBy('id')->get()
+            ->map(fn ($attempt) => $attempt->makeVisible(['content_snapshot', 'result_snapshot'])->toArray())->all();
+
+        return $this->miniCompletionEvidence($user->id, $chapter->id, $resources, $attempts) !== null;
+    }
+
+    /** Published question groups require completed server-scored passing attempts; never expose answers. */
+    public function miniCompletionEvidence(int $userId, int $chapterId, array $resources, array $attempts): ?array
+    {
+        $groups = [];
+        foreach ($resources as $resource) {
+            if (($resource['status'] ?? null) !== 'published') {
+                continue;
+            }
+            if (! is_int($resource['id'] ?? null) || $resource['id'] < 1 || ($resource['chapter_id'] ?? null) !== $chapterId
+                || ! is_int($resource['session'] ?? null) || $resource['session'] < 1
+                || ! is_int($resource['part'] ?? null) || $resource['part'] < 1) {
+                return null;
+            }
+            $groups[$resource['session'].':'.$resource['part']][] = $resource;
+        }
+        if ($groups === []) {
+            return null;
+        }
+        $evidence = [];
+        foreach ($groups as $resources) {
+            $passing = null;
+            foreach ($attempts as $attempt) {
+                if (($attempt['user_id'] ?? null) !== $userId || ($attempt['chapter_id'] ?? null) !== $chapterId
+                    || ($attempt['kind'] ?? null) !== 'mini' || ($attempt['status'] ?? null) !== 'completed'
+                    || empty($attempt['id']) || ! is_string($attempt['submitted_at'] ?? null)
+                    || trim($attempt['submitted_at']) === '' || strtotime($attempt['submitted_at']) === false) {
+                    continue;
+                }
+                $content = $attempt['content_snapshot'] ?? [];
+                $result = $attempt['result_snapshot'] ?? [];
+                if (! is_array($content) || $content === [] || ! is_array($result)
+                    || count(array_filter($content, fn ($question) => is_array($question)
+                        && is_int($question['id'] ?? null) && $question['id'] > 0)) !== count($content)) {
+                    continue;
+                }
+                try {
+                    $configuration = (new LearningAttemptService($this))->miniConfiguration($content);
+                } catch (ValidationException) {
+                    continue;
+                }
+                $ids = array_column($content, 'id');
+                if ($configuration['session'] !== $resources[0]['session'] || $configuration['part'] !== $resources[0]['part']
+                    || count(array_unique($ids)) !== count($content)
+                    || array_diff(array_column($resources, 'id'), $ids) !== []
+                    || ($result['passed'] ?? null) !== true || ($result['total'] ?? null) !== count($content)
+                    || ! is_numeric($result['percentage'] ?? null) || $result['percentage'] > 100
+                    || ($result['passing_score'] ?? null) !== $configuration['passing_score']
+                    || $result['percentage'] < $configuration['passing_score']) {
+                    continue;
+                }
+                $passing = $attempt;
+                break;
+            }
+            if ($passing === null) {
+                return null;
+            }
+            foreach ($resources as $resource) {
+                $evidence[] = ['type' => 'mini_checkpoint', 'resource_id' => $resource['id'],
+                    'session' => $resource['session'], 'part' => $resource['part'],
+                    'attempt_id' => $passing['id'], 'submitted_at' => $passing['submitted_at']];
+            }
+        }
+
+        return $evidence;
     }
 
     public function batch(User $user, Collection $chapters, Collection $programs): array
@@ -104,6 +176,7 @@ class LearningProgressService
             'audioQuestions' => $published,
             'readingPassages' => $published,
             'readingPassages.questions' => fn ($query) => $query->where('status', 'published')->select(['id', 'reading_passage_id']),
+            'miniCheckpointQuestions' => fn ($query) => $query->where('status', 'published')->select(['id', 'chapter_id', 'status', 'session', 'part']),
         ]);
         $resources = [];
         $allIds = [];
@@ -121,8 +194,9 @@ class LearningProgressService
         }
         $completions = ActivityCompletion::where('user_id', $user->id)->whereIn('chapter_id', $chapters->modelKeys())->whereIn('resource_id', array_unique($allIds))
             ->get(['type', 'resource_id'])->groupBy('type')->map(fn ($rows) => $rows->pluck('resource_id')->map(fn ($id) => (int) $id)->all())->all();
-        $completedMini = LearningAttempt::where('user_id', $user->id)->whereIn('chapter_id', $chapters->modelKeys())
-            ->where('kind', 'mini')->where('status', 'completed')->pluck('chapter_id')->flip();
+        $miniAttempts = LearningAttempt::where('user_id', $user->id)->whereIn('chapter_id', $chapters->modelKeys())
+            ->where('kind', 'mini')->where('status', 'completed')->orderBy('id')->get()
+            ->map(fn ($attempt) => $attempt->makeVisible(['content_snapshot', 'result_snapshot'])->toArray())->groupBy('chapter_id');
         $replayLevels = app(EntitlementService::class)->effectiveAccess($user)['replay_levels'];
         $result = [];
         foreach ($chapters as $chapter) {
@@ -130,7 +204,10 @@ class LearningProgressService
                 ! $chapter->readingPassages->contains(fn ($passage) => $passage->questions->isEmpty()),
                 $programs->get($chapter->program_id)->family === 'jlpt'
                     && in_array($programs->get($chapter->program_id)->code, ['n5', 'n4', 'n3', 'n2'], true)
-                    && in_array($programs->get($chapter->program_id)->code, $replayLevels, true), $completedMini->has($chapter->id));
+                    && in_array($programs->get($chapter->program_id)->code, $replayLevels, true),
+                $this->miniCompletionEvidence($user->id, $chapter->id, $chapter->miniCheckpointQuestions->toArray(),
+                    $miniAttempts->get($chapter->id, collect())->all()) !== null,
+                $miniAttempts->has($chapter->id));
         }
 
         return $result;

@@ -45,6 +45,10 @@ final class MiniEligibilityTest extends TestCase
         $this->assertFalse($service->assemble($program, $chapter, $resources, $completed, true, true)['mini_unlocked']);
         $this->assertTrue($service->assemble($program, $chapter, $resources, $completed, true, true, true)['mini_completed']);
         $this->assertFalse($service->assemble($program, $chapter, $resources, $completed, true, true)['mini_completed']);
+        $this->assertFalse($service->assemble($program, $chapter, $resources, $completed, true, true)['mini_attempted']);
+        $failed = $service->assemble($program, $chapter, $resources, $completed, true, true, false, true);
+        $this->assertTrue($failed['mini_attempted']);
+        $this->assertFalse($failed['mini_completed']);
         foreach (['ssw', 'interview'] as $family) {
             $other = new Program(['family' => $family]);
             $this->assertNotContains('audio', $service->requiredTypes($other));

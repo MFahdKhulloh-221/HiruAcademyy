@@ -43,8 +43,20 @@ for (const plan of ["lms", "sensei"] as const) {
     await expect(dialog.getByRole("combobox", { name: "Status", exact: true })).toBeDisabled();
     await dialog.getByRole("button", { name: "Simpan", exact: true }).click();
     await expect(dialog).toHaveCount(0);
-    expect(writes).toEqual([{ name: `Custom ${plan}`, description: "Program regression", show_on_programs: true, sort_order: 1, slug: expect.stringMatching(new RegExp(`^custom-${plan}-[0-9a-f-]{36}$`)), plan_code: plan, duration_months: 7, base_price: 123456 }]);
+    expect(writes).toEqual([{ name: `Custom ${plan}`, description: "Program regression", show_on_programs: true, sort_order: 0, slug: expect.stringMatching(new RegExp(`^custom-${plan}-[0-9a-f-]{36}$`)), plan_code: plan, duration_months: 7, base_price: 123456 }]);
     await expect(page.getByRole("table", { name: "Daftar Program" }).getByRole("row").filter({ hasText: `Custom ${plan}` })).toContainText("Draft");
+
+    await expect(page.getByRole("link", { name: /Kelola isi/ })).toHaveCount(0);
+    await page.goto("/admin/kurikulum-materi?tab=Kurikulum&program=90");
+    await expect(page.getByRole("combobox", { name: "Program", exact: true })).toHaveValue("90");
+    await page.getByRole("button", { name: "+ Tambah Chapter", exact: true }).click();
+    const chapterDialog = page.getByRole("dialog", { name: "Chapter", exact: true });
+    await expect(chapterDialog.getByRole("combobox", { name: "Program", exact: true })).toHaveValue("90");
+    await chapterDialog.getByLabel("Judul", { exact: true }).fill("Chapter program baru");
+    await chapterDialog.getByRole("button", { name: "Simpan", exact: true }).click();
+    await expect(chapterDialog).toHaveCount(0);
+    await page.getByRole("link", { name: "Video Lesson", exact: true }).click();
+    await expect(page.getByRole("combobox", { name: "Program", exact: true })).toHaveValue("90");
 
     await page.goto("/admin/program-harga");
     const row = page.getByRole("table", { name: "Harga dan pratinjau promo" }).getByRole("row").filter({ hasText: `Custom ${plan}` });

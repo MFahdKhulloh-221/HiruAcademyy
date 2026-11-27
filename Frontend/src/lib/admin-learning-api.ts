@@ -11,8 +11,8 @@ export async function adminLearningList<T>(resource: LearningAdminResource, sign
 export async function adminLearningSave<T>(resource: LearningAdminResource, payload: Record<string, unknown>, id?: number) {
   return (await apiRequest<{ data: T }>(`/api/admin/${resource}${id ? `/${id}` : ""}`, { method: id ? "PATCH" : "POST", body: JSON.stringify(payload) })).data;
 }
-export function adminLearningDelete(resource: LearningAdminResource, id: number) {
-  return apiRequest<void>(`/api/admin/${resource}/${id}`, { method: "DELETE" });
+export function adminLearningDelete(resource: LearningAdminResource, id: number, force = false) {
+  return apiRequest<void>(`/api/admin/${resource}/${id}`, { method: "DELETE", ...(force ? { body: JSON.stringify({ force: true, confirmed: true }) } : {}) });
 }
 export async function adminLearningContext(signal?: AbortSignal) {
   const [programs, chapters] = await Promise.all([apiRequest<{ data: LearningProgram[] }>("/api/admin/programs", { signal }), adminLearningList<AdminChapter>("chapters", signal)]);

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\AccessGrant;
+use App\Models\Program;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Validation\ValidationException;
@@ -36,6 +37,9 @@ class EntitlementService
 
         $learning = array_fill_keys(['dasar', ...self::JLPT_LEVELS], 'preview');
         $learning += ['ssw-food' => 'none', 'interview' => 'none'];
+        foreach (Program::where('free_preview', true)->pluck('code') as $code) {
+            $learning[$code] = 'preview';
+        }
         $replay = [];
         $sources = [];
 
@@ -50,7 +54,7 @@ class EntitlementService
                         $replay[$level] = true;
                     }
                 }
-            } elseif ($code !== 'dasar' && $rank === false && $grant->plan_code === 'lms') {
+            } elseif ($code !== 'dasar' && $rank === false && in_array($grant->plan_code, ['lms', 'sensei'], true)) {
                 $learning[$code] = 'full';
             }
 

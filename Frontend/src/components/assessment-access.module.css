@@ -1,0 +1,11 @@
+.page { display: grid; gap: 24px; min-width: 0; }
+.page > header h1 { margin: 8px 0 0; font-size: clamp(24px, 3vw, 34px); line-height: 1.35; overflow-wrap: anywhere; }
+.locked { display: flex; align-items: flex-start; gap: 20px; padding: clamp(20px, 4vw, 36px); border: 1px solid var(--line); border-radius: 20px; background: #fff; }
+.locked > div { min-width: 0; }
+.icon { display: grid; place-items: center; flex: 0 0 56px; height: 56px; border-radius: 16px; background: #fff0e3; color: var(--orange-dark); font-size: 26px; }
+.locked h2 { margin: 0 0 12px; color: var(--navy); font-size: clamp(21px, 2.5vw, 27px); line-height: 1.4; }
+.locked p { margin: 0; max-width: 680px; color: var(--muted); line-height: 1.7; }
+.locked .hint { margin-top: 10px; font-size: 13px; }
+.actions { display: flex; align-items: stretch; flex-wrap: wrap; gap: 12px; margin-top: 24px; }
+.actions > a, .actions > button { min-height: 44px; height: auto; padding: 12px 18px; white-space: normal; text-align: center; line-height: 1.5; }
+@media (max-width: 639px) { .locked { flex-direction: column; gap: 16px; } .actions { flex-direction: column; } .actions > a, .actions > button { width: 100%; box-sizing: border-box; } }

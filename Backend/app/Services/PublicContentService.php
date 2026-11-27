@@ -53,7 +53,7 @@ class PublicContentService
     private function saveContent(string $resource, array $input, ?Model $model): Model
     {
         $class = $this->model($resource);
-        if (in_array($resource, ['testimonials', 'blog-articles', 'sensei-profiles'], true) && $model?->exists) {
+        if (in_array($resource, ['testimonials', 'blog-articles', 'sensei-profiles', 'showcase-items'], true) && $model?->exists) {
             $model = $class::query()->lockForUpdate()->findOrFail($model->getKey());
         }
         $model ??= new $class;
@@ -241,12 +241,12 @@ class PublicContentService
                 }
             }
         }
-        if ($model instanceof SenseiProfile) {
-            $others = SenseiProfile::query()->when($model->exists, fn ($query) => $query->whereKeyNot($model->id))
+        if ($model instanceof SenseiProfile || $model instanceof ShowcaseItem) {
+            $others = $model->newQuery()->when($model->exists, fn ($query) => $query->whereKeyNot($model->id))
                 ->orderBy('sort_order')->orderBy('id')->lockForUpdate()->get();
             $position = $data['sort_order'] ?? ($model->exists ? max(1, min($model->sort_order, $others->count() + 1)) : $others->count() + 1);
             if ($position > $others->count() + 1) {
-                throw ValidationException::withMessages(['sort_order' => 'Urutan melebihi jumlah Sensei yang tersedia.']);
+                throw ValidationException::withMessages(['sort_order' => $model instanceof ShowcaseItem ? 'Urutan melebihi jumlah showcase yang tersedia.' : 'Urutan melebihi jumlah Sensei yang tersedia.']);
             }
             $others->splice($position - 1, 0, [$model]);
             foreach ($others as $index => $profile) {

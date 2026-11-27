@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import type { ReactNode } from "react";
 import { AdminPageHeader } from "@/components/admin-primitives";
 
@@ -28,8 +29,10 @@ export function AdminJourneyHeader({ tab, actions }: { tab: keyof typeof journey
 }
 
 export function AdminJourneyLinks({ current }: { current: string }) {
+  const searchParams = useSearchParams();
+  const program = searchParams.get("program");
   return <nav className="admin-tabs" aria-label="Journey / Kurikulum & Materi">
-    {Object.entries(journeyTabs).map(([label, { href }]) => <Link key={href} href={href} className={current === href ? "active" : undefined} aria-current={current === href ? "page" : undefined}>{label}</Link>)}
+    {Object.entries(journeyTabs).map(([label, { href }]) => <Link key={href} href={program ? `${href}${href.includes("?") ? "&" : "?"}program=${encodeURIComponent(program)}` : href} className={current === href ? "active" : undefined} aria-current={current === href ? "page" : undefined}>{label}</Link>)}
   </nav>;
 }
 

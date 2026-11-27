@@ -166,7 +166,7 @@ class ProgramTest extends TestCase
         $base = ['name' => 'Custom validation', 'slug' => 'custom-validation', 'sort_order' => 9];
         $this->postJson('/api/admin/programs', $base)->assertUnprocessable()
             ->assertJsonValidationErrors(['plan_code', 'duration_months', 'base_price']);
-        foreach ([['plan_code' => 'free'], ['duration_months' => 0], ['duration_months' => 32768], ['duration_months' => 1.5], ['base_price' => -1], ['base_price' => 2147483648], ['base_price' => null]] as $invalid) {
+        foreach ([['plan_code' => 'invalid'], ['duration_months' => 0], ['duration_months' => 32768], ['duration_months' => 1.5], ['base_price' => -1], ['base_price' => 2147483648], ['base_price' => null]] as $invalid) {
             $this->postJson('/api/admin/programs', [...$base, 'plan_code' => 'lms', 'duration_months' => 1, 'base_price' => 0, ...$invalid])
                 ->assertUnprocessable()->assertJsonValidationErrors(array_keys($invalid));
         }
@@ -196,6 +196,36 @@ class ProgramTest extends TestCase
         } finally {
             ProgramOffer::setEventDispatcher($events);
         }
+    }
+
+    public function test_program_package_changes_preserve_offers_and_support_free_preview(): void
+    {
+        $this->actingAs($this->createUser('admin'));
+        $program = Program::where('code', 'ssw-food')->firstOrFail();
+        $this->patchJson('/api/admin/programs/'.$program->id, [
+            'plan_code' => 'sensei', 'duration_months' => 7, 'base_price' => 123456,
+        ])->assertOk();
+        $this->assertDatabaseHas('program_offers', ['program_id' => $program->id, 'plan_code' => 'sensei', 'status' => 'active', 'base_price' => 123456]);
+        $this->assertDatabaseMissing('program_offers', ['program_id' => $program->id, 'plan_code' => 'lms', 'status' => 'active']);
+        $this->patchJson('/api/admin/programs/'.$program->id, ['plan_code' => 'free'])->assertOk()->assertJsonPath('data.free_preview', true);
+        $this->assertSame(0, ProgramOffer::where('program_id', $program->id)->where('status', 'active')->count());
+        $this->assertDatabaseHas('program_offers', ['program_id' => $program->id, 'plan_code' => 'sensei', 'base_price' => 123456]);
+        $student = new User;
+        $student->role = 'student';
+        $service = app(\App\Services\EntitlementService::class);
+        $this->assertSame('preview', $service->project($student, [])['learning']['ssw-food']);
+        $grant = new \App\Models\AccessGrant(['plan_code' => 'sensei', 'starts_at' => now(), 'ends_at' => now()->addMonth()]);
+        $grant->setRelation('program', $program);
+        $this->assertSame('full', $service->project($student, [$grant])['learning']['ssw-food']);
+    }
+
+    public function test_free_program_creation_needs_no_paid_offer(): void
+    {
+        $this->actingAs($this->createUser('admin'));
+        $response = $this->postJson('/api/admin/programs', [
+            'name' => 'Preview program', 'slug' => 'preview-program', 'sort_order' => 0, 'plan_code' => 'free',
+        ])->assertCreated()->assertJsonPath('data.free_preview', true);
+        $this->assertSame(0, ProgramOffer::where('program_id', $response->json('data.id'))->count());
     }
 
     private function createUser(string $role = 'student'): User

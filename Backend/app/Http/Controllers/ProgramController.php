@@ -37,9 +37,9 @@ class ProgramController extends Controller
             'description' => ['nullable', 'string', 'max:10000'],
             'show_on_programs' => ['sometimes', 'required', 'boolean'],
             'sort_order' => ['required', 'integer', 'min:0', 'max:32767'],
-            'plan_code' => ['required', Rule::in(['lms', 'sensei'])],
-            'duration_months' => ['required', 'integer', 'min:1', 'max:32767'],
-            'base_price' => ['required', 'integer', 'min:0', 'max:2147483647'],
+            'plan_code' => ['required', Rule::in(['free', 'lms', 'sensei'])],
+            'duration_months' => ['exclude_if:plan_code,free', 'required', 'integer', 'min:1', 'max:32767'],
+            'base_price' => ['exclude_if:plan_code,free', 'required', 'integer', 'min:0', 'max:2147483647'],
         ]);
         $program = $this->locked(function () use ($data) {
             $ids = Program::query()->orderBy('sort_order')->orderBy('id')->pluck('id')->all();
@@ -49,12 +49,15 @@ class ProgramController extends Controller
                 'description' => $data['description'] ?? null, 'sort_order' => $data['sort_order'],
                 'family' => 'interview', 'status' => 'draft',
                 'show_on_programs' => $data['show_on_programs'] ?? true,
+                'free_preview' => $data['plan_code'] === 'free',
             ]);
-            ProgramOffer::create([
-                'program_id' => $program->id, 'plan_code' => $data['plan_code'],
-                'duration_months' => $data['duration_months'], 'base_price' => $data['base_price'],
-                'currency' => 'IDR', 'status' => 'inactive',
-            ]);
+            if ($data['plan_code'] !== 'free') {
+                ProgramOffer::create([
+                    'program_id' => $program->id, 'plan_code' => $data['plan_code'],
+                    'duration_months' => $data['duration_months'], 'base_price' => $data['base_price'],
+                    'currency' => 'IDR', 'status' => 'inactive',
+                ]);
+            }
 
             array_splice($ids, (int) $data['sort_order'], 0, [$program->id]);
             $this->normalizeOrder($ids);
@@ -74,6 +77,9 @@ class ProgramController extends Controller
             'status' => ['sometimes', 'required', Rule::in(['draft', 'active', 'inactive'])],
             'show_on_programs' => ['sometimes', 'required', 'boolean'],
             'sort_order' => ['sometimes', 'required', 'integer', 'min:0', 'max:32767'],
+            'plan_code' => ['sometimes', 'required', Rule::in(['free', 'lms', 'sensei'])],
+            'duration_months' => ['exclude_if:plan_code,free', 'required_with:plan_code', 'integer', 'min:1', 'max:32767'],
+            'base_price' => ['exclude_if:plan_code,free', 'required_with:plan_code', 'integer', 'min:0', 'max:2147483647'],
         ]);
         $program = $this->locked(function () use ($data, $program) {
             $program = Program::query()->findOrFail($program->id);
@@ -84,6 +90,18 @@ class ProgramController extends Controller
                 array_splice($ids, (int) $data['sort_order'], 0, [$program->id]);
                 $this->normalizeOrder($ids);
             }
+            if (isset($data['plan_code'])) {
+                $plan = $data['plan_code'];
+                $data['free_preview'] = $plan === 'free';
+                ProgramOffer::where('program_id', $program->id)->update(['status' => 'inactive']);
+                if ($plan !== 'free') {
+                    ProgramOffer::updateOrCreate(
+                        ['program_id' => $program->id, 'plan_code' => $plan],
+                        ['duration_months' => $data['duration_months'], 'base_price' => $data['base_price'], 'currency' => 'IDR', 'status' => 'active'],
+                    );
+                }
+            }
+            unset($data['plan_code'], $data['duration_months'], $data['base_price']);
             $program->update($data);
 
             return $program->refresh();

@@ -184,7 +184,7 @@ class LearningAttemptService
             }
         }
 
-        if (in_array($locked->kind, ['audio', 'reading'], true)) {
+        if (in_array($locked->kind, ['audio', 'reading', 'mini'], true)) {
             app(ProgramAchievementReconciliationService::class)->schedule((int) $user->id, (int) $program->id);
         }
 

@@ -36,10 +36,10 @@ class LearningContentService
     ];
 
     public const ACTIVITIES = [
-        'foundation' => ['video', 'module', 'audio', 'reading', 'mini_checkpoint'],
+        'foundation' => ['video', 'module', 'flashcard', 'audio', 'reading', 'mini_checkpoint'],
         'jlpt' => ['video', 'module', 'flashcard', 'audio', 'reading', 'mini_checkpoint'],
-        'ssw' => ['video', 'module', 'mini_checkpoint'],
-        'interview' => ['video', 'module'],
+        'ssw' => ['video', 'module', 'flashcard', 'audio', 'reading', 'mini_checkpoint'],
+        'interview' => ['video', 'module', 'flashcard', 'audio', 'reading'],
     ];
 
     public function model(string $resource): string
@@ -201,7 +201,7 @@ class LearningContentService
                         throw ValidationException::withMessages(['program_id' => 'Mini Checkpoint requires an N5–N2 program.']);
                     }
                     if ($model->exists && $model->isDirty('program_id') && ! $this->allowsFlashcards($program) && $model->flashcards()->exists()) {
-                        throw ValidationException::withMessages(['program_id' => 'Flashcards require a JLPT N5–N1 program.']);
+                        throw ValidationException::withMessages(['program_id' => 'Flashcards are not supported by the selected program family.']);
                     }
                     $family = $program->family;
                     $duplicate = Chapter::where('program_id', $model->program_id)
@@ -236,7 +236,7 @@ class LearningContentService
                     }
                     $program = $chapter->program()->firstOrFail();
                     if ($resource === 'flashcards' && ! $this->allowsFlashcards($program)) {
-                        throw ValidationException::withMessages(['chapter_id' => 'Flashcards require a JLPT N5–N1 program.']);
+                        throw ValidationException::withMessages(['chapter_id' => 'Flashcards are not supported by the selected program family.']);
                     }
                     if ($resource !== 'checkpoint-questions' && ! $this->allowed($program->family, self::RESOURCES[$resource][1])) {
                         throw ValidationException::withMessages([$parent => 'Content is not allowed in this program family.']);
@@ -303,10 +303,10 @@ class LearningContentService
         }
     }
 
-    public function delete(string $resource, string|int $id): void
+    public function delete(string $resource, string|int $id, bool $force = false): void
     {
         $class = $this->model($resource);
-        DB::transaction(function () use ($resource, $class, $id) {
+        DB::transaction(function () use ($resource, $class, $id, $force) {
             if ($resource === 'chapters') {
                 $this->lockChapters();
             }
@@ -315,7 +315,10 @@ class LearningContentService
                 throw ValidationException::withMessages(['chapter' => 'Chapter has Checkpoint questions and cannot be deleted.']);
             }
             if ($resource === 'chapters' && LearningAttempt::where('chapter_id', $model->id)->exists()) {
-                throw ValidationException::withMessages(['chapter' => 'Chapter has retained learning attempts and cannot be deleted.']);
+                if (! $force) {
+                    throw ValidationException::withMessages(['chapter' => 'Chapter has retained learning attempts and cannot be deleted.']);
+                }
+                LearningAttempt::where('chapter_id', $model->id)->delete();
             }
             $model->delete();
             if ($resource === 'chapters') {
@@ -409,7 +412,7 @@ class LearningContentService
 
     private function allowsFlashcards(Program $program): bool
     {
-        return $program->family === 'jlpt' && in_array($program->code, ['n5', 'n4', 'n3', 'n2', 'n1'], true);
+        return $this->allowed($program->family, 'flashcard');
     }
 
     private function allowed(string $family, string $activity): bool

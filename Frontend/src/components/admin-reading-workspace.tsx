@@ -40,7 +40,7 @@ export function AdminReadingWorkspace({ navigation, nested = false }: { navigati
   const writing = useRef(false);
   const saved = useRef<AdminAssessment | undefined>(undefined);
   const passageStatus = useRef(new Map<string, Passage["status"]>());
-  const chapters = request.data?.chapters.filter(item => request.data?.programs.find(p => p.id === item.program_id)?.family === "jlpt") ?? [];
+  const chapters = request.data?.chapters ?? [];
   const selected = chapters.find(item => String(item.id) === chapter);
   const current = draft ?? readingDraft(chapter, request.data?.passages.filter(item => String(item.chapter_id) === chapter) ?? [], request.data?.questions ?? []);
   const withContext = { ...current, context: request.data?.programs.find(item => item.id === selected?.program_id)?.name ?? "" };

@@ -12,6 +12,7 @@ import { loadChapterContext, useLearningRequest } from "@/components/learning-ho
 import { LuBookMarked, LuBookOpen, LuCircleCheck, LuClipboardCheck, LuLayers3, LuLockKeyhole, LuPlay, LuVolume2 } from "react-icons/lu";
 import styles from "./learning-module.module.css";
 import { LearningVideo } from "./learning-video";
+import { requestAchievementNotice } from "@/lib/program-achievement-api";
 import { learningCompletion, learningMembership, safeLearningUrl, type ChapterProgress } from "@/lib/learning-api";
 
 export function LearningVertical({ kind, level, chapter }: { kind: "learning" | "video" | "grammar" | "kanji" | "flashcards"; level: string; chapter: string }) {
@@ -47,6 +48,7 @@ function CanonicalLearning({ context, kind, level, chapterSlug }: { context: Awa
     try {
       const next = await learningCompletion(program.id, chapter.id, type, id);
       setProgress(next);
+      requestAchievementNotice(program.id);
       return next;
     } catch (cause) {
       setError(kind === "video" || kind === "flashcards" ? "Progres belajar belum berhasil disimpan. Silakan coba lagi." : cause instanceof Error ? cause.message : "Permintaan belum berhasil. Silakan coba lagi.");
@@ -75,15 +77,15 @@ function CanonicalLearning({ context, kind, level, chapterSlug }: { context: Awa
       <section className="learning-section-head"><h2>Aktivitas chapter</h2></section>
       {level === "dasar" && chapter.chapter_number === 1 && !activities.some(item => item[3]) && <p role="status">Materi Chapter 1 gratis DASAR belum tersedia.</p>}
       <section className="learning-activity-grid" aria-label="Aktivitas chapter">{visibleActivities.map(([path, title, type, available, description, Icon]) => {
-        const status = !available ? "Terkunci" : activityComplete(type) ? "Selesai" : activityStarted(type) ? "Sedang dikerjakan" : "Belum dimulai";
-        return <article className={`learning-activity-card activity-${!available ? "locked" : activityComplete(type) ? "completed" : "available"}`} key={path}>
+        const status = !available ? "Belum tersedia" : activityComplete(type) ? "Selesai" : activityStarted(type) ? "Sedang dikerjakan" : "Belum dimulai";
+        return <article className={`learning-activity-card activity-${!available ? "unavailable" : activityComplete(type) ? "completed" : "available"}`} key={path}>
           <div className="learning-activity-top"><span className="learning-activity-icon"><Icon aria-hidden="true" /></span><span className="learning-activity-status" role="status">{available && activityComplete(type) && <LuCircleCheck size={16} aria-hidden="true" />}{status}</span></div>
           <h3>{title}</h3><p>{description}</p>
-          {available ? <Link className="activity-action-button" href={activityHref(path)}>{path === "audio" || path === "reading" ? "Mulai" : "Buka"}</Link> : <span className="learning-activity-unavailable">Terkunci</span>}
+          {available ? <Link className="activity-action-button" href={activityHref(path)}>{path === "audio" || path === "reading" ? "Mulai" : "Buka"}</Link> : <span className="learning-activity-unavailable">Materi sedang disiapkan</span>}
         </article>;
       })}
         {program.family === "jlpt" && chapter.mini_checkpoint?.exists && <article className={`learning-activity-card activity-${progress.mini_completed ? "completed" : progress.mini_unlocked ? "current" : "locked"}`}>
-          <div className="learning-activity-top"><span className="learning-activity-icon">{progress.mini_completed ? <LuCircleCheck aria-hidden="true" /> : progress.mini_unlocked ? <LuClipboardCheck aria-hidden="true" /> : <LuLockKeyhole aria-hidden="true" />}</span><span className="learning-activity-status" role="status">{progress.mini_completed ? "Selesai" : progress.mini_unlocked ? "Belum dimulai" : "Terkunci"}</span></div>
+          <div className="learning-activity-top"><span className="learning-activity-icon">{progress.mini_completed ? <LuCircleCheck aria-hidden="true" /> : progress.mini_unlocked ? <LuClipboardCheck aria-hidden="true" /> : <LuLockKeyhole aria-hidden="true" />}</span><span className="learning-activity-status" role="status">{progress.mini_completed ? "Lulus" : progress.mini_attempted ? "Belum lulus" : progress.mini_unlocked ? "Belum dimulai" : "Terkunci"}</span></div>
           <h3>Mini Checkpoint Chapter {chapter.chapter_number}</h3><p>{progress.mini_unlocked ? "Uji pemahaman materi chapter." : "Selesaikan seluruh aktivitas chapter untuk membuka Mini Checkpoint."}</p>
           {progress.mini_completed ? <Link className="activity-action-button" href={`${base}/mini-checkpoint`}>Lihat Mini Checkpoint</Link> : progress.mini_unlocked ? <Link className="activity-action-button" href={`${base}/mini-checkpoint`}>Mulai Mini Checkpoint</Link> : <MiniLockedDialog access={chapter.access} progress={progress} chapterHref={base} className="activity-action-button" />}
         </article>}

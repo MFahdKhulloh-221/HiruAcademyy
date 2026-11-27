@@ -75,7 +75,7 @@ export function getJourneyLevels(membership: Membership, purchasedLevel = getDef
       access,
       cohort: membership === "sensei" && progression === "current" ? "active" : "none",
       progression,
-      statusLabel: owned ? (progression === "current" ? "SEDANG DIPELAJARI" : "LEVEL DIMILIKI") : access === "freePreview" ? "CHAPTER 1 TERSEDIA" : "TERKUNCI",
+      statusLabel: owned ? (progression === "current" ? "SEDANG DIPELAJARI" : "PROGRAM DIMILIKI") : access === "freePreview" ? "CHAPTER 1 TERSEDIA" : "TERKUNCI",
       actionLabel: owned ? "Buka perjalanan" : access === "freePreview" ? "Buka Chapter 1" : "Upgrade Membership",
     };
   });

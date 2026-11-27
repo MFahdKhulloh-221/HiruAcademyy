@@ -47,7 +47,8 @@ class AdminLearningController extends Controller
 
     public function destroy(Request $request): JsonResponse
     {
-        $this->content->delete($this->resource($request), $this->id($request));
+        $data = $request->validate(['force' => ['sometimes', 'boolean'], 'confirmed' => ['exclude_unless:force,true', 'required', 'accepted']]);
+        $this->content->delete($this->resource($request), $this->id($request), (bool) ($data['force'] ?? false));
 
         return response()->json(null, 204);
     }

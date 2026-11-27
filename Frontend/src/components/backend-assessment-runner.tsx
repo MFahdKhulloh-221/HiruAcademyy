@@ -11,6 +11,7 @@ import { QuestionAudioPlayer } from "@/components/question-audio-player";
 import { AssessmentContent } from "@/components/assessment-content";
 import { AssessmentPassageContent } from "@/components/assessment-passage-content";
 import { MiniCheckpointResult } from "@/components/mini-checkpoint-result";
+import { requestAchievementNotice } from "@/lib/program-achievement-api";
 import miniStyles from "./mini-checkpoint-student.module.css";
 
 import Link from "next/link";
@@ -342,6 +343,15 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
   const result = attempt?.result;
 
+  useEffect(() => {
+    if (domain !== "learning" || !result || attempt?.status !== "completed" || flow.busy || reviewing) return;
+    const programId = /^\/api\/student\/programs\/(\d+)\/chapters\//.exec(path)?.[1];
+    if (!programId) return;
+    // Fetch only after result commit; never interrupt an active assessment.
+    const frame = requestAnimationFrame(() => requestAchievementNotice(Number(programId)));
+    return () => cancelAnimationFrame(frame);
+  }, [domain, path, result, attempt?.status, flow.busy, reviewing]);
+
   const passed = domain === "learning" && "kind" in startBody && startBody.kind === "mini" ? result?.passed : result?.overall_pass;
 
   useEffect(() => {
@@ -659,12 +669,22 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
   const answeredCount = questions.filter(item => flow.answers[item.id]).length;
   const answerReview = reviewing && attempt.status === "completed";
   const reviewAnswerAvailable = answerReview && question?.correct_option !== undefined && Object.hasOwn(question.options, question.correct_option);
-  const miniNavigator = (mobile = false) => <div className="mini-question-navigator"><h2>Navigator Soal</h2><p className="mini-nav-status">{answeredCount} dari {questions.length} soal dijawab <span role="status">{saveStatus}</span></p><div className="mini-category-list" role="group" aria-label="Kategori soal">{miniCategories.map(category => { const items = questions.filter(item => item.session === category); return <button type="button" key={String(category)} aria-pressed={question?.session === category} onClick={() => { setIndex(questions.findIndex(item => item.session === category)); }}><span>{miniCategoryLabel(category)}</span><small>{items.filter(item => flow.answers[item.id]).length}/{items.length} dijawab</small></button>; })}</div><nav className="mini-number-grid" aria-label={`Nomor soal ${miniCategoryLabel(question?.session)}`}>{sessionQuestions.map(item => { const position = questions.findIndex(candidate => candidate.id === item.id); return <button type="button" key={item.id} aria-label={`Soal ${position + 1}, ${flow.answers[item.id] ? "sudah dijawab" : "belum dijawab"}`} aria-current={position === index ? "step" : undefined} className={position === index ? "active" : flow.answers[item.id] ? "answered" : ""} onClick={() => { setIndex(position); if (mobile) mobileNavigator.current?.close(); }}>{position + 1}</button>; })}</nav><p className="mini-nav-legend"><span className="active">Aktif</span><span className="answered">Dijawab</span><span>Belum dijawab</span></p>{!answerReview && <button type="button" className="button button-primary" disabled={flow.submitting} onClick={() => { if (mobile) mobileNavigator.current?.close(); navigateTryOut(index, true); }}>Periksa Jawaban</button>}</div>;
+  const activeMini = Boolean(miniContext) && !answerReview;
+  const miniNavigator = (mobile = false) => activeMini ? <>
+    <div className="mini-question-navigator">
+      <h2>Navigasi Soal</h2>
+      <nav className="mini-number-grid" aria-label="Nomor soal Mini Checkpoint">
+        {questions.map((item, position) => <button type="button" key={item.id} aria-label={`Soal ${position + 1}, ${flow.answers[item.id] ? "sudah dijawab" : "belum dijawab"}`} aria-current={position === index ? "step" : undefined} className={[position === index ? "active" : "", flow.answers[item.id] ? "answered" : ""].filter(Boolean).join(" ")} onClick={() => { setIndex(position); if (mobile) mobileNavigator.current?.close(); }}>{position + 1}</button>)}
+      </nav>
+      <p className="mini-nav-legend"><span className="active">Aktif</span><span className="answered">Dijawab</span><span>Belum dijawab</span></p>
+    </div>
+    <p className="mini-save-status"><span>{answeredCount} dari {questions.length} soal dijawab</span><span role="status">{saveStatus}</span></p>
+  </> : <div className="mini-question-navigator"><h2>Navigator Soal</h2><p className="mini-nav-status">{answeredCount} dari {questions.length} soal dijawab <span role="status">{saveStatus}</span></p><div className="mini-category-list" role="group" aria-label="Kategori soal">{miniCategories.map(category => { const items = questions.filter(item => item.session === category); return <button type="button" key={String(category)} aria-pressed={question?.session === category} onClick={() => { setIndex(questions.findIndex(item => item.session === category)); }}><span>{miniCategoryLabel(category)}</span><small>{items.filter(item => flow.answers[item.id]).length}/{items.length} dijawab</small></button>; })}</div><nav className="mini-number-grid" aria-label={`Nomor soal ${miniCategoryLabel(question?.session)}`}>{sessionQuestions.map(item => { const position = questions.findIndex(candidate => candidate.id === item.id); return <button type="button" key={item.id} aria-label={`Soal ${position + 1}, ${flow.answers[item.id] ? "sudah dijawab" : "belum dijawab"}`} aria-current={position === index ? "step" : undefined} className={position === index ? "active" : flow.answers[item.id] ? "answered" : ""} onClick={() => { setIndex(position); if (mobile) mobileNavigator.current?.close(); }}>{position + 1}</button>; })}</nav><p className="mini-nav-legend"><span className="active">Aktif</span><span className="answered">Dijawab</span><span>Belum dijawab</span></p>{!answerReview && <button type="button" className="button button-primary" disabled={flow.submitting} onClick={() => { if (mobile) mobileNavigator.current?.close(); navigateTryOut(index, true); }}>Periksa Jawaban</button>}</div>;
 
   const readingLayout = isReading;
   const practiceNavigator = readingLayout || (domain === "learning" && attempt.kind === "audio");
 
-  const examReading = tryoutExperience && question?.session === "reading";
+  const examReading = tryoutExperience && question?.session === "reading" && !activeMini;
   const tryoutImages = domain === "tryout" || Boolean(miniContext);
 
   const QuestionPanel = Fragment;
@@ -683,10 +703,9 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
   return (
 
-    <div className={tryoutExperience ? `${className}${miniContext ? ` ${miniStyles.runner}` : ""}${domain === "checkpoint" || miniContext ? ` checkpoint-readable-content ${tryOutJapaneseFont.variable}` : ""} tryout-runner-polished${tryoutExperience ? " tryout-placement-style" : ""}${domain === "tryout" ? ` tryout-readable-content ${tryOutJapaneseFont.variable}` : ""}${mobileTryout ? " tryout-mobile-exam" : ""}` : `${className}${domain === "learning" && attempt.kind === "mini" ? ` checkpoint-readable-content ${tryOutJapaneseFont.variable}` : ""}${readingLayout ? " reading-workspace" : ""}${domain === "learning" && (attempt.kind === "audio" || attempt.kind === "reading") && !answerReview ? " daily-practice-runner" : ""}`}>
+    <div className={tryoutExperience ? `${className}${miniContext ? ` ${miniStyles.runner}${!answerReview ? ` ${miniStyles.active}` : ""}` : ""}${domain === "checkpoint" || miniContext ? ` checkpoint-readable-content ${tryOutJapaneseFont.variable}` : ""} tryout-runner-polished${tryoutExperience ? " tryout-placement-style" : ""}${domain === "tryout" ? ` tryout-readable-content ${tryOutJapaneseFont.variable}` : ""}${mobileTryout ? " tryout-mobile-exam" : ""}` : `${className}${domain === "learning" && attempt.kind === "mini" ? ` checkpoint-readable-content ${tryOutJapaneseFont.variable}` : ""}${readingLayout ? " reading-workspace" : ""}${domain === "learning" && (attempt.kind === "audio" || attempt.kind === "reading") && !answerReview ? " daily-practice-runner" : ""}`}>
 
       {examDialog}
-      {miniContext && <nav className="mini-breadcrumb" aria-label="Breadcrumb"><Link href={miniContext.href}>Chapter {miniContext.chapter}: {miniContext.chapterTitle}</Link><span aria-hidden="true">/</span><span aria-current="page">{answerReview ? "Pembahasan Mini Checkpoint" : "Mini Checkpoint"}</span></nav>}
 
       {mobileTryout && <>
         <nav className="tryout-mobile-footer" aria-label={miniContext ? "Navigasi Mini Checkpoint" : "Navigasi pengerjaan Try Out"}>
@@ -695,7 +714,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
           <button type="button" className="button button-secondary" disabled={isLast && !miniContext} onClick={() => miniContext && isLast ? answerReview ? setReviewing(false) : navigateTryOut(index, true) : setIndex(index + 1)}>{miniContext && isLast ? answerReview ? "Hasil" : "Periksa" : "Selanjutnya"}<FiArrowRight aria-hidden="true" /></button>
         </nav>
         <dialog ref={mobileNavigator} id="tryout-mobile-navigator" className="tryout-mobile-sheet" aria-labelledby="tryout-mobile-navigator-title" aria-describedby="tryout-mobile-navigator-description" onClick={event => { if (event.target === event.currentTarget) { const box = event.currentTarget.getBoundingClientRect(); if (event.clientX < box.left || event.clientX > box.right || event.clientY < box.top || event.clientY > box.bottom) event.currentTarget.close(); } }}>
-          <header><div><h2 id="tryout-mobile-navigator-title">Navigator Soal</h2><p id="tryout-mobile-navigator-description">{miniContext ? "Pilih kategori atau nomor soal" : sessionLocked ? "Pilih nomor soal pada sesi aktif" : "Pilih sesi atau nomor soal"}</p></div><button type="button" className="button button-secondary" aria-label="Tutup Navigator" autoFocus onClick={() => mobileNavigator.current?.close()}><FiX aria-hidden="true" /></button></header>
+          <header><div><h2 id="tryout-mobile-navigator-title">Navigator Soal</h2><p id="tryout-mobile-navigator-description">{miniContext ? activeMini ? "Pilih nomor soal" : "Pilih kategori atau nomor soal" : sessionLocked ? "Pilih nomor soal pada sesi aktif" : "Pilih sesi atau nomor soal"}</p></div><button type="button" className="button button-secondary" aria-label="Tutup Navigator" autoFocus onClick={() => mobileNavigator.current?.close()}><FiX aria-hidden="true" /></button></header>
           <div className="tryout-mobile-sheet-content">
             {miniContext ? miniNavigator(true) : <>{sessionLocked ? <section className="tryout-active-session" aria-label="Sesi aktif"><span>Sesi {(attempt.current_session ?? 0) + 1} dari {timingGroups.length}</span><strong>{activeGroup?.label}</strong>{combinedSession && <div className="tryout-mobile-sessions" role="group" aria-label="Pilihan bagian sesi aktif">{activeSessions.map(category => <button type="button" key={category} aria-pressed={(mobileSession ?? question?.session) === category} onClick={() => setMobileSession(category)}>{assessmentSessionLabels[assessmentSessions.indexOf(category)]}</button>)}</div>}</section> : <div className="tryout-mobile-sessions" role="group" aria-label="Pilihan sesi">
               {activeSessions.map(session => {
@@ -721,7 +740,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
         {mobileTryout && <div className="tryout-mobile-status"><span>{miniContext ? miniCategoryLabel(question?.session) : sessionLabel}</span><strong>Soal {miniContext ? index + 1 : sessionPosition + 1} dari {miniContext ? questions.length : sessionQuestions.length}</strong><progress aria-label={miniContext ? "Progres jawaban Mini Checkpoint" : "Progress jawaban Try Out"} value={answeredCount} max={questions.length || 1} /></div>}
 
-        {tryOutTimer ?? (tryoutExperience && <div className="checkpoint-timer" role="timer"><span>Sisa waktu</span><strong>—</strong><small>Durasi belum tersedia</small></div>)}
+        {activeMini ? <div className="mini-remaining-time" role="timer"><span>Waktu tersisa</span><strong>{remaining === null ? "—" : `${String(Math.floor(remaining / 60)).padStart(2, "0")}:${String(remaining % 60).padStart(2, "0")}`}</strong></div> : tryOutTimer ?? (tryoutExperience && <div className="checkpoint-timer" role="timer"><span>Sisa waktu</span><strong>—</strong><small>Durasi belum tersedia</small></div>)}
 
         {!readingLayout && !(domain === "learning" && attempt.kind === "audio") && !tryoutExperience && remaining !== null && (
 
@@ -773,7 +792,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
 
             <section className={`learning-question-card${examReading ? " exam-reading-questions" : ""}`} tabIndex={examReading ? 0 : undefined} aria-label={examReading ? "Pertanyaan dan pilihan jawaban" : undefined}>
 
-              <p className="dash-kicker">{tryoutExperience ? <>{domain !== "tryout" && (miniContext || sessionLabel) && <span className="tryout-session-badge">{miniContext ? miniCategoryLabel(question?.session) : sessionLabel}</span>}<span>Soal {miniContext ? `${index + 1} dari ${questions.length}` : sessionPosition + 1}</span></> : <>SOAL {Math.min(index + 1, questions.length)} DARI {questions.length}</>}</p>
+              <p className="dash-kicker">{activeMini ? <>SOAL {index + 1} DARI {questions.length}</> : tryoutExperience ? <>{domain !== "tryout" && (miniContext || sessionLabel) && <span className="tryout-session-badge">{miniContext ? miniCategoryLabel(question?.session) : sessionLabel}</span>}<span>Soal {miniContext ? `${index + 1} dari ${questions.length}` : sessionPosition + 1}</span></> : <>SOAL {Math.min(index + 1, questions.length)} DARI {questions.length}</>}</p>
 
               {!isReading && !examReading && question.passage && <section className="reading-passage" aria-label={tryoutImages && question.session === "grammar" ? "Kelompok soal tata bahasa" : undefined}><h2><PlacementRichText value={question.passage.title} /></h2><AssessmentPassageContent passage={tryoutImages ? question.passage : { body: question.passage.body }} /></section>}
 
@@ -786,7 +805,7 @@ export function BackendAssessmentRunner({ path, domain = "learning", title, star
               ) : question.audio_url ? <p role="status">Audio belum tersedia.</p> : null}
 
               <AssessmentContent content={tryoutImages ? question : {}}>
-              {!isReading && question.instruction && <p><PlacementRichText value={question.instruction} /></p>}
+              {!isReading && question.instruction && <p className={miniContext ? "mini-question-instruction" : undefined}><PlacementRichText value={question.instruction} /></p>}
 
               {readingLayout ? <div className="reading-question-copy" tabIndex={0} role="region" aria-label="Isi pertanyaan">
 

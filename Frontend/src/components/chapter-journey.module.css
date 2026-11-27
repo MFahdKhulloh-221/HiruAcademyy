@@ -1,0 +1,37 @@
+.heading{margin-bottom:20px}
+.heading h1{margin:0;font-size:24px;font-weight:600;line-height:1.4}
+.heading p{margin:6px 0 0;font-size:14px;line-height:1.65;color:var(--muted)}
+.banner{margin-bottom:28px;padding:20px;border:1px solid var(--navy);border-radius:24px;background:var(--navy);color:#fff}
+.bannerCopy{min-width:0}
+.bannerHeading{display:flex;align-items:center;justify-content:space-between;gap:24px;margin-bottom:18px}
+.bannerHeading>div{min-width:0}
+.kicker{margin:0 0 8px;color:#dce2f3;font-size:12px;line-height:1.5}
+.banner h2{margin:0;font-size:24px;font-weight:800;line-height:1.35}
+.intro{margin:8px 0 0;color:#dce2f3;font-size:13px;line-height:1.65}
+.bookIcon{display:grid;place-items:center;flex:0 0 60px;height:60px;border-radius:16px;background:#ffffff14}
+.bookIcon svg{width:28px;height:28px}
+.bannerProgress{display:flex;flex-wrap:wrap;justify-content:space-between;gap:8px;margin-bottom:12px;font-size:14px}
+.bannerProgress strong{color:#ffb786;font-weight:600}
+.progress{display:block;width:100%;height:9px;border:0;border-radius:999px;overflow:hidden;appearance:none;background:#ffffff24;color:#f48220;accent-color:#f48220}
+.progress::-webkit-progress-bar{background:#ffffff24;border-radius:999px}
+.progress::-webkit-progress-value{background:#f48220;border-radius:999px}
+.progress::-moz-progress-bar{background:#f48220;border-radius:999px}
+.primary{display:inline-flex;align-items:center;justify-content:center;gap:10px;max-width:100%;min-height:44px;padding:10px 16px;border:1px solid #f48220;border-radius:10px;background:#f48220;color:#5a2a00;font:inherit;font-size:12px;font-weight:800;line-height:1.5;text-align:center;text-decoration:none;cursor:pointer;box-sizing:border-box}
+.primary:disabled{opacity:.65;cursor:wait}
+.primary:hover:not(:disabled){background:#ff993f}
+.primary:focus-visible{outline:3px solid #954900;outline-offset:3px}
+.milestone{min-width:0;align-self:start;padding:24px;border:1px solid var(--line);border-radius:24px;background:#fff;overflow-wrap:anywhere}
+.milestoneHeading{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+.milestoneHeading h2{margin:0;font-size:16px;font-weight:800;line-height:1.5}
+.milestoneIcon{display:grid;place-items:center;flex:0 0 40px;height:40px;border-radius:12px;background:var(--soft);color:var(--navy)}
+.milestoneIcon svg{width:21px;height:21px}
+.chapterLabel{font-size:10px;font-weight:800;letter-spacing:1px;color:var(--orange-dark)}
+.milestoneBody h3{margin:8px 0;font-size:18px;font-weight:800;line-height:1.5}
+.milestoneBody p{margin:0 0 18px;color:var(--muted);font-size:12px;line-height:1.75}
+.milestoneBody .primary{width:100%}
+.milestone .backToPrograms{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;max-width:100%;min-height:44px;box-sizing:border-box;margin-top:12px;white-space:normal;text-align:center;font-size:12px}
+.milestone a:focus-visible,.milestone button:focus-visible{outline:3px solid var(--orange-dark);outline-offset:3px}
+.certificateNotification{margin-top:20px;padding-top:16px;border-top:1px solid var(--line);min-width:0}
+.certificateNotification p{margin:0 0 12px;color:var(--muted);font-size:12px;line-height:1.65;overflow-wrap:anywhere}
+.certificateNotification .primary{width:100%}
+@media(max-width:639px){.heading h1{font-size:22px}.banner h2{font-size:21px}.bannerHeading{gap:14px}.bookIcon{flex-basis:48px;height:48px;border-radius:12px}.bookIcon svg{width:24px;height:24px}.certificateNotification>button{width:100%}}

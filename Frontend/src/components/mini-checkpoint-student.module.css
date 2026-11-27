@@ -53,7 +53,7 @@
 .runner.runner :global(.exam-reading-passage), .runner.runner :global(.exam-reading-questions) { min-width: 0; height: auto; max-height: none; overflow: visible; }
 .runner.runner :global(.exam-reading-scroll) { max-height: none; overflow: visible; }
 .runner.runner :global(.mini-category-list) button:focus-visible, .runner.runner :global(.mini-breadcrumb) a:focus-visible { outline: 3px solid #954900; outline-offset: 3px; }
-.runner.runner :global(.learning-question-card) { width: 100%; min-width: 0; margin-top: 0; border: 1px solid #e3e7ef; border-radius: 20px; background: white; }
+.runner.runner :global(.learning-question-card) { width: 100%; min-width: 0; margin-top: 0; padding: 24px; border: 1px solid #e3e7ef; border-radius: 20px; background: white; box-shadow: none; }
 .runner.runner :global(.learning-question-head),
 .runner.runner :global(.learning-question-head.tryout-exam-topbar) { position: static; inset: auto; width: 100%; max-width: 100%; margin: 0 0 20px; padding: 16px 20px; border: 1px solid #e3e7ef; border-radius: 16px; background: white; box-shadow: none; box-sizing: border-box; }
 .runner.runner :global(.learning-question-head) h1 { min-width: 0; overflow-wrap: anywhere; }
@@ -61,7 +61,9 @@
 .runner.runner :global(.mini-breadcrumb) { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; color: #526074; font-size: 14px; line-height: 1.6; }
 .runner.runner :global(.mini-breadcrumb) a { color: #954900; }
 .runner.runner :global(.learning-question-card) fieldset { display: grid; grid-template-columns: minmax(0, 1fr); min-inline-size: 0; width: 100%; max-width: none; }
-.runner.runner :global(.learning-question-card) fieldset > label { width: 100%; min-width: 0; max-width: none; box-sizing: border-box; overflow-wrap: anywhere; }
+.runner.runner :global(.learning-question-card) fieldset > label { width: 100%; min-width: 0; max-width: none; box-sizing: border-box; overflow-wrap: anywhere; flex-wrap: nowrap; }
+.runner.runner :global(.learning-question-card) fieldset > label:global(.review-correct),
+.runner.runner :global(.learning-question-card) fieldset > label:global(.review-wrong) { flex-wrap: wrap; }
 .runner.runner :global(.mini-question-navigator .mini-category-list) > button { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; width: 100%; padding: 10px 12px; border: 1px solid #e3e7ef; border-radius: 10px; background: white; color: #162c46; text-align: left; }
 .runner.runner :global(.mini-question-navigator .mini-category-list) > button[aria-pressed="true"] { border-color: #f48220; background: #fff4e9; }
 .runner.runner :global(.mini-question-navigator .mini-category-list) small { flex-shrink: 0; color: #526074; }
@@ -76,16 +78,36 @@
 .runner.runner :global(.mini-question-navigator) { min-width: 0; padding: 20px; border: 1px solid #e3e7ef; border-radius: 20px; background: white; }
 .runner.runner :global(.mini-question-navigator) h2 { margin: 0 0 16px; color: #162c46; font-size: 16px; }
 .runner.runner :global(.mini-question-navigator .mini-category-list) { display: grid; gap: 8px; margin-top: 16px; }
-.runner.runner :global(.learning-question-head) h1 { margin: 0; font-size: clamp(22px, 2.5vw, 30px); }
-.runner.runner :global(.learning-question-head) p { margin: 6px 0 0; color: #526074; }
+.runner.runner :global(.learning-question-card) > :global(.dash-kicker) { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin: 0 0 20px; font-size: 12px; line-height: 1.5; }
+.runner.runner :global(.learning-question-card) > h2 { margin: 20px 0 0; padding: 20px; border-radius: 14px; background: #f0edff; font-size: clamp(20px, 2.5vw, 28px); line-height: 1.7; white-space: pre-wrap; overflow-wrap: anywhere; }
+.runner.runner :global(.learning-question-card) audio { width: 100%; max-width: 100%; }
+.runner.runner :global(.mini-question-instruction) { margin: 0 0 16px; color: #526074; font-size: 14px; line-height: 1.7; }
+.runner.runner :global(.mini-nav-status) { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.runner.runner :global(.mini-nav-status) > span { padding: 2px 8px; border-radius: 6px; background: #f5f6fa; font-size: 11px; }
+.runner.runner :global(.learning-question-head) { display: flex; justify-content: space-between; align-items: center; gap: 20px; }
+.runner.runner :global(.learning-question-head) h1 { margin: 0; font-size: clamp(22px, 2.5vw, 28px); line-height: 1.4; }
+.runner.runner :global(.learning-question-head) p { margin: 6px 0 0; color: #526074; font-size: 14px; }
+.runner.runner :global(.learning-question-card) fieldset { gap: 12px; margin: 24px 0 0; padding: 0; border: 0; }
+.runner.runner :global(.learning-question-card) fieldset > label { display: flex; align-items: center; min-height: 64px; padding: 12px 16px; font-size: 17px; line-height: 1.7; }
+.runner.runner :global(.tryout-option-text) { flex: 1; min-width: 0; white-space: pre-wrap; }
+.runner.runner :global(.learning-question-card) fieldset > label:focus-within { outline: 3px solid #954900; outline-offset: 3px; }
+.runner.runner :global(.learning-question-actions) { display: flex; justify-content: space-between; gap: 12px; margin-top: 20px; padding: 0; }
+.runner.runner :global(.learning-question-actions) > button { min-height: 44px; }
 .runner.runner :global(.answer-explanation) h3 { margin: 0 0 12px; font-size: 16px; }
-.runner.runner :global(.learning-question-card) fieldset > label { min-height: 52px; padding: 14px 16px; }
-.runner.runner :global(.learning-question-card) :global(.tryout-option-text) { min-width: 0; }
+.runner.runner :global(.learning-question-card) fieldset > label { position: relative; gap: 12px; border: 1px solid #e3e7ef; border-radius: 12px; cursor: pointer; }
+.runner.runner :global(.learning-question-card) fieldset > label:global(.selected) { border-color: #954900; background: #fff7ef; }
+.runner.runner :global(.learning-question-card) fieldset > label > input[type="radio"] { position: absolute; width: 1px; height: 1px; clip-path: inset(50%); overflow: hidden; }
+.runner.runner :global(.learning-question-card) :global(.tryout-option-letter) { display: grid; place-items: center; flex: 0 0 40px; height: 40px; border: 1px solid #e3e7ef; border-radius: 8px; background: #f5f6fa; font-weight: 800; }
+.runner.runner :global(.learning-question-card) fieldset:disabled label { cursor: default; }
+.runner.runner :global(.learning-question-card) fieldset > label:global(.review-correct) { border-color: #3fad5f; background: #edf6ef; }
+.runner.runner :global(.learning-question-card) fieldset > label:global(.review-wrong) { border-color: #d4615a; background: #fcf0ef; }
+.runner.runner :global(.tryout-review-label) { flex-basis: 100%; font-size: 12px; }
+.runner.runner :global(.answer-explanation) { margin-top: 20px; padding: 20px; border: 1px solid #e3e7ef; border-radius: 14px; background: #fafbff; }
 .runner.runner :global(.mini-question-navigator .mini-category-list) h3 { margin: 0 0 10px; color: #526074; font-size: 13px; line-height: 1.5; }
-.runner.runner :global(.mini-question-navigator .mini-number-grid) { display: grid; grid-template-columns: repeat(auto-fit, 44px); gap: 8px; }
-.runner.runner :global(.mini-question-navigator .mini-number-grid) button { display: grid; place-items: center; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; border: 1px solid #cbd5e1; border-radius: 10px; background: white; color: #162c46; font-size: 14px; box-shadow: none; }
+.runner.runner :global(.mini-question-navigator .mini-number-grid) { display: grid; grid-template-columns: repeat(auto-fit, 44px); gap: 8px; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
+.runner.runner :global(.mini-question-navigator .mini-number-grid) button { display: grid; place-items: center; width: 44px; min-width: 44px; height: 44px; min-height: 44px; padding: 0; border: 1px solid #cbd5e1; border-radius: 10px; background: white; color: #162c46; font-size: 14px; box-shadow: none; outline: none; }
 .runner.runner :global(.mini-question-navigator .mini-number-grid) :global(button.answered) { border-color: #f48220; background: #fff4e9; color: #854000; }
-.runner.runner :global(.mini-question-navigator .mini-number-grid) :global(button.active) { border-color: #162c46; background: #162c46; color: white; box-shadow: none; }
+.runner.runner :global(.mini-question-navigator .mini-number-grid) :global(button.active) { border-color: #162c46; background: #162c46; color: white; box-shadow: none; outline: none; }
 .runner.runner :global(.mini-question-navigator .mini-number-grid) button:focus-visible { outline: 3px solid #954900; outline-offset: 3px; }
 .runner.runner :global(.mini-question-navigator .mini-nav-legend) { display: flex; flex-wrap: wrap; gap: 10px 16px; margin-top: 20px; padding-top: 16px; border-top: 1px solid #e3e7ef; color: #526074; font-size: 12px; line-height: 1.6; }
 .runner.runner :global(.mini-question-navigator .mini-nav-legend) > span { display: inline-flex; align-items: center; gap: 6px; }
@@ -110,6 +132,8 @@
   .resultActions { flex-direction: column; }
   .primaryAction, .secondaryAction { width: 100%; margin: 0; }
   .runner.runner :global(.learning-question-head.tryout-exam-topbar) { padding: 12px; margin: 0 0 16px; }
+  .runner.runner :global(.learning-question-card) { padding: 16px; }
+  .runner.runner :global(.learning-question-card) fieldset > label { min-height: 44px; padding: 8px 10px; }
   .runner.runner :global(.learning-question-layout) { gap: 16px; }
   .runner.runner { padding-bottom: calc(100px + env(safe-area-inset-bottom)); }
   .runner.runner :global(.learning-question-sidebar) { display: none; }
@@ -118,6 +142,46 @@
   .runner.runner :global(.tryout-mobile-status) { display: grid; }
   .runner.runner :global(.learning-question-head) { flex-wrap: wrap; gap: 12px; }
   .runner.runner :global(.learning-question-actions) { display: none; }
+}
+
+/* Active Mini only: outrank shared exam rules; review keeps exam styling. */
+.runner.runner.active.active { width: min(1120px, 100%); max-width: 100%; margin-inline: 0; padding: 0; box-sizing: border-box; }
+.runner.runner.active.active :global(.learning-question-head.tryout-exam-topbar) { display: flex; min-height: 60px; margin: 0 0 16px; padding: 0; border: 0; border-radius: 0; background: transparent; }
+.runner.runner.active.active :global(.learning-question-head) h1 { font-size: 24px; font-weight: 700; line-height: 1.4; }
+.runner.runner.active.active :global(.learning-question-head) p { font-size: 12px; }
+.runner.runner.active.active :global(.mini-remaining-time) { display: flex; align-items: center; flex-shrink: 0; gap: 10px; color: #526074; font-size: 12px; }
+.runner.runner.active.active :global(.mini-remaining-time) strong { color: #162c46; font-size: 18px; font-variant-numeric: tabular-nums; }
+.runner.runner.active.active :global(.learning-question-card) { margin: 0; padding: 20px; border-radius: 16px; }
+.runner.runner.active.active :global(.learning-question-card) h2 { margin: 16px 0; padding: 0; border-radius: 0; background: transparent; font-size: 18px; line-height: 1.7; }
+.runner.runner.active.active :global(.learning-question-card) > :global(.dash-kicker) { margin: 0 0 16px; color: #526074; font-size: 11px; letter-spacing: .06em; }
+.runner.runner.active.active :global(.learning-question-card .reading-passage) { width: 100%; margin: 0 0 20px; padding: 0 0 16px; border: 0; border-bottom: 1px solid #e3e7ef; border-radius: 0; box-shadow: none; font-size: 16px; line-height: 1.9; }
+.runner.runner.active.active :global(.learning-question-card .reading-passage) h2 { margin: 0 0 12px; font-size: 16px; }
+.runner.runner.active.active :global(.learning-question-card) fieldset { gap: 8px; margin-top: 16px; }
+.runner.runner.active.active :global(.learning-question-card) fieldset > label { min-height: 44px; padding: 8px 12px; gap: 8px; border-radius: 10px; font-size: 15px; line-height: 1.6; }
+.runner.runner.active.active :global(.learning-question-card) fieldset > label > input[type="radio"] { position: static; flex: 0 0 18px; width: 18px; height: 18px; margin: 0; clip-path: none; overflow: visible; appearance: auto; accent-color: #954900; }
+.runner.runner.active.active :global(.learning-question-card .tryout-option-letter) { display: inline; flex: 0 0 auto; width: auto; height: auto; padding: 0; border: 0; border-radius: 0; background: transparent; color: inherit; font-weight: 400; }
+.runner.runner.active.active :global(.learning-question-card .tryout-option-text) { font-size: 15px; }
+.runner.runner.active.active :global(.mini-question-navigator) { padding: 14px; border-radius: 16px; }
+.runner.runner.active.active :global(.mini-question-navigator) h2 { margin: 0 0 12px; font-size: 14px; }
+.runner.runner.active.active :global(.mini-question-navigator .mini-number-grid) { grid-template-columns: repeat(4, 44px); gap: 6px; margin: 0; }
+.runner.runner.active.active :global(.mini-question-navigator .mini-number-grid) button { border-radius: 8px; font-size: 12px; }
+.runner.runner.active.active :global(.mini-question-navigator .mini-number-grid) :global(button.answered) { border-color: #f48220; background: #fff4e9; color: #854000; text-decoration: underline; text-underline-offset: 4px; }
+.runner.runner.active.active :global(.mini-question-navigator .mini-number-grid) :global(button.active) { border-color: #f48220; background: #f48220; color: #5a2a00; }
+.runner.runner.active.active :global(.mini-question-navigator .mini-nav-legend) { gap: 6px 10px; margin: 12px 0 0; padding-top: 12px; font-size: 10px; }
+.runner.runner.active.active :global(.mini-nav-legend) > :global(span.active)::before { background: #f48220; border-color: #f48220; }
+.runner.runner.active.active :global(.mini-save-status) { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; margin: 10px 0 0; color: #526074; font-size: 11px; line-height: 1.6; }
+.runner.runner.active.active :global(.learning-question-actions) { display: flex; flex-wrap: wrap; margin-top: 16px; }
+.runner.runner.active.active :global(.learning-question-actions) > button:last-child { margin-left: auto; }
+.runner.runner.active.active :global(.learning-question-actions) > button:focus-visible { outline: 3px solid #954900; outline-offset: 3px; }
+
+@media (min-width: 1024px) {
+  .runner.runner.active.active :global(.learning-question-layout) { grid-template-columns: minmax(0, 1fr) 250px; gap: 20px; }
+  .runner.runner.active.active :global(.learning-question-layout.tryout-navigator-hidden) { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (max-width: 639px) {
+  .runner.runner.active.active { padding: 16px 0 calc(100px + env(safe-area-inset-bottom)); }
+  .runner.runner.active.active :global(.learning-question-card) { padding: 16px; }
 }
 
 @media (hover: hover) {
