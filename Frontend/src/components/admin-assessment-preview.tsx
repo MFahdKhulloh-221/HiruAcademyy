@@ -4,6 +4,7 @@ import { AssessmentContent } from "@/components/assessment-content";
 import { AssessmentPassageContent } from "@/components/assessment-passage-content";
 import { PlacementRichText } from "@/components/placement-rich-text";
 import styles from "@/components/admin-tryout-builder.module.css";
+import miniStyles from "@/components/mini-checkpoint-student.module.css";
 
 import { useEffect, useId, useRef, useState } from "react";
 import { LuFlag } from "react-icons/lu";
@@ -71,7 +72,47 @@ function AssessmentPreview({ assessment, initialQuestionId }: { assessment: Admi
     <p>{tryout ? "Pratinjau visual saja. Pilihan jawaban tidak menghasilkan skor, progres, atau penyimpanan siswa." : "Pratinjau admin saja. Penilaian lokal tidak menyimpan hasil atau progres siswa."}</p>
     <div className="admin-page-actions">{(tryout ? ["Detail", "Runner"] : ["Detail", "Runner", "Hasil"]).map((name) => <button className="button" type="button" aria-pressed={view === name} key={name} onClick={() => setView(name)}>{name}</button>)}</div>
     {view === "Detail" && <div className={mini ? "mini-info" : "sensei-tryout tryout-prestart"}><div className="tryout-prestart-layout"><section className="tryout-prestart-info"><p className="dash-kicker">{tryout ? "INFORMASI PRATINJAU" : "INFORMASI SIMULASI"}</p><h2>{assessment.title}</h2><p>{assessment.context}{mini && ` • Chapter ${assessment.chapter}`}</p><div className="tryout-info-tiles"><div><strong>{tryout ? timingTotals ? `${timingTotals.total} Menit` : "Belum diatur" : `${assessment.duration || "OPEN"} Menit`}</strong><span>Total Waktu</span></div><div><strong>{mini ? "1 Ujian" : `${tryout ? tryOutTimingSessions.length : sections.length} Sesi`}</strong><span>Pembagian</span></div><div><strong>{assessment.maxScore || "OPEN"} Poin</strong><span>Skor Maksimal</span></div><div><strong>{tryout ? threshold === "" ? "Tidak ditetapkan" : threshold : mini ? threshold || "OPEN" : "Review Mode"}</strong><span>{tryout ? "Passing score total" : mini ? "Passing score" : "Tersedia"}</span></div></div><p>{ordered.length} soal • {ordered.filter((item) => item.status === "Published").length} Published • {assessment.status}</p>{tryout && <><ul>{tryOutTimingSessions.map((session, index) => <li key={session}>Sesi {index + 1} — {tryOutTimingSessionLabels[index]}: {assessment.sessionDurationMinutes?.[session] ? `${assessment.sessionDurationMinutes[session]} menit` : "Belum diatur"}</li>)}</ul><p>Istirahat setelah Sesi 1 dan Sesi 2: {assessment.breakDurationMinutes ? `${assessment.breakDurationMinutes} menit per istirahat` : "Belum diatur"}.</p><p>Total waktu istirahat (2 kali): {timingTotals ? `${timingTotals.rest} menit` : "Belum diatur"}.</p><p>Penilaian dan kelulusan hanya dihitung oleh server saat ujian siswa, bukan dalam pratinjau ini.</p><ul>{sections.map((name, sessionIndex) => { const passingScore = assessment.sessionPassingScores?.[assessmentSessions[sessionIndex]]; return <li key={name}>{name}: {passingScore == null ? "Fallback server: minimal 19 jawaban benar" : `Passing score: ${passingScore} poin`}</li>; })}</ul></>}{!mini && !tryout && <p>Lulus jika keempat sesi masing-masing memiliki minimal 19 jawaban benar. {title} dapat diulang tanpa batas.</p>}<button className="button button-primary" type="button" onClick={() => setView("Runner")}>Mulai {title}</button></section><aside className="tryout-prestart-sidebar"><section className="tryout-sections"><h2>{tryout ? "Bagian Soal" : "Materi Sesi"}</h2>{sections.map((name) => <div key={name}><strong>{name}</strong><small>{ordered.filter((item) => item.section === name).length} soal</small></div>)}</section></aside></div></div>}
-    {view === "Runner" && <div className={mini ? "mini-runner" : "sensei-tryout tryout-runner tryout-clean-focus"}>
+    {view === "Runner" && mini && <div className={`${miniStyles.runner} ${miniStyles.active} checkpoint-readable-content tryout-runner-polished tryout-placement-style`}>
+      <header className="learning-question-head tryout-exam-topbar">
+        <div><h1>Mini Checkpoint</h1><p>{assessment.context} · Chapter {assessment.chapter} · {question?.section}</p></div>
+        <div className="mini-remaining-time"><span>Waktu tersisa</span><strong>{previewDuration ? `${previewDuration}:00` : "OPEN"}</strong><small>Contoh timer, tidak berjalan</small></div>
+      </header>
+      <div className="learning-question-layout">
+        <main>
+          {question ? <>
+            <section className="learning-question-card">
+              <p className="dash-kicker">SOAL {index + 1} DARI {questions.length}</p>
+              {(passage || question.passage || question.type === "Reading") && <section className="reading-passage" aria-label="Teks bacaan">
+                {passage?.title && <h2><PlacementRichText value={passage.title} /></h2>}
+                <AssessmentPassageContent passage={passage ?? { body: question.passage || "OPEN: teks bacaan belum tersedia." }} />
+              </section>}
+              {question.type === "Audio" && <AssessmentAudio key={question.id} question={question} />}
+              <AssessmentContent content={assessment.builderCapabilities?.images ? question : {}}>
+                {question.instruction && <p className="mini-question-instruction"><PlacementRichText value={question.instruction} /></p>}
+                <h2><PlacementRichText value={question.prompt} /></h2>
+                {question.japanese && <p lang="ja">{question.japanese.reading ? <ruby>{question.japanese.text}<rt>{question.japanese.reading}</rt></ruby> : question.japanese.text}</p>}
+              </AssessmentContent>
+              <fieldset><legend className="sr-only">Pilih satu jawaban</legend>{question.answers.map((answer, answerIndex) => <label className={answers[question.id] === answerIndex ? "selected" : ""} key={answerIndex}><input type="radio" name={`${radioName}-${question.id}`} checked={answers[question.id] === answerIndex} onChange={() => setAnswers((current) => ({ ...current, [question.id]: answerIndex }))} /><span className="tryout-option-letter">{assessmentLetters[answerIndex]}.</span><span className="tryout-option-text"><PlacementRichText value={answer} /></span></label>)}</fieldset>
+            </section>
+            <div className="learning-question-actions">
+              <button type="button" className="button button-secondary" disabled={index <= 0} onClick={() => setQuestionId(questions[index - 1].id)}>Sebelumnya</button>
+              <button type="button" className="button button-secondary" aria-pressed={marked.includes(question.id)} onClick={() => setMarked((current) => current.includes(question.id) ? current.filter((id) => id !== question.id) : [...current, question.id])}><LuFlag aria-hidden="true" /> Tandai Soal</button>
+              <button type="button" className="button button-primary" disabled={index >= questions.length - 1} onClick={() => setQuestionId(questions[index + 1].id)}>Selanjutnya</button>
+            </div>
+          </> : <p>Belum ada data</p>}
+        </main>
+        <aside className="learning-question-sidebar">
+          <div className="mini-question-navigator">
+            <h2>Navigasi Soal</h2>
+            <nav className="mini-number-grid" aria-label="Nomor soal Mini Checkpoint">{questions.map((item, position) => <button key={item.id} type="button" aria-label={`Soal ${position + 1}, ${answers[item.id] !== undefined ? "sudah dijawab" : "belum dijawab"}${marked.includes(item.id) ? ", ditandai" : ""}`} aria-current={item.id === question?.id ? "step" : undefined} className={`${item.id === question?.id ? "active" : ""} ${answers[item.id] !== undefined ? "answered" : ""}`} onClick={() => setQuestionId(item.id)}>{position + 1}</button>)}</nav>
+            <p className="mini-nav-legend"><span className="active">Aktif</span><span className="answered">Dijawab</span><span>Belum dijawab</span></p>
+          </div>
+          <p className="mini-save-status"><span>{answered} dari {questions.length} soal dijawab</span><span>Pratinjau lokal · {markedCount} ditandai</span></p>
+          <button className="button" type="button" onClick={() => setView("Hasil")}>Hasil contoh</button>
+        </aside>
+      </div>
+    </div>}
+    {view === "Runner" && !mini && <div className={mini ? "mini-runner" : "sensei-tryout tryout-runner tryout-clean-focus"}>
       <header className="tryout-focus-header"><div><h2>Soal {globalNumber} dari {ordered.length}</h2><p>{assessment.title} • {activeSection}</p></div><div className="tryout-focus-timer"><span>{tryout ? "Timer sesi" : "Timer"}</span><strong>{previewDuration ? `${previewDuration}:00` : tryout ? "Belum diatur" : "OPEN"}</strong><small>Contoh timer, tidak berjalan</small></div></header>
       <div className="tryout-focus-status"><span><strong>{answered}/{ordered.length}</strong> Dijawab</span><span><strong>{markedCount}</strong> Ditandai</span></div>
       <div className={mini ? "mini-runner-layout" : "tryout-focus-layout"}><div>
