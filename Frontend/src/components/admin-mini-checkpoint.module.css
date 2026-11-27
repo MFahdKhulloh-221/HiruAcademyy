@@ -11,6 +11,9 @@
 .publishDialog :global(.admin-dialog-content) p { line-height: 1.7; }
 .publishSummary { display: grid; gap: 8px; padding: 16px; border: 1px solid #e1e4ec; border-radius: 12px; background: #f9f9ff; line-height: 1.6; overflow-wrap: anywhere; }
 .publishSummary span { color: #595e70; }
+.readiness { padding: 16px 20px; border: 1px solid #e1e4ec; border-radius: 12px; background: #fff; line-height: 1.7; }
+.readiness p { margin: 8px 0 0; }
+.readiness ul { margin: 8px 0 0; padding-left: 24px; }
 .summary { margin: 0; padding: 16px 20px; border: 1px solid #e1e4ec; border-left: 4px solid #f48220; border-radius: 12px; background: #fff; line-height: 1.8; overflow-wrap: anywhere; }
 .help { padding: 14px 20px; border: 1px solid #e1e4ec; border-radius: 12px; background: #fff; color: #595e70; line-height: 1.7; }
 .help summary { min-height: 44px; align-content: center; cursor: pointer; color: var(--navy); font-weight: 600; }

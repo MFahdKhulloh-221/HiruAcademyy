@@ -18,12 +18,13 @@ import daily from "./daily-practice-studio.module.css";
 
 const labels = ["Kosakata & Kanji", "Tata Bahasa", "Reading (Dokkai)", "Audio (Choukai)"];
 
-export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChange, onUploadBusyChange, busy: saving, error, onChange, onSave, onClose, saveStatus, navigation, bulkAction, readingOnly = false, audioOnly = false, fixedSession, studioTitle, saveLabel, closeLabel = "Kembali ke Daftar" }: {
+export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChange, onUploadBusyChange, busy: saving, error, onChange, onSave, onClose, saveStatus, navigation, bulkAction, readingOnly = false, audioOnly = false, fixedSession, studioTitle, saveLabel, questionIdMap, closeLabel = "Kembali ke Daftar" }: {
   fixedSession?: number;
   readingOnly?: boolean;
   audioOnly?: boolean;
   studioTitle?: string;
   saveLabel?: string;
+  questionIdMap?: Readonly<Record<string, string>>;
   closeLabel?: string;
   navigation?: ReactNode;
   bulkAction?: ReactNode;
@@ -73,7 +74,8 @@ export function AdminTryoutQuestionBuilder({ draft, initialQuestion, onDirtyChan
     return linked.length ? linked.every(question => question.section === sections[session]) : session === 2;
   });
   const questions = orderedAssessmentQuestions(draft).filter(question => question.section === sections[session]);
-  const active = questions.find(question => question.id === activeId) ?? (chapterOnly || mini ? questions[0] : undefined);
+  const resolvedActiveId = mini ? questionIdMap?.[activeId] ?? activeId : activeId;
+  const active = questions.find(question => question.id === resolvedActiveId) ?? (chapterOnly || mini ? questions[0] : undefined);
   const passage = sessionPassages.find(item => item.id === active?.passageId);
   const linked = questions.filter(question => question.passageId === passage?.id && passage);
   useEffect(() => { onDirtyChange(false); }, [onDirtyChange]);

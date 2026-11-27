@@ -435,12 +435,14 @@ class LearningContentService
 
     public function miniReadiness(Chapter $chapter): array
     {
-        $errors = [];
-        try {
-            app(LearningAttemptService::class)->chapterMiniConfiguration($chapter);
-        } catch (ValidationException $exception) {
-            $errors = $exception->errors();
-        }
+        $configuration = Validator::make([
+            'duration_minutes' => $chapter->mini_checkpoint_duration_minutes,
+            'passing_score' => $chapter->mini_checkpoint_passing_score,
+        ], [
+            'duration_minutes' => ['required', 'integer', 'min:1'],
+            'passing_score' => ['required', 'integer', 'min:0', 'max:100'],
+        ]);
+        $errors = $configuration->errors()->toArray();
         if (! in_array($chapter->program->code, ['n5', 'n4', 'n3', 'n2'], true)) {
             $errors['chapter_id'] = ['Mini Checkpoint requires an N5–N2 program.'];
         }

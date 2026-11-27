@@ -300,6 +300,8 @@ test.describe("Mini learning regression — mock API only, no backend or DB", ()
     await expect.poll(() => api.count("PUT", "/api/student/programs/5/chapters/9/attempts/700/answers")).toBe(1);
     await expect.poll(() => api.attempts.get(700)?.data.answers).toEqual({ "500": "A" });
     await page.reload();
+    await expect(page.getByRole("status").filter({ hasText: "Kamu memiliki pengerjaan yang belum selesai." })).toBeVisible();
+    await page.getByRole("button", { name: "Lanjutkan Mini Checkpoint", exact: true }).click();
     await expect(page.getByRole("radio", { name: "A. Cat" })).toBeChecked();
     await page.getByRole("button", { name: "Kumpulkan Jawaban" }).click();
     await expect(page.getByRole("heading", { name: "Hasil Mini Checkpoint" })).toBeVisible();
