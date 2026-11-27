@@ -45,6 +45,7 @@ export function useCommercialInvoice(id: string) {
     const current = ++version.current;
     const row = await commercialData<CommercialInvoice>(`/api/student/invoices/${commercialId(id)}`);
     if (current === version.current) { setInvoice(row); setError(""); }
+    return row;
   }, [id]);
   useEffect(() => { let active = true; void Promise.resolve().then(() => { if (active) return refresh(); }).catch(error => { if (active) setError(error.message); }); return () => { active = false; version.current += 1; }; }, [refresh]);
   async function transition(action: "submit") {

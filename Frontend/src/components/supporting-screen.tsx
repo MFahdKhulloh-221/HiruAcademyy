@@ -24,7 +24,7 @@ import type { LearningAccess, LearningProgram } from "@/lib/learning-api";
 import { supportingData, type SupportingKind } from "@/lib/supporting-mock";
 
 type Membership = "free" | "lms" | "sensei";
-type Props = { kind: SupportingKind; membership: Membership; access: LearningAccess; programs: LearningProgram[]; breadcrumbCurrent?: string; targetProgram?: string; invoiceId?: string };
+type Props = { kind: SupportingKind; membership: Membership; access: LearningAccess; programs: LearningProgram[]; breadcrumbCurrent?: string; targetProgram?: string; targetPlan?: "lms" | "sensei"; invoiceId?: string };
 const money = (value: number) => new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(value);
 const planLabel = (plan: Membership) => plan === "sensei" ? "Kelas bersama Sensei" : plan === "lms" ? "Belajar Mandiri" : "Free Member";
 
@@ -43,7 +43,7 @@ function EmptySupportingScreen({ kind }: { kind: SupportingKind }) {
 }
 
 
-function RenewalScreen({ membership, access, programs, targetProgram, breadcrumbCurrent, invoiceId }: Props) {
+function RenewalScreen({ membership, access, programs, targetProgram, targetPlan, breadcrumbCurrent, invoiceId }: Props) {
   const isFree = membership === "free";
   const ownedPrograms = programs.filter(item => access.source_grants.some(grant => grant.program_code === item.code));
   const recommendedPrograms = [...ownedPrograms, ...programs.filter(item => !ownedPrograms.includes(item))];
@@ -55,7 +55,7 @@ function RenewalScreen({ membership, access, programs, targetProgram, breadcrumb
     ?? "";
 
   const [program, setProgram] = useState(initialProgram);
-  const [plan, setPlan] = useState<"lms" | "sensei">("lms");
+  const [plan, setPlan] = useState<"lms" | "sensei">(targetPlan ?? "lms");
   const [referral, setReferral] = useState("");
   const [createdId, setCreatedId] = useState<string>();
   const order = useCommercialOrder(commercialCode(program), plan);
@@ -200,7 +200,7 @@ function RenewalScreen({ membership, access, programs, targetProgram, breadcrumb
             </div>
           </button>
 
-          {!["ssw-food", "interview"].includes(program) && (
+          {senseiOffer && (
             <button
               className={`renewal-plan-card ${plan === "sensei" ? "selected" : ""}`}
               type="button"
@@ -278,12 +278,21 @@ function RenewalInvoice({ id }: { id: string }) {
   const { user } = useAuth();
   const request = useCommercialInvoice(id);
   const [refreshError, setRefreshError] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [statusMessage, setStatusMessage] = useState("");
   const invoice = request.invoice;
   async function refresh() {
+    if (checking) return;
+    setChecking(true);
     setRefreshError("");
-    try { await request.refresh(); }
+    setStatusMessage("");
+    try {
+      const latest = await request.refresh();
+      setStatusMessage(`Status pembayaran ${latest.status === invoice?.status ? "belum berubah" : "diperbarui"}: ${labels[latest.status] ?? latest.status}. Verifikasi pembayaran dan aktivasi akses dilakukan Admin.`);
+    }
     catch (cause) { setRefreshError(cause instanceof Error ? cause.message : "Permintaan belum berhasil."); }
+    finally { setChecking(false); }
   }
   const labels: Record<string, string> = { draft: "Draft", awaiting_payment: "Menunggu Pembayaran", paid: "Menunggu Konfirmasi Admin", verified: "Menunggu Aktivasi", active: "Sudah Bayar", cancelled: "Dibatalkan" };
-  return <section className="renewal-summary-card"><header className="renewal-summary-head"><h2>Invoice</h2></header>{(request.error || refreshError) && <p role="alert">{refreshError || request.error}</p>}{!invoice && !request.error && <LoadingSkeleton variant="form" label="Memuat…" />}{invoice && <><dl><div><dt>Invoice ID</dt><dd>{invoice.id}</dd></div><div><dt>Program</dt><dd>{commercialCode(invoice.program_code)}</dd></div><div><dt>Jenis Transaksi</dt><dd>{invoice.renewal_grant_id ? "Perpanjangan Membership" : "Pembelian Baru"}</dd></div><div><dt>Paket Belajar</dt><dd>{planLabel(invoice.plan_code)}</dd></div><div><dt>Harga</dt><dd>{money(invoice.base_price)}</dd></div><div><dt>Diskon</dt><dd>{money(invoice.discount_amount)}</dd></div><div><dt>Total</dt><dd>{money(invoice.total_price)}</dd></div><div><dt>Status</dt><dd>{labels[invoice.status] ?? invoice.status}</dd></div>{invoice.access_grant && <div><dt>Akses aktif</dt><dd>{new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta" }).format(new Date(invoice.access_grant.ends_at))}</dd></div>}</dl><div className="button-group">{invoice.status === "draft" && <button className="button button-primary" type="button" disabled={request.busy} onClick={() => void request.submit()}>Buat Invoice</button>}<a className="button button-primary" href={invoiceWhatsAppUrl(invoice, user?.email)} target="_blank" rel="noopener noreferrer">Hubungi Admin via WhatsApp</a><button className="button button-secondary" type="button" disabled={request.busy} onClick={() => void refresh()}>Perbarui Status</button></div></>}</section>;
+  return <section className="renewal-summary-card renewal-invoice"><header className="renewal-summary-head"><h2>Invoice</h2></header>{(request.error || refreshError) && <p role="alert">{refreshError || request.error}</p>}{!invoice && !request.error && <LoadingSkeleton variant="form" label="Memuat…" />}{invoice && <><dl><div><dt>Invoice ID</dt><dd>{invoice.id}</dd></div><div><dt>Program</dt><dd>{commercialCode(invoice.program_code)}</dd></div><div><dt>Jenis Transaksi</dt><dd>{invoice.renewal_grant_id ? "Perpanjangan Membership" : "Pembelian Baru"}</dd></div><div><dt>Paket Belajar</dt><dd>{planLabel(invoice.plan_code)}</dd></div><div><dt>Harga</dt><dd>{money(invoice.base_price)}</dd></div><div><dt>Diskon</dt><dd>{money(invoice.discount_amount)}</dd></div><div><dt>Total</dt><dd>{money(invoice.total_price)}</dd></div><div><dt>Status</dt><dd>{labels[invoice.status] ?? invoice.status}</dd></div>{invoice.access_grant && <div><dt>Akses aktif</dt><dd>{new Intl.DateTimeFormat("id-ID", { timeZone: "Asia/Jakarta" }).format(new Date(invoice.access_grant.ends_at))}</dd></div>}</dl><div className="button-group">{invoice.status === "draft" && <button className="button button-primary" type="button" disabled={request.busy} onClick={() => void request.submit()}>Buat Invoice</button>}<a className="button renewal-invoice-whatsapp" href={invoiceWhatsAppUrl(invoice, user?.email)} target="_blank" rel="noopener noreferrer">Hubungi Admin via WhatsApp</a><button className="button button-secondary" type="button" disabled={request.busy || checking} aria-busy={checking} onClick={() => void refresh()}>{checking ? "Mengecek Status…" : "Cek Status Pembayaran"}</button></div><p role="status" aria-atomic="true">{statusMessage}</p></>}</section>;
 }
